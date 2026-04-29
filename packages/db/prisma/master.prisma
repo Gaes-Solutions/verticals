@@ -1,0 +1,74 @@
+// Master DB schema — datos cross-tenant.
+// Cada tenant tiene su propio schema postgres separado (ver tenant.template.prisma).
+// Ver ADR-001 (multi-tenancy schema-per-tenant) y docs/analisis/04-modelo-datos/4.1-tenants-billing.md
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/master"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_MASTER")
+}
+
+// Plan de subscripción (Hito 0 mínimo, se expande con billing/coupons en Hito 6)
+model Plan {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  priceCents  Int      @map("price_cents")
+  currency    String   @default("MXN")
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+// Tenant = una cuenta SaaS (un negocio cliente)
+model Tenant {
+  id         String       @id @default(cuid())
+  slug       String       @unique
+  name       String
+  schemaName String       @unique @map("schema_name")
+  status     TenantStatus @default(trial)
+  planId     String       @map("plan_id")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@map("tenants")
+}
+
+enum TenantStatus {
+  trial
+  active
+  suspended
+  cancelled
+
+  @@map("tenant_status")
+}
+
+// Audit log master (acciones cross-tenant: superadmin, billing, etc.)
+// Tenant tiene su propio audit log en su schema.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  resource   String?
+  resourceId String?  @map("resource_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actor])
+  @@index([resource, resourceId])
+  @@map("audit_log")
+}

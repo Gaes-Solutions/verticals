@@ -16,13 +16,24 @@
     "test": "turbo test",
     "format": "biome format --write .",
     "check": "biome check --write .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "dev:db": "docker compose up -d",
+    "dev:db:down": "docker compose down",
+    "dev:db:reset": "docker compose down -v",
+    "dev:db:logs": "docker compose logs -f",
+    "db:generate": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:migrate",
+    "db:migrate:deploy": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:migrate:deploy",
+    "db:studio": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:studio",
+    "db:reset": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:reset",
+    "db:seed": "dotenv -e .env -- pnpm --filter @gaespos/db seed:master"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@types/node": "^22.10.2",
+    "dotenv-cli": "^8.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
     "turbo": "^2.3.3",
@@ -32,6 +43,12 @@
     "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}": ["biome check --write --no-errors-on-unmatched"]
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome"]
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

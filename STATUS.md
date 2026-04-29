@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 5 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5)
-- **Tarea actual**: Listo para arrancar 0.6 — Package `db/` con Prisma + schema master + plantilla schema tenant
-- **Próximo paso concreto**: `mkdir -p packages/db/prisma` + crear `packages/db/package.json` + `prisma/master.prisma` (schema master DB con tenants, billing, partners stub mínimo Hito 0) + Docker compose dev (Postgres 16 + Redis 7)
+- **Progreso Hito 0**: 6 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+- **Tarea actual**: Listo para arrancar 0.7 — CLI `gaes-migrate` para migraciones multi-schema
+- **Próximo paso concreto**: Crear `packages/db/src/cli/migrate.ts` con comandos `master` (migra master DB), `tenant <slug>` (crea schema postgres + aplica migrations tenant template), `tenant --all` (itera todos los tenants registrados); usar Commander o yargs; binario via `bin` en package.json
 - **Bloqueos**: Ninguno
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -21,7 +21,7 @@ Ver checklist completo en [`docs/hitos/hito-0-infra.md`](docs/hitos/hito-0-infra
 - [x] **0.3 Migrar 12 ADRs** desde Análisis 9 (`docs/adr/001-012`)
 - [x] **0.4 Setup monorepo Turborepo + pnpm workspaces** (turbo 2.9.6, typescript 5.9.3, pnpm 10.33.2, Node 22 target, git init main)
 - [x] **0.5 Biome + commitlint + Husky + lint-staged + tsconfig.json** (Biome 1.9.4, husky 9.1.7, commitlint 19.8.1, lint-staged 15.5.2)
-- [ ] 0.6 Package `db/` con Prisma + schema master + plantilla schema tenant
+- [x] **0.6 Package `db/` con Prisma + schema master** (Prisma 6.19.3, Postgres 16-alpine, Redis 7-alpine en docker-compose, schema master con plans/tenants/audit_log, seed con 4 planes, tenant.template.prisma vacío)
 - [ ] 0.7 CLI `gaes-migrate` para migraciones multi-schema
 - [ ] 0.8 App `api/` con Fastify + auth JWT 15min/refresh 30d
 - [ ] 0.9 CI GitHub Actions (lint + typecheck + test + build)
@@ -102,4 +102,19 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - `lint-staged`: biome check --write en {ts,tsx,js,jsx,mjs,cjs,json,jsonc} staged
 - `tsconfig.json` raíz extiende base, noEmit, includes vacío (project references se llenan al crear packages)
 - Verificación: `pnpm biome check .` 6 archivos clean; commitlint rechaza mensajes sin convention y acepta válidos
-- **Próxima sesión empieza en**: 0.6 Package `db/` con Prisma multi-schema
+- Commit `3e4f29f`: chore(tooling)
+
+### 2026-04-28 — Hito 0.6 Package db/ + Docker
+- `docker-compose.yml`: Postgres 16-alpine (5432:5432) + Redis 7-alpine (6380:6379, host port distinto porque 6379 ocupado por otro container) con healthchecks y volúmenes persistentes
+- `.env.example` + `.env` (gitignored) con `DATABASE_URL_MASTER`, `DATABASE_URL_TENANT`, `REDIS_URL`
+- `packages/db/`: package privado `@gaespos/db`, scripts prisma (generate/migrate/migrate:deploy/studio/reset/seed:master), Prisma 6.19.3 + tsx 4.19.2
+- `prisma/master.prisma`: modelos `Plan` (id, code, name, priceCents, currency, description, active), `Tenant` (id, slug, name, schemaName, status, planId), enum `TenantStatus` (trial/active/suspended/cancelled), `AuditLog` (actor, action, resource, metadata, ipAddress); generator output a `src/generated/master`
+- `prisma/tenant.template.prisma`: stub Hito 0 (solo datasource + generator, modelos llegan Hito 1+)
+- `src/client.ts`: factory `createMasterClient(databaseUrl?)` + singleton `masterPrisma` (HMR-safe via global), log levels según NODE_ENV
+- `src/seed-master.ts`: upsert 4 planes (Free $0, Starter $499, Growth $999, Scale $1999 MXN)
+- `src/index.ts`: re-exports tipados (Prisma, Plan, Tenant, TenantStatus, AuditLog)
+- Scripts en root: `dev:db`, `dev:db:down`, `dev:db:reset`, `db:generate`, `db:migrate`, `db:seed`, `db:studio` (todos via dotenv-cli leyendo `.env`)
+- `pnpm.onlyBuiltDependencies`: agregados `@prisma/client`, `@prisma/engines`, `prisma`, `esbuild` (pnpm 10 los bloquea)
+- `tsconfig.json` raíz con `references: [{ path: "./packages/db" }]`
+- Verificación end-to-end: docker compose up → Postgres healthy → migration `20260429025709_init` aplicada (4 tablas: plans, tenants, audit_log, _prisma_migrations) → seed insertó 4 plans → typecheck + biome OK
+- **Próxima sesión empieza en**: 0.7 CLI `gaes-migrate` (master + tenant <slug> + tenant --all)

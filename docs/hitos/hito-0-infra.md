@@ -72,13 +72,19 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [x] `pnpm.onlyBuiltDependencies: ["@biomejs/biome"]` (pnpm 10 bloquea build scripts por seguridad)
 - [x] Verificación: `pnpm biome check .` clean; commitlint rechaza/acepta correctamente
 
-### 0.6 Package `db/`
-- [ ] `packages/db/package.json` con dep Prisma
-- [ ] `packages/db/prisma/master.prisma` schema master DB (tenants, billing, partners stub mínimo Hito 0)
-- [ ] `packages/db/prisma/tenant.template.prisma` plantilla tenant (vacía Hito 0, llena Hito 1+)
-- [ ] `packages/db/src/client.ts` factory de PrismaClient con `setSearchPath` middleware
-- [ ] `packages/db/src/seed-master.ts` seed básico
-- [ ] Docker compose dev (Postgres 16 + Redis 7)
+### 0.6 Package `db/` ✅
+- [x] `packages/db/package.json` con `@prisma/client` 6.19 + `prisma` + `tsx` + scripts (generate/migrate/migrate:deploy/studio/reset/seed:master)
+- [x] `packages/db/prisma/master.prisma` schema master: `Plan` (cuid, code unique, priceCents, currency MXN, active), `Tenant` (slug unique, schemaName unique, status enum, planId FK), `TenantStatus` enum (trial/active/suspended/cancelled), `AuditLog` (actor, action, resource, metadata, ipAddress, índices)
+- [x] `packages/db/prisma/tenant.template.prisma` Hito 0 vacía (datasource + generator → `src/generated/tenant`); modelos llegan Hito 1+
+- [x] `packages/db/src/client.ts` factory `createMasterClient(databaseUrl?)` + singleton `masterPrisma` HMR-safe via global; log levels según NODE_ENV (factory de tenant client con `setSearchPath` middleware llega en 0.7-0.8)
+- [x] `packages/db/src/seed-master.ts` upsert 4 planes (Free $0, Starter $499 MXN, Growth $999 MXN, Scale $1999 MXN)
+- [x] `packages/db/src/index.ts` re-exports tipados (Prisma, Plan, Tenant, TenantStatus, AuditLog)
+- [x] `docker-compose.yml`: Postgres 16-alpine (5432:5432) + Redis 7-alpine (6380:6379, conflicto host port) con healthchecks y volúmenes persistentes
+- [x] `.env.example` + `.env` (gitignored) con `DATABASE_URL_MASTER`/`DATABASE_URL_TENANT`/`REDIS_URL`
+- [x] Scripts root: `dev:db`/`dev:db:down`/`dev:db:reset`/`dev:db:logs`, `db:generate`/`db:migrate`/`db:migrate:deploy`/`db:studio`/`db:reset`/`db:seed` (todos via dotenv-cli leyendo `.env`)
+- [x] `pnpm.onlyBuiltDependencies` aprobado: `@prisma/client`, `@prisma/engines`, `prisma`, `esbuild`
+- [x] `tsconfig.json` raíz con `references: [{ path: "./packages/db" }]`
+- [x] Verificación E2E: docker compose up → Postgres healthy → migration `20260429025709_init` aplicada (tablas plans/tenants/audit_log/_prisma_migrations) → `seed:master` insertó 4 plans → `pnpm typecheck` y `pnpm biome check .` clean
 
 ### 0.7 CLI `gaes-migrate`
 - [ ] `packages/db/src/cli/migrate.ts`

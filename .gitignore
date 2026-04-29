@@ -43,6 +43,7 @@ src-tauri/target/
 
 # Prisma
 prisma/migrations/dev/
+**/src/generated/
 *.db
 *.db-journal
 

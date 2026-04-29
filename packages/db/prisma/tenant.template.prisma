@@ -1,0 +1,19 @@
+// Plantilla del schema de cada tenant.
+// Cada tenant tiene su propio schema postgres con copia de estos modelos.
+// El cliente Prisma de tenant aplica `SET search_path TO tenant_<slug>` por request.
+// Ver ADR-001 y docs/analisis/04-modelo-datos/ (4.6+)
+//
+// Hito 0: vacío. Los modelos llegan desde Hito 1+:
+//   - Hito 1: usuarios, roles, productos, ventas
+//   - Hito 2: clientes, apartados, CxC, cotizaciones
+//   - Hito 3+: módulos verticales (abarrotes, salud, etc.)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/tenant"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_TENANT")
+}

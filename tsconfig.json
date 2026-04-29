@@ -5,5 +5,5 @@
     "composite": false
   },
   "include": [],
-  "references": []
+  "references": [{ "path": "./packages/db" }]
 }
