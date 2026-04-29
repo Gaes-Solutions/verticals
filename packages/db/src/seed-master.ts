@@ -1,3 +1,4 @@
+import { hash } from "@node-rs/argon2";
 import { masterPrisma } from "./client.js";
 
 async function main(): Promise<void> {
@@ -41,12 +42,40 @@ async function main(): Promise<void> {
       create: plan,
     });
   }
-
   console.info(`[seed-master] upserted ${plans.length} plans`);
+
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@gaessoft.local";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe!2026";
+  const passwordHash = await hash(adminPassword, {
+    memoryCost: 19456,
+    timeCost: 2,
+    parallelism: 1,
+  });
+
+  await masterPrisma.adminUser.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      passwordHash,
+      name: "Admin GaesSoft",
+      role: "superadmin",
+      active: true,
+    },
+  });
+  console.info(`[seed-master] upserted admin user "${adminEmail}"`);
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.warn(
+      `[seed-master] ⚠️  Admin password = "${adminPassword}" (set SEED_ADMIN_PASSWORD env to override)`,
+    );
+  }
 
   const totalPlans = await masterPrisma.plan.count();
   const totalTenants = await masterPrisma.tenant.count();
-  console.info(`[seed-master] DB state: ${totalPlans} plans, ${totalTenants} tenants`);
+  const totalAdmins = await masterPrisma.adminUser.count();
+  console.info(
+    `[seed-master] DB state: ${totalPlans} plans, ${totalTenants} tenants, ${totalAdmins} admins`,
+  );
 }
 
 main()

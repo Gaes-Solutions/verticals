@@ -27,7 +27,8 @@
     "db:studio": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:studio",
     "db:reset": "dotenv -e .env -- pnpm --filter @gaespos/db prisma:reset",
     "db:seed": "dotenv -e .env -- pnpm --filter @gaespos/db seed:master",
-    "gaes-migrate": "dotenv -e .env -- pnpm --filter @gaespos/db migrate"
+    "gaes-migrate": "dotenv -e .env -- pnpm --filter @gaespos/db migrate",
+    "dev:api": "dotenv -e .env -- pnpm --filter @gaespos/api dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

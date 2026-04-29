@@ -102,17 +102,28 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [x] Verificación E2E: 2 tenants creados con schemas postgres correspondientes, migrate-all idempotente
 - [ ] Tests unitarios del CLI → diferido a 0.9 (cuando Vitest workspace esté configurado)
 
-### 0.8 App `api/`
-- [ ] `apps/api/package.json` con Fastify + plugins (cors, helmet, rate-limit, jwt, sensible)
-- [ ] `apps/api/src/server.ts` bootstrap
-- [ ] `apps/api/src/plugins/` (db, auth, rate-limit, error-handler)
-- [ ] `apps/api/src/modules/auth/` (login, refresh, logout)
-- [ ] `apps/api/src/modules/tenants/` (CRUD básico Hito 0)
-- [ ] `apps/api/src/modules/health/` (`/health`, `/ready`)
-- [ ] JWT 15min access + refresh 30d en HttpOnly cookie
-- [ ] Pino logger structured JSON
-- [ ] Zod schemas en endpoints
-- [ ] Tests integración con Postgres real (no mocks)
+### 0.8 App `api/` ✅
+- [x] `apps/api/package.json` con Fastify 5.2 + plugins (cors, helmet, rate-limit, jwt, cookie, sensible) + fastify-plugin + Zod + Pino
+- [x] Schema master extendido: `AdminUser` (email único, passwordHash argon2, role enum superadmin/support/billing, mfaSecret opcional, active, lastLoginAt) + `RefreshToken` (tokenHash SHA-256 único, adminUserId FK cascade, expiresAt, revokedAt, userAgent, ipAddress) + migration `add_admin_users` + seed con admin default `admin@gaessoft.local` / `ChangeMe!2026`
+- [x] `apps/api/src/config.ts` Zod env validation (JWT/REFRESH/COOKIE secrets ≥32, TTLs, CORS, rate limit)
+- [x] `apps/api/src/server.ts` bootstrap con SIGINT/SIGTERM graceful shutdown
+- [x] `apps/api/src/app.ts` factory `buildApp(config)` (testeable)
+- [x] `src/plugins/db.ts`: decora `app.masterPrisma` + onClose disconnect
+- [x] `src/plugins/auth.ts`: registra @fastify/jwt + @fastify/cookie con COOKIE_SECRET, decorator `app.authenticate` preHandler
+- [x] `src/plugins/security.ts`: helmet (CSP only prod) + cors (credentials true) + rate-limit (100/min global) + sensible
+- [x] `src/plugins/error-handler.ts`: ZodError→400 con issues, Prisma P2002→409, P2025→404, fallback 500 con request log
+- [x] `src/modules/auth/`: login (rate-limit 10/min, argon2 verify, JWT 15min + refresh cookie HttpOnly signed Path=/auth Max-Age=30d, lastLoginAt update), refresh (rotación: revoca anterior + emite nuevo par), logout (revoca + clearCookie), me (preHandler authenticate)
+- [x] `src/modules/tenants/`: preHandler authenticate global, list, get-by-slug, create (reusa `createTenant` de `@gaespos/db`)
+- [x] `src/modules/health/`: `/health` (liveness) + `/ready` (Postgres SELECT 1)
+- [x] JWT 15min HS256 access + refresh 30d HttpOnly cookie signed
+- [x] Pino logger structured JSON (pino-pretty en dev)
+- [x] Zod schemas en endpoints (login body, tenant body/params)
+- [x] `@node-rs/argon2` 2.0 password hashing (Rust prebuilt)
+- [x] Re-export funciones tenant desde `@gaespos/db` (createTenant, migrateTenant, etc. usables desde apps)
+- [x] Script root `dev:api` via dotenv-cli + pnpm filter
+- [x] `.env.example` actualizado con todas las vars (incluye comentario para generar secrets)
+- [x] Verificación E2E manual: login admin → me → list tenants (demo+acme) → POST `bodega-norte` plan growth (creó schema tenant_bodega_norte) → list 3 → /me sin token 401 → refresh OK → password mala 401
+- [ ] Tests integración con Postgres real → diferido a 0.9 (Vitest workspace + setup helpers + reset DB entre tests)
 
 ### 0.9 CI GitHub Actions
 - [ ] `.github/workflows/pr.yml`: install + lint + typecheck + test + build

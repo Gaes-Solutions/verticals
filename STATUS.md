@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 7 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
-- **Tarea actual**: Listo para arrancar 0.8 — App `api/` con Fastify + JWT auth
-- **Próximo paso concreto**: `mkdir -p apps/api/src/{plugins,modules/{auth,tenants,health}}` + crear `apps/api/package.json` con Fastify 5 + plugins (cors, helmet, rate-limit, jwt, sensible) + Zod + Pino; bootstrap server.ts; auth con JWT 15min + refresh 30d HttpOnly cookie; CRUD básico tenants reusando `@gaespos/db`
+- **Progreso Hito 0**: 8 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+- **Tarea actual**: Listo para arrancar 0.9 — CI GitHub Actions + tests integración
+- **Próximo paso concreto**: Crear `.github/workflows/pr.yml` (install + lint + typecheck + test + build) y `main.yml` (build + push images + deploy staging). Configurar Vitest workspace-wide y agregar tests integración api/auth + tenants + CLI gaes-migrate (Postgres real, no mocks)
 - **Bloqueos**: Ninguno
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -23,7 +23,7 @@ Ver checklist completo en [`docs/hitos/hito-0-infra.md`](docs/hitos/hito-0-infra
 - [x] **0.5 Biome + commitlint + Husky + lint-staged + tsconfig.json** (Biome 1.9.4, husky 9.1.7, commitlint 19.8.1, lint-staged 15.5.2)
 - [x] **0.6 Package `db/` con Prisma + schema master** (Prisma 6.19.3, Postgres 16-alpine, Redis 7-alpine en docker-compose, schema master con plans/tenants/audit_log, seed con 4 planes, tenant.template.prisma vacío)
 - [x] **0.7 CLI `gaes-migrate`** (commander 13 + pg 8 + execa 9; comandos master/tenant create/migrate/migrate-all/list; reorganización prisma/master + prisma/tenant para historial separado)
-- [ ] 0.8 App `api/` con Fastify + auth JWT 15min/refresh 30d
+- [x] **0.8 App `api/` con Fastify + JWT auth** (Fastify 5 + helmet + cors + rate-limit + jwt + cookie + sensible; AdminUser/RefreshToken en master; argon2 password hashing; modules health/auth/tenants; E2E verificado)
 - [ ] 0.9 CI GitHub Actions (lint + typecheck + test + build)
 - [ ] 0.10 Hetzner CPX31 + Coolify install + dominio staging
 - [ ] 0.11 Primer commit + PR + merge + deploy verde
@@ -129,4 +129,18 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `gaes-migrate` via dotenv-cli + pnpm filter
 - Verificación E2E: `gaes-migrate tenant create demo --name "Demo Tenant" --plan free` y `acme --plan starter` → master.tenants tiene 2 rows trial, postgres tiene schemas tenant_demo y tenant_acme; `tenant list` los muestra; `tenant migrate-all` idempotente
 - TODO diferido a 0.9: tests unitarios CLI (cuando Vitest workspace esté configurado)
-- **Próxima sesión empieza en**: 0.8 App api/ con Fastify + JWT auth
+- Commit `d49d966`: feat(db) CLI gaes-migrate
+
+### 2026-04-29 — Hito 0.8 App api/ con Fastify + JWT
+- Schema master extendido: `AdminUser` (email, passwordHash argon2, role enum superadmin/support/billing, mfaSecret opcional, lastLoginAt) + `RefreshToken` (tokenHash SHA-256, adminUserId FK cascade, expiresAt, revokedAt, userAgent, ipAddress). Migration `add_admin_users` aplicada
+- `@node-rs/argon2` 2.0 para hash + verify password (Rust prebuilt, sin native build); seed con admin default `admin@gaessoft.local` / `ChangeMe!2026` (override via env `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`)
+- `@gaespos/db` re-exporta funciones `createTenant`/`migrateTenant`/`listTenants`/`migrateAllTenants` para uso desde apps (no solo CLI)
+- `apps/api`: Fastify 5.2 + @fastify/{cors,helmet,jwt,cookie,rate-limit,sensible} + fastify-plugin + Zod 3.23 + Pino 9.5 (pino-pretty dev)
+- `src/config.ts` Zod schema valida env vars (JWT/REFRESH/COOKIE secrets ≥32 chars, TTLs configurables, CORS origin, rate limit)
+- `src/plugins/`: db (decora masterPrisma + onClose disconnect), auth (JWT 15min + cookie con COOKIE_SECRET, decorator `authenticate`), security (helmet+cors+rate-limit+sensible), error-handler (ZodError→400, Prisma P2002→409, P2025→404, fallback 500)
+- `src/modules/health`: `/health` (liveness) + `/ready` (Postgres `SELECT 1`)
+- `src/modules/auth`: POST `/login` (rate-limited 10/min, valida con Zod, verify argon2, emite access JWT + refresh cookie HttpOnly Path=/auth Max-Age=30d signed con COOKIE_SECRET, actualiza lastLoginAt), POST `/refresh` (consume cookie, revoca anterior, emite nuevo par, rotación), POST `/logout` (revoca + clearCookie), GET `/me` (preHandler authenticate)
+- `src/modules/tenants`: hook preHandler authenticate global, GET `/` lista, GET `/:slug` detalle, POST `/` invoca `createTenant` (reusa lógica del CLI: master row + CREATE SCHEMA + migrate)
+- Verificación E2E: login admin → me → list (2 tenants existentes) → POST tenant `bodega-norte` plan growth (creó schema postgres tenant_bodega_norte) → list (3 tenants) → /me sin token rechaza 401 → /refresh con cookie rota OK → password mala rechaza 401
+- Pendiente: tests integración (en 0.9 con Vitest), módulo /auth refresh cookie SameSite=Strict en prod (actualmente Lax)
+- **Próxima sesión empieza en**: 0.9 CI GitHub Actions + tests Vitest

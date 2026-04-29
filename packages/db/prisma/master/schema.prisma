@@ -55,6 +55,54 @@ enum TenantStatus {
   @@map("tenant_status")
 }
 
+// Usuarios de GaesSoft (superadmin, soporte, billing). Distinto de los usuarios
+// de cada tenant (que viven en el schema del tenant — análisis 4.6).
+// Ver análisis 4.4 (soporte/audit) y flujo 10 (superadmin).
+model AdminUser {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  name         String
+  role         AdminRole  @default(superadmin)
+  active       Boolean    @default(true)
+  mfaSecret    String?    @map("mfa_secret")
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  @@index([active])
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  superadmin
+  support
+  billing
+
+  @@map("admin_role")
+}
+
+// Refresh tokens persistidos para revocación (rotación + invalidación al logout).
+// access JWT 15min queda en memoria del cliente; refresh 30d HttpOnly cookie.
+model RefreshToken {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique @map("token_hash")
+  adminUserId String    @map("admin_user_id")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  userAgent   String?   @map("user_agent")
+  ipAddress   String?   @map("ip_address")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
 // Audit log master (acciones cross-tenant: superadmin, billing, etc.)
 // Tenant tiene su propio audit log en su schema.
 model AuditLog {
