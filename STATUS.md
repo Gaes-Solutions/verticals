@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 6 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
-- **Tarea actual**: Listo para arrancar 0.7 — CLI `gaes-migrate` para migraciones multi-schema
-- **Próximo paso concreto**: Crear `packages/db/src/cli/migrate.ts` con comandos `master` (migra master DB), `tenant <slug>` (crea schema postgres + aplica migrations tenant template), `tenant --all` (itera todos los tenants registrados); usar Commander o yargs; binario via `bin` en package.json
+- **Progreso Hito 0**: 7 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
+- **Tarea actual**: Listo para arrancar 0.8 — App `api/` con Fastify + JWT auth
+- **Próximo paso concreto**: `mkdir -p apps/api/src/{plugins,modules/{auth,tenants,health}}` + crear `apps/api/package.json` con Fastify 5 + plugins (cors, helmet, rate-limit, jwt, sensible) + Zod + Pino; bootstrap server.ts; auth con JWT 15min + refresh 30d HttpOnly cookie; CRUD básico tenants reusando `@gaespos/db`
 - **Bloqueos**: Ninguno
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -22,7 +22,7 @@ Ver checklist completo en [`docs/hitos/hito-0-infra.md`](docs/hitos/hito-0-infra
 - [x] **0.4 Setup monorepo Turborepo + pnpm workspaces** (turbo 2.9.6, typescript 5.9.3, pnpm 10.33.2, Node 22 target, git init main)
 - [x] **0.5 Biome + commitlint + Husky + lint-staged + tsconfig.json** (Biome 1.9.4, husky 9.1.7, commitlint 19.8.1, lint-staged 15.5.2)
 - [x] **0.6 Package `db/` con Prisma + schema master** (Prisma 6.19.3, Postgres 16-alpine, Redis 7-alpine en docker-compose, schema master con plans/tenants/audit_log, seed con 4 planes, tenant.template.prisma vacío)
-- [ ] 0.7 CLI `gaes-migrate` para migraciones multi-schema
+- [x] **0.7 CLI `gaes-migrate`** (commander 13 + pg 8 + execa 9; comandos master/tenant create/migrate/migrate-all/list; reorganización prisma/master + prisma/tenant para historial separado)
 - [ ] 0.8 App `api/` con Fastify + auth JWT 15min/refresh 30d
 - [ ] 0.9 CI GitHub Actions (lint + typecheck + test + build)
 - [ ] 0.10 Hetzner CPX31 + Coolify install + dominio staging
@@ -117,4 +117,16 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - `pnpm.onlyBuiltDependencies`: agregados `@prisma/client`, `@prisma/engines`, `prisma`, `esbuild` (pnpm 10 los bloquea)
 - `tsconfig.json` raíz con `references: [{ path: "./packages/db" }]`
 - Verificación end-to-end: docker compose up → Postgres healthy → migration `20260429025709_init` aplicada (4 tablas: plans, tenants, audit_log, _prisma_migrations) → seed insertó 4 plans → typecheck + biome OK
-- **Próxima sesión empieza en**: 0.7 CLI `gaes-migrate` (master + tenant <slug> + tenant --all)
+- Commit `ef9b9c2`: feat(db)
+
+### 2026-04-28 — Hito 0.7 CLI gaes-migrate
+- Reorganización `prisma/`: `prisma/master/{schema.prisma, migrations/}` y `prisma/tenant/{schema.prisma, migrations/}` (cada schema con su historial separado, evita colisión `_prisma_migrations` shared)
+- Deps nuevas en `@gaespos/db`: `commander@13.1.0`, `pg@8.20.0`, `execa@9.6.1`, `@types/pg@8.20.0`
+- `src/cli/migrate.ts` entry point con Commander, sub-comandos: `master`, `tenant create <slug> --name <n> --plan <code>`, `tenant migrate <slug>`, `tenant migrate-all`, `tenant list`
+- `src/cli/master.ts`: invoca `prisma migrate deploy` sobre master schema
+- `src/cli/tenant.ts`: crea row en master.tenants + `CREATE SCHEMA` postgres + invoca `prisma migrate deploy` sobre tenant schema con `DATABASE_URL_TENANT?schema=tenant_<slug>` injectado
+- `src/cli/utils.ts`: validateSlug (regex), tenantSchemaName, tenantDatabaseUrl, requireEnv, withPgClient
+- Script root `gaes-migrate` via dotenv-cli + pnpm filter
+- Verificación E2E: `gaes-migrate tenant create demo --name "Demo Tenant" --plan free` y `acme --plan starter` → master.tenants tiene 2 rows trial, postgres tiene schemas tenant_demo y tenant_acme; `tenant list` los muestra; `tenant migrate-all` idempotente
+- TODO diferido a 0.9: tests unitarios CLI (cuando Vitest workspace esté configurado)
+- **Próxima sesión empieza en**: 0.8 App api/ con Fastify + JWT auth

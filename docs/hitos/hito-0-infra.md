@@ -86,12 +86,21 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [x] `tsconfig.json` raíz con `references: [{ path: "./packages/db" }]`
 - [x] Verificación E2E: docker compose up → Postgres healthy → migration `20260429025709_init` aplicada (tablas plans/tenants/audit_log/_prisma_migrations) → `seed:master` insertó 4 plans → `pnpm typecheck` y `pnpm biome check .` clean
 
-### 0.7 CLI `gaes-migrate`
-- [ ] `packages/db/src/cli/migrate.ts`
-- [ ] Comando `gaes-migrate master` (migra master DB)
-- [ ] Comando `gaes-migrate tenant <slug>` (crea schema + aplica migrations tenant)
-- [ ] Comando `gaes-migrate tenant --all` (itera todos los tenants registrados)
-- [ ] Tests unitarios del CLI
+### 0.7 CLI `gaes-migrate` ✅
+- [x] Reorganización `prisma/`: `prisma/master/{schema.prisma, migrations/}` + `prisma/tenant/{schema.prisma, migrations/}` (cada schema con su propio historial `_prisma_migrations`)
+- [x] Deps `@gaespos/db`: commander 13.1, pg 8.20, execa 9.6, @types/pg 8.20
+- [x] `packages/db/src/cli/migrate.ts` entry point Commander, exit handling, $disconnect en finally
+- [x] `packages/db/src/cli/master.ts` invoca `prisma migrate deploy --schema=./prisma/master/schema.prisma`
+- [x] `packages/db/src/cli/tenant.ts` con `createTenant`, `migrateTenant`, `migrateAllTenants`, `listTenants`
+- [x] `packages/db/src/cli/utils.ts` con `validateSlug` (regex `^[a-z][a-z0-9_-]{1,49}$`), `tenantSchemaName`, `tenantDatabaseUrl`, `requireEnv`, `withPgClient`
+- [x] Comando `gaes-migrate master` aplica migrations master idempotente
+- [x] Comando `gaes-migrate tenant create <slug> -n <name> -p <plan>`: master row → `CREATE SCHEMA` postgres → `prisma migrate deploy` sobre tenant template con DATABASE_URL_TENANT injectado con `?schema=`
+- [x] Comando `gaes-migrate tenant migrate <slug>` aplica migrations tenant
+- [x] Comando `gaes-migrate tenant migrate-all` itera tenants no-cancelled
+- [x] Comando `gaes-migrate tenant list` (slug, schema, plan, status, name)
+- [x] Script root `gaes-migrate` via dotenv-cli + `pnpm --filter @gaespos/db migrate`
+- [x] Verificación E2E: 2 tenants creados con schemas postgres correspondientes, migrate-all idempotente
+- [ ] Tests unitarios del CLI → diferido a 0.9 (cuando Vitest workspace esté configurado)
 
 ### 0.8 App `api/`
 - [ ] `apps/api/package.json` con Fastify + plugins (cors, helmet, rate-limit, jwt, sensible)
