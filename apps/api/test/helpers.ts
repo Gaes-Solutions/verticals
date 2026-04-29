@@ -1,0 +1,102 @@
+import { masterPrisma } from "@gaespos/db";
+import type { FastifyInstance } from "fastify";
+import { Client } from "pg";
+import { buildApp } from "../src/app.js";
+import type { Config } from "../src/config.js";
+
+export const TEST_ADMIN_EMAIL = "admin@gaessoft.local";
+export const TEST_ADMIN_PASSWORD = "ChangeMe!2026";
+
+export const TEST_TENANT_PREFIX = "test-";
+
+export function makeTestConfig(overrides: Partial<Config> = {}): Config {
+  const baseUrl = process.env.DATABASE_URL_MASTER;
+  if (!baseUrl) {
+    throw new Error("DATABASE_URL_MASTER must be set for tests");
+  }
+  return {
+    NODE_ENV: "test",
+    HOST: "127.0.0.1",
+    PORT: 0,
+    LOG_LEVEL: "fatal",
+    DATABASE_URL_MASTER: baseUrl,
+    DATABASE_URL_TENANT: process.env.DATABASE_URL_TENANT ?? baseUrl,
+    REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6380",
+    JWT_SECRET: "test-jwt-secret-must-be-at-least-32-chars-long",
+    JWT_REFRESH_SECRET: "test-refresh-secret-must-be-at-least-32-chars-long",
+    COOKIE_SECRET: "test-cookie-secret-must-be-at-least-32-chars-long",
+    ACCESS_TOKEN_TTL_MIN: 15,
+    REFRESH_TOKEN_TTL_DAYS: 30,
+    CORS_ORIGIN: "http://localhost:5173",
+    RATE_LIMIT_MAX: 100000,
+    RATE_LIMIT_WINDOW: "1 minute",
+    ...overrides,
+  };
+}
+
+export async function buildTestApp(overrides: Partial<Config> = {}): Promise<FastifyInstance> {
+  const config = makeTestConfig(overrides);
+  const app = await buildApp(config);
+  await app.ready();
+  return app;
+}
+
+export interface LoggedInAdmin {
+  accessToken: string;
+  refreshCookie: string;
+  userId: string;
+}
+
+export async function loginAdmin(
+  app: FastifyInstance,
+  email: string = TEST_ADMIN_EMAIL,
+  password: string = TEST_ADMIN_PASSWORD,
+): Promise<LoggedInAdmin> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/auth/login",
+    payload: { email, password },
+  });
+  if (res.statusCode !== 200) {
+    throw new Error(`login failed: ${res.statusCode} ${res.body}`);
+  }
+  const body = res.json() as { accessToken: string; user: { id: string } };
+  const setCookie = res.headers["set-cookie"];
+  const cookieStr = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  if (!cookieStr) throw new Error("login: missing set-cookie");
+  const refreshCookie = cookieStr.split(";")[0];
+  if (!refreshCookie) throw new Error("login: malformed cookie");
+  return { accessToken: body.accessToken, refreshCookie, userId: body.user.id };
+}
+
+export async function cleanupTestTenants(): Promise<void> {
+  const tenants = await masterPrisma.tenant.findMany({
+    where: { slug: { startsWith: TEST_TENANT_PREFIX } },
+  });
+  if (tenants.length === 0) return;
+
+  const baseUrl = process.env.DATABASE_URL_MASTER;
+  if (!baseUrl) throw new Error("DATABASE_URL_MASTER not set");
+
+  const pg = new Client({ connectionString: baseUrl });
+  await pg.connect();
+  try {
+    for (const t of tenants) {
+      await pg.query(`DROP SCHEMA IF EXISTS "${t.schemaName}" CASCADE`);
+    }
+  } finally {
+    await pg.end();
+  }
+
+  await masterPrisma.tenant.deleteMany({
+    where: { slug: { startsWith: TEST_TENANT_PREFIX } },
+  });
+}
+
+export async function cleanupTestRefreshTokens(): Promise<void> {
+  const admin = await masterPrisma.adminUser.findUnique({
+    where: { email: TEST_ADMIN_EMAIL },
+  });
+  if (!admin) return;
+  await masterPrisma.refreshToken.deleteMany({ where: { adminUserId: admin.id } });
+}

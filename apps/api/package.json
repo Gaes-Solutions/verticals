@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -27,6 +30,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

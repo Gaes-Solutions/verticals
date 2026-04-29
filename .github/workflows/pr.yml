@@ -1,0 +1,97 @@
+name: PR Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint + Typecheck + Test + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gaespos
+          POSTGRES_PASSWORD: devsecret
+          POSTGRES_DB: gaespos_master
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      DATABASE_URL_MASTER: postgresql://gaespos:devsecret@localhost:5432/gaespos_master?schema=public
+      DATABASE_URL_TENANT: postgresql://gaespos:devsecret@localhost:5432/gaespos_master
+      REDIS_URL: redis://localhost:6380
+      JWT_SECRET: ci-jwt-secret-must-be-at-least-32-chars-long-padding
+      JWT_REFRESH_SECRET: ci-refresh-secret-must-be-at-least-32-chars-long
+      COOKIE_SECRET: ci-cookie-secret-must-be-at-least-32-chars-long-pad
+      ACCESS_TOKEN_TTL_MIN: "15"
+      REFRESH_TOKEN_TTL_DAYS: "30"
+      CORS_ORIGIN: http://localhost:5173
+      RATE_LIMIT_MAX: "100000"
+      RATE_LIMIT_WINDOW: 1 minute
+      SEED_ADMIN_EMAIL: admin@gaessoft.local
+      SEED_ADMIN_PASSWORD: ChangeMe!2026
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma clients
+        run: pnpm --filter @gaespos/db prisma:generate
+
+      - name: Apply master DB migrations
+        run: pnpm --filter @gaespos/db prisma:migrate:deploy
+
+      - name: Seed master DB
+        run: pnpm --filter @gaespos/db seed:master
+
+      - name: Lint (Biome)
+        run: pnpm biome ci .
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

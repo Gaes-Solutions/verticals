@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalEnv": ["NODE_ENV", "LOG_LEVEL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -14,7 +15,24 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "DATABASE_URL_MASTER",
+        "DATABASE_URL_TENANT",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "JWT_REFRESH_SECRET",
+        "COOKIE_SECRET",
+        "ACCESS_TOKEN_TTL_MIN",
+        "REFRESH_TOKEN_TTL_DAYS",
+        "CORS_ORIGIN",
+        "RATE_LIMIT_MAX",
+        "RATE_LIMIT_WINDOW",
+        "PORT",
+        "HOST",
+        "SEED_ADMIN_EMAIL",
+        "SEED_ADMIN_PASSWORD"
+      ]
     },
     "dev": {
       "cache": false,

@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 8 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
-- **Tarea actual**: Listo para arrancar 0.9 — CI GitHub Actions + tests integración
-- **Próximo paso concreto**: Crear `.github/workflows/pr.yml` (install + lint + typecheck + test + build) y `main.yml` (build + push images + deploy staging). Configurar Vitest workspace-wide y agregar tests integración api/auth + tenants + CLI gaes-migrate (Postgres real, no mocks)
+- **Progreso Hito 0**: 9 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+- **Tarea actual**: Listo para arrancar 0.10 — Hetzner CPX31 + Coolify install + dominio staging
+- **Próximo paso concreto**: provisionar VM Hetzner CPX31 (~€15/mes, ubicación FSN1 o NBG1), instalar Coolify via script oficial, apuntar dominio `staging.gaessoft.com`, conectar repo GitHub, deploy app `api` con Postgres 16 + Redis 7 managed por Coolify, SSL Let's Encrypt
 - **Bloqueos**: Ninguno
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -24,7 +24,7 @@ Ver checklist completo en [`docs/hitos/hito-0-infra.md`](docs/hitos/hito-0-infra
 - [x] **0.6 Package `db/` con Prisma + schema master** (Prisma 6.19.3, Postgres 16-alpine, Redis 7-alpine en docker-compose, schema master con plans/tenants/audit_log, seed con 4 planes, tenant.template.prisma vacío)
 - [x] **0.7 CLI `gaes-migrate`** (commander 13 + pg 8 + execa 9; comandos master/tenant create/migrate/migrate-all/list; reorganización prisma/master + prisma/tenant para historial separado)
 - [x] **0.8 App `api/` con Fastify + JWT auth** (Fastify 5 + helmet + cors + rate-limit + jwt + cookie + sensible; AdminUser/RefreshToken en master; argon2 password hashing; modules health/auth/tenants; E2E verificado)
-- [ ] 0.9 CI GitHub Actions (lint + typecheck + test + build)
+- [x] **0.9 CI GitHub Actions + tests integración** (Vitest 2.1.9; 38 tests verdes: 18 unit utils + 20 integración auth/tenants/health con Postgres real; workflows pr.yml con services postgres+redis y main.yml placeholder deploy)
 - [ ] 0.10 Hetzner CPX31 + Coolify install + dominio staging
 - [ ] 0.11 Primer commit + PR + merge + deploy verde
 - [ ] 0.12 Demo Hito 0: login admin + crear tenant + listar tenants
@@ -143,4 +143,18 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - `src/modules/tenants`: hook preHandler authenticate global, GET `/` lista, GET `/:slug` detalle, POST `/` invoca `createTenant` (reusa lógica del CLI: master row + CREATE SCHEMA + migrate)
 - Verificación E2E: login admin → me → list (2 tenants existentes) → POST tenant `bodega-norte` plan growth (creó schema postgres tenant_bodega_norte) → list (3 tenants) → /me sin token rechaza 401 → /refresh con cookie rota OK → password mala rechaza 401
 - Pendiente: tests integración (en 0.9 con Vitest), módulo /auth refresh cookie SameSite=Strict en prod (actualmente Lax)
-- **Próxima sesión empieza en**: 0.9 CI GitHub Actions + tests Vitest
+- Commit `9f66e50`: feat(api)
+
+### 2026-04-29 — Hito 0.9 CI + tests integración
+- Vitest 2.1.9 + @vitest/coverage-v8 a nivel root devDeps
+- `apps/api/test/` (4 archivos): helpers (buildTestApp con NODE_ENV=test + RATE_LIMIT_MAX=100k; loginAdmin; cleanupTestTenants con DROP SCHEMA CASCADE para slugs `test-*`; cleanupTestRefreshTokens), setup (beforeAll/afterAll cleanup + masterPrisma.$disconnect), health.test.ts (2 tests: /health + /ready), auth.test.ts (11 tests: login OK/wrong password/wrong email/body inválido, /me sin token/inválido/válido, /refresh sin cookie/con cookie/rotación, /logout), tenants.test.ts (7 tests: list sin auth/con auth, get not-found, POST inválido/sin plan/crea+detail/duplicado 409)
+- `packages/db/src/cli/utils.test.ts` (18 tests): validateSlug (6 válidos + 7 inválidos), tenantSchemaName (con/sin guión), tenantDatabaseUrl (agrega/sobrescribe schema, preserva otros params)
+- Total: **38 tests verdes** corriendo en Postgres real (sin mocks)
+- Tsconfig: `tsconfig.json` (typecheck/IDE, sin rootDir, incluye test/) y `tsconfig.build.json` (build con rootDir=src, excluye test/) para que test files no rompan rootDir validation
+- Vitest configs inline por package (no shared root, evita issue rootDir cross-package)
+- `.github/workflows/pr.yml`: services postgres:16-alpine + redis:7-alpine con healthchecks, env vars dummy (JWT/REFRESH/COOKIE secrets ≥32 chars), pasos checkout → pnpm 10.33.2 + Node 22 cache pnpm → install --frozen-lockfile → prisma generate/migrate:deploy/seed → biome ci → typecheck → test → build
+- `.github/workflows/main.yml`: trigger push a main, placeholder deploy staging (real en 0.10/0.11)
+- `turbo.json` con `globalEnv` (NODE_ENV, LOG_LEVEL) y `test.env` con todas las vars que afectan tests para invalidación correcta de cache
+- Script root `test:dev` (con dotenv) para local; `test` puro para CI
+- TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
+- **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging

@@ -125,12 +125,23 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [x] Verificación E2E manual: login admin → me → list tenants (demo+acme) → POST `bodega-norte` plan growth (creó schema tenant_bodega_norte) → list 3 → /me sin token 401 → refresh OK → password mala 401
 - [ ] Tests integración con Postgres real → diferido a 0.9 (Vitest workspace + setup helpers + reset DB entre tests)
 
-### 0.9 CI GitHub Actions
-- [ ] `.github/workflows/pr.yml`: install + lint + typecheck + test + build
-- [ ] `.github/workflows/main.yml`: build + push Docker images + deploy staging
-- [ ] `.github/workflows/release.yml`: deploy producción (Hito 6+)
-- [ ] Cache pnpm + Turbo
-- [ ] Branch protection main: PR review obligatorio, checks verdes
+### 0.9 CI GitHub Actions + tests ✅
+- [x] Vitest 2.1.9 + @vitest/coverage-v8 a nivel root
+- [x] `packages/db/src/cli/utils.test.ts` (18 tests): validateSlug, tenantSchemaName, tenantDatabaseUrl — cierra TODO de 0.7
+- [x] `apps/api/test/helpers.ts`: buildTestApp + loginAdmin + cleanupTestTenants (DROP SCHEMA CASCADE en slugs `test-*`) + cleanupTestRefreshTokens
+- [x] `apps/api/test/setup.ts` con beforeAll/afterAll cleanup
+- [x] `apps/api/test/health.test.ts` (2 tests)
+- [x] `apps/api/test/auth.test.ts` (11 tests: login OK/inválido, /me con/sin token, /refresh con rotación, /logout)
+- [x] `apps/api/test/tenants.test.ts` (7 tests: list/get/create con auth + duplicado 409 + slug inválido 400)
+- [x] Tsconfig split: `tsconfig.json` (typecheck sin rootDir incluye test/) y `tsconfig.build.json` (build con rootDir=src, excluye test/)
+- [x] Vitest configs inline por package (sin shared root, evita issue rootDir cross-package)
+- [x] **Total: 38 tests verdes** corriendo con Postgres real + Redis (no mocks)
+- [x] `.github/workflows/pr.yml`: services postgres:16-alpine + redis:7-alpine con healthchecks; env vars dummy; checkout → pnpm 10.33.2 + Node 22 cache pnpm → install --frozen-lockfile → prisma generate/migrate:deploy/seed:master → biome ci → pnpm typecheck → pnpm test → pnpm build
+- [x] `.github/workflows/main.yml`: trigger push a main, placeholder deploy staging (real en 0.10/0.11)
+- [x] `turbo.json` con `globalEnv: [NODE_ENV, LOG_LEVEL]` y `test.env` con todas las vars que afectan tests
+- [x] Script root `test:dev` (con dotenv-cli) para local; `test` puro para CI
+- [ ] `.github/workflows/release.yml`: deploy producción → diferido a Hito 6+ (V1 release)
+- [ ] Branch protection main: PR review obligatorio + checks verdes → configuración manual via GitHub UI cuando se cree el remote en 0.10/0.11
 
 ### 0.10 Hetzner + Coolify staging
 - [ ] VM Hetzner CPX31 (~€15/mes)
