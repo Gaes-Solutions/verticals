@@ -61,12 +61,16 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [x] `git init -b main` (sin remote aún)
 - [x] `pnpm turbo run typecheck --dry-run` reconoce engines correctamente
 
-### 0.5 Linter, formato, hooks
-- [ ] `biome.json` con config strict
-- [ ] `commitlint.config.js` Conventional commits
-- [ ] Husky `pre-commit` (Biome check + typecheck) y `commit-msg` (commitlint)
-- [ ] `lint-staged` para correr Biome solo en archivos staged
-- [ ] `tsconfig.json` raíz con `strict: true`, paths workspace
+### 0.5 Linter, formato, hooks ✅
+- [x] `biome.json` 1.9.4: linter recommended + TS strict rules (noExplicitAny error, useImportType error, noNonNullAssertion warn, noConsoleLog warn, useConst error, useTemplate error, complexity, performance), formatter (double quotes, semicolons, trailingCommas all, lineWidth 100, lf), organizeImports, VCS git integrado, ignore docs/**/*.md y artefactos build, overrides para tests y *.config.ts/scripts/
+- [x] `commitlint.config.cjs` extiende `@commitlint/config-conventional`, type-enum (feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert/wip), scope-case kebab, header-max 100, body/footer libres
+- [x] Husky 9.1.7 inicializado con `pnpm exec husky init` (script `prepare: husky`)
+- [x] `.husky/pre-commit` → `pnpm exec lint-staged && pnpm exec turbo run typecheck`
+- [x] `.husky/commit-msg` → `pnpm exec commitlint --edit "$1"`
+- [x] `lint-staged` config en package.json para `*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}` → `biome check --write --no-errors-on-unmatched`
+- [x] `tsconfig.json` raíz extiende `tsconfig.base.json` con `noEmit`, `includes:[]`, `references:[]` (se llena al crear packages)
+- [x] `pnpm.onlyBuiltDependencies: ["@biomejs/biome"]` (pnpm 10 bloquea build scripts por seguridad)
+- [x] Verificación: `pnpm biome check .` clean; commitlint rechaza/acepta correctamente
 
 ### 0.6 Package `db/`
 - [ ] `packages/db/package.json` con dep Prisma

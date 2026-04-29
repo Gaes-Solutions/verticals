@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 4 de 12 tareas completas (0.1, 0.2, 0.3, 0.4)
-- **Tarea actual**: Listo para arrancar 0.5 — Biome + commitlint + Husky + lint-staged + TS strict
-- **Próximo paso concreto**: `pnpm add -Dw @biomejs/biome` + crear `biome.json` raíz; después husky init + commitlint config
+- **Progreso Hito 0**: 5 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5)
+- **Tarea actual**: Listo para arrancar 0.6 — Package `db/` con Prisma + schema master + plantilla schema tenant
+- **Próximo paso concreto**: `mkdir -p packages/db/prisma` + crear `packages/db/package.json` + `prisma/master.prisma` (schema master DB con tenants, billing, partners stub mínimo Hito 0) + Docker compose dev (Postgres 16 + Redis 7)
 - **Bloqueos**: Ninguno
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -20,7 +20,7 @@ Ver checklist completo en [`docs/hitos/hito-0-infra.md`](docs/hitos/hito-0-infra
 - [x] **0.2 Migrar 10 análisis al repo** (37 archivos en `docs/analisis/`: 2 raíz + 10 flujos + 18 sub-modelos + 6 técnicos + INDEX)
 - [x] **0.3 Migrar 12 ADRs** desde Análisis 9 (`docs/adr/001-012`)
 - [x] **0.4 Setup monorepo Turborepo + pnpm workspaces** (turbo 2.9.6, typescript 5.9.3, pnpm 10.33.2, Node 22 target, git init main)
-- [ ] 0.5 Setup Biome + commitlint + Husky + lint-staged + TS strict
+- [x] **0.5 Biome + commitlint + Husky + lint-staged + tsconfig.json** (Biome 1.9.4, husky 9.1.7, commitlint 19.8.1, lint-staged 15.5.2)
 - [ ] 0.6 Package `db/` con Prisma + schema master + plantilla schema tenant
 - [ ] 0.7 CLI `gaes-migrate` para migraciones multi-schema
 - [ ] 0.8 App `api/` con Fastify + auth JWT 15min/refresh 30d
@@ -91,4 +91,15 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Creé manualmente (sin `create-turbo` por archivos previos): `package.json` root con workspaces + scripts; `pnpm-workspace.yaml`; `turbo.json` con tasks build/dev/lint/typecheck/test/clean; `tsconfig.base.json` strict total; `.nvmrc` (22), `.npmrc`, `.editorconfig`, `.gitignore`, `README.md` mínimo
 - `pnpm install` OK → turbo 2.9.6, typescript 5.9.3, @types/node 22.19.17
 - Verificado `pnpm turbo run typecheck --dry-run` (lee `engines` correctamente)
-- **Próxima sesión empieza en**: 0.5 Biome + commitlint + Husky + lint-staged
+- Commit `e1a51d4`: chore: initial scaffold
+
+### 2026-04-28 — Hito 0.5 Lint + hooks
+- Instalé Biome 1.9.4, husky 9.1.7, commitlint 19.8.1 + config-conventional, lint-staged 15.5.2
+- `pnpm.onlyBuiltDependencies: ["@biomejs/biome"]` (pnpm 10 bloquea build scripts por seguridad)
+- `biome.json`: linter recommended + reglas TS strict (noExplicitAny, useImportType, useConst, noNonNullAssertion warn), formatter (double quotes, semicolons, trailingCommas all, lineWidth 100), VCS git integrado, ignore docs/**.md (markdown sin format), overrides para tests/scripts
+- `commitlint.config.cjs` extiende config-conventional, scope kebab-case, header max 100, body/footer libres
+- Husky: `.husky/pre-commit` (lint-staged + turbo run typecheck) y `.husky/commit-msg` (commitlint --edit)
+- `lint-staged`: biome check --write en {ts,tsx,js,jsx,mjs,cjs,json,jsonc} staged
+- `tsconfig.json` raíz extiende base, noEmit, includes vacío (project references se llenan al crear packages)
+- Verificación: `pnpm biome check .` 6 archivos clean; commitlint rechaza mensajes sin convention y acepta válidos
+- **Próxima sesión empieza en**: 0.6 Package `db/` con Prisma multi-schema
