@@ -1,0 +1,25 @@
+{
+  "name": "gaespos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GaesSoft POS — SaaS multi-tenant POS para México (Retail, Abarrotes, Salud Vet/Humana)",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20.18.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "format": "biome format --write .",
+    "check": "biome check --write ."
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.2"
+  }
+}
