@@ -5,6 +5,9 @@ Versionado [SemVer](https://semver.org/lang/es/) (aplica desde primer release).
 
 ## [Unreleased]
 
+### Hito 1 (POS Core retail) — arranque
+- **2026-05-15** — Hito 1 arranca con `docs/hitos/hito-1-pos-core.md`: scope cerrado (núcleo POS retail vendible que reemplaza Eleventa para 1-2 clientes piloto), checklist de 7 sub-tareas demoables, performance targets explícitos (búsqueda producto P95 <100ms, checkout sin CFDI P95 <500ms, timbrado CFDI P95 <3s), demo objetivo (login → POS → multi-pago → ticket → CFDI → corte Z). Sub-tareas: 1.1 Modelo 4.6 Usuarios+Sucursales+Cajas+RBAC, 1.2 Modelo 4.7 Productos+Inventario+Motor precios, 1.3 Modelo 4.9 Ventas básicas+Multi-pago+Tickets, 1.4 Modelo 4.11 Cortes X/Z, 1.5 Modelo 4.19 CFDI+Facturama+Autofacturación QR, 1.6 Print Bridge Tauri V1, 1.7 Demo end-to-end. Las 3 tareas externas pendientes de Hito 0 (0.10/0.11/0.12) corren en paralelo (no bloquean código).
+
 ### Added
 - **2026-04-27** — Estructura de continuidad inicial: `CLAUDE.md`, `STATUS.md`, `CHANGELOG.md`, `docs/hitos/`, `docs/adr/`, `docs/analisis/`, `docs/decisiones-pendientes.md`
 - **2026-04-27** — Checklist Hito 0 (Infra base) en `docs/hitos/hito-0-infra.md`

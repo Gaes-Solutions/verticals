@@ -2,15 +2,28 @@
 
 > **Cómo usar:** Claude actualiza este archivo al final de cada sesión productiva. Si una sesión se trunca o hay que retomar después, este archivo dice exactamente dónde quedamos.
 
-**Última actualización:** 2026-04-28
+**Última actualización:** 2026-05-15
 
 ## 🎯 Estado actual
 
-- **Fase**: Hito 0 — Infra base (semana 1-2)
-- **Progreso Hito 0**: 9 de 12 tareas completas (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
-- **Tarea actual**: Listo para arrancar 0.10 — Hetzner CPX31 + Coolify install + dominio staging
-- **Próximo paso concreto**: provisionar VM Hetzner CPX31 (~€15/mes, ubicación FSN1 o NBG1), instalar Coolify via script oficial, apuntar dominio `staging.gaessoft.com`, conectar repo GitHub, deploy app `api` con Postgres 16 + Redis 7 managed por Coolify, SSL Let's Encrypt
-- **Bloqueos**: Ninguno
+- **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
+- **Progreso Hito 1**: 1 de 8 tareas en curso (1.0 doc + status)
+- **Tarea actual**: 1.1 Modelo 4.6 — Usuarios + roles + permisos + sucursales + cajas + RBAC. Schema tenant Prisma + migrations + package `permissions/` + endpoints API + tests.
+- **Próximo paso concreto**: Definir el schema tenant 4.6 en `packages/db/prisma/tenant/schema.prisma` (modelos `usuarios`, `roles`, `usuario_roles`, `sucursales`, `cajas`, `vistas_guardadas`, `usuario_sucursales`), generar migration, seed system roles, agregar `createTenant` extendido para crear sucursal/caja default, paquete `packages/permissions/` con `hasPermission`, módulos API y tests integración.
+- **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
+
+## 📋 Hito 1 — POS Core retail · Progreso
+
+Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-pos-core.md).
+
+- [ ] **1.0 Doc del hito + STATUS + CHANGELOG** (en curso, este commit)
+- [ ] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
+- [ ] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
+- [ ] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
+- [ ] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
+- [ ] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR**
+- [ ] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)**
+- [ ] **1.7 Demo cajero retail end-to-end**
 
 ## 📋 Hito 0 — Infra base · Progreso
 
@@ -158,3 +171,11 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-15 — Hito 1 arranca: doc + STATUS + CHANGELOG (1.0)
+- Decisión: arrancar Hito 1 (POS Core retail) en paralelo a las 3 tareas externas pendientes de Hito 0 (0.10/0.11/0.12 requieren credenciales Hetzner + dominio + GitHub remote — no bloquean código local).
+- Creado `docs/hitos/hito-1-pos-core.md` con scope cerrado, checklist desglosado en 7 sub-tareas (1.1-1.7) y performance targets a verificar al cierre.
+- Sub-tareas Hito 1: 1.1 Modelo 4.6 (usuarios/sucursales/cajas/RBAC) → 1.2 Modelo 4.7 (productos/inventario/motor precios) → 1.3 Modelo 4.9 (ventas básicas/multi-pago/tickets) → 1.4 Modelo 4.11 (cortes X/Z) → 1.5 Modelo 4.19 (CFDI/Facturama/autofacturación QR) → 1.6 Print Bridge Tauri V1 → 1.7 Demo end-to-end.
+- Demo objetivo: cajero retail completo (login → POS → multi-pago → ticket → CFDI → corte Z) en staging.
+- Hito vendible: primeros 1-2 clientes piloto retail empiezan a usar staging al cerrar 1.7.
+- **Próxima sesión empieza en**: 1.1 Schema tenant 4.6 — usuarios + roles + permisos jsonb + sucursales + cajas + vistas_guardadas; migration; seed system roles; package `permissions/`; endpoints API; tests integración.
