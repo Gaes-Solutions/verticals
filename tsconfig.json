@@ -5,5 +5,5 @@
     "composite": false
   },
   "include": [],
-  "references": [{ "path": "./packages/db" }]
+  "references": [{ "path": "./packages/db" }, { "path": "./packages/permissions" }]
 }
