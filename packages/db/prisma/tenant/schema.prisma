@@ -3,9 +3,13 @@
 // El cliente Prisma de tenant aplica `SET search_path TO tenant_<slug>` por request.
 // Ver ADR-001 y docs/analisis/04-modelo-datos/ (4.6+)
 //
-// Hito 0: vacío. Los modelos llegan desde Hito 1+:
-//   - Hito 1: usuarios, roles, productos, ventas
-//   - Hito 2: clientes, apartados, CxC, cotizaciones
+// Roadmap por hito:
+//   - Hito 1.1 (este archivo): usuarios, roles, sucursales, cajas, vistas guardadas
+//   - Hito 1.2: productos, variantes, inventario, motor precios
+//   - Hito 1.3: ventas básicas, multi-pago, tickets
+//   - Hito 1.4: cortes X/Z + caja_aperturas/movimientos
+//   - Hito 1.5: cfdis
+//   - Hito 2+: clientes, apartados, CxC, cotizaciones, promociones
 //   - Hito 3+: módulos verticales (abarrotes, salud, etc.)
 
 generator client {
@@ -16,4 +20,176 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL_TENANT")
+}
+
+// ============================================================
+// 4.6 — Usuarios, roles, sucursales, cajas, vistas guardadas
+// ============================================================
+
+enum SucursalTipo {
+  tienda_fisica
+  bodega
+  consultorio
+  kiosko
+  oficina
+}
+
+enum CajaTipo {
+  fija
+  movil_tablet
+  movil_celular
+}
+
+enum UsuarioTipo {
+  empleado
+  vendedor_externo
+  medico
+  enfermera
+  recepcion
+  almacen
+  contador_interno
+}
+
+model Sucursal {
+  id                String       @id @default(cuid())
+  codigo            String       @unique
+  nombre            String
+  direccion         Json?
+  telefono          String?
+  emailContacto     String?      @map("email_contacto")
+  horario           Json?
+  tipo              SucursalTipo @default(tienda_fisica)
+  verticalPrincipal String?      @map("vertical_principal")
+  isVisiblePublico  Boolean      @default(false) @map("is_visible_publico")
+  isDefault         Boolean      @default(false) @map("is_default")
+  isActive          Boolean      @default(true) @map("is_active")
+  archivedAt        DateTime?    @map("archived_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  cajas             Caja[]
+  usuarioSucursales UsuarioSucursal[]
+  usuariosLastLogin Usuario[]         @relation("UsuarioLastLoginSucursal")
+
+  @@index([isActive])
+  @@map("sucursales")
+}
+
+model Caja {
+  id                  String   @id @default(cuid())
+  sucursalId          String   @map("sucursal_id")
+  codigo              String
+  nombre              String
+  tipo                CajaTipo @default(fija)
+  impresoraDefault    String?  @map("impresora_default")
+  lectorBarrasDefault String?  @map("lector_barras_default")
+  balanzaDefault      String?  @map("balanza_default")
+  terminalPagoDefault String?  @map("terminal_pago_default")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+
+  @@unique([sucursalId, codigo])
+  @@index([sucursalId, isActive])
+  @@map("cajas")
+}
+
+model Usuario {
+  id                  String      @id @default(cuid())
+  email               String      @unique
+  passwordHash        String      @map("password_hash")
+  pinHash             String?     @map("pin_hash")
+  codigoEscaneo       String?     @unique @map("codigo_escaneo")
+  qrCodeUrl           String?     @map("qr_code_url")
+  fotoUrl             String?     @map("foto_url")
+  nombre              String
+  apellidos           String?
+  telefono            String?
+  mfaEnabled          Boolean     @default(false) @map("mfa_enabled")
+  mfaSecret           String?     @map("mfa_secret")
+  tipoUsuario         UsuarioTipo @default(empleado) @map("tipo_usuario")
+  languagePreferred   String      @default("es-MX") @map("language_preferred")
+  isActive            Boolean     @default(true) @map("is_active")
+  lastLoginAt         DateTime?   @map("last_login_at")
+  lastLoginSucursalId String?     @map("last_login_sucursal_id")
+  terminatedAt        DateTime?   @map("terminated_at")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  lastLoginSucursal Sucursal?              @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
+  sucursales        UsuarioSucursal[]
+  roles             UsuarioRol[]           @relation("UsuarioRol_Usuario")
+  rolesAsignados    UsuarioRol[]           @relation("UsuarioRol_AsignadoPor")
+  vistasGuardadas   UsuarioVistaGuardada[]
+
+  @@index([isActive])
+  @@index([tipoUsuario])
+  @@map("usuarios")
+}
+
+model UsuarioSucursal {
+  usuarioId  String   @map("usuario_id")
+  sucursalId String   @map("sucursal_id")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, sucursalId])
+  @@index([sucursalId])
+  @@map("usuario_sucursales")
+}
+
+model Rol {
+  id          String   @id @default(cuid())
+  codigo      String   @unique
+  nombre      String
+  descripcion String?
+  isPreset    Boolean  @default(false) @map("is_preset")
+  isActive    Boolean  @default(true) @map("is_active")
+  permisos    Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  usuarios UsuarioRol[]
+
+  @@index([isActive])
+  @@map("roles")
+}
+
+model UsuarioRol {
+  usuarioId        String   @map("usuario_id")
+  rolId            String   @map("rol_id")
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+  assignedByUserId String?  @map("assigned_by_user_id")
+
+  usuario        Usuario  @relation("UsuarioRol_Usuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  rol            Rol      @relation(fields: [rolId], references: [id], onDelete: Restrict)
+  assignedByUser Usuario? @relation("UsuarioRol_AsignadoPor", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([usuarioId, rolId])
+  @@index([rolId])
+  @@map("usuario_roles")
+}
+
+model UsuarioVistaGuardada {
+  id               String   @id @default(cuid())
+  usuarioId        String   @map("usuario_id")
+  recurso          String
+  nombre           String
+  filtros          Json     @default("{}")
+  ordenamiento     Json     @default("{}")
+  columnasVisibles Json     @default("[]") @map("columnas_visibles")
+  isDefault        Boolean  @default(false) @map("is_default")
+  esCompartida     Boolean  @default(false) @map("es_compartida")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, recurso])
+  @@map("usuario_vistas_guardadas")
 }
