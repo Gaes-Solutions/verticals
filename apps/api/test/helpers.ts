@@ -1,4 +1,10 @@
-import { masterPrisma } from "@gaespos/db";
+import {
+  createTenant,
+  disconnectAllTenantClients,
+  getTenantClient,
+  masterPrisma,
+} from "@gaespos/db";
+import { hash as argon2Hash } from "@node-rs/argon2";
 import type { FastifyInstance } from "fastify";
 import { Client } from "pg";
 import { buildApp } from "../src/app.js";
@@ -99,4 +105,84 @@ export async function cleanupTestRefreshTokens(): Promise<void> {
   });
   if (!admin) return;
   await masterPrisma.refreshToken.deleteMany({ where: { adminUserId: admin.id } });
+}
+
+export async function disconnectTenantPool(): Promise<void> {
+  await disconnectAllTenantClients();
+}
+
+export interface CreatedTestTenant {
+  slug: string;
+  name: string;
+}
+
+export async function createTestTenant(
+  slug: string,
+  name = `Test ${slug}`,
+  planCode = "free",
+): Promise<CreatedTestTenant> {
+  if (!slug.startsWith(TEST_TENANT_PREFIX)) {
+    throw new Error(`Test tenant slug must start with "${TEST_TENANT_PREFIX}"`);
+  }
+  await createTenant({ slug, name, planCode });
+  return { slug, name };
+}
+
+export interface CreatedTenantUser {
+  id: string;
+  email: string;
+  password: string;
+}
+
+export async function createTenantUser(
+  tenantSlug: string,
+  opts: { email: string; password: string; rolCodigo: string; nombre?: string },
+): Promise<CreatedTenantUser> {
+  const client = getTenantClient(tenantSlug);
+  const rol = await client.rol.findUnique({ where: { codigo: opts.rolCodigo } });
+  if (!rol) {
+    throw new Error(`Rol "${opts.rolCodigo}" no encontrado en tenant "${tenantSlug}"`);
+  }
+  const passwordHash = await argon2Hash(opts.password);
+  const usuario = await client.usuario.create({
+    data: {
+      email: opts.email,
+      passwordHash,
+      nombre: opts.nombre ?? "Test",
+      tipoUsuario: "empleado",
+      roles: { create: [{ rolId: rol.id }] },
+    },
+  });
+  return { id: usuario.id, email: opts.email, password: opts.password };
+}
+
+export interface LoggedInTenantUser {
+  accessToken: string;
+  userId: string;
+  permissions: string[];
+}
+
+export async function loginTenantUser(
+  app: FastifyInstance,
+  tenantSlug: string,
+  email: string,
+  password: string,
+): Promise<LoggedInTenantUser> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/auth/tenant/login",
+    payload: { tenantSlug, email, password },
+  });
+  if (res.statusCode !== 200) {
+    throw new Error(`tenant login failed: ${res.statusCode} ${res.body}`);
+  }
+  const body = res.json() as {
+    accessToken: string;
+    user: { id: string; permissions: string[] };
+  };
+  return {
+    accessToken: body.accessToken,
+    userId: body.user.id,
+    permissions: body.user.permissions,
+  };
 }

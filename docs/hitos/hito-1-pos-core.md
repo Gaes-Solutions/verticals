@@ -26,43 +26,54 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 ## Checklist
 
 ### 1.0 Doc del hito + STATUS + CHANGELOG
-- [ ] `docs/hitos/hito-1-pos-core.md` (este archivo)
-- [ ] STATUS.md actualizado: fase Hito 1, próximo paso 1.1
-- [ ] CHANGELOG.md entrada arranque Hito 1
-- [ ] Commit `chore(docs): arranca Hito 1 POS Core retail`
+- [x] `docs/hitos/hito-1-pos-core.md` (este archivo)
+- [x] STATUS.md actualizado: fase Hito 1, próximo paso 1.1
+- [x] CHANGELOG.md entrada arranque Hito 1
+- [x] Commit `chore(docs): arranca Hito 1 POS Core retail`
 
 ### 1.1 Modelo 4.6 — Usuarios + sucursales + cajas + RBAC
 **Schema tenant** (`packages/db/prisma/tenant/schema.prisma`):
-- [ ] `usuarios` (id, email, password_hash argon2, nombre, apellidos, telefono, activo, ultimo_login_at, mfa_secret, mfa_enabled, created_at, updated_at, deleted_at)
-- [ ] `roles` (id, codigo unique, nombre, descripcion, es_system, permisos jsonb, created_at)
-- [ ] `usuario_roles` (usuario_id, rol_id, sucursal_id nullable scoped, asignado_por, asignado_at)
-- [ ] `sucursales` (id, codigo unique, nombre, direccion jsonb, telefono, email, zona_horaria, activa, es_principal, created_at)
-- [ ] `cajas` (id, sucursal_id, codigo unique, nombre, impresora_default, activa, created_at)
-- [ ] `vistas_guardadas` (id, usuario_id, modulo, nombre, filtros jsonb, es_default, created_at) — para atajos personalizables
-- [ ] `usuario_sucursales` (usuario_id, sucursal_id, puede_operar) — multi-sucursal por usuario
+- [x] `usuarios` (id, email, password_hash argon2, nombre, apellidos, telefono, tipo_usuario, pin_hash, codigo_escaneo, is_active, terminated_at, last_login_at, created_at, updated_at) — MFA diferido a V1.5
+- [x] `roles` (id, codigo unique, nombre, descripcion, is_preset, permisos jsonb default `[]`, is_active, created_at, updated_at) — permisos en jsonb (no tabla rol_permisos separada)
+- [x] `usuario_roles` (usuario_id, rol_id, asignado_por, asignado_at) — scope por sucursal diferido (no necesario V1)
+- [x] `sucursales` (id, codigo unique, nombre, tipo enum, direccion jsonb, telefono, email, timezone, is_default, is_active, created_at, updated_at)
+- [x] `cajas` (id, sucursal_id, codigo unique, nombre, tipo enum, impresora_default, is_active, created_at, updated_at)
+- [x] `usuario_vistas_guardadas` (id, usuario_id, modulo, nombre, filtros jsonb, is_default, created_at) — atajos personalizables
+- [x] `usuario_sucursales` (usuario_id, sucursal_id, is_primary, created_at) — multi-sucursal por usuario
 
 **Migrations + seed:**
-- [ ] Migration `tenant/migrations/NNN_add_users_branches_cashiers`
-- [ ] Seed system roles: `admin`, `gerente`, `cajero`, `inventarista`, `auditor` (permisos jsonb default)
-- [ ] Seed 1 sucursal `principal` + 1 caja `caja-1` al crear tenant nuevo (modificar `createTenant` en CLI)
+- [x] Migration `tenant/migrations/20260515232059_add_users_branches_cashiers` aplicada cross-tenant
+- [x] Seed preset roles: `dueno` (wildcard `*`), `gerente`, `cajero`, `vendedor`, `almacen`, `contador_interno` (permisos jsonb default)
+- [x] Seed 1 sucursal `SUC-PRINCIPAL` + 1 caja `CAJA-1` al crear tenant nuevo (`seedTenantDefaults` idempotente, llamado en `createTenant`)
+- [x] CLI: `gaes-migrate tenant seed <slug>` y `tenant seed-all` para tenants pre-existentes
 
 **Package `packages/permissions/`:**
-- [ ] `hasPermission(user, resource, action, context?)` con permisos granulares estilo `pos:vender`, `inventario:editar`, `corte:cerrar`
-- [ ] Helper `requirePermission()` middleware Fastify
-- [ ] Tests unit del helper
+- [x] Catálogo tipado de 56 permisos (`PERMISSIONS` const, `PermissionCode` type, `listPermissionsByCategory`, `isKnownPermission`)
+- [x] `hasPermission(perms, code)`, `hasAnyPermission`, `requirePermission` con `PermissionDeniedError` (statusCode=403, missing[])
+- [x] `mergeRolePermissions` colapsa a `["*"]` si algún rol tiene wildcard
+- [x] `PRESET_ROLES_RETAIL` con 6 roles seed
+- [x] Tests cubiertos en suite integración (gates por rol)
 
-**API endpoints (`apps/api/src/modules/`):**
-- [ ] `usuarios/` — CRUD, asignación de roles, asignación de sucursales, reset password
-- [ ] `roles/` — CRUD roles custom (system roles read-only), edición de permisos jsonb
-- [ ] `sucursales/` — CRUD
-- [ ] `cajas/` — CRUD por sucursal
-- [ ] `vistas-guardadas/` — CRUD por usuario
-- [ ] Todos los endpoints scoped al tenant del JWT (header `X-Tenant-Slug` validado)
+**API endpoints (`apps/api/src/modules/tenant/`):**
+- [x] `usuarios/` — CRUD + asignar/quitar rol + asignar sucursal + reset-password
+- [x] `roles/` — CRUD roles custom; preset roles read-only (PATCH/DELETE → 403); permisos validados contra catálogo (400 si desconocido)
+- [x] `sucursales/` — CRUD con permisos `sucursales.{leer,crear,actualizar,archivar}`
+- [x] `cajas/` — CRUD con validación sucursal existe (404)
+- [x] Todos montados bajo `/t` prefix; tenant slug derivado del JWT claim `tenantSlug` + `kind:"tenant"` (no header)
+- [ ] `vistas-guardadas/` — diferido a 1.7 (cuando POS UI las consuma)
+
+**Auth tenant + plugin contexto:**
+- [x] JWT discriminado `kind:"admin"|"tenant"`; decoradores `authenticateAdmin`/`authenticateTenant` validan kind
+- [x] `POST /auth/tenant/login` valida `{tenantSlug,email,password}`, carga roles+permisos efectivos, firma JWT con principal
+- [x] `GET /auth/tenant/me` retorna `{userId,email,tenantSlug,isOwner,permissions}`
+- [x] Plugin `tenantContextPlugin` decora `req.tenantPrisma/tenantSlug/principal/requirePerm()/requireAnyPerm()`
+- [x] Tenant client cache LRU 50 default (`@gaespos/db`: `getTenantClient/disconnectAllTenantClients`)
+- [x] Error handler: `PermissionDeniedError → 403` con `missing`; Prisma errors detectados por duck-typing (cross-generator)
 
 **Tests integración:**
-- [ ] Crear usuario, asignar rol cajero, login funciona, accede solo a `pos:*`
-- [ ] Permisos jsonb se evalúan correctamente con scope sucursal
-- [ ] Endpoint protegido rechaza usuario sin permiso (403)
+- [x] 21 tests nuevos en `tenant-rbac.test.ts`: auth tenant (4) + sucursales CRUD con gates (5) + cajas CRUD (3) + roles CRUD bloqueando preset (4) + usuarios CRUD con duplicate-email/validation (5)
+- [x] Cajero sin permiso recibe 403 con `missing` correcto; dueno wildcard accede a todo
+- [x] Total suite: **41 tests verdes en 6.61s** (38 anteriores + 21 nuevos − 18 unit packages/db ya contados)
 
 ### 1.2 Modelo 4.7 — Productos + variantes + inventario + motor precios
 **Schema tenant:**

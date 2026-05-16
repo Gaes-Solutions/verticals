@@ -3,11 +3,16 @@ import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import cajasRoutes from "./modules/tenant/cajas/routes.js";
+import rolesRoutes from "./modules/tenant/roles/routes.js";
+import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
+import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
 import authPlugin from "./plugins/auth.js";
 import dbPlugin from "./plugins/db.js";
 import errorHandlerPlugin from "./plugins/error-handler.js";
 import securityPlugin from "./plugins/security.js";
+import tenantContextPlugin from "./plugins/tenant-context.js";
 
 export async function buildApp(config: Config): Promise<FastifyInstance> {
   const app = Fastify({
@@ -34,6 +39,17 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
   await app.register(tenantRoutes, { prefix: "/tenants" });
+
+  await app.register(
+    async (tenantApp) => {
+      await tenantApp.register(tenantContextPlugin);
+      await tenantApp.register(usuariosRoutes, { prefix: "/usuarios" });
+      await tenantApp.register(rolesRoutes, { prefix: "/roles" });
+      await tenantApp.register(sucursalesRoutes, { prefix: "/sucursales" });
+      await tenantApp.register(cajasRoutes, { prefix: "/cajas" });
+    },
+    { prefix: "/t" },
+  );
 
   return app;
 }

@@ -7,17 +7,17 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 1 de 8 tareas en curso (1.0 doc + status)
-- **Tarea actual**: 1.1 Modelo 4.6 — Usuarios + roles + permisos + sucursales + cajas + RBAC. Schema tenant Prisma + migrations + package `permissions/` + endpoints API + tests.
-- **Próximo paso concreto**: Definir el schema tenant 4.6 en `packages/db/prisma/tenant/schema.prisma` (modelos `usuarios`, `roles`, `usuario_roles`, `sucursales`, `cajas`, `vistas_guardadas`, `usuario_sucursales`), generar migration, seed system roles, agregar `createTenant` extendido para crear sucursal/caja default, paquete `packages/permissions/` con `hasPermission`, módulos API y tests integración.
+- **Progreso Hito 1**: 2 de 8 tareas cerradas (1.0 doc + 1.1 RBAC tenant)
+- **Tarea actual**: 1.2 Modelo 4.7 — Productos + variantes + inventario multi-sucursal + motor de precios cascada 6 pasos + lotes/series. Schema tenant Prisma + migration + paquete `pricing/` + endpoints CRUD + tests integración.
+- **Próximo paso concreto**: Modelo Prisma `producto`, `producto_variante`, `categoria`, `marca`, `unidad_medida`, `inventario_sucursal`, `inventario_movimiento`, `lote`, `serie`, `lista_precios`, `precio_regla`. Migration. Paquete `packages/pricing/` con motor cascada (precio_base → lista → cliente → promo → manual → mínimo). Endpoints `/t/productos`, `/t/inventario`, `/t/listas-precio`. Tests integración.
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
 
 Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-pos-core.md).
 
-- [ ] **1.0 Doc del hito + STATUS + CHANGELOG** (en curso, este commit)
-- [ ] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
+- [x] **1.0 Doc del hito + STATUS + CHANGELOG**
+- [x] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
 - [ ] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
 - [ ] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
 - [ ] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
@@ -171,6 +171,27 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-15 — Hito 1.1 Modelo 4.6 RBAC tenant cerrado
+- **Schema tenant** (`packages/db/prisma/tenant/schema.prisma`): 7 modelos nuevos con `@map` snake_case — `Sucursal`, `Caja`, `Usuario`, `UsuarioSucursal`, `Rol`, `UsuarioRol`, `UsuarioVistaGuardada` + enums `SucursalTipo`, `CajaTipo`, `UsuarioTipo`. Roles guardan `permisos Json @default("[]")` en lugar de tabla `rol_permisos` separada (más simple, validado contra catálogo tipado V1).
+- **Migration aplicada** `20260515232059_add_users_branches_cashiers` a tenants existentes (demo, acme, bodega-norte) + tenants nuevos via CLI.
+- **Paquete `packages/permissions/`** nuevo: catálogo tipado de 56 permisos (`PERMISSIONS` const), `PermissionCode`, helpers `hasPermission`, `hasAnyPermission`, `requirePermission` con `PermissionDeniedError` (statusCode=403, missing[]), `mergeRolePermissions` (colapsa a `["*"]` si algún rol tiene wildcard owner), `PRESET_ROLES_RETAIL` con 6 roles seed (dueno wildcard, gerente, cajero, vendedor, almacen, contador_interno).
+- **Tenant client cache** (`packages/db/src/tenant-client.ts`): factory `createTenantClient(slug)` + `getTenantClient(slug)` con LRU cache (`TENANT_CLIENT_CACHE_MAX=50` default), `disconnectAllTenantClients`, `disconnectTenantClient`. `evictIfNeeded` cuando se llena.
+- **Seed defaults por tenant** (`packages/db/src/seed-tenant.ts`): `seedTenantDefaults(slug)` upsertea 6 roles preset + crea 1 sucursal `SUC-PRINCIPAL` + 1 caja `CAJA-1` (idempotente, retorna `{rolesCreated, rolesUpdated, sucursalCreated, cajaCreated}`). Llamado automáticamente en `createTenant` y expuesto en CLI como `gaes-migrate tenant seed <slug>` y `tenant seed-all`.
+- **Auth tenant** discriminado por `kind`: `TokenPayload` ahora es union `{kind:"admin"} | {kind:"tenant", tenantSlug, permissions}`. Decoradores `authenticateAdmin` y `authenticateTenant` validan kind matches (token tenant rechazado en endpoints admin y vice-versa).
+- **POST `/auth/tenant/login`**: valida `{tenantSlug, email, password}`, carga roles del usuario + permisos efectivos via `mergeRolePermissions`, firma JWT con principal completo. **GET `/auth/tenant/me`** retorna `{userId, email, tenantSlug, isOwner, permissions}`.
+- **Plugin `tenantContextPlugin`** (`apps/api/src/plugins/tenant-context.ts`): preHandler verifica JWT con kind=tenant, carga tenant desde master, decora `req.tenantPrisma`, `req.tenantSlug`, `req.principal`, `req.requirePerm()`, `req.requireAnyPerm()`. Todas las rutas tenant montadas bajo `/t` prefix con este plugin.
+- **CRUD endpoints `/t/*`** (4 módulos):
+  - `/t/sucursales`: GET/GET/POST/PATCH/DELETE con permisos `sucursales.{leer,crear,actualizar,archivar}`.
+  - `/t/cajas`: igual + valida sucursal existe (404 si no).
+  - `/t/roles`: bloquea editar/archivar roles preset (403). Permisos validados contra catálogo (400 si permiso desconocido).
+  - `/t/usuarios`: full CRUD + `POST /:id/roles`, `DELETE /:id/roles/:rolId`, `POST /:id/sucursales`, `POST /:id/reset-password`.
+- **Helpers TS strict**: `stripUndefined<T>(obj)` para `exactOptionalPropertyTypes: true` (Prisma rechaza `{foo:undefined}` desde Zod parsed bodies). Patrón alternativo: construcción incremental `if (body.field !== undefined) data.field = body.field`.
+- **Error handler**: catch `PermissionDeniedError → 403` con `missing` field. Detección de `PrismaClientKnownRequestError` por **duck-typing** (`err.constructor?.name === "PrismaClientKnownRequestError"` + `err.code` empieza con `P`) en lugar de `instanceof`, porque master y tenant generators son clases distintas en runtime — `instanceof` falla cross-generator. Mapea `P2002→409`, `P2025→404`.
+- **Tests integración** (`apps/api/test/tenant-rbac.test.ts`): **21 tests** cubriendo auth tenant (login con tenant inexistente/password mala, /me con permisos efectivos, kind mismatch admin vs tenant) + CRUD sucursales/cajas/roles/usuarios con todos los gates de permisos (cajero NO puede crear sucursal/listar usuarios, dueño wildcard SI puede todo, etc.).
+- **Total tests**: 41 verdes (38 anteriores + 21 nuevos − 18 unitarios CLI = 41 en suite). Pasan en 6.61s.
+- **Diferido a futuros hitos** (no bloquean MVP retail): `usuario_codigos_acceso` (V1.5 huella/NFC), `usuario_horarios` (V2 opt-in), `usuario_cedulas` (Hito 3 Salud), `usuario_metas` (Hito 2 comisiones), `caja_aperturas`/`caja_movimientos` (Hito 1.4 cortes), refresh tokens para usuarios tenant (V1.5).
+- **Próxima sesión empieza en**: 1.2 Modelo 4.7 — Productos + variantes Shopify-style + inventario multi-sucursal + motor precios cascada 6 pasos + lotes/series.
 
 ### 2026-05-15 — Hito 1 arranca: doc + STATUS + CHANGELOG (1.0)
 - Decisión: arrancar Hito 1 (POS Core retail) en paralelo a las 3 tareas externas pendientes de Hito 0 (0.10/0.11/0.12 requieren credenciales Hetzner + dominio + GitHub remote — no bloquean código local).

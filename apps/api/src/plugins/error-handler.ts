@@ -1,7 +1,20 @@
-import { Prisma } from "@gaespos/db";
+import { PermissionDeniedError } from "@gaespos/permissions";
 import type { FastifyError, FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import { ZodError } from "zod";
+
+function isPrismaKnownRequestError(
+  err: unknown,
+): err is { code: string; meta?: { target?: unknown } } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    typeof (err as { code: unknown }).code === "string" &&
+    (err as { code: string }).code.startsWith("P") &&
+    err.constructor?.name === "PrismaClientKnownRequestError"
+  );
+}
 
 const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
   app.setErrorHandler((err: FastifyError, req, reply) => {
@@ -14,16 +27,26 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
       });
     }
 
-    if (err instanceof Prisma.PrismaClientKnownRequestError) {
-      if (err.code === "P2002") {
+    if (err instanceof PermissionDeniedError) {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: "Forbidden",
+        message: err.message,
+        missing: err.missing,
+      });
+    }
+
+    if (isPrismaKnownRequestError(err)) {
+      const prismaErr = err as { code: string; meta?: { target?: unknown } };
+      if (prismaErr.code === "P2002") {
         return reply.code(409).send({
           statusCode: 409,
           error: "Conflict",
           message: "Recurso ya existe",
-          target: err.meta?.target,
+          target: prismaErr.meta?.target,
         });
       }
-      if (err.code === "P2025") {
+      if (prismaErr.code === "P2025") {
         return reply.code(404).send({
           statusCode: 404,
           error: "Not Found",
