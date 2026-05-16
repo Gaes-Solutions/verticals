@@ -18,3 +18,18 @@ export {
 } from "./cli/tenant.js";
 export type { CreateTenantOptions } from "./cli/tenant.js";
 export { tenantSchemaName, validateSlug } from "./cli/utils.js";
+export {
+  createTenantClient,
+  disconnectAllTenantClients,
+  disconnectTenantClient,
+  getTenantClient,
+} from "./tenant-client.js";
+export type { TenantPrismaClient } from "./tenant-client.js";
+export {
+  seedAllTenantDefaults,
+  seedTenantDefaults,
+} from "./seed-tenant.js";
+export type {
+  SeedTenantDefaultsOptions,
+  SeedTenantDefaultsResult,
+} from "./seed-tenant.js";

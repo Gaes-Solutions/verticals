@@ -105,6 +105,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@gaespos/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2

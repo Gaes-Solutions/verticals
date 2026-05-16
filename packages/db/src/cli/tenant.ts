@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { masterPrisma } from "../client.js";
+import { seedTenantDefaults } from "../seed-tenant.js";
 import {
   requireEnv,
   tenantDatabaseUrl,
@@ -48,6 +49,12 @@ export async function createTenant(opts: CreateTenantOptions): Promise<void> {
   console.info(`[tenant create] postgres schema "${schemaName}" creado`);
 
   await migrateTenant(opts.slug);
+
+  const seedResult = await seedTenantDefaults(opts.slug);
+  console.info(
+    `[tenant create] seed defaults: roles_creados=${seedResult.rolesCreated}, sucursal_creada=${seedResult.sucursalCreated}, caja_creada=${seedResult.cajaCreated}`,
+  );
+
   console.info(`[tenant create] ${opts.slug} listo (status=trial)`);
 }
 

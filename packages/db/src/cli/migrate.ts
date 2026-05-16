@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { masterPrisma } from "../client.js";
+import { seedAllTenantDefaults, seedTenantDefaults } from "../seed-tenant.js";
 import { migrateMaster } from "./master.js";
 import { createTenant, listTenants, migrateAllTenants, migrateTenant } from "./tenant.js";
 
@@ -65,6 +66,31 @@ tenant
   .action(async () => {
     try {
       await listTenants();
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+
+tenant
+  .command("seed <slug>")
+  .description("Siembra roles preset + sucursal/caja default en un tenant (idempotente)")
+  .action(async (slug: string) => {
+    try {
+      const result = await seedTenantDefaults(slug);
+      console.info(
+        `[tenant seed] ${slug}: roles_created=${result.rolesCreated}, roles_updated=${result.rolesUpdated}, sucursal_creada=${result.sucursalCreated}, caja_creada=${result.cajaCreated}`,
+      );
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+
+tenant
+  .command("seed-all")
+  .description("Siembra defaults en todos los tenants no cancelados")
+  .action(async () => {
+    try {
+      await seedAllTenantDefaults();
     } finally {
       await masterPrisma.$disconnect();
     }

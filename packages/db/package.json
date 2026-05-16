@@ -24,6 +24,7 @@
     "migrate": "tsx src/cli/migrate.ts"
   },
   "dependencies": {
+    "@gaespos/permissions": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.6.0",
     "commander": "^13.0.0",
