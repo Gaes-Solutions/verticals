@@ -67,9 +67,14 @@ model Sucursal {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  cajas             Caja[]
-  usuarioSucursales UsuarioSucursal[]
-  usuariosLastLogin Usuario[]         @relation("UsuarioLastLoginSucursal")
+  cajas              Caja[]
+  usuarioSucursales  UsuarioSucursal[]
+  usuariosLastLogin  Usuario[]              @relation("UsuarioLastLoginSucursal")
+  inventarioSucursal InventarioSucursal[]
+  movimientos        InventarioMovimiento[]
+  movimientosOrigen  InventarioMovimiento[] @relation("MovimientoSucursalOrigen")
+  lotes              ProductoLote[]
+  series             ProductoSerie[]
 
   @@index([isActive])
   @@map("sucursales")
@@ -123,6 +128,7 @@ model Usuario {
   roles             UsuarioRol[]           @relation("UsuarioRol_Usuario")
   rolesAsignados    UsuarioRol[]           @relation("UsuarioRol_AsignadoPor")
   vistasGuardadas   UsuarioVistaGuardada[]
+  movimientos       InventarioMovimiento[]
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -192,4 +198,525 @@ model UsuarioVistaGuardada {
 
   @@index([usuarioId, recurso])
   @@map("usuario_vistas_guardadas")
+}
+
+// ============================================================
+// 4.7 — Productos, variantes, inventario, lotes, series, precios
+// pgvector + particionamiento mensual de movimientos diferidos a V1.5
+// ============================================================
+
+enum TipoVenta {
+  unidad
+  peso
+  volumen
+  tiempo
+  servicio
+}
+
+enum UnidadMedida {
+  pza
+  kg
+  g
+  lt
+  ml
+  m
+  m2
+  hora
+  servicio
+}
+
+enum CodigoBarrasTipo {
+  ean13
+  upc
+  corto_interno
+  qr
+}
+
+enum ProductoImagenTipo {
+  principal
+  lifestyle
+  detalle
+  lateral
+  back
+}
+
+enum InventarioMovimientoTipo {
+  compra
+  venta
+  devolucion_cliente
+  devolucion_proveedor
+  ajuste_positivo
+  ajuste_negativo
+  transferencia_salida
+  transferencia_entrada
+  merma
+  apartado_reservado
+  apartado_liberado
+  consumo_interno
+}
+
+enum SerieEstado {
+  disponible
+  vendido
+  devuelto
+  garantia
+  reparacion
+}
+
+enum ListaPrecioTipo {
+  publico
+  mayoreo_nivel
+  cliente_individual
+}
+
+enum ReglaPrecioTipo {
+  descuento_global_por_monto
+  descuento_producto
+  descuento_categoria
+  descuento_cliente
+  bogo_compra_x_lleva_y
+  precio_temporada
+  mayoreo_por_total_ticket
+}
+
+enum ReglaPrecioCanal {
+  pos_fisico
+  ecommerce
+  b2b
+  todos
+}
+
+enum CuponTipo {
+  monto_fijo
+  porcentaje
+  envio_gratis
+  producto_gratis
+}
+
+model Categoria {
+  id                String   @id @default(cuid())
+  parentId          String?  @map("parent_id")
+  nombre            String
+  slug              String   @unique
+  descripcion       String?
+  imagenUrl         String?  @map("imagen_url")
+  icono             String?
+  color             String?
+  orden             Int      @default(0)
+  verticalAplicable String?  @map("vertical_aplicable")
+  isVisiblePos      Boolean  @default(true) @map("is_visible_pos")
+  isVisiblePublico  Boolean  @default(true) @map("is_visible_publico")
+  isActive          Boolean  @default(true) @map("is_active")
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  parent                Categoria?             @relation("CategoriaTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children              Categoria[]            @relation("CategoriaTree")
+  productos             Producto[]
+  reglasPrecioCategoria ReglaPrecioCategoria[]
+
+  @@index([parentId])
+  @@index([isActive])
+  @@map("categorias")
+}
+
+model Marca {
+  id          String   @id @default(cuid())
+  nombre      String
+  slug        String   @unique
+  descripcion String?
+  logoUrl     String?  @map("logo_url")
+  paisOrigen  String?  @map("pais_origen")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  productos Producto[]
+
+  @@map("marcas")
+}
+
+model Producto {
+  id                 String       @id @default(cuid())
+  skuPadre           String       @unique @map("sku_padre")
+  nombre             String
+  descripcionCorta   String?      @map("descripcion_corta")
+  descripcionLarga   String?      @map("descripcion_larga")
+  categoriaId        String?      @map("categoria_id")
+  marcaId            String?      @map("marca_id")
+  tipoVenta          TipoVenta    @default(unidad) @map("tipo_venta")
+  unidadMedida       UnidadMedida @default(pza) @map("unidad_medida")
+  unidadMedidaCompra UnidadMedida @default(pza) @map("unidad_medida_compra")
+  factorCompraAVenta Decimal      @default(1) @map("factor_compra_a_venta") @db.Decimal(18, 6)
+  tieneVariantes     Boolean      @default(false) @map("tiene_variantes")
+  requiresRecipe     Boolean      @default(false) @map("requires_recipe")
+  claveSat           String?      @map("clave_sat")
+  claveUnidadSat     String?      @map("clave_unidad_sat")
+  aplicaIva          Boolean      @default(true) @map("aplica_iva")
+  tasaIva            Decimal      @default(16) @map("tasa_iva") @db.Decimal(5, 2)
+  aplicaIeps         Boolean      @default(false) @map("aplica_ieps")
+  tasaIeps           Json?        @map("tasa_ieps")
+  permiteDescuento   Boolean      @default(true) @map("permite_descuento")
+  permiteFiado       Boolean      @default(true) @map("permite_fiado")
+  permiteApartado    Boolean      @default(true) @map("permite_apartado")
+  permiteDevolucion  Boolean      @default(true) @map("permite_devolucion")
+  diasDevolucion     Int          @default(15) @map("dias_devolucion")
+  diasGarantia       Int          @default(0) @map("dias_garantia")
+  requiresLote       Boolean      @default(false) @map("requires_lote")
+  requiresSerie      Boolean      @default(false) @map("requires_serie")
+  requiresBalanza    Boolean      @default(false) @map("requires_balanza")
+  pesoKg             Decimal?     @map("peso_kg") @db.Decimal(10, 3)
+  dimensiones        Json?
+  isActive           Boolean      @default(true) @map("is_active")
+  isVisiblePublico   Boolean      @default(true) @map("is_visible_publico")
+  isVisibleB2b       Boolean      @default(true) @map("is_visible_b2b")
+  archivedAt         DateTime?    @map("archived_at")
+  metadata           Json?
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  categoria            Categoria?            @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  marca                Marca?                @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  variantes            ProductoVariante[]
+  imagenes             ProductoImagen[]
+  atributos            ProductoAtributo[]
+  tags                 ProductoTag[]
+  reglasPrecioProducto ReglaPrecioProducto[]
+
+  @@index([categoriaId])
+  @@index([marcaId])
+  @@index([isActive])
+  @@map("productos")
+}
+
+model ProductoVariante {
+  id             String    @id @default(cuid())
+  productoId     String    @map("producto_id")
+  sku            String    @unique
+  nombreVariante String?   @map("nombre_variante")
+  opciones       Json      @default("{}")
+  precioBase     Decimal   @map("precio_base") @db.Decimal(14, 4)
+  costoPromedio  Decimal   @default(0) @map("costo_promedio") @db.Decimal(14, 4)
+  costoUltimo    Decimal   @default(0) @map("costo_ultimo") @db.Decimal(14, 4)
+  pesoKg         Decimal?  @map("peso_kg") @db.Decimal(10, 3)
+  imagenUrl      String?   @map("imagen_url")
+  isDefault      Boolean   @default(false) @map("is_default")
+  isActive       Boolean   @default(true) @map("is_active")
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  producto           Producto                   @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  codigosBarras      ProductoCodigoBarras[]
+  imagenes           ProductoImagen[]
+  inventario         InventarioSucursal[]
+  movimientos        InventarioMovimiento[]
+  lotes              ProductoLote[]
+  series             ProductoSerie[]
+  listaItems         ListaPrecioItem[]
+  preciosEscalonados ProductoPrecioEscalonado[]
+
+  @@index([productoId])
+  @@index([isActive])
+  @@map("producto_variantes")
+}
+
+model ProductoCodigoBarras {
+  id         String           @id @default(cuid())
+  varianteId String           @map("variante_id")
+  codigo     String           @unique
+  tipo       CodigoBarrasTipo @default(ean13)
+  isPrimary  Boolean          @default(false) @map("is_primary")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  variante ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@index([varianteId])
+  @@map("producto_codigos_barras")
+}
+
+model ProductoImagen {
+  id         String             @id @default(cuid())
+  productoId String?            @map("producto_id")
+  varianteId String?            @map("variante_id")
+  s3Key      String?            @map("s3_key")
+  cdnUrl     String             @map("cdn_url")
+  orden      Int                @default(0)
+  tipo       ProductoImagenTipo @default(principal)
+  altText    String?            @map("alt_text")
+  metadata   Json?
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  producto Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  variante ProductoVariante? @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+  @@index([varianteId])
+  @@map("producto_imagenes")
+}
+
+model ProductoAtributo {
+  id         String   @id @default(cuid())
+  productoId String   @map("producto_id")
+  clave      String
+  valor      String
+  tipoDato   String   @default("string") @map("tipo_dato")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, clave])
+  @@map("producto_atributos")
+}
+
+model ProductoTag {
+  productoId String   @map("producto_id")
+  tag        String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@id([productoId, tag])
+  @@index([tag])
+  @@map("producto_tags")
+}
+
+model InventarioSucursal {
+  varianteId      String    @map("variante_id")
+  sucursalId      String    @map("sucursal_id")
+  stockActual     Decimal   @default(0) @map("stock_actual") @db.Decimal(18, 3)
+  stockReservado  Decimal   @default(0) @map("stock_reservado") @db.Decimal(18, 3)
+  stockMinimo     Decimal   @default(0) @map("stock_minimo") @db.Decimal(18, 3)
+  stockMaximo     Decimal?  @map("stock_maximo") @db.Decimal(18, 3)
+  ubicacion       String?
+  lastInventoryAt DateTime? @map("last_inventory_at")
+  nextInventoryAt DateTime? @map("next_inventory_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  variante ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+  sucursal Sucursal         @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@id([varianteId, sucursalId])
+  @@index([sucursalId])
+  @@map("inventario_sucursal")
+}
+
+model InventarioMovimiento {
+  id               String                   @id @default(cuid())
+  varianteId       String                   @map("variante_id")
+  sucursalId       String                   @map("sucursal_id")
+  sucursalOrigenId String?                  @map("sucursal_origen_id")
+  tipo             InventarioMovimientoTipo
+  cantidad         Decimal                  @db.Decimal(18, 3)
+  costoUnitario    Decimal?                 @map("costo_unitario") @db.Decimal(14, 4)
+  referenciaTipo   String?                  @map("referencia_tipo")
+  referenciaId     String?                  @map("referencia_id")
+  loteId           String?                  @map("lote_id")
+  serieId          String?                  @map("serie_id")
+  motivo           String?
+  usuarioId        String?                  @map("usuario_id")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  variante       ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+  sucursal       Sucursal         @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  sucursalOrigen Sucursal?        @relation("MovimientoSucursalOrigen", fields: [sucursalOrigenId], references: [id], onDelete: SetNull)
+  lote           ProductoLote?    @relation(fields: [loteId], references: [id], onDelete: SetNull)
+  serie          ProductoSerie?   @relation(fields: [serieId], references: [id], onDelete: SetNull)
+  usuario        Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([varianteId, sucursalId, createdAt])
+  @@index([referenciaTipo, referenciaId])
+  @@map("inventario_movimientos")
+}
+
+model ProductoLote {
+  id              String    @id @default(cuid())
+  varianteId      String    @map("variante_id")
+  sucursalId      String    @map("sucursal_id")
+  numeroLote      String    @map("numero_lote")
+  fechaCaducidad  DateTime? @map("fecha_caducidad")
+  cantidadInicial Decimal   @map("cantidad_inicial") @db.Decimal(18, 3)
+  cantidadActual  Decimal   @map("cantidad_actual") @db.Decimal(18, 3)
+  proveedorId     String?   @map("proveedor_id")
+  notas           String?
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  variante    ProductoVariante       @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+  sucursal    Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  movimientos InventarioMovimiento[]
+
+  @@unique([varianteId, sucursalId, numeroLote])
+  @@index([fechaCaducidad])
+  @@map("producto_lotes")
+}
+
+model ProductoSerie {
+  id                String      @id @default(cuid())
+  varianteId        String      @map("variante_id")
+  sucursalId        String      @map("sucursal_id")
+  numeroSerie       String      @unique @map("numero_serie")
+  estado            SerieEstado @default(disponible)
+  vendidoAClienteId String?     @map("vendido_a_cliente_id")
+  ventaId           String?     @map("venta_id")
+  vendidoAt         DateTime?   @map("vendido_at")
+  garantiaHasta     DateTime?   @map("garantia_hasta")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  variante    ProductoVariante       @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+  sucursal    Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  movimientos InventarioMovimiento[]
+
+  @@index([varianteId, estado])
+  @@map("producto_series")
+}
+
+model NivelPrecioMayoreo {
+  id                  String   @id @default(cuid())
+  codigo              String   @unique
+  nombre              String
+  descripcion         String?
+  descuentoDefaultPct Decimal? @map("descuento_default_pct") @db.Decimal(5, 2)
+  montoMinimoCompra   Decimal? @map("monto_minimo_compra") @db.Decimal(14, 2)
+  orden               Int      @default(0)
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  listas ListaPrecio[]
+
+  @@map("niveles_precio_mayoreo")
+}
+
+model ListaPrecio {
+  id             String          @id @default(cuid())
+  codigo         String          @unique
+  nombre         String
+  tipo           ListaPrecioTipo @default(publico)
+  nivelMayoreoId String?         @map("nivel_mayoreo_id")
+  clienteB2bId   String?         @map("cliente_b2b_id")
+  currency       String          @default("MXN")
+  vigenteDesde   DateTime?       @map("vigente_desde")
+  vigenteHasta   DateTime?       @map("vigente_hasta")
+  isDefault      Boolean         @default(false) @map("is_default")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  nivelMayoreo NivelPrecioMayoreo? @relation(fields: [nivelMayoreoId], references: [id], onDelete: SetNull)
+  items        ListaPrecioItem[]
+
+  @@index([tipo, isActive])
+  @@map("listas_precios")
+}
+
+model ListaPrecioItem {
+  listaPrecioId           String   @map("lista_precio_id")
+  varianteId              String   @map("variante_id")
+  precio                  Decimal  @db.Decimal(14, 4)
+  precioMinimoNegociacion Decimal? @map("precio_minimo_negociacion") @db.Decimal(14, 4)
+  incluyeIva              Boolean  @default(true) @map("incluye_iva")
+
+  lista    ListaPrecio      @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+  variante ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@id([listaPrecioId, varianteId])
+  @@index([varianteId])
+  @@map("lista_precio_items")
+}
+
+model ProductoPrecioEscalonado {
+  id             String   @id @default(cuid())
+  varianteId     String   @map("variante_id")
+  nivel          Int
+  cantidadMinima Decimal  @map("cantidad_minima") @db.Decimal(18, 3)
+  cantidadMaxima Decimal? @map("cantidad_maxima") @db.Decimal(18, 3)
+  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(14, 4)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  variante ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@unique([varianteId, nivel])
+  @@index([varianteId, isActive])
+  @@map("producto_precios_escalonados")
+}
+
+model ReglaPrecio {
+  id                            String           @id @default(cuid())
+  codigo                        String           @unique
+  nombre                        String
+  descripcion                   String?
+  tipo                          ReglaPrecioTipo
+  prioridad                     Int              @default(100)
+  stackable                     Boolean          @default(false)
+  excluyeProductosConEscalonado Boolean          @default(true) @map("excluye_productos_con_escalonado")
+  aplicaA                       ReglaPrecioCanal @default(todos) @map("aplica_a")
+  condicion                     Json             @default("{}")
+  accion                        Json             @default("{}")
+  vigenteDesde                  DateTime?        @map("vigente_desde")
+  vigenteHasta                  DateTime?        @map("vigente_hasta")
+  diasSemana                    Json?            @map("dias_semana")
+  horarios                      Json?
+  usosMaxPorCliente             Int?             @map("usos_max_por_cliente")
+  usosTotal                     Int?             @map("usos_total")
+  usosActuales                  Int              @default(0) @map("usos_actuales")
+  isActive                      Boolean          @default(true) @map("is_active")
+  createdAt                     DateTime         @default(now()) @map("created_at")
+  updatedAt                     DateTime         @updatedAt @map("updated_at")
+
+  productos  ReglaPrecioProducto[]
+  categorias ReglaPrecioCategoria[]
+
+  @@index([tipo, isActive])
+  @@index([vigenteDesde, vigenteHasta])
+  @@map("reglas_precio")
+}
+
+model ReglaPrecioProducto {
+  reglaId    String @map("regla_id")
+  productoId String @map("producto_id")
+
+  regla    ReglaPrecio @relation(fields: [reglaId], references: [id], onDelete: Cascade)
+  producto Producto    @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@id([reglaId, productoId])
+  @@map("regla_precio_productos")
+}
+
+model ReglaPrecioCategoria {
+  reglaId     String @map("regla_id")
+  categoriaId String @map("categoria_id")
+
+  regla     ReglaPrecio @relation(fields: [reglaId], references: [id], onDelete: Cascade)
+  categoria Categoria   @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+
+  @@id([reglaId, categoriaId])
+  @@map("regla_precio_categorias")
+}
+
+model CuponTenant {
+  id                   String    @id @default(cuid())
+  codigo               String    @unique
+  nombre               String
+  tipo                 CuponTipo
+  valor                Decimal   @db.Decimal(14, 4)
+  montoMinimoCompra    Decimal?  @map("monto_minimo_compra") @db.Decimal(14, 2)
+  productosAplicables  Json      @default("[]") @map("productos_aplicables")
+  categoriasAplicables Json      @default("[]") @map("categorias_aplicables")
+  clientesAplicables   Json      @default("[]") @map("clientes_aplicables")
+  usosMaxPorCliente    Int?      @map("usos_max_por_cliente")
+  usosTotal            Int?      @map("usos_total")
+  usosActuales         Int       @default(0) @map("usos_actuales")
+  vigenteDesde         DateTime? @map("vigente_desde")
+  vigenteHasta         DateTime? @map("vigente_hasta")
+  isActive             Boolean   @default(true) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@map("cupones_tenant")
 }

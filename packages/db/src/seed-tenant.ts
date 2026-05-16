@@ -21,6 +21,7 @@ export interface SeedTenantDefaultsResult {
   rolesUpdated: number;
   sucursalCreated: boolean;
   cajaCreated: boolean;
+  listaPrecioCreated: boolean;
 }
 
 export async function seedTenantDefaults(
@@ -106,7 +107,22 @@ export async function seedTenantDefaults(
       cajaCreated = true;
     }
 
-    return { rolesCreated, rolesUpdated, sucursalCreated, cajaCreated };
+    let listaPrecioCreated = false;
+    const existingLista = await client.listaPrecio.findUnique({ where: { codigo: "PUBLICO" } });
+    if (!existingLista) {
+      await client.listaPrecio.create({
+        data: {
+          codigo: "PUBLICO",
+          nombre: "Lista de precios pública",
+          tipo: "publico",
+          currency: "MXN",
+          isDefault: true,
+        },
+      });
+      listaPrecioCreated = true;
+    }
+
+    return { rolesCreated, rolesUpdated, sucursalCreated, cajaCreated, listaPrecioCreated };
   } finally {
     await client.$disconnect();
   }
@@ -121,7 +137,7 @@ export async function seedAllTenantDefaults(): Promise<void> {
   for (const t of tenants) {
     const result = await seedTenantDefaults(t.slug);
     console.info(
-      `[tenant seed] ${t.slug}: roles_created=${result.rolesCreated}, roles_updated=${result.rolesUpdated}, sucursal_creada=${result.sucursalCreated}, caja_creada=${result.cajaCreated}`,
+      `[tenant seed] ${t.slug}: roles_created=${result.rolesCreated}, roles_updated=${result.rolesUpdated}, sucursal_creada=${result.sucursalCreated}, caja_creada=${result.cajaCreated}, lista_creada=${result.listaPrecioCreated}`,
     );
   }
   console.info("[tenant seed-all] done.");
