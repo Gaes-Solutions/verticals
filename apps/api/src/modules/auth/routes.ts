@@ -49,6 +49,7 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
         sub: admin.id,
         email: admin.email,
         role: admin.role,
+        kind: "admin",
       });
 
       const userAgent = req.headers["user-agent"] ?? undefined;
@@ -136,6 +137,7 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
       sub: found.adminUser.id,
       email: found.adminUser.email,
       role: found.adminUser.role,
+      kind: "admin",
     });
 
     reply.setCookie(REFRESH_COOKIE_NAME, plaintext, {
@@ -165,7 +167,7 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
   app.get(
     "/me",
     {
-      preHandler: app.authenticate,
+      preHandler: app.authenticateAdmin,
     },
     async (req, reply) => {
       const admin = await app.masterPrisma.adminUser.findUnique({

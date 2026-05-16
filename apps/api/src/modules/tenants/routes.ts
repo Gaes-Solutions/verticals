@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createTenantBodySchema, tenantParamsSchema } from "./schemas.js";
 
 const tenantRoutes: FastifyPluginAsync = async (app) => {
-  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.authenticateAdmin);
 
   app.get("/", async () => {
     const tenants = await app.masterPrisma.tenant.findMany({

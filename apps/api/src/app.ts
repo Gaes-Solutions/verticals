@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
+import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
@@ -31,6 +32,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
+  await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
   await app.register(tenantRoutes, { prefix: "/tenants" });
 
   return app;

@@ -4,17 +4,44 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "../config.js";
 
+type AdminTokenPayload = {
+  sub: string;
+  email: string;
+  role: string;
+  kind: "admin";
+};
+
+type TenantTokenPayload = {
+  sub: string;
+  email: string;
+  tenantSlug: string;
+  permissions: string[];
+  kind: "tenant";
+};
+
+type TokenPayload = AdminTokenPayload | TenantTokenPayload;
+
 declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { sub: string; email: string; role: string };
-    user: { sub: string; email: string; role: string };
+    payload: TokenPayload;
+    user: TokenPayload;
   }
+}
+
+function rejectUnauthorized(reply: FastifyReply, message: string) {
+  return reply.code(401).send({
+    statusCode: 401,
+    error: "Unauthorized",
+    message,
+  });
 }
 
 const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => {
@@ -33,11 +60,29 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     try {
       await req.jwtVerify();
     } catch (_err) {
-      return reply.code(401).send({
-        statusCode: 401,
-        error: "Unauthorized",
-        message: "Token inválido o expirado",
-      });
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+  });
+
+  app.decorate("authenticateAdmin", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "admin") {
+      return rejectUnauthorized(reply, "Se requiere sesión de administrador");
+    }
+  });
+
+  app.decorate("authenticateTenant", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "tenant") {
+      return rejectUnauthorized(reply, "Se requiere sesión de usuario de tenant");
     }
   });
 };
