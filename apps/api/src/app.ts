@@ -15,6 +15,7 @@ import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
 import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import variantesRoutes from "./modules/tenant/variantes/routes.js";
+import ventasRoutes from "./modules/tenant/ventas/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
 import authPlugin from "./plugins/auth.js";
 import dbPlugin from "./plugins/db.js";
@@ -63,6 +64,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await tenantApp.register(lotesRoutes, { prefix: "/lotes" });
       await tenantApp.register(seriesRoutes, { prefix: "/series" });
       await tenantApp.register(preciosRoutes, { prefix: "/precios" });
+      await tenantApp.register(ventasRoutes, { prefix: "/ventas" });
     },
     { prefix: "/t" },
   );

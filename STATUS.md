@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 3 de 8 tareas cerradas (1.0 doc + 1.1 RBAC tenant + 1.2 Productos/Inventario/Precios)
-- **Tarea actual**: 1.3 Modelo 4.9 — Ventas básicas + multi-pago + tickets. POS checkout, multi-payment (efectivo/tarjeta/transferencia/vales), generación de ticket, descuento del stock al cobrar, snapshot inmutable de productos vendidos.
-- **Próximo paso concreto**: Modelos `venta`, `venta_linea`, `venta_pago` en schema tenant. Endpoints `/t/ventas` POST (atómico: crea venta + líneas + pagos + descuenta inventario reutilizando `aplicarAjuste` con tipo `venta`), GET listado y detalle, GET ticket print-ready. Validación stock disponible y precio mínimo antes de cobrar. Tests integración cubriendo checkout completo retail.
+- **Progreso Hito 1**: 4 de 8 tareas cerradas (1.0 doc + 1.1 RBAC + 1.2 Productos/Inventario/Precios + 1.3 Ventas)
+- **Tarea actual**: 1.4 Modelo 4.11 — Cortes X/Z con denominaciones MX. Apertura/cierre de caja, conteo de denominaciones (billetes/monedas), corte parcial (X) y corte definitivo (Z), arqueo, faltantes/sobrantes, reportes por usuario+caja+sucursal.
+- **Próximo paso concreto**: Modelos `caja_apertura`, `caja_movimiento` (entradas/salidas no-venta), `corte` (X|Z), `corte_denominacion` (jsonb estructura billetes 1000/500/200/100/50/20 + monedas 10/5/2/1/0.50). Endpoints `/t/cajas/:id/aperturar`, `/t/cortes` POST (genera X o Z), GET reportes por filtro. Validación: caja solo puede abrirse 1 vez por turno; Z bloquea ventas hasta nueva apertura. Tests integración full flujo apertura → ventas → corte X → más ventas → corte Z.
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -19,7 +19,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 - [x] **1.0 Doc del hito + STATUS + CHANGELOG**
 - [x] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
 - [x] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
-- [ ] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
+- [x] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
 - [ ] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
 - [ ] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR**
 - [ ] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)**
@@ -171,6 +171,40 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-17 — Hito 1.3 Modelo 4.9 Ventas + multi-pago cerrado
+- **Schema tenant 4.9** (4 modelos + 3 enums nuevos):
+  - `Venta` (folio único per-sucursal, sucursal/caja/usuario/cliente, estado [borrador|cobrada|cancelada], canal [pos|ecommerce|mayoreo], desglose subtotal/descuento/iva/ieps/total/totalCobrado/cambioDado, listaPrecioCodigo+cuponCodigo persisted, cfdiId nullable [Hito 1.5], canceladaMotivo/Por/At)
+  - `VentaLinea` (numero per-venta, productoId+varianteId+lote/serie nullable, cantidad+precioUnitario+precioOriginal+descuentoUnitario, iva/ieps unitario+total desglosados, `descuentosAplicados jsonb` con paso-a-paso del motor, `snapshotProducto jsonb` inmutable con nombre/sku/marca/categoria/aplicaIva/tasaIva)
+  - `VentaPago` (metodo enum efectivo/tarjeta_debito/tarjeta_credito/transferencia/vale/monedero/otro, monto, referencia/autorizacion/ultimosCuatro/terminalReferencia)
+  - `VentaFolioCounter` (sucursalId PK, ultimoNumero counter para folios atómicos via upsert+increment dentro de transaction)
+- **Migration `add_sales_payments_tickets`** generada con shadow schema postgres y aplicada cross-tenant (3 tenants demo/acme/bodega-norte).
+- **Service `ventas/service.ts`** con lógica atómica refactorizada (complejidad cognitiva ≤15):
+  - `crearVenta`: validarSucursalCaja → ejecutarPreviewSegura (wrap `calcularPreview` mapeando PreviewError → VentaError) → loadSnapshots + buildLineasCalculo (incluye `calcularImpuestosLinea` que desglosa IVA asumiendo precios CON IVA: `iva = total - total/(1+tasa/100)`) → totalesVenta (descuento líneas + descuento ticket, IVA agregado) → validarPagos (suma ≥ total + cambio requiere efectivo) → `persistirVenta` dentro de `$transaction`:
+    1. `nextFolio` con upsert+increment del counter (formato `{SUC-CODIGO}-{000123}`)
+    2. `descontarStockLineas` invoca `aplicarAjuste` con tipo `ajuste_negativo` por cada línea — InsufficientStockError → VentaError 409
+    3. Insert `Venta` con todos los totales
+    4. `insertarLineasYPagos` con snapshot inmutable
+  - `cancelarVenta`: valida estado=cobrada (409 si ya cancelada o borrador), en transaction reinserta stock con `ajuste_positivo` por cada línea con motivo `Cancelación venta {folio}: {motivo}`, marca estado=cancelada + canceladaPor/Motivo/At
+- **Endpoints `/t/ventas`**:
+  - GET lista paginada con filtros sucursal/caja/usuario/cliente/estado/canal/folio/desde/hasta (helper `buildVentaWhere`)
+  - GET `/:id` detalle con sucursal+caja+usuario+canceladaPor + líneas (orden ASC) + pagos (orden createdAt)
+  - POST `/` cobro atómico (permisos VENTAS_CREAR)
+  - POST `/:id/cancelar` (permisos VENTAS_CANCELAR + motivo obligatorio min 3 chars)
+  - VentaError con statusCode mapeado + extra fields (varianteId/stockActual/intentado/total/cobrado)
+- **15 tests integración end-to-end** en `tenant-ventas.test.ts`:
+  - Cobro simple 1 unidad efectivo exacto, folio formato `SUC-PRINCIPAL-{000001}`, folio incrementa
+  - Stock descontado atómicamente, IVA desglosado correcto (116 con 16% = 100 base + 16 IVA)
+  - Multi-pago tarjeta+efectivo con cambio, multi-línea con totales agregados
+  - Rechaza pagos insuficientes → 400, cambio sin efectivo → 400, stock insuficiente → 409 sin mutar
+  - Snapshot preserva nombre/sku tras modificar producto
+  - cajaId que no pertenece a sucursal → 400
+  - Cancelación devuelve stock, cancelar ya cancelada → 409, cajero forbidden → 403
+- **Suite total: 108 tests API + 22 permissions + 16 pricing + 18 db = 164 tests verdes en ~12s**
+- **Diferidos a Hito 1.5 (CFDI)**: emisión CFDI 4.0 con Facturama (campo `cfdiId` ya está en schema)
+- **Diferidos a Hito 1.6 (Print Bridge)**: generación HTML/CSS del ticket print-ready (los datos están todos en `GET /:id`)
+- **Diferidos a Hito 2+**: apartados (stockReservado ya existe en inventario), CxC, devoluciones parciales por línea, refunds tarjeta, IEPS detallado (V1 retorna 0)
+- **Próxima sesión empieza en**: 1.4 Cortes X/Z con denominaciones MX — apertura de caja, conteo de billetes/monedas, arqueo de movimientos+ventas+pagos por método, faltantes/sobrantes.
 
 ### 2026-05-16 — Hito 1.2 Modelo 4.7 Productos + Inventario + Precios cerrado
 - **Schema tenant 4.7** (`packages/db/prisma/tenant/schema.prisma`): 20 modelos + 10 enums nuevos: `Categoria` (árbol auto-ref), `Marca`, `Producto` con todos los flags fiscales MX (claveSat, aplicaIva/tasaIva, aplicaIeps/tasaIeps jsonb, requiresLote/Serie/Balanza, permite*), `ProductoVariante` (Shopify-style con opciones jsonb), `ProductoCodigoBarras`, `ProductoImagen`, `ProductoAtributo`, `ProductoTag`, `InventarioSucursal` (DECIMAL 18,3 stock para granel + stockReservado), `InventarioMovimiento` (append-only), `ProductoLote` (caducidad), `ProductoSerie` (electrónicos), `NivelPrecioMayoreo`, `ListaPrecio` + `ListaPrecioItem` (con precioMinimoNegociacion), `ProductoPrecioEscalonado` (RF-02 hasta 5 niveles), `ReglaPrecio` + `ReglaPrecioProducto` + `ReglaPrecioCategoria` (motor de promos con condicion/accion jsonb), `CuponTenant`. Diferidos a V1.5: pgvector búsqueda semántica, particionamiento mensual `inventario_movimientos`, triggers postgres para `stock_disponible` y `costo_promedio` (se computan en código).

@@ -75,6 +75,8 @@ model Sucursal {
   movimientosOrigen  InventarioMovimiento[] @relation("MovimientoSucursalOrigen")
   lotes              ProductoLote[]
   series             ProductoSerie[]
+  ventas             Venta[]
+  ventaFolioCounter  VentaFolioCounter?
 
   @@index([isActive])
   @@map("sucursales")
@@ -95,6 +97,7 @@ model Caja {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  ventas   Venta[]
 
   @@unique([sucursalId, codigo])
   @@index([sucursalId, isActive])
@@ -129,6 +132,8 @@ model Usuario {
   rolesAsignados    UsuarioRol[]           @relation("UsuarioRol_AsignadoPor")
   vistasGuardadas   UsuarioVistaGuardada[]
   movimientos       InventarioMovimiento[]
+  ventasCreadas     Venta[]                @relation("VentaUsuarioCreador")
+  ventasCanceladas  Venta[]                @relation("VentaUsuarioCancelador")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -719,4 +724,130 @@ model CuponTenant {
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@map("cupones_tenant")
+}
+
+// ============================================================
+// 4.9 — Ventas, líneas, pagos (subset retail V1)
+// Apartados, CxC, devoluciones parciales diferidos a Hito 2+
+// CFDI integration diferido a Hito 1.5 (campo cfdiId nullable)
+// ============================================================
+
+enum VentaEstado {
+  borrador
+  cobrada
+  cancelada
+}
+
+enum VentaCanal {
+  pos
+  ecommerce
+  mayoreo
+}
+
+enum VentaPagoMetodo {
+  efectivo
+  tarjeta_debito
+  tarjeta_credito
+  transferencia
+  vale
+  monedero
+  otro
+}
+
+model Venta {
+  id                String      @id @default(cuid())
+  folio             String
+  sucursalId        String      @map("sucursal_id")
+  cajaId            String?     @map("caja_id")
+  usuarioId         String      @map("usuario_id")
+  clienteId         String?     @map("cliente_id")
+  estado            VentaEstado @default(borrador)
+  canal             VentaCanal  @default(pos)
+  moneda            String      @default("MXN")
+  listaPrecioCodigo String?     @map("lista_precio_codigo")
+  cuponCodigo       String?     @map("cupon_codigo")
+  subtotal          Decimal     @default(0) @db.Decimal(14, 4)
+  descuentoTotal    Decimal     @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  ivaTotal          Decimal     @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal         Decimal     @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  total             Decimal     @default(0) @db.Decimal(14, 4)
+  totalCobrado      Decimal     @default(0) @map("total_cobrado") @db.Decimal(14, 4)
+  cambioDado        Decimal     @default(0) @map("cambio_dado") @db.Decimal(14, 4)
+  observaciones     String?
+  cfdiId            String?     @map("cfdi_id")
+  canceladaMotivo   String?     @map("cancelada_motivo")
+  canceladaPorId    String?     @map("cancelada_por_id")
+  cobradaAt         DateTime?   @map("cobrada_at")
+  canceladaAt       DateTime?   @map("cancelada_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  sucursal     Sucursal     @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja         Caja?        @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario      Usuario      @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
+  canceladaPor Usuario?     @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  lineas       VentaLinea[]
+  pagos        VentaPago[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado, createdAt])
+  @@index([sucursalId, cobradaAt])
+  @@index([clienteId])
+  @@map("ventas")
+}
+
+model VentaLinea {
+  id                  String  @id @default(cuid())
+  ventaId             String  @map("venta_id")
+  numero              Int
+  productoId          String  @map("producto_id")
+  varianteId          String  @map("variante_id")
+  loteId              String? @map("lote_id")
+  serieId             String? @map("serie_id")
+  cantidad            Decimal @db.Decimal(18, 3)
+  precioUnitario      Decimal @map("precio_unitario") @db.Decimal(14, 4)
+  precioOriginal      Decimal @map("precio_original") @db.Decimal(14, 4)
+  descuentoUnitario   Decimal @default(0) @map("descuento_unitario") @db.Decimal(14, 4)
+  subtotal            Decimal @db.Decimal(14, 4)
+  ivaUnitario         Decimal @default(0) @map("iva_unitario") @db.Decimal(14, 4)
+  ivaTotal            Decimal @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsUnitario        Decimal @default(0) @map("ieps_unitario") @db.Decimal(14, 4)
+  iepsTotal           Decimal @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  totalLinea          Decimal @map("total_linea") @db.Decimal(14, 4)
+  descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
+  snapshotProducto    Json    @map("snapshot_producto")
+
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@unique([ventaId, numero])
+  @@index([productoId])
+  @@index([varianteId])
+  @@map("venta_lineas")
+}
+
+model VentaPago {
+  id                 String          @id @default(cuid())
+  ventaId            String          @map("venta_id")
+  metodo             VentaPagoMetodo
+  monto              Decimal         @db.Decimal(14, 4)
+  referencia         String?
+  autorizacion       String?
+  terminalReferencia String?         @map("terminal_referencia")
+  ultimosCuatro      String?         @map("ultimos_cuatro")
+  createdAt          DateTime        @default(now()) @map("created_at")
+
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([ventaId])
+  @@map("venta_pagos")
+}
+
+model VentaFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("venta_folio_counters")
 }

@@ -135,33 +135,35 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 
 ### 1.3 Modelo 4.9 — Ventas básicas + multi-pago + tickets
 **Schema tenant (subset retail V1, sin apartados/CxC/devoluciones aún):**
-- [ ] `ventas` (id, folio unique, sucursal_id, caja_id, usuario_id, cliente_id nullable, estado enum [borrador|cobrada|cancelada], subtotal, descuento_total, iva_total, ieps_total, total, moneda, canal enum [pos|ecommerce|mayoreo], created_at, cobrada_at, cancelada_at, cancelacion_motivo, cfdi_id nullable)
-- [ ] `venta_items` (id, venta_id, producto_id, variante_id, lote_id nullable, serie_id nullable, cantidad, precio_unitario, precio_original, descuento_unitario, iva_unitario, ieps_unitario, subtotal_linea, total_linea, descuento_aplicado_regla jsonb, snapshot_producto jsonb) — snapshot inmutable
-- [ ] `venta_pagos` (id, venta_id, metodo enum [efectivo|tarjeta_debito|tarjeta_credito|transferencia|vale|otro], monto, referencia, cambio_dado, terminal_referencia, autorizacion, created_at)
-- [ ] `tickets_html` (id, venta_id, html, css, version_plantilla, generado_at) — template renderizado
+- [x] `ventas` (folio único per-sucursal, sucursal/caja/usuario/cliente, estado, canal, todos los totales desglosados, listaPrecioCodigo+cuponCodigo persisted, cfdiId nullable, canceladaMotivo/Por/At)
+- [x] `venta_lineas` (numero per-venta, productoId+varianteId+lote/serie, cantidad+precioUnit+precioOriginal+descuentoUnit+iva/ieps desglosado, `descuentosAplicados jsonb` paso-a-paso, `snapshotProducto jsonb` inmutable)
+- [x] `venta_pagos` (metodo enum efectivo/tarjeta_debito/tarjeta_credito/transferencia/vale/monedero/otro, referencia/autorizacion/terminalReferencia/ultimosCuatro)
+- [x] `venta_folio_counters` (PK sucursalId, counter atómico via upsert+increment) — alternativa elegida sobre tickets_html porque el template HTML/CSS se difiere a 1.6 Print Bridge (los datos del ticket están todos en GET `/:id`)
 
 **Migrations:**
-- [ ] Migration `tenant/migrations/NNN_add_sales_payments_tickets`
-- [ ] Migration default ticket template (HTML+CSS) en `configuracion_tenant` (anticipa modelo 4.20)
+- [x] Migration `tenant/migrations/20260516040000_add_sales_payments_tickets` generada via shadow schema + aplicada cross-tenant
+- Diferido a 1.6: template HTML/CSS configurable (cuando Print Bridge Tauri esté listo)
 
-**Lógica state machine venta:**
-- [ ] `package fiscal` (esqueleto solo Hito 1): cálculo IVA 16% / IVA frontera 8% según sucursal, IEPS por categoría
-- [ ] Validación: suma `venta_pagos.monto` >= total (con cambio)
-- [ ] Transacción atómica: decrementa inventario + crea movimientos + marca cobrada
+**Lógica state machine venta** (`apps/api/src/modules/tenant/ventas/service.ts`):
+- [x] `calcularImpuestosLinea`: asume precios CON IVA (default MX retail), desglosa `iva = total - total/(1+tasa/100)`. IEPS retorna 0 (V1 diferido)
+- [x] `validarPagos`: suma pagos ≥ total + cambio requiere al menos un pago efectivo
+- [x] **Transacción atómica `persistirVenta`**: nextFolio counter → `descontarStockLineas` reusando `aplicarAjuste` con tipo `ajuste_negativo` → insertar Venta + Lineas + Pagos
+- [x] `cancelarVenta`: en transaction reinserta stock con `ajuste_positivo` por cada línea, valida estado=cobrada (409 si ya cancelada o borrador)
+- Diferido a Hito 1.7+: paquete `fiscal` con IVA frontera 8% (V1 toma tasaIva del producto directamente)
 
 **API endpoints:**
-- [ ] `POST /ventas` (crear borrador con items)
-- [ ] `PATCH /ventas/:id/items` (modificar líneas mientras borrador)
-- [ ] `POST /ventas/:id/cobrar` (multi-pago, valida total, decrementa inventario en trx)
-- [ ] `POST /ventas/:id/cancelar` (motivo obligatorio, reversa inventario)
-- [ ] `GET /ventas/:id/ticket-html` (render con template)
-- [ ] `GET /ventas` (lista con filtros: sucursal, caja, usuario, rango fechas, estado)
+- [x] `POST /t/ventas` cobro atómico (sin estado borrador V1 — el POS calcula con `/t/precios/preview` y luego cobra en un solo POST)
+- [x] `POST /t/ventas/:id/cancelar` con motivo obligatorio (permisos VENTAS_CANCELAR)
+- [x] `GET /t/ventas` lista paginada con filtros sucursal/caja/usuario/cliente/estado/canal/folio/desde/hasta
+- [x] `GET /t/ventas/:id` detalle full con líneas+pagos+canceladaPor
+- Diferido a 1.6: `GET /ventas/:id/ticket-html` (Print Bridge render)
+- Diferido a Hito 2: `PATCH /:id/items` borrador editable (V1 no hay carrito persistido server-side, el POS lo mantiene en cliente hasta cobrar)
 
 **Tests integración:**
-- [ ] Venta completa decrementa stock atómicamente
-- [ ] Multi-pago efectivo + tarjeta valida totales y calcula cambio
-- [ ] Cancelación reversa inventario
-- [ ] Checkout completo (sin CFDI) <500ms P95
+- [x] 15 tests `tenant-ventas.test.ts`: cobro simple folio formato `SUC-PRINCIPAL-{000001}`, folio incrementa correlativo, stock descontado atómicamente, IVA desglosado 16% correcto, multi-pago tarjeta+efectivo con cambio, pagos insuficientes→400, cambio sin efectivo→400, stock insuficiente→409 sin mutar, snapshot preserva nombre tras modificar producto, cajaId fuera de sucursal→400, listado filtrado, cancelación devuelve stock, doble cancelación→409, cajero sin VENTAS_CANCELAR→403
+- Diferido a 1.7: P95 checkout <500ms con benchmark (necesita catálogo demo + load test)
+
+**Total cierre 1.3: 108 tests API + 22 permissions + 16 pricing + 18 db = 164 verdes en ~12s**
 
 ### 1.4 Modelo 4.11 — Cortes X/Z con denominaciones MX
 **Schema tenant:**
