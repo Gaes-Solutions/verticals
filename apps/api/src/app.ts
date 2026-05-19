@@ -5,9 +5,12 @@ import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
+import inventarioRoutes from "./modules/tenant/inventario/routes.js";
+import lotesRoutes from "./modules/tenant/lotes/routes.js";
 import marcasRoutes from "./modules/tenant/marcas/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
+import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
 import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import variantesRoutes from "./modules/tenant/variantes/routes.js";
@@ -55,6 +58,9 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await tenantApp.register(marcasRoutes, { prefix: "/marcas" });
       await tenantApp.register(productosRoutes, { prefix: "/productos" });
       await tenantApp.register(variantesRoutes, { prefix: "/variantes" });
+      await tenantApp.register(inventarioRoutes, { prefix: "/inventario" });
+      await tenantApp.register(lotesRoutes, { prefix: "/lotes" });
+      await tenantApp.register(seriesRoutes, { prefix: "/series" });
     },
     { prefix: "/t" },
   );

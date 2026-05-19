@@ -9,11 +9,17 @@ import {
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
+export interface TenantPrincipal extends PermissionPrincipal {
+  userId: string;
+  email: string;
+  tenantSlug: string;
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     tenantPrisma: TenantPrismaClient;
     tenantSlug: string;
-    principal: PermissionPrincipal;
+    principal: TenantPrincipal;
     requirePerm: (perm: PermissionCode | PermissionCode[]) => void;
     requireAnyPerm: (perms: PermissionCode[]) => void;
   }
@@ -55,6 +61,9 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
     req.tenantSlug = req.user.tenantSlug;
     req.tenantPrisma = getTenantClient(req.user.tenantSlug);
     req.principal = {
+      userId: req.user.sub,
+      email: req.user.email,
+      tenantSlug: req.user.tenantSlug,
       permissions,
       isOwner,
     };
