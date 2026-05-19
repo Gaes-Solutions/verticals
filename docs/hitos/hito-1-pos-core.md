@@ -76,43 +76,62 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 - [x] Total suite: **41 tests verdes en 6.61s** (38 anteriores + 21 nuevos − 18 unit packages/db ya contados)
 
 ### 1.2 Modelo 4.7 — Productos + variantes + inventario + motor precios
-**Schema tenant:**
-- [ ] `productos` (id, sku unique, codigo_barras, nombre, descripcion, marca, categoria_id, unidad_medida, peso, granel bool, requiere_serie bool, requiere_lote bool, activo, created_at, updated_at, deleted_at)
-- [ ] `categorias` (id, parent_id, nombre, slug, orden, activa)
-- [ ] `producto_variantes` (id, producto_id, sku unique, nombre, atributos jsonb, precio_base, costo_promedio, activo) — Shopify-style
-- [ ] `producto_atributos` (id, producto_id, nombre, valores jsonb) — color/talla/sabor
-- [ ] `inventario_sucursal` (producto_id, variante_id, sucursal_id, stock, stock_minimo, stock_maximo, ubicacion, updated_at) PK compuesta
-- [ ] `inventario_movimientos` (id, producto_id, variante_id, sucursal_id, tipo enum, cantidad, costo_unitario, referencia_tipo, referencia_id, usuario_id, fecha, notas) — audit completo
-- [ ] `lotes` (id, producto_id, variante_id, codigo_lote, fecha_vencimiento, cantidad_inicial, cantidad_actual, sucursal_id, created_at)
-- [ ] `series` (id, producto_id, variante_id, numero_serie unique, sucursal_id, estado enum, created_at) — para electrónica/imei
-- [ ] `precios_lista` (id, nombre, codigo unique, es_default, vigente_desde, vigente_hasta) — listas de precios
-- [ ] `precios_producto` (producto_id, variante_id, lista_id, precio, precio_minimo, margen_minimo_pct) PK compuesta
-- [ ] `precios_reglas` (id, nombre, tipo enum, condiciones jsonb, accion jsonb, prioridad, vigente_desde, vigente_hasta, activa) — descuentos por volumen, cliente, sucursal, etc.
+**Schema tenant** (`packages/db/prisma/tenant/schema.prisma`):
+- [x] `productos` con flags fiscales completos MX (claveSat, aplicaIva/tasaIva, aplicaIeps/tasaIeps jsonb, permite*, requires_lote/serie/balanza, archivedAt soft-delete)
+- [x] `categorias` (árbol auto-ref via parentId, slug único, isVisiblePos/Publico)
+- [x] `producto_variantes` (Shopify-style, opciones jsonb, isDefault, precioBase/costoPromedio/costoUltimo)
+- [x] `producto_codigos_barras` (multi-barcode por variante con tipo ean13/upc/corto_interno/qr)
+- [x] `producto_imagenes`, `producto_atributos` (custom JSONB), `producto_tags`
+- [x] `inventario_sucursal` (PK compuesta varianteId+sucursalId, DECIMAL 18,3 stockActual+Reservado+Min+Max para granel)
+- [x] `inventario_movimientos` (append-only, enum tipo completo, referencia polimórfica, usuarioId actor)
+- [x] `producto_lotes` (fechaCaducidad, cantidadInicial/Actual por sucursal)
+- [x] `producto_series` (numeroSerie único, estado enum, garantiaHasta)
+- [x] `niveles_precio_mayoreo`, `listas_precios` (tipo enum publico/mayoreo_nivel/cliente_individual)
+- [x] `lista_precio_items` (PK compuesta, **precioMinimoNegociacion** opcional)
+- [x] `producto_precios_escalonados` RF-02 (hasta 5 niveles, unique varianteId+nivel)
+- [x] `reglas_precio` motor de promos (condicion/accion jsonb, prioridad, stackable, excluyeProductosConEscalonado, vigencia, dias_semana/horarios)
+- [x] `regla_precio_productos` + `regla_precio_categorias` join tables
+- [x] `cupones_tenant` (jsonb productos/categorias/clientes aplicables, usos, vigencia)
+- Diferidos a V1.5: pgvector búsqueda semántica, particionamiento mensual movimientos, triggers postgres `stock_disponible`/`costo_promedio` (se computan en código)
 
-**Migrations + seed demo:**
-- [ ] Migration `tenant/migrations/NNN_add_products_inventory_pricing`
-- [ ] Seed catálogo demo (10 productos retail variados con variantes para testing)
-- [ ] Seed lista de precios `default`
+**Migrations + seed defaults:**
+- [x] Migration `20260516025507_add_products_inventory_pricing` generada via shadow schema postgres temporal (`prisma migrate diff --from-url`) y aplicada cross-tenant
+- [x] Seed extendido: `seedTenantDefaults` crea lista `PUBLICO` default por tenant (idempotente)
+- Diferido a 1.7 demo: catálogo demo de 10 productos retail (cuando empiece UI POS)
 
-**Package `packages/pricing/`:**
-- [ ] Motor cascada **6 pasos**: (1) precio base lista → (2) lista cliente especial → (3) regla descuento volumen → (4) regla promoción vigente → (5) descuento manual cajero (con permiso) → (6) precio mínimo guard
-- [ ] `calculatePrice(producto, contexto)` retorna `{precio_final, precio_original, descuentos: [...], aplicada_regla_id?}`
-- [ ] Tests unit cobertura 100% del motor con casos del análisis 4.7
+**Package `packages/pricing/`** (nuevo workspace):
+- [x] Motor cascada **6 pasos puro** con Decimal.js:
+  - `calcularLinea` → pasos 1 escalonado RF-02 / 2 lista cliente con `precioMinimoViolado` flag / 3 reglas línea (descuento_producto/categoria/cliente/precio_temporada) con stackable + excluyeProductosConEscalonado
+  - `calcularTicket` → pasos 4 mayoreo_por_total_ticket / 5 cupón / 6 descuento manual del cajero
+- [x] Tipos exportados (`LineaPrecioInput`, `CalcularTicketInput`, `ReglaPrecioInput`, `CuponInput`, `DescuentoAplicado` con paso 1-6, `TicketCalculado`)
+- [x] **16 tests unit** cubriendo cada paso + cascada completa + edge cases
 
-**API endpoints:**
-- [ ] `productos/` — CRUD, búsqueda por SKU/código de barras/nombre (índices full-text), bulk import CSV (Eleventa)
-- [ ] `productos/:id/inventario` — stock por sucursal, ajuste manual con motivo
-- [ ] `productos/:id/precios` — precios por lista
-- [ ] `categorias/` — CRUD árbol
-- [ ] `precios-listas/` — CRUD
-- [ ] `precios-reglas/` — CRUD
-- [ ] `precios/preview` POST — calcula precio dado producto + contexto (cliente, sucursal, cantidad) para POS
+**API endpoints `/t/*`:**
+- [x] `/t/categorias` CRUD árbol, valida parentId, bloquea self-parent (400), bloquea archivar si tiene productos (409)
+- [x] `/t/marcas` CRUD con misma protección
+- [x] `/t/productos` POST crea producto + variante default + barcode autocreados; GET lista paginada con búsqueda multi-criterio (nombre/sku/barcode); **GET `/buscar/:codigo`** lookup rápido barcode → SKU variante → SKU padre; PATCH/DELETE
+- [x] `/t/variantes` POST/PATCH con swap isDefault automático + auto-promote `tieneVariantes`; bloquea archivar default (409); sub-endpoints `:id/codigos-barras`
+- [x] `/t/inventario` GET lista paginada con `stockBajoMinimo`; GET detalle por varianteId/sucursalId; PATCH stockMin/Max
+- [x] `/t/inventario/ajustes` POST atómico transaction `aplicarAjuste` con motivo audit
+- [x] `/t/inventario/transferencias` POST atómico cross-sucursal con 2 movimientos vinculados
+- [x] `/t/inventario/movimientos` GET audit DESC con filtros
+- [x] `/t/lotes` CRUD con filtro `caducaAntes`
+- [x] `/t/series` CRUD con filtro `estado`
+- [x] `/t/precios/listas` + `/listas/:id/items` PUT upsert / DELETE
+- [x] `/t/precios/escalonados` POST/DELETE
+- [x] `/t/precios/reglas` CRUD con productos/categorias many-to-many, soft-archive
+- [x] `/t/precios/cupones` CRUD
+- [x] **POST `/t/precios/preview`** ⭐ recibe `{lineas, clienteId?, listaPrecioCodigo?, cuponCodigo?, descuentoGlobalPct?}` → carga datos tenant → `calcularTicket` → devuelve `TicketCalculado` con descuentos paso-a-paso. `PreviewError` mapeado a 404/409.
+- Diferido a 1.2.e (cuando UI lo necesite): imágenes (S3+thumbnails), atributos custom JSONB, tags, bulk import CSV Eleventa
 
 **Tests integración:**
-- [ ] Búsqueda producto P95 <100ms con 10k productos seed
-- [ ] Motor de precios aplica cascada correctamente en casos retail
-- [ ] Movimiento de inventario actualiza stock atómicamente
-- [ ] Import CSV Eleventa de 1k productos en <10s
+- [x] `tenant-catalogo.test.ts`: 23 tests (categorías árbol con padre+hijo+inexistente+slug dup+self-parent, marcas owner/cajero, productos con variante+barcode auto, sku dup, categoriaId inexistente, búsqueda barcode/SKU/inexistente, paginación, búsqueda q full-text, cajero puede listar pero no crear, agregar variante, archivar default → 409, segundo barcode lookup, PATCH flags fiscales)
+- [x] `tenant-inventario.test.ts`: 14 tests (ajuste+/-, merma, excede stock → 409, cajero forbidden, PATCH min/max upsert, transferencia atómica + 2 mov, origen=destino → 400, stock insuficiente sin mutar, audit DESC, lotes filtrar+ordenar caducidad, series numeroSerie dup → 409)
+- [x] `tenant-precios.test.ts`: 15 tests incluyendo **preview end-to-end** (base 20, lista 18.5, escalonado 17 override lista, cupón 10%, descuento manual 5%, variante 404, cupón 404, regla activar/desactivar/dup)
+- Diferido a 1.7 demo: P95 búsqueda <100ms con 10k productos seed (después de catálogo demo)
+- Diferido a V1.5: import CSV Eleventa 1k en <10s
+
+**Total cierre 1.2: 93 tests API + 22 permissions + 16 pricing + 18 db = 149 verdes en ~12s**
 
 ### 1.3 Modelo 4.9 — Ventas básicas + multi-pago + tickets
 **Schema tenant (subset retail V1, sin apartados/CxC/devoluciones aún):**

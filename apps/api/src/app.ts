@@ -6,6 +6,7 @@ import healthRoutes from "./modules/health/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
+import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
 import lotesRoutes from "./modules/tenant/lotes/routes.js";
 import marcasRoutes from "./modules/tenant/marcas/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
@@ -61,6 +62,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await tenantApp.register(inventarioRoutes, { prefix: "/inventario" });
       await tenantApp.register(lotesRoutes, { prefix: "/lotes" });
       await tenantApp.register(seriesRoutes, { prefix: "/series" });
+      await tenantApp.register(preciosRoutes, { prefix: "/precios" });
     },
     { prefix: "/t" },
   );

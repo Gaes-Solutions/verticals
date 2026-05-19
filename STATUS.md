@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 2 de 8 tareas cerradas (1.0 doc + 1.1 RBAC tenant)
-- **Tarea actual**: 1.2 Modelo 4.7 — Productos + variantes + inventario multi-sucursal + motor de precios cascada 6 pasos + lotes/series. Schema tenant Prisma + migration + paquete `pricing/` + endpoints CRUD + tests integración.
-- **Próximo paso concreto**: Modelo Prisma `producto`, `producto_variante`, `categoria`, `marca`, `unidad_medida`, `inventario_sucursal`, `inventario_movimiento`, `lote`, `serie`, `lista_precios`, `precio_regla`. Migration. Paquete `packages/pricing/` con motor cascada (precio_base → lista → cliente → promo → manual → mínimo). Endpoints `/t/productos`, `/t/inventario`, `/t/listas-precio`. Tests integración.
+- **Progreso Hito 1**: 3 de 8 tareas cerradas (1.0 doc + 1.1 RBAC tenant + 1.2 Productos/Inventario/Precios)
+- **Tarea actual**: 1.3 Modelo 4.9 — Ventas básicas + multi-pago + tickets. POS checkout, multi-payment (efectivo/tarjeta/transferencia/vales), generación de ticket, descuento del stock al cobrar, snapshot inmutable de productos vendidos.
+- **Próximo paso concreto**: Modelos `venta`, `venta_linea`, `venta_pago` en schema tenant. Endpoints `/t/ventas` POST (atómico: crea venta + líneas + pagos + descuenta inventario reutilizando `aplicarAjuste` con tipo `venta`), GET listado y detalle, GET ticket print-ready. Validación stock disponible y precio mínimo antes de cobrar. Tests integración cubriendo checkout completo retail.
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -18,7 +18,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 
 - [x] **1.0 Doc del hito + STATUS + CHANGELOG**
 - [x] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
-- [ ] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
+- [x] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
 - [ ] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
 - [ ] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
 - [ ] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR**
@@ -171,6 +171,42 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-16 — Hito 1.2 Modelo 4.7 Productos + Inventario + Precios cerrado
+- **Schema tenant 4.7** (`packages/db/prisma/tenant/schema.prisma`): 20 modelos + 10 enums nuevos: `Categoria` (árbol auto-ref), `Marca`, `Producto` con todos los flags fiscales MX (claveSat, aplicaIva/tasaIva, aplicaIeps/tasaIeps jsonb, requiresLote/Serie/Balanza, permite*), `ProductoVariante` (Shopify-style con opciones jsonb), `ProductoCodigoBarras`, `ProductoImagen`, `ProductoAtributo`, `ProductoTag`, `InventarioSucursal` (DECIMAL 18,3 stock para granel + stockReservado), `InventarioMovimiento` (append-only), `ProductoLote` (caducidad), `ProductoSerie` (electrónicos), `NivelPrecioMayoreo`, `ListaPrecio` + `ListaPrecioItem` (con precioMinimoNegociacion), `ProductoPrecioEscalonado` (RF-02 hasta 5 niveles), `ReglaPrecio` + `ReglaPrecioProducto` + `ReglaPrecioCategoria` (motor de promos con condicion/accion jsonb), `CuponTenant`. Diferidos a V1.5: pgvector búsqueda semántica, particionamiento mensual `inventario_movimientos`, triggers postgres para `stock_disponible` y `costo_promedio` (se computan en código).
+- **Migration `add_products_inventory_pricing`** generada via shadow schema postgres temporal (`prisma migrate diff --from-url`) y aplicada a 3 tenants existentes (demo, acme, bodega-norte) via `gaes-migrate tenant migrate-all`.
+- **Paquete `@gaespos/pricing`** nuevo con motor cascada 6 pasos puro (Decimal.js):
+  - `calcularLinea` → pasos 1 escalonado / 2 lista cliente / 3 reglas línea con stackable+excluyeProductosConEscalonado
+  - `calcularTicket` → pasos 4 mayoreo por total / 5 cupón / 6 descuento manual del cajero
+  - Tipos exportados (`LineaPrecioInput`, `CalcularTicketInput`, `ReglaPrecioInput`, `CuponInput`, `DescuentoAplicado`, `TicketCalculado`, etc.)
+  - **16 tests unit** cubriendo cada paso + cascada completa + edge cases (`precioMinimoViolado`, stackable, montoMin, no aplica si `permiteDescuento=false`)
+- **Seed defaults extendido**: `seedTenantDefaults` ahora crea lista_precios `PUBLICO` default por tenant. CLI `gaes-migrate tenant seed-all` re-ejecutado.
+- **Endpoints CRUD catálogo** (módulos `apps/api/src/modules/tenant/`):
+  - `/t/categorias`: árbol con `parentId` self-ref, valida existencia, bloquea ser su propio padre (400), bloquea archivar si tiene productos (409)
+  - `/t/marcas`: CRUD simple con misma protección de archivado
+  - `/t/productos`: POST crea producto + **variante default automática** (SKU=skuPadre + barcode opcional EAN-13 en un solo request); GET lista paginada con búsqueda multi-criterio (nombre, sku padre, sku variantes, código de barras); **GET `/buscar/:codigo`** lookup rápido barcode → SKU variante → SKU padre (caso central POS); valida `categoriaId`/`marcaId` existen (404)
+  - `/t/variantes`: POST/PATCH con auto-promote `producto.tieneVariantes=true`, swap automático de `isDefault`; DELETE bloquea archivar la variante default (409); sub-endpoints `POST/DELETE :id/codigos-barras` con `isPrimary` mutually exclusive
+- **Endpoints inventario** (`/t/inventario/*` + `/t/lotes`, `/t/series`):
+  - GET lista paginada filtros sucursal/variante/producto + flag `stockBajoMinimo`
+  - PATCH `/:varianteId/:sucursalId` upsertea registro vacío con stockMin/Max/ubicacion
+  - **POST `/ajustes`** atómico (transaction): `ensureInventario` + actualiza `stockActual` + inserta `inventario_movimiento` con `usuarioId` del JWT; tipos `ajuste_positivo`/`negativo`/`merma`/`consumo_interno`; rechaza con `InsufficientStockError → 409` si stock se vuelve negativo
+  - **POST `/transferencias`**: salida en origen + entrada en destino + 2 movimientos vinculados (`referenciaTipo="transferencia"`, `referenciaId` cruzados) en UNA transacción; rechaza origen=destino (400) y stock insuficiente (409) sin mutar nada
+  - GET `/movimientos` audit con filtros varianteId/sucursalId/tipo/desde/hasta, DESC por fecha
+  - Lotes con filtro `caducaAntes`, Series con `estado` (disponible/vendido/devuelto/garantia/reparacion)
+- **Endpoints precios** (`/t/precios/*`):
+  - `/listas` + `/listas/:id/items` (PUT upsert, DELETE)
+  - `/escalonados` por variante (POST/DELETE con unique `varianteId+nivel`)
+  - **`/reglas`** motor de promos con condicion/accion jsonb, productos/categorias many-to-many, vigencia, prioridad, stackable
+  - `/cupones` con vigencia + usos + clientesAplicables jsonb
+  - **POST `/preview`** ⭐ endpoint clave para POS: recibe `{lineas, clienteId?, listaPrecioCodigo?, cuponCodigo?, descuentoGlobalPct?}` → carga variantes+escalonados+lista+reglas vigentes+cupón del tenant → invoca `calcularTicket` del paquete pricing → devuelve `TicketCalculado` con descuentos paso-a-paso. Validaciones cupón (existe, vigente, no agotado), variantes inexistentes (404). `PreviewError` con statusCode mapeado.
+- **Plugin tenant-context extendido**: `PermissionPrincipal → TenantPrincipal` con `userId/email/tenantSlug` derivados del JWT claim (`req.user.sub`, etc.) — necesario para registrar actor en `inventario_movimientos.usuarioId` y en `descuentoGlobal.usuarioId` del motor.
+- **Tests integración**:
+  - `tenant-catalogo.test.ts`: 23 tests (categorías árbol, marcas, productos con variante+barcode auto, búsqueda barcode/SKU/inexistente, cajero puede listar pero no crear)
+  - `tenant-inventario.test.ts`: 14 tests (ajuste+/-, merma, excede stock → 409, transferencia atómica + 2 mov, origen=destino → 400, stock insuficiente sin mutar, audit DESC, lotes+series)
+  - `tenant-precios.test.ts`: 15 tests (seed PUBLICO, upsert item, crear lista, escalonado RF-02, reglas activar/desactivar/duplicar, cupón, **preview end-to-end**: base 20, lista 18.5, escalonado 17 override, cupón 10%, descuento manual 5%, variante 404, cupón 404)
+- **Total suite: 93 tests API + 22 permissions + 16 pricing + 18 db = 149 tests verdes en ~12s**
+- **Diferidos a 1.2.e (cuando UI los necesite)**: imágenes producto (S3 + thumbnails), atributos custom JSONB, tags, bulk import CSV Eleventa.
+- **Próxima sesión empieza en**: 1.3 Modelo 4.9 — Ventas + multi-pago + tickets. POS checkout que reutiliza `/t/precios/preview` + `aplicarAjuste` con tipo `venta` para descontar stock atómicamente.
 
 ### 2026-05-15 — Hito 1.1 Modelo 4.6 RBAC tenant cerrado
 - **Schema tenant** (`packages/db/prisma/tenant/schema.prisma`): 7 modelos nuevos con `@map` snake_case — `Sucursal`, `Caja`, `Usuario`, `UsuarioSucursal`, `Rol`, `UsuarioRol`, `UsuarioVistaGuardada` + enums `SucursalTipo`, `CajaTipo`, `UsuarioTipo`. Roles guardan `permisos Json @default("[]")` en lugar de tabla `rol_permisos` separada (más simple, validado contra catálogo tipado V1).
