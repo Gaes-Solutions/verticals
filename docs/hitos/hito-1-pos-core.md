@@ -167,28 +167,32 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 
 ### 1.4 Modelo 4.11 — Cortes X/Z con denominaciones MX
 **Schema tenant:**
-- [ ] `cortes_caja` (id, folio, sucursal_id, caja_id, usuario_id, tipo enum [x|z], apertura_at, cierre_at, fondo_inicial, ventas_efectivo_esperado, ventas_tarjeta_esperado, ventas_otros_esperado, contado_efectivo, contado_tarjeta, contado_otros, diferencia_efectivo, diferencia_tarjeta, observaciones, cerrado_por, created_at)
-- [ ] `corte_denominaciones` (id, corte_id, denominacion, cantidad, subtotal) — 1000/500/200/100/50/20 billetes; 10/5/2/1/0.5 monedas
-- [ ] `movimientos_caja` (id, caja_id, sucursal_id, usuario_id, tipo enum [apertura|venta|retiro|deposito|gasto|cierre], monto, metodo enum, referencia_tipo, referencia_id, notas, created_at)
+- [x] `caja_aperturas` (cajaId+sucursalId+usuarioId, montoInicial, estado [abierta|cerrada], cerradaAt/Por/Forzosa, observaciones)
+- [x] `caja_movimientos` (8 tipos: entrada_fondo/prestamo/devolucion/otro, salida_retiro/gasto/deposito/otro)
+- [x] `cortes` (tipo X|Z + numero per-apertura unique, desdeAt/hastaAt, ventasCount/Canceladas/Total, efectivoEsperado/Contado/Diferencia, desglosePorMetodo jsonb, desgloseMovimientos jsonb, **denominaciones jsonb** estructura billetes 1000/500/200/100/50/20 + monedas 20/10/5/2/1/0.50)
 
 **Migrations + lógica:**
-- [ ] Migration `tenant/migrations/NNN_add_cash_register_closures`
-- [ ] Corte X = consulta sin cerrar (puede haber N por turno)
-- [ ] Corte Z = cierre obligatorio fin de turno, no editable después
-- [ ] Plantilla impresa: ventas por método, retiros, depósitos, diferencias por denominación
+- [x] Migration `20260517010000_add_caja_aperturas_cortes` aplicada cross-tenant
+- [x] Corte X = consulta sin cerrar (puede haber N por turno; acumulado desde apertura, no diferencial)
+- [x] Corte Z = cierre obligatorio fin de turno; setea apertura.estado=cerrada; bloquea ventas hasta nueva apertura
+- [x] Arqueo automático: ventas efectivo + entradas - salidas - cambios = efectivoEsperado; diferencia=contado−esperado (positivo=sobrante, negativo=faltante)
+- Diferido a 1.6: plantilla impresa Print Bridge
 
 **API endpoints:**
-- [ ] `POST /cortes/apertura` (fondo inicial denominaciones)
-- [ ] `GET /cortes/x` (corte consulta tiempo real)
-- [ ] `POST /cortes/z` (cierre con denominaciones contadas + observaciones)
-- [ ] `POST /cortes/movimientos` (retiro/depósito/gasto manual)
-- [ ] `GET /cortes/:id/ticket-html` (template impresión corte)
+- [x] `POST /t/cajas/:cajaId/aperturar` (CAJA_ABRIR; rechaza segunda apertura activa con 409)
+- [x] `GET /t/cajas/:cajaId/apertura-actual` (CORTE_CONSULTAR; 404 si no hay)
+- [x] `POST /t/caja-movimientos` (CAJA_MOVIMIENTO_CREAR; bloquea sobre apertura cerrada)
+- [x] `POST /t/cortes` con tipo X|Z + denominaciones contadas + observaciones (CAJA_CERRAR para Z, CAJA_CERRAR_FORZOSO para forzar)
+- [x] `GET /t/cortes` + `GET /t/cortes/:id` con filtros sucursal/caja/usuario/tipo/desde/hasta
+- [x] **Integración cross-módulo**: `crearVenta` ahora invoca `requireAperturaAbierta` si la venta lleva `cajaId` (devuelve 409 si caja sin apertura)
+- Diferido a 1.6: `GET /cortes/:id/ticket-html`
 
 **Tests integración:**
-- [ ] Apertura caja registra fondo inicial
-- [ ] Corte X muestra ventas del turno en curso sin cerrar
-- [ ] Corte Z cierra turno, no permite modificación posterior
-- [ ] Diferencias entre esperado y contado se calculan correctamente
+- [x] 17 tests en `tenant-cortes.test.ts`: apertura (5) + movimientos (2) + corte X (3) + corte Z (6) + permisos (1) cubriendo flujo completo:
+  - apertura → ventas → préstamo + gasto → corte X arqueo 0 → más ventas → corte Z faltante → bloqueo ventas → nueva apertura → ventas OK
+  - Bug fix descubierto: `nextCorteNumero` filtraba por tipo pero unique es global (aperturaId, numero); fix global
+
+**Total cierre 1.4: 125 tests API + 22 permissions + 16 pricing + 18 db = 181 verdes en ~14s**
 
 ### 1.5 Modelo 4.19 — CFDI 4.0 + Facturama + autofacturación QR
 **Schema tenant + master SAT:**

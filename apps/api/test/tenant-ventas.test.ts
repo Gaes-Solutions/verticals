@@ -109,6 +109,14 @@ beforeAll(async () => {
 
   await injectStock(varianteAId, "100");
   await injectStock(varianteBId, "50");
+
+  const apertura = await app.inject({
+    method: "POST",
+    url: `/t/cajas/${cajaId}/aperturar`,
+    headers: authOwner(),
+    payload: { montoInicial: "500", observaciones: "Test setup" },
+  });
+  if (apertura.statusCode !== 201) throw new Error(`apertura failed: ${apertura.body}`);
 });
 
 afterAll(async () => {

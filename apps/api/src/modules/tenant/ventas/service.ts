@@ -1,6 +1,7 @@
 import type { LineaCalculada, TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import type { VentaCreateInput } from "./schemas.js";
@@ -225,6 +226,12 @@ async function validarSucursalCaja(
     const caja = await client.caja.findUnique({ where: { id: cajaId } });
     if (!caja || caja.sucursalId !== sucursalId) {
       throw new VentaError(400, "cajaId no pertenece a la sucursal indicada");
+    }
+    try {
+      await requireAperturaAbierta(client, cajaId);
+    } catch (err) {
+      if (err instanceof CorteError) throw new VentaError(err.statusCode, err.message, err.extra);
+      throw err;
     }
   }
   return { id: sucursal.id, codigo: sucursal.codigo };

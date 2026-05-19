@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 4 de 8 tareas cerradas (1.0 doc + 1.1 RBAC + 1.2 Productos/Inventario/Precios + 1.3 Ventas)
-- **Tarea actual**: 1.4 Modelo 4.11 — Cortes X/Z con denominaciones MX. Apertura/cierre de caja, conteo de denominaciones (billetes/monedas), corte parcial (X) y corte definitivo (Z), arqueo, faltantes/sobrantes, reportes por usuario+caja+sucursal.
-- **Próximo paso concreto**: Modelos `caja_apertura`, `caja_movimiento` (entradas/salidas no-venta), `corte` (X|Z), `corte_denominacion` (jsonb estructura billetes 1000/500/200/100/50/20 + monedas 10/5/2/1/0.50). Endpoints `/t/cajas/:id/aperturar`, `/t/cortes` POST (genera X o Z), GET reportes por filtro. Validación: caja solo puede abrirse 1 vez por turno; Z bloquea ventas hasta nueva apertura. Tests integración full flujo apertura → ventas → corte X → más ventas → corte Z.
+- **Progreso Hito 1**: 5 de 8 tareas cerradas (1.0 + 1.1 + 1.2 + 1.3 + 1.4)
+- **Tarea actual**: 1.5 Modelo 4.19 — CFDI 4.0 + Facturama + autofacturación QR. Generación CFDI desde ventas cobradas, integración Facturama V1 (PAC default), cancelación CFDI con motivo SAT, autofacturación pública con QR.
+- **Próximo paso concreto**: Schema master `cfdis_emitidos` (multi-tenant para portal autofacturación), tenant schema `cfdi_config` (RFC emisor, certificados, plantilla). Service Facturama wrapper. Endpoints `POST /t/ventas/:id/cfdi/emitir`, `POST /t/cfdis/:id/cancelar`, portal público `POST /autofactura` con QR generado en ticket. Pruebas con Facturama sandbox.
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -20,7 +20,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 - [x] **1.1 Modelo 4.6 Usuarios + sucursales + cajas + RBAC**
 - [x] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
 - [x] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
-- [ ] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
+- [x] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
 - [ ] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR**
 - [ ] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)**
 - [ ] **1.7 Demo cajero retail end-to-end**
@@ -171,6 +171,41 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-17 — Hito 1.4 Modelo 4.11 Cortes X/Z + arqueo MX cerrado
+- **Schema tenant 4.11** (3 modelos + 3 enums nuevos):
+  - `CajaApertura` (cajaId+sucursalId+usuarioId, montoInicial, estado [abierta|cerrada], cerradaAt/Por/Forzosa)
+  - `CajaMovimiento` (8 tipos: entrada_fondo/prestamo/devolucion/otro, salida_retiro/gasto/deposito/otro)
+  - `Corte` (tipo X|Z, numero per-apertura unique, desdeAt/hastaAt, ventasCount/Canceladas/Total, efectivoEsperado/Contado/Diferencia, desglosePorMetodo jsonb, desgloseMovimientos jsonb, denominaciones jsonb)
+- **Migration `add_caja_aperturas_cortes`** aplicada cross-tenant via shadow schema.
+- **Service `cortes/service.ts`** refactorizado a complejidad cognitiva ≤15 con helpers extraídos (`summarizarVentas`, `summarizarMovimientos`, `serializeDesglose`, `totalDenominaciones`):
+  - `abrirCaja`: rechaza si caja inactiva o ya tiene apertura activa (409)
+  - `findAperturaActiva`: helper reutilizable que devuelve la apertura abierta o null
+  - `requireAperturaAbierta`: exporta error CorteError 409 — **integrado en `crearVenta`**: si la venta llega con `cajaId`, valida que tenga apertura abierta antes de procesar
+  - `calcularArqueo`: acumulado desde `apertura.createdAt` (no diferencial entre cortes — convención POS retail). Suma efectivo vendido del periodo + cambios dados + entradas/salidas → `efectivoEsperado`
+  - `crearCorte`: calcula arqueo + `totalDenominaciones` (billetes 1000/500/200/100/50/20 + monedas 20/10/5/2/1/0.50 MX) → diferencia (positiva=sobrante, negativa=faltante). Z cierra apertura, X no.
+  - `registrarMovimiento`: bloquea si apertura cerrada
+- **Endpoints `/t/*`**:
+  - `POST /t/cajas/:cajaId/aperturar` (permiso CAJA_ABRIR)
+  - `GET /t/cajas/:cajaId/apertura-actual` (CORTE_CONSULTAR, 404 si no hay)
+  - `POST /t/caja-movimientos` (CAJA_MOVIMIENTO_CREAR)
+  - `POST /t/cortes` con tipo X (CORTE_CONSULTAR) o Z (CAJA_CERRAR); flag `cerradaForzosa` requiere CAJA_CERRAR_FORZOSO
+  - `GET /t/cortes` lista paginada con filtros (helper `buildCorteWhere` para sucursal/caja/usuario/tipo/desde/hasta)
+  - `GET /t/cortes/:id` detalle con apertura+caja+usuario embebidos
+- **Bug fix encontrado en tests**: `nextCorteNumero` antes contaba por `(aperturaId, tipo)`, pero el `@@unique` del schema es solo `(aperturaId, numero)` global. Causaba colisión cuando X numero 1 ya existía y Z intentaba crear numero 1 también. Fix: counter ahora cuenta TODOS los cortes por apertura sin filtrar tipo.
+- **Ajuste a Hito 1.3**: tests de ventas ahora abren caja en `beforeAll` porque venta con `cajaId` ahora requiere apertura abierta (regla de negocio del POS retail). 12 tests previos rotos → arreglados con apertura inicial.
+- **17 tests integración** en `tenant-cortes.test.ts` cubriendo:
+  - **Apertura**: venta sin apertura→409 con mensaje "apertura"; cajero abre OK; segunda apertura mientras abierta→409; GET apertura-actual; ventas con apertura cobran
+  - **Movimientos**: entrada préstamo, salida gasto
+  - **Corte X**: arqueo acumulado correcto (montoInicial 500 + 3 ventas × 100 + préstamo 200 - gasto 50 = 950); X NO cierra apertura; ventas siguen tras X
+  - **Corte Z**: denominaciones incorrectas marca faltante (diferencia<0); Z cierra apertura (apertura-actual ahora 404); ventas bloqueadas→409; nueva apertura permite cobrar; corte sobre apertura cerrada→409; GET cortes lista con filtros
+  - **Permisos**: cajero NO puede `cerradaForzosa` (sin CAJA_CERRAR_FORZOSO, 403) — cajero SÍ tiene CAJA_CERRAR normal
+- **Suite total: 125 tests API + 22 permissions + 16 pricing + 18 db = 181 tests verdes**
+- **Diferidos**:
+  - Reportes de diferencia/faltante por usuario (Hito 4 reporting)
+  - Apertura forzada de caja por gerente sobre apertura abandonada → CAJA_CERRAR_FORZOSO ya está en catálogo
+  - Print de corte → 1.6 Print Bridge
+- **Próxima sesión empieza en**: 1.5 CFDI 4.0 + Facturama — emisión desde ventas cobradas, cancelación con motivo SAT, portal público autofactura con QR en ticket.
 
 ### 2026-05-17 — Hito 1.3 Modelo 4.9 Ventas + multi-pago cerrado
 - **Schema tenant 4.9** (4 modelos + 3 enums nuevos):

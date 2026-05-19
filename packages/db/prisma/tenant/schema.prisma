@@ -96,8 +96,9 @@ model Caja {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  ventas   Venta[]
+  sucursal  Sucursal       @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  ventas    Venta[]
+  aperturas CajaApertura[]
 
   @@unique([sucursalId, codigo])
   @@index([sucursalId, isActive])
@@ -134,6 +135,10 @@ model Usuario {
   movimientos       InventarioMovimiento[]
   ventasCreadas     Venta[]                @relation("VentaUsuarioCreador")
   ventasCanceladas  Venta[]                @relation("VentaUsuarioCancelador")
+  aperturasAbiertas CajaApertura[]         @relation("CajaAperturaUsuario")
+  aperturasCerradas CajaApertura[]         @relation("CajaAperturaCerradaPor")
+  cajaMovimientos   CajaMovimiento[]
+  cortes            Corte[]
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -850,4 +855,100 @@ model VentaFolioCounter {
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
 
   @@map("venta_folio_counters")
+}
+
+// ============================================================
+// 4.11 — Cortes X/Z + apertura/cierre caja + movimientos
+// ============================================================
+
+enum CajaAperturaEstado {
+  abierta
+  cerrada
+}
+
+enum CajaMovimientoTipo {
+  entrada_fondo
+  entrada_prestamo
+  entrada_devolucion
+  entrada_otro
+  salida_retiro
+  salida_gasto
+  salida_deposito
+  salida_otro
+}
+
+enum CorteTipo {
+  X
+  Z
+}
+
+model CajaApertura {
+  id                    String             @id @default(cuid())
+  cajaId                String             @map("caja_id")
+  sucursalId            String             @map("sucursal_id")
+  usuarioId             String             @map("usuario_id")
+  montoInicial          Decimal            @map("monto_inicial") @db.Decimal(14, 4)
+  observacionesApertura String?            @map("observaciones_apertura")
+  estado                CajaAperturaEstado @default(abierta)
+  cerradaAt             DateTime?          @map("cerrada_at")
+  cerradaPorId          String?            @map("cerrada_por_id")
+  cerradaForzosa        Boolean            @default(false) @map("cerrada_forzosa")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  caja        Caja             @relation(fields: [cajaId], references: [id], onDelete: Restrict)
+  usuario     Usuario          @relation("CajaAperturaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict)
+  cerradaPor  Usuario?         @relation("CajaAperturaCerradaPor", fields: [cerradaPorId], references: [id], onDelete: SetNull)
+  movimientos CajaMovimiento[]
+  cortes      Corte[]
+
+  @@index([cajaId, estado])
+  @@index([sucursalId, estado])
+  @@index([usuarioId, estado])
+  @@map("caja_aperturas")
+}
+
+model CajaMovimiento {
+  id         String             @id @default(cuid())
+  aperturaId String             @map("apertura_id")
+  tipo       CajaMovimientoTipo
+  monto      Decimal            @db.Decimal(14, 4)
+  motivo     String
+  referencia String?
+  usuarioId  String             @map("usuario_id")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  apertura CajaApertura @relation(fields: [aperturaId], references: [id], onDelete: Restrict)
+  usuario  Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([aperturaId, createdAt])
+  @@map("caja_movimientos")
+}
+
+model Corte {
+  id                  String    @id @default(cuid())
+  aperturaId          String    @map("apertura_id")
+  tipo                CorteTipo
+  numero              Int
+  desdeAt             DateTime  @map("desde_at")
+  hastaAt             DateTime  @map("hasta_at")
+  ventasCount         Int       @map("ventas_count")
+  ventasCanceladas    Int       @default(0) @map("ventas_canceladas")
+  ventasTotal         Decimal   @map("ventas_total") @db.Decimal(14, 4)
+  efectivoEsperado    Decimal   @map("efectivo_esperado") @db.Decimal(14, 4)
+  efectivoContado     Decimal   @map("efectivo_contado") @db.Decimal(14, 4)
+  diferencia          Decimal   @db.Decimal(14, 4)
+  desglosePorMetodo   Json      @map("desglose_por_metodo")
+  desgloseMovimientos Json      @map("desglose_movimientos")
+  denominaciones      Json
+  observaciones       String?
+  usuarioId           String    @map("usuario_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  apertura CajaApertura @relation(fields: [aperturaId], references: [id], onDelete: Restrict)
+  usuario  Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@unique([aperturaId, numero])
+  @@index([aperturaId, tipo])
+  @@map("cortes")
 }
