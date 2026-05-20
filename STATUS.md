@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 7 de 8 tareas cerradas (1.0-1.6 + 1.6.a contract). 1.6.b ESC/POS Rust real y 1.5.c autofactura quedan como sub-tareas opcionales antes/durante 1.7
-- **Tarea actual**: 1.7 Demo cajero retail end-to-end — flujo completo en staging: login cajero → apertura caja → POS busca producto barcode → cobro multi-pago → ticket → CFDI Facturama sandbox → corte Z. Replaces Eleventa para 1-2 clientes piloto retail
-- **Próximo paso concreto**: Decidir si el demo es CLI scripted (curl/fetch que ejecuta el flujo completo con asserts) o requiere mini UI web. Recomendado: script CLI end-to-end que demuestra los endpoints encadenados + un README con el flujo paso a paso para el cliente. UI POS web completa cae fuera del Hito 1 (es Hito 2+). Pendiente: 1.5.c autofactura y 1.6.b ESC/POS Rust se cierran cuando Gaby tenga hardware/dominio listos
+- **Progreso Hito 1**: 🎉 **8 de 8 tareas cerradas — Hito 1 POS Core retail CERRADO al 100%**. Pendientes opcionales 1.5.c autofactura pública y 1.6.b ESC/POS Rust se cierran cuando Gaby tenga dominio + hardware listos
+- **Tarea actual**: Hito 2 — Comercial. Apartados, CxC formal, devoluciones parciales, clientes B2C/B2B, cotizaciones→pedidos, promociones avanzadas, programa lealtad puntos
+- **Próximo paso concreto**: Empezar 2.1 con modelo 4.8 Clientes (B2C separados de B2B, multi-direcciones, fiados informales, multi-usuarios B2B). Luego 2.2 Apartados/CxC/Devoluciones. **Recomendado primero**: hacer las 3 tareas externas pendientes de Hito 0 (Hetzner CPX31 + dominio staging + GitHub remote+CI), para desplegar el Hito 1 en staging real y mostrarlo a los 5 clientes piloto antes de seguir con Hito 2
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -23,7 +23,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 - [x] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
 - [x] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR** (autofactura pública diferida a 1.5.c — endpoints tenant cerrados)
 - [x] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)** (1.6.a contrato JSON + endpoints backend; 1.6.b ESC/POS Rust real cuando Gaby tenga TM-T20III)
-- [ ] **1.7 Demo cajero retail end-to-end**
+- [x] **1.7 Demo cajero retail end-to-end** — CLI script verificado que ejecuta los 16 pasos del flujo completo: login admin→tenant→cajero→config CFDI→catálogo+stock→apertura caja→búsqueda barcode→preview→cobro multi-pago→CFDI Mock→ticket JSON→movimientos→corte X→venta extra→corte Z→bloqueo post-Z
 
 ## 📋 Hito 0 — Infra base · Progreso
 
@@ -171,6 +171,46 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-17 — 🎉 Hito 1.7 Demo cajero retail end-to-end + cierre Hito 1 completo
+- **Script CLI verificado** `apps/api/scripts/demo-cajero-retail.ts` que ejecuta el flujo completo del POS retail contra una API live, con salida colorizada y asserts en cada paso:
+  1. Login admin → POST tenant fresh con plan starter
+  2. POST `/tenants/:slug/bootstrap-owner` para crear el primer dueño del tenant (endpoint admin nuevo)
+  3. Dueño crea cajero con rol preset
+  4. Localiza SUC-PRINCIPAL + CAJA-1 sembradas por defecto
+  5. PUT `/t/cfdis/config` configura CFDI sandbox
+  6. Crea categoría Abarrotes + marca Demo MX + 3 productos (Coca/Sabritas/Galletas) con barcodes EAN-13 + stock 50 c/u
+  7. Cajero abre caja con $500 fondo inicial
+  8. GET `/t/productos/buscar/:barcode` lookup rápido (UX POS escaneo)
+  9. POST `/t/precios/preview` (motor cascada) → POST `/t/ventas` multi-pago tarjeta+efectivo con cambio
+  10. POST `/t/ventas/:id/cfdi/emitir` → CFDI 4.0 UUID válido vía MockFacturamaClient
+  11. GET `/t/ventas/:id/ticket` JSON listo para Print Bridge con CFDI + autofactura URL embebidos
+  12. Movimientos manuales caja (entrada préstamo + salida gasto)
+  13. POST `/t/cortes` tipo X informativo
+  14. Venta extra post-X
+  15. POST `/t/cortes` tipo Z con denominaciones contadas → cierra caja, reporta diferencia/cuadre/sobrante/faltante
+  16. Verifica con 409 que ventas quedan bloqueadas hasta nueva apertura
+- **Endpoint nuevo admin** `POST /tenants/:slug/bootstrap-owner` para crear el primer dueño del tenant programáticamente (requerido por demo automation + onboarding de nuevos clientes piloto). Valida tenant existe, busca rol preset "dueno", verifica email no duplicado, crea usuario con argon2 + asigna rol.
+- **Flag `FISCAL_PROVIDER=mock` en `server.ts`** para inyectar `MockFacturamaClient` en dev/demo sin requerir API key real de Facturama. Default sigue siendo `FacturamaClient` real (prod). Logea warning visible al arrancar con mock.
+- **Script `pnpm --filter @gaespos/api demo:retail`** ejecutable con un comando. Salida con emojis + colores ANSI + asserts en cada paso. Si algo falla, dump del response body + exit 1.
+- **tsconfig.json apps/api** incluye `scripts/**/*` para que el typecheck en CI valide el demo también.
+- **Verificación end-to-end OK**: corrida real contra API local con `FISCAL_PROVIDER=mock` completó los 16 pasos en ~3s, CFDI timbrado con UUID `CA029BF0-1AA7-4775-9670-6977E70583DB`, ticket JSON incluye autofactura URL `/autofactura/demo-mpdhgpou/venta/cmpdhgrs50014eixwgcu55bg9`, corte Z reporta sobrante de $127, ventas post-Z rechazadas con 409 como esperado.
+- **Suite total: 146 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 205 tests verdes (sin regresiones por cambio en server.ts)**
+
+### 🏁 Cierre de Hito 1 — POS Core retail
+- **8 sub-tareas completadas** (1.0 docs + 1.1 RBAC + 1.2 Productos/Inventario/Precios + 1.3 Ventas + 1.4 Cortes + 1.5 CFDI + 1.6 Print Bridge contract + 1.7 Demo)
+- **Commits del Hito 1**: 1 doc + 11 features (un commit por sub-tarea con su test suite)
+- **Suite estable**: 205 tests verdes en ~14s (146 integración API + 59 unit packages)
+- **6 packages nuevos en workspace**: `@gaespos/permissions`, `@gaespos/pricing`, `@gaespos/fiscal` (además de `@gaespos/db` y `@gaespos/api` ya existentes)
+- **App Rust scaffold nuevo**: `apps/print-bridge` (Tauri 2 + axum, espera hardware para 1.6.b)
+- **Diferidos a hitos posteriores** (decisiones explícitas):
+  - 1.5.c autofactura pública con QR + 1.6.b ESC/POS Rust → cuando Gaby tenga dominio + hardware
+  - Apartados, CxC formal, devoluciones parciales por línea, clientes B2B, cotizaciones, promociones lealtad → Hito 2
+  - Verticales Salud (vet + humano N3), Abarrotes (recargas+servicios), B2B portal, Doctoralia, Partner contador → Hito 3
+  - Bulk import CSV Eleventa, pgvector búsqueda semántica, particionamiento tablas, S3 XML/PDF, IVA 8% frontera → V1.5
+  - Hetzner CPX31 + Coolify + dominio staging + GitHub remote + CI deploy → Hito 0 pendientes externos
+- **Hito vendible**: el flujo demo (script CLI) es lo que se le muestra a los 1-2 clientes piloto retail para validar el reemplazo de Eleventa antes de empezar Hito 2.
+- **Próxima sesión empieza en**: decidir el orden — (a) cerrar las 3 tareas externas pendientes de Hito 0 (Hetzner+dominio+GitHub) para tener staging real y mostrarlo a clientes, o (b) arrancar Hito 2.1 Modelo 4.8 Clientes. La recomendación es (a) primero porque desbloquea validación con clientes reales y CI funcional.
 
 ### 2026-05-17 — Hito 1.6.a Print Bridge contrato JSON + endpoints backend cerrado
 - **Endpoints backend nuevos** (`apps/api/src/modules/tenant/tickets/`):

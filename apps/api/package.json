@@ -11,7 +11,8 @@
     "lint": "biome check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "demo:retail": "tsx scripts/demo-cajero-retail.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

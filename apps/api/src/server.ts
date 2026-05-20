@@ -1,9 +1,15 @@
+import { MockFacturamaClient } from "@gaespos/fiscal";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const app = await buildApp(config);
+  const useMockFiscal = process.env.FISCAL_PROVIDER === "mock";
+  const mockClient = useMockFiscal ? new MockFacturamaClient() : null;
+  const app = await buildApp(config, mockClient ? { fiscalProviderFactory: () => mockClient } : {});
+  if (useMockFiscal) {
+    app.log.warn("⚠️  FISCAL_PROVIDER=mock — usando MockFacturamaClient (no apto producción)");
+  }
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "shutdown signal received");

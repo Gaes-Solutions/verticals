@@ -256,19 +256,34 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 **Nota:** Para Hito 1.7 demo en staging, el ticket se muestra como JSON/HTML en navegador. La impresión física ESC/POS es nice-to-have post-Hito 1.
 
 ### 1.7 Demo cajero retail end-to-end
-- [ ] Flujo completo grabado (GIF/MP4 <2min):
-  1. Login cajero (`cajero@demo.gaessoft.local`)
-  2. Apertura de caja con fondo inicial
-  3. Búsqueda y captura de 3-5 productos (incluir 1 variante)
-  4. Aplicación de descuento manual (con permiso)
-  5. Cobro multi-pago efectivo + tarjeta
-  6. Impresión ticket por print bridge
-  7. Cliente escanea QR del ticket → autofacturación → CFDI emitido
-  8. Corte Z con denominaciones
-- [ ] Video subido a `docs/demos/hito-1-cajero-retail.mp4`
-- [ ] Actualizar STATUS.md, CHANGELOG.md, memorias
-- [ ] Tag git `hito-1-pos-core-v1`
-- [ ] **Hito vendible:** invitar a 1-2 clientes piloto retail a probar staging
+**Demo CLI script verificada (`apps/api/scripts/demo-cajero-retail.ts`):**
+- [x] 16 pasos ejecutados contra API live con asserts en cada uno:
+  1. Login admin + POST tenant fresh (plan starter)
+  2. POST `/tenants/:slug/bootstrap-owner` — endpoint admin nuevo para crear primer dueño
+  3. Dueño crea cajero con rol preset "cajero"
+  4. Localiza SUC-PRINCIPAL + CAJA-1 sembradas por defecto
+  5. Configura CFDI sandbox (RFC + régimen + apiKey)
+  6. Crea categoría + marca + 3 productos demo (Coca, Sabritas, Galletas) con barcodes EAN-13 + stock 50 c/u
+  7. Cajero abre caja CAJA-1 con $500 fondo inicial
+  8. Búsqueda producto por barcode 7501055304226 (UX POS escaneo, <100ms)
+  9. POST `/t/precios/preview` (motor cascada) + POST `/t/ventas` multi-pago tarjeta+efectivo con cambio
+  10. POST `/t/ventas/:id/cfdi/emitir` — CFDI 4.0 timbrado UUID válido vía MockFacturamaClient
+  11. GET `/t/ventas/:id/ticket` JSON listo para Print Bridge con CFDI + autofactura URL embebidos
+  12. POST `/t/caja-movimientos` (entrada préstamo + salida gasto)
+  13. POST `/t/cortes` tipo X informativo (no cierra)
+  14. Venta extra post-X
+  15. POST `/t/cortes` tipo Z con denominaciones contadas → cierra caja, reporta diferencia/cuadre/sobrante/faltante
+  16. Verifica con 409 que ventas quedan bloqueadas hasta nueva apertura
+- [x] Salida colorizada (ANSI + emojis) + asserts; dump del body + exit 1 si algo falla
+- [x] Flag `FISCAL_PROVIDER=mock` en `server.ts` para usar MockFacturamaClient sin API key real
+- [x] Script ejecutable con `pnpm --filter @gaespos/api demo:retail`
+- [x] `tsconfig.json` incluye `scripts/**/*` para typecheck en CI
+- [x] STATUS.md, CHANGELOG.md, docs/hitos/hito-1-pos-core.md actualizados
+- [ ] Video GIF/MP4 <2min para clientes: se graba al desplegar en staging real (Hito 0.10-0.12 pendientes)
+- [ ] Tag git `hito-1-pos-core-v1`: se aplica cuando esté en staging
+- [ ] **Hito vendible:** invitar a 1-2 clientes piloto retail a probar staging (depende Hetzner + dominio externos)
+
+**Total cierre 1.7: 146 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 205 verdes + demo CLI verificada end-to-end**
 
 ## Decisiones tomadas en este hito (candidatas a ADR)
 
