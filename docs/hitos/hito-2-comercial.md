@@ -104,27 +104,31 @@
 
 **Total cierre 2.2: 186 tests API + 22 perm + 16 pricing + 18 db + 3 fiscal = 245 verdes**
 
-### 2.3 Modelo 4.9 Apartados
+### 2.3 Modelo 4.9 Apartados ✅ CERRADO
 **Schema tenant:**
-- [ ] `apartados` (folio AP-001-A-NNNNN + cliente_id O cliente_b2b_id + sucursal+caja+usuario + subtotal/descuentos/total + monto_pagado computed + saldo computed + fecha_apartado + fecha_limite (default +30 días config tenant) + status [activo|liquidado_y_entregado|cancelado|expirado] + politica_cancelacion snapshot + pena_cancelacion_pct + convertido_a_venta_id FK)
-- [ ] `apartado_items` (snapshot similar venta_lineas + stock_reservado_movimiento_id FK)
-- [ ] `apartado_abonos` (append-only: monto + método + referencia + comprobante)
+- [x] `Apartado` con folio único per-sucursal `AP-{CODIGO}-{NNNNNN}` + cliente_id O cliente_b2b_id + estado enum + montoPagado acumulado + fechaLimite + penaCancelacionPct + politicaCancelacion snapshot + motivoCancelacion + canceladaPorId + liquidadoAt/canceladoAt
+- [x] `ApartadoLinea` snapshot inmutable (misma estructura que VentaLinea con descuentos+impuestos+totalLinea+descuentosAplicados jsonb del motor + snapshotProducto jsonb)
+- [x] `ApartadoAbono` append-only con 6 métodos + referencia + comprobanteUrl
+- [x] `ApartadoFolioCounter` atómico (mismo patrón VentaFolioCounter)
+- [x] Extensión `Venta.apartadoId @unique` para relación 1:1 inversa
+
+**Permisos:** 5 nuevos APARTADOS_LEER/CREAR/ABONAR/LIQUIDAR/CANCELAR + categoría en catálogo. Roles preset actualizados.
 
 **Logic + endpoints:**
-- [ ] Service `aplicarApartadoReserva` reusa `aplicarAjuste` con tipo `apartado_reservado` (nuevo tipo en inventario_movimientos)
-- [ ] `POST /t/apartados` crea + reserva stock atómicamente
-- [ ] `POST /t/apartados/:id/abonos`
-- [ ] `POST /t/apartados/:id/liquidar` → crea venta, libera stock reservado, marca apartado liquidado, descuenta stock vendido
-- [ ] `POST /t/apartados/:id/cancelar` → libera stock con tipo `apartado_liberado`, aplica pena (porcentaje de los abonos)
-- [ ] `GET /t/apartados` lista con filtros estado/cliente/vencimiento
+- [x] Service `aplicarReservaApartado` y `liberarReservaApartado` en inventario service (modifican `stockReservado` NO `stockActual`, validan disponibilidad = actual - reservado, crean movimiento tipo `apartado_reservado`/`apartado_liberado`)
+- [x] `POST /t/apartados` (APARTADOS_CREAR) — atómico: preview cascada + reserva por línea + abono inicial opcional
+- [x] `POST /t/apartados/:id/abonos` (APARTADOS_ABONAR)
+- [x] `POST /t/apartados/:id/liquidar` (APARTADOS_LIQUIDAR) → libera reserva + descuenta stockActual via aplicarAjuste + crea Venta linkada con folio normal copiando líneas/snapshot/abonos como pagos
+- [x] `POST /t/apartados/:id/cancelar` (APARTADOS_CANCELAR — gerente/dueno) → libera reservas + aplica pena con override opcional
+- [x] `GET /t/apartados` lista paginada con filtros + GET `/:id` detalle full
+- [x] Refine schema Zod: requiere clienteId O clienteB2bId (400 si ambos null)
 
-**Diferido a V2:** job nocturno BullMQ que mueve apartados activos+fecha_limite_pasada → estado=expirado + libera stock + aplica pena automática
+**Diferido a V2:** job nocturno BullMQ apartado_expirado (libera reservas + aplica pena automática). **Diferido a 2.5 Devoluciones:** CFDI Egreso si abono inicial fue facturado. **Diferido a V1.5:** retención de pena en monedero del tenant (V1 sólo la calcula).
 
 **Tests integración:**
-- [ ] Crear apartado reserva stock (stockReservado +N)
-- [ ] Abonos suman a monto_pagado, validan no exceder total
-- [ ] Liquidación crea venta vinculada + libera reservado + decrementa stock vendido en una transacción
-- [ ] Cancelación libera stock + aplica pena
+- [x] 14 tests: reserva sin tocar stockActual, stock insuficiente→409 con extra.stockDisponible, sin clienteId→400, abono > saldo→409, liquidar antes saldar→409, liquidación crea venta+libera+descuenta atómico, re-liquidación→409, cajero sin CANCELAR→403, pena 25%+override 0%, listado filtros
+
+**Total cierre 2.3: 200 tests API + 22 perm + 16 pricing + 18 db + 3 fiscal = 259 verdes**
 
 ### 2.4 Modelo 4.9 CxC formal
 **Schema tenant:**

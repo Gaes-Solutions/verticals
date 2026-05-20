@@ -8,9 +8,9 @@
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
 - **Fase**: 🎉 Hito 1 cerrado · Hito 0 deploy stack listo (esperando cuentas externas Hetzner+dominio cuando haya cliente piloto comprometido). Trabajo activo: **Hito 2 Comercial**
-- **Progreso Hito 2**: 2.1 B2C + 2.2 B2B cerrados. Siguiente: 2.3 Apartados
-- **Tarea actual**: 2.3 Modelo 4.9 Apartados — reserva de stock + abonos + liquidación con conversión a venta + cancelación con pena
-- **Próximo paso concreto**: Schema tenant `apartados` + `apartado_items` + `apartado_abonos`. Service `aplicarApartadoReserva` que reusa `aplicarAjuste` con tipo `apartado_reservado` (nuevo). Endpoints crear/abonar/liquidar/cancelar. Stock reservado por sucursal incrementa al crear apartado, libera al cancelar/expirar/liquidar (y entonces decrementa stockActual)
+- **Progreso Hito 2**: 2.1 B2C + 2.2 B2B + 2.3 Apartados cerrados. Siguiente: 2.4 CxC formal
+- **Tarea actual**: 2.4 Modelo 4.9 CxC formal — `cuentas_cobrar` auto-creadas al cobrar venta con método `credito`, abonos manuales, estado activa/vencida/liquidada, regularización fiado→CxC, método pago `credito_b2b` que valida línea_disponible
+- **Próximo paso concreto**: Schema `CuentaCobrar` + `CxcPago` + integración con `crearVenta` (método nuevo `credito` para B2B con línea autorizada) + endpoint POST regularizar fiado a CxC. Interés moratorio job nocturno → V2
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -172,6 +172,44 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-20 — Hito 2.3 Apartados cerrado
+- **Schema tenant 4.9.b** (4 modelos + 2 enums nuevos):
+  - `Apartado` (folio único per-sucursal `AP-{CODIGO}-{NNNNNN}`, sucursal+caja+usuario, clienteId O clienteB2bId, totales completos, **montoPagado** acumulado, fechaApartado + **fechaLimite** computado de `diasVigencia`, estado [activo|liquidado_y_entregado|cancelado|expirado], `politicaCancelacion` snapshot + `penaCancelacionPct`, motivoCancelacion + canceladaPorId, liquidadoAt/canceladoAt, relación 1:1 inversa con Venta para detalle)
+  - `ApartadoLinea` (numero per-apartado unique, snapshot inmutable del producto, mismos campos que VentaLinea: cantidad+precios+impuestos+descuentos+totalLinea+`descuentosAplicados` jsonb del motor cascada + `snapshotProducto` jsonb)
+  - `ApartadoAbono` (append-only: metodo enum 6 valores + monto + referencia + comprobanteUrl + usuarioId, no admite eliminación)
+  - `ApartadoFolioCounter` (counter atómico por sucursal — mismo patrón que VentaFolioCounter)
+- **Extensión Venta**: campo `apartadoId @unique` (FK opcional) para relación 1:1 inversa cuando la venta nace de un apartado liquidado.
+- **5 permisos nuevos** en `@gaespos/permissions`: APARTADOS_LEER/CREAR/ABONAR/LIQUIDAR/CANCELAR + descripciones por categoría. Roles preset actualizados: gerente tiene todos los 5; cajero y vendedor tienen LEER/CREAR/ABONAR/LIQUIDAR (no CANCELAR).
+- **Migration `add_apartados`** generada via shadow schema postgres + aplicada cross-tenant a 7 tenants.
+- **Extensión `@gaespos/api`** inventario service con dos helpers nuevos:
+  - `aplicarReservaApartado(tx, input)` valida `stockActual - stockReservado >= cantidad` (rechaza con `InsufficientStockError` 409), incrementa `stockReservado` SIN tocar `stockActual`, crea movimiento tipo `apartado_reservado`
+  - `liberarReservaApartado(tx, input)` decrementa `stockReservado` con `Math.max(0, ...)` para no ir negativo, crea movimiento tipo `apartado_liberado`
+- **Service `apartados/service.ts`** con 4 operaciones atómicas en `$transaction`:
+  - `crearApartado` invoca `calcularPreview` del motor cascada (reusa motor de pricing) → buildLineas con impuestos desglosados → `nextFolio` → crear apartado + reserva stock por cada línea + abono inicial opcional. InsufficientStockError mapeado a ApartadoError 409 con extra.stockDisponible/intentado
+  - `registrarAbono` valida apartado activo + monto ≤ saldo (no excede), actualiza `montoPagado`, crea abono
+  - `liquidarApartado` valida `montoPagado >= total` → por cada línea: libera reserva + descuenta stockActual via `aplicarAjuste(tipo: ajuste_negativo)` → genera folio venta con `nextVentaFolio` → crea Venta con `apartadoId` + VentaLineas con snapshot copiado + VentaPagos copiando los abonos como pagos → marca apartado `liquidado_y_entregado`
+  - `cancelarApartado` libera todas las reservas + calcula pena = `montoPagado * penaPct/100` (override opcional) + reembolso = `montoPagado - pena` + marca cancelado con motivo + canceladaPorId
+- **Endpoints `/t/apartados*`**:
+  - GET lista paginada con filtros estado/clienteId/clienteB2bId/sucursalId/desde/hasta (helper `buildApartadoWhere`)
+  - GET `/:id` detalle full con líneas+abonos+canceladaPor+venta linkada
+  - POST `/` (APARTADOS_CREAR) crear apartado atómico
+  - POST `/:id/abonos` (APARTADOS_ABONAR) registrar abono
+  - POST `/:id/liquidar` (APARTADOS_LIQUIDAR) genera venta vinculada
+  - POST `/:id/cancelar` (APARTADOS_CANCELAR — sólo gerente/dueno) aplica pena con override opcional
+- **Schema Zod refine**: apartado requiere `clienteId` O `clienteB2bId` (400 si ambos null).
+- **14 tests integración** en `tenant-apartados.test.ts`:
+  - Crear: rechaza sin cliente (400), cajero crea apartado con abono inicial → reserva stockReservado +N sin tocar stockActual, stock insuficiente → 409 con extra, abono inicial > total → 400
+  - Flujo abonos: abono parcial reduce saldo, abono > saldo → 409, liquidar antes de saldar → 409
+  - **Liquidación**: abono final + liquidar → crea venta `SUC-PRINCIPAL-NNNNNN`, libera reservado, descuenta stockActual, estado=liquidado_y_entregado, venta linkada visible en detalle, re-liquidación → 409
+  - **Cancelación**: cajero sin APARTADOS_CANCELAR → 403, owner cancela $200 con penaPct 25% → pena=$50 reembolso=$150, stockReservado liberado, cancelación con `penaPctOverride: 0` → pena=$0 reembolso=$100 (excepción VIP)
+  - Listado: filtros por estado y clienteId
+- **Suite total: 200 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 259 tests verdes en ~14s**
+- **Diferidos**:
+  - Job nocturno `apartado_expirado` (mueve activo+fecha_limite_pasada → expirado + libera reservas + aplica pena automática) → V2 con BullMQ workers
+  - Cancelación con CFDI Egreso si abono inicial fue facturado → Hito 2.5 Devoluciones
+  - Pena retiene en monedero del tenant (no devolución directa) → V1.5
+- **Próxima sesión empieza en**: 2.4 CxC formal — `cuentas_cobrar` auto-creadas al cobrar venta con método `credito`, abonos manuales, regularización fiado→CxC, método pago `credito_b2b` valida línea_disponible.
 
 ### 2026-05-20 — Hito 2.2 Clientes B2B + crédito formal cerrado
 - **Schema tenant 4.8.b** (6 modelos + 3 enums nuevos):

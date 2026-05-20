@@ -19,6 +19,12 @@ export const PERMISSIONS = {
   VENTAS_APLICAR_DESCUENTO: "ventas.aplicar_descuento",
   VENTAS_APLICAR_DESCUENTO_ALTO: "ventas.aplicar_descuento_alto",
 
+  APARTADOS_LEER: "apartados.leer",
+  APARTADOS_CREAR: "apartados.crear",
+  APARTADOS_ABONAR: "apartados.abonar",
+  APARTADOS_LIQUIDAR: "apartados.liquidar",
+  APARTADOS_CANCELAR: "apartados.cancelar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -107,6 +113,18 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "ventas.aplicar_descuento_alto": {
     category: "ventas",
     description: "Aplicar descuento manual por encima del límite default",
+  },
+
+  "apartados.leer": { category: "apartados", description: "Consultar apartados y sus abonos" },
+  "apartados.crear": { category: "apartados", description: "Crear apartados (reserva stock)" },
+  "apartados.abonar": { category: "apartados", description: "Registrar abonos a apartado" },
+  "apartados.liquidar": {
+    category: "apartados",
+    description: "Liquidar apartado y convertir a venta",
+  },
+  "apartados.cancelar": {
+    category: "apartados",
+    description: "Cancelar apartado (libera stock + aplica pena)",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

@@ -3,6 +3,7 @@ import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import apartadosRoutes from "./modules/tenant/apartados/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
 import cfdisRoutes from "./modules/tenant/cfdis/routes.js";
@@ -87,6 +88,7 @@ export async function buildApp(
       await tenantApp.register(ticketsRoutes);
       await tenantApp.register(clientesRoutes, { prefix: "/clientes" });
       await tenantApp.register(clientesB2bRoutes, { prefix: "/clientes-b2b" });
+      await tenantApp.register(apartadosRoutes, { prefix: "/apartados" });
     },
     { prefix: "/t" },
   );

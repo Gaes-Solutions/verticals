@@ -181,3 +181,73 @@ export class InsufficientStockError extends Error {
     this.name = "InsufficientStockError";
   }
 }
+
+export interface ReservaApartadoInput {
+  varianteId: string;
+  sucursalId: string;
+  cantidad: string;
+  apartadoId: string;
+  motivo: string;
+  usuarioId: string;
+}
+
+export async function aplicarReservaApartado(tx: Tx, input: ReservaApartadoInput): Promise<void> {
+  const cantidad = new Decimal(input.cantidad);
+  const inv = await ensureInventario(tx, input.varianteId, input.sucursalId);
+  const stockActual = new Decimal(inv.stockActual.toString());
+  const stockReservado = new Decimal(inv.stockReservado.toString());
+  const stockDisponible = stockActual.minus(stockReservado);
+  if (stockDisponible.lt(cantidad)) {
+    throw new InsufficientStockError(
+      input.varianteId,
+      input.sucursalId,
+      stockDisponible.toString(),
+      cantidad.toString(),
+    );
+  }
+  await tx.inventarioSucursal.update({
+    where: {
+      varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+    },
+    data: { stockReservado: stockReservado.plus(cantidad).toString() },
+  });
+  await tx.inventarioMovimiento.create({
+    data: {
+      varianteId: input.varianteId,
+      sucursalId: input.sucursalId,
+      tipo: "apartado_reservado",
+      cantidad: cantidad.toString(),
+      motivo: input.motivo,
+      usuarioId: input.usuarioId,
+      referenciaTipo: "apartado",
+      referenciaId: input.apartadoId,
+    },
+  });
+}
+
+export async function liberarReservaApartado(tx: Tx, input: ReservaApartadoInput): Promise<void> {
+  const cantidad = new Decimal(input.cantidad);
+  const inv = await ensureInventario(tx, input.varianteId, input.sucursalId);
+  const nuevoReservado = Decimal.max(
+    new Decimal(inv.stockReservado.toString()).minus(cantidad),
+    ZERO,
+  );
+  await tx.inventarioSucursal.update({
+    where: {
+      varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+    },
+    data: { stockReservado: nuevoReservado.toString() },
+  });
+  await tx.inventarioMovimiento.create({
+    data: {
+      varianteId: input.varianteId,
+      sucursalId: input.sucursalId,
+      tipo: "apartado_liberado",
+      cantidad: cantidad.negated().toString(),
+      motivo: input.motivo,
+      usuarioId: input.usuarioId,
+      referenciaTipo: "apartado",
+      referenciaId: input.apartadoId,
+    },
+  });
+}

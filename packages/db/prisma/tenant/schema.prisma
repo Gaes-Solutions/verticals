@@ -67,16 +67,18 @@ model Sucursal {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  cajas              Caja[]
-  usuarioSucursales  UsuarioSucursal[]
-  usuariosLastLogin  Usuario[]              @relation("UsuarioLastLoginSucursal")
-  inventarioSucursal InventarioSucursal[]
-  movimientos        InventarioMovimiento[]
-  movimientosOrigen  InventarioMovimiento[] @relation("MovimientoSucursalOrigen")
-  lotes              ProductoLote[]
-  series             ProductoSerie[]
-  ventas             Venta[]
-  ventaFolioCounter  VentaFolioCounter?
+  cajas                Caja[]
+  usuarioSucursales    UsuarioSucursal[]
+  usuariosLastLogin    Usuario[]              @relation("UsuarioLastLoginSucursal")
+  inventarioSucursal   InventarioSucursal[]
+  movimientos          InventarioMovimiento[]
+  movimientosOrigen    InventarioMovimiento[] @relation("MovimientoSucursalOrigen")
+  lotes                ProductoLote[]
+  series               ProductoSerie[]
+  ventas               Venta[]
+  ventaFolioCounter    VentaFolioCounter?
+  apartados            Apartado[]
+  apartadoFolioCounter ApartadoFolioCounter?
 
   @@index([isActive])
   @@map("sucursales")
@@ -99,6 +101,7 @@ model Caja {
   sucursal  Sucursal       @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
   ventas    Venta[]
   aperturas CajaApertura[]
+  apartados Apartado[]
 
   @@unique([sucursalId, codigo])
   @@index([sucursalId, isActive])
@@ -145,6 +148,9 @@ model Usuario {
   clientesB2bAsignados ClienteB2bVendedorAsignado[]
   fiadoMovimientos     FiadoMovimiento[]
   creditosB2bAprobados ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
+  apartadosCreados     Apartado[]                   @relation("ApartadoUsuarioCreador")
+  apartadosCancelados  Apartado[]                   @relation("ApartadoUsuarioCancelador")
+  apartadoAbonos       ApartadoAbono[]
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -432,6 +438,7 @@ model ProductoVariante {
   series             ProductoSerie[]
   listaItems         ListaPrecioItem[]
   preciosEscalonados ProductoPrecioEscalonado[]
+  apartadoLineas     ApartadoLinea[]
 
   @@index([productoId])
   @@index([isActive])
@@ -794,6 +801,7 @@ model Venta {
   canceladaPorId    String?     @map("cancelada_por_id")
   cobradaAt         DateTime?   @map("cobrada_at")
   canceladaAt       DateTime?   @map("cancelada_at")
+  apartadoId        String?     @unique @map("apartado_id")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
@@ -803,6 +811,7 @@ model Venta {
   canceladaPor Usuario?          @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
   cliente      Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   clienteB2b   ClienteB2b?       @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
+  apartado     Apartado?         @relation(fields: [apartadoId], references: [id], onDelete: SetNull)
   lineas       VentaLinea[]
   pagos        VentaPago[]
   cfdis        Cfdi[]
@@ -1139,6 +1148,7 @@ model Cliente {
   etiquetas        ClienteEtiqueta[]
   fiado            Fiado?
   ventas           Venta[]
+  apartados        Apartado[]
 
   @@unique([rfc])
   @@index([nombre])
@@ -1320,6 +1330,7 @@ model ClienteB2b {
   listasPrecio        ClienteB2bListaPrecio[]
   vendedoresAsignados ClienteB2bVendedorAsignado[]
   ventas              Venta[]
+  apartados           Apartado[]
 
   @@index([razonSocial])
   @@index([rfc])
@@ -1432,4 +1443,124 @@ model ClienteB2bVendedorAsignado {
   @@id([clienteB2bId, usuarioId, tipo])
   @@index([usuarioId])
   @@map("cliente_b2b_vendedores_asignados")
+}
+
+// ============================================================
+// 4.9.b — Apartados (reserva stock + abonos + liquidación a venta)
+// Job nocturno apartado_expirado → V2 con BullMQ ; documentos S3 → V1.5
+// ============================================================
+
+enum ApartadoEstado {
+  activo
+  liquidado_y_entregado
+  cancelado
+  expirado
+}
+
+enum ApartadoAbonoMetodo {
+  efectivo
+  tarjeta_debito
+  tarjeta_credito
+  transferencia
+  vale
+  otro
+}
+
+model Apartado {
+  id                  String         @id @default(cuid())
+  folio               String
+  sucursalId          String         @map("sucursal_id")
+  cajaId              String?        @map("caja_id")
+  usuarioId           String         @map("usuario_id")
+  clienteId           String?        @map("cliente_id")
+  clienteB2bId        String?        @map("cliente_b2b_id")
+  estado              ApartadoEstado @default(activo)
+  moneda              String         @default("MXN")
+  subtotal            Decimal        @db.Decimal(14, 4)
+  descuentoTotal      Decimal        @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  ivaTotal            Decimal        @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal           Decimal        @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  total               Decimal        @db.Decimal(14, 4)
+  montoPagado         Decimal        @default(0) @map("monto_pagado") @db.Decimal(14, 4)
+  fechaApartado       DateTime       @default(now()) @map("fecha_apartado")
+  fechaLimite         DateTime       @map("fecha_limite")
+  observaciones       String?
+  politicaCancelacion String?        @map("politica_cancelacion")
+  penaCancelacionPct  Decimal        @default(0) @map("pena_cancelacion_pct") @db.Decimal(5, 2)
+  motivoCancelacion   String?        @map("motivo_cancelacion")
+  canceladaPorId      String?        @map("cancelada_por_id")
+  liquidadoAt         DateTime?      @map("liquidado_at")
+  canceladoAt         DateTime?      @map("cancelado_at")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  sucursal     Sucursal        @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja         Caja?           @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario      Usuario         @relation("ApartadoUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
+  canceladaPor Usuario?        @relation("ApartadoUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  cliente      Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteB2b   ClienteB2b?     @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
+  lineas       ApartadoLinea[]
+  abonos       ApartadoAbono[]
+  venta        Venta?
+
+  @@unique([sucursalId, folio])
+  @@index([estado, fechaLimite])
+  @@index([clienteId])
+  @@index([clienteB2bId])
+  @@map("apartados")
+}
+
+model ApartadoLinea {
+  id                  String  @id @default(cuid())
+  apartadoId          String  @map("apartado_id")
+  numero              Int
+  productoId          String  @map("producto_id")
+  varianteId          String  @map("variante_id")
+  cantidad            Decimal @db.Decimal(18, 3)
+  precioUnitario      Decimal @map("precio_unitario") @db.Decimal(14, 4)
+  precioOriginal      Decimal @map("precio_original") @db.Decimal(14, 4)
+  descuentoUnitario   Decimal @default(0) @map("descuento_unitario") @db.Decimal(14, 4)
+  subtotal            Decimal @db.Decimal(14, 4)
+  ivaUnitario         Decimal @default(0) @map("iva_unitario") @db.Decimal(14, 4)
+  ivaTotal            Decimal @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsUnitario        Decimal @default(0) @map("ieps_unitario") @db.Decimal(14, 4)
+  iepsTotal           Decimal @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  totalLinea          Decimal @map("total_linea") @db.Decimal(14, 4)
+  descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
+  snapshotProducto    Json    @map("snapshot_producto")
+
+  apartado Apartado         @relation(fields: [apartadoId], references: [id], onDelete: Cascade)
+  variante ProductoVariante @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+
+  @@unique([apartadoId, numero])
+  @@index([varianteId])
+  @@map("apartado_lineas")
+}
+
+model ApartadoAbono {
+  id             String              @id @default(cuid())
+  apartadoId     String              @map("apartado_id")
+  metodo         ApartadoAbonoMetodo
+  monto          Decimal             @db.Decimal(14, 4)
+  referencia     String?
+  comprobanteUrl String?             @map("comprobante_url")
+  usuarioId      String              @map("usuario_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  apartado Apartado @relation(fields: [apartadoId], references: [id], onDelete: Cascade)
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([apartadoId, createdAt])
+  @@map("apartado_abonos")
+}
+
+model ApartadoFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("apartado_folio_counters")
 }
