@@ -143,29 +143,199 @@ Levantar la base mínima del monorepo, package de DB con Prisma multi-schema, ap
 - [ ] `.github/workflows/release.yml`: deploy producción → diferido a Hito 6+ (V1 release)
 - [ ] Branch protection main: PR review obligatorio + checks verdes → configuración manual via GitHub UI cuando se cree el remote en 0.10/0.11
 
-### 0.10 Hetzner + Coolify staging
-- [ ] VM Hetzner CPX31 (~€15/mes)
-- [ ] Coolify install via script oficial
-- [ ] Dominio `staging.gaessoft.com` apuntando
-- [ ] SSL Let's Encrypt automático
-- [ ] App `api` deploy desde GitHub
-- [ ] Postgres 16 managed o Coolify
-- [ ] Redis 7 Coolify
-- [ ] Variables de entorno via Coolify secrets
+## 🚀 Runbook deploy staging (0.10–0.12)
 
-### 0.11 Primer flujo verde
-- [ ] PR de Hito 0 con todo arriba
-- [ ] CI verde
-- [ ] Merge a main
-- [ ] Deploy automático a staging
-- [ ] Smoke test endpoints `/health`, `/ready`, `/auth/login`
+Código de deploy ya en el repo: `apps/api/Dockerfile`, `docker-compose.prod.yml`, `.env.prod.example`, `.github/workflows/main.yml`. Lo que falta son acciones humanas en cuentas externas. Tiempo estimado total: **2-3 horas** la primera vez.
 
-### 0.12 Demo Hito 0
-- [ ] Crear tenant superadmin via seed
-- [ ] Login con superadmin desde curl/Postman
-- [ ] Crear nuevo tenant via API
-- [ ] Listar tenants
-- [ ] Capturar GIF/video corto demo
+### 0.10.a Comprar dominio (~10 min, ~$13 USD/año)
+
+**Recomendado**: Cloudflare Registrar (precio al costo, DNS+CDN+SSL incluido). Alternativa: Namecheap.
+
+1. Ir a https://dash.cloudflare.com/ → crear cuenta
+2. Buscar dominio: opciones sugeridas por orden de preferencia:
+   - `gaespos.mx` (~$700 MXN/año en Akky o Cloudflare con coste extra para .mx)
+   - `gaes.mx`
+   - `gaessoft.com` o `gaessoft.com.mx`
+3. Comprar dominio. Si es `.mx`, Cloudflare Registrar no vende — usar **Akky** (registrar oficial mx) y migrar nameservers a Cloudflare después
+4. En Cloudflare → tu dominio → DNS → habilitar Cloudflare nameservers (cf docs explican cómo cambiar en el registrar)
+
+### 0.10.b Crear cuenta Hetzner Cloud + provisionar CPX31 (~15 min, €8/mes)
+
+1. https://www.hetzner.com/cloud → crear cuenta + agregar método de pago (tarjeta o PayPal)
+2. Crear nuevo proyecto: `gaespos-staging`
+3. Generar par de llaves SSH local si no tienes:
+   ```bash
+   ssh-keygen -t ed25519 -C "tu-email@dominio.com" -f ~/.ssh/gaespos-staging
+   cat ~/.ssh/gaespos-staging.pub  # copiar al portapapeles
+   ```
+4. En Hetzner Console → Security → SSH Keys → Add SSH Key → pegar la pública
+5. Servers → Add Server:
+   - **Location**: Falkenstein o Helsinki (Europa, los más baratos)
+   - **Image**: Ubuntu 24.04 LTS
+   - **Type**: CPX31 (4 vCPU AMD, 8 GB RAM, 160 GB SSD, ~€8.46/mes)
+   - **Networking**: IPv4 + IPv6 ✅
+   - **SSH Keys**: seleccionar la que subiste
+   - **Firewalls**: crear uno nuevo `gaespos-staging-fw` con reglas:
+     - SSH (22) — solo desde tu IP fija (o `0.0.0.0/0` si IP dinámica)
+     - HTTP (80) — `0.0.0.0/0`
+     - HTTPS (443) — `0.0.0.0/0`
+     - Coolify UI (8000) — solo tu IP
+   - **Name**: `gaespos-staging-1`
+   - **Backups**: ON (~20% del costo, $1.7/mes — vale la pena)
+6. Click Create. En ~30 seg te da una IP pública (anótala, p.ej. `5.78.91.42`)
+7. Conectar:
+   ```bash
+   ssh -i ~/.ssh/gaespos-staging root@5.78.91.42
+   ```
+
+### 0.10.c Configurar DNS en Cloudflare (5 min)
+
+1. Cloudflare → tu dominio → DNS → Records → Add record:
+   - Type: `A`
+   - Name: `staging`
+   - IPv4: `5.78.91.42` (IP del servidor Hetzner)
+   - Proxy status: **DNS only** (gris) — para que Coolify pueda obtener cert Let's Encrypt directo; luego puedes activar proxy
+2. Repetir para `coolify.staging` (mismo IP) si quieres acceder a la UI de Coolify por dominio
+3. Verificar DNS propagado:
+   ```bash
+   dig +short staging.gaespos.mx  # debería retornar 5.78.91.42
+   ```
+
+### 0.11.a Instalar Coolify en el servidor (~10 min)
+
+Conectado por SSH al servidor:
+
+```bash
+# Actualizar sistema
+apt update && apt upgrade -y
+
+# Crear usuario non-root para Coolify (opcional pero recomendado)
+adduser gaespos --disabled-password --gecos ""
+usermod -aG sudo gaespos
+mkdir -p /home/gaespos/.ssh
+cp ~/.ssh/authorized_keys /home/gaespos/.ssh/
+chown -R gaespos:gaespos /home/gaespos/.ssh
+
+# Instalar Coolify (script oficial)
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+
+El instalador instala Docker, Docker Compose, y Coolify. Al final imprime la URL del panel: `http://5.78.91.42:8000` (HTTP plano sin SSL todavía).
+
+1. Abrir `http://5.78.91.42:8000` → crear usuario admin (email + password fuerte)
+2. Coolify se queda corriendo en background como systemd service
+
+### 0.11.b Configurar Coolify (~15 min)
+
+**Servidor**: ya está auto-registrado como `localhost`. No tocar.
+
+**Dominio + SSL para Coolify UI**:
+1. Settings → General → Instance Domain: `coolify.staging.gaespos.mx`
+2. Coolify obtiene cert Let's Encrypt automáticamente (toma 1-2 min)
+3. Verificar HTTPS: `https://coolify.staging.gaespos.mx` debe cargar el panel
+
+**Crear servicios Postgres + Redis** (Resources → New Resource):
+1. **Postgres 16**:
+   - Tipo: Database → PostgreSQL 16
+   - Nombre: `gaespos-postgres`
+   - Database: `gaespos_master`
+   - Username: `gaespos`
+   - Password: generar uno fuerte (Coolify lo guarda)
+   - Volume: persistent ✅
+2. **Redis 7**:
+   - Tipo: Database → Redis 7
+   - Nombre: `gaespos-redis`
+   - Password: generar fuerte
+
+Anotar los hostnames internos (Coolify los expone como `gaespos-postgres` y `gaespos-redis` dentro de su red Docker).
+
+### 0.12.a Crear repo GitHub + push primero (~5 min)
+
+1. https://github.com/new → repo privado `gaespos` en tu user o en organización `gaes-solutions`
+2. NO inicializar con README/gitignore (ya los tenemos local)
+3. Local:
+   ```bash
+   cd /home/gaby-pc-ubuntu/Documentos/GaesSoft/gaespos
+   git remote add origin git@github.com:gaes-solutions/gaespos.git
+   git push -u origin main
+   ```
+
+### 0.12.b Conectar Coolify ↔ GitHub + deploy primer (~20 min)
+
+1. Coolify → Sources → Add Source → GitHub App
+2. Coolify abre wizard → autorizar GitHub App en tu cuenta/org → seleccionar el repo `gaespos`
+3. Resources → New Resource → Application:
+   - Source: el repo recién conectado, branch `main`
+   - **Build Pack**: Dockerfile
+   - **Dockerfile Location**: `apps/api/Dockerfile`
+   - **Build Context**: `.` (raíz del repo)
+   - **Ports Exposes**: `3000`
+   - **Domain**: `api.staging.gaespos.mx`
+4. **Environment variables** (copiar de `.env.prod.example`, generar secrets reales):
+   ```
+   DATABASE_URL_MASTER=postgresql://gaespos:<pass>@gaespos-postgres:5432/gaespos_master?schema=public
+   DATABASE_URL_TENANT=postgresql://gaespos:<pass>@gaespos-postgres:5432/gaespos_master
+   REDIS_URL=redis://:<pass>@gaespos-redis:6379
+   JWT_SECRET=<openssl rand -hex 32>
+   JWT_REFRESH_SECRET=<openssl rand -hex 32>
+   COOKIE_SECRET=<openssl rand -hex 32>
+   CORS_ORIGIN=https://app.staging.gaespos.mx
+   ACCESS_TOKEN_TTL_MIN=15
+   REFRESH_TOKEN_TTL_DAYS=30
+   RATE_LIMIT_MAX=300
+   RATE_LIMIT_WINDOW=1 minute
+   SEED_ADMIN_EMAIL=admin@gaessoft.local
+   SEED_ADMIN_PASSWORD=<generar fuerte>
+   NODE_ENV=production
+   LOG_LEVEL=info
+   ```
+5. **Healthcheck**: `GET /health`, interval 30s
+6. **Pre-deploy command**:
+   ```bash
+   pnpm gaes-migrate master && pnpm gaes-migrate tenant migrate-all
+   ```
+   (corre las migrations Prisma antes de levantar la nueva versión)
+7. Click Deploy. Coolify clona el repo, builda la imagen Docker (~3-5 min primera vez), arranca el contenedor, obtiene SSL Let's Encrypt automático.
+8. Verificar:
+   ```bash
+   curl https://api.staging.gaespos.mx/health
+   # {"status":"ok","timestamp":"..."}
+   ```
+
+### 0.12.c (Opcional) Configurar GHCR webhook para auto-deploy
+
+GitHub Actions ya está configurado en `.github/workflows/main.yml` para buildear imagen y pushear a `ghcr.io/<repo>/api:latest` en cada push a `main`. Para que Coolify haga deploy automático en cada push:
+
+1. Coolify → tu Application → Settings → Webhooks → Copy webhook URL + Generate token
+2. GitHub repo → Settings → Secrets and variables → Actions:
+   - Variable `COOLIFY_WEBHOOK_URL` (public) — pegar la URL
+   - Secret `COOLIFY_WEBHOOK_TOKEN` — pegar el token
+3. Próximo `git push` a main: GitHub Actions builda + pushea imagen a GHCR + dispara webhook → Coolify hace deploy automático
+
+### 0.12.d Smoke test end-to-end del demo
+
+Con la API en staging:
+```bash
+API_URL=https://api.staging.gaespos.mx \
+SEED_ADMIN_EMAIL=admin@gaessoft.local \
+SEED_ADMIN_PASSWORD=<el que pusiste en env> \
+pnpm --filter @gaespos/api demo:retail
+```
+
+Los 16 pasos del demo cajero retail deben pasar verde en staging real. Esto es lo que se le muestra a los 1-2 clientes piloto retail.
+
+### 0.12.e Cierre Hito 0
+- [ ] Grabar GIF/video corto (<2 min) del demo en staging
+- [ ] Tag git `v0.1.0`: `git tag v0.1.0 && git push origin v0.1.0`
+- [ ] Actualizar `STATUS.md` con URL staging + credenciales admin (NO commiteadas)
+- [ ] Invitar 1-2 clientes piloto retail a probar staging
+
+## Costos mensuales staging
+- Hetzner CPX31 + backups: ~€10/mes (~$200 MXN)
+- Dominio `.mx`: ~$60 MXN/mes amortizado
+- Cloudflare: $0 (Free tier)
+- GHCR: $0 (público o privado <500MB free)
+- **Total**: ~$260 MXN/mes hasta producción
 
 ## Criterio de "Hito 0 cerrado"
 

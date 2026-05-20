@@ -1,0 +1,35 @@
+**/node_modules
+**/.turbo
+**/dist
+**/coverage
+**/.next
+**/.cache
+**/.env
+**/.env.*
+!.env.example
+
+**/.git
+**/.github
+
+**/*.log
+**/*.lock
+!pnpm-lock.yaml
+
+**/.DS_Store
+**/.vscode
+**/.idea
+
+# Tauri/Rust del print-bridge no van en imagen Node
+apps/print-bridge/target/
+apps/print-bridge/Cargo.lock
+
+# Docs y assets pesados que no se necesitan en imagen
+docs/**/*.png
+docs/**/*.mp4
+docs/**/*.gif
+
+# Tests no se necesitan en imagen prod
+**/test/
+**/*.test.ts
+**/*.spec.ts
+**/vitest.config.ts

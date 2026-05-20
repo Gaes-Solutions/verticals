@@ -1,0 +1,91 @@
+# Stack productivo de GaesSoft POS — referencia para Coolify (staging)
+#
+# En Coolify se crean cada servicio por separado desde su UI (Postgres,
+# Redis, Application). Este archivo sirve como referencia exacta de la
+# configuración esperada (env vars, volúmenes, healthchecks, networks).
+#
+# Para correr fuera de Coolify (testing en una VM cruda):
+#   1. cp .env.example .env.prod  (rellenar secrets reales)
+#   2. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   3. docker compose -f docker-compose.prod.yml exec api pnpm gaes-migrate master
+#   4. docker compose -f docker-compose.prod.yml exec api pnpm gaes-migrate tenant migrate-all
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-gaespos_master}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-gaespos_master}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gaespos
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?required}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gaespos
+
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-gaes-solutions/gaespos}/api:${API_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL_MASTER: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gaespos_master}?schema=public
+      DATABASE_URL_TENANT: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gaespos_master}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?required}
+      COOKIE_SECRET: ${COOKIE_SECRET:?required}
+      ACCESS_TOKEN_TTL_MIN: ${ACCESS_TOKEN_TTL_MIN:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      CORS_ORIGIN: ${CORS_ORIGIN:?required}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@gaessoft.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?required}
+      # FISCAL_PROVIDER: dejar sin definir en prod (default = FacturamaClient real)
+    ports:
+      - "${API_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - gaespos
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  gaespos:
+    driver: bridge
