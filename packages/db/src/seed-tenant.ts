@@ -22,6 +22,7 @@ export interface SeedTenantDefaultsResult {
   sucursalCreated: boolean;
   cajaCreated: boolean;
   listaPrecioCreated: boolean;
+  clientePublicoCreated: boolean;
 }
 
 export async function seedTenantDefaults(
@@ -122,7 +123,29 @@ export async function seedTenantDefaults(
       listaPrecioCreated = true;
     }
 
-    return { rolesCreated, rolesUpdated, sucursalCreated, cajaCreated, listaPrecioCreated };
+    let clientePublicoCreated = false;
+    const existingPublico = await client.cliente.findFirst({ where: { isDefault: true } });
+    if (!existingPublico) {
+      await client.cliente.create({
+        data: {
+          tipo: "publico_general",
+          isDefault: true,
+          nombre: "Público",
+          apellidos: "en general",
+          permiteFiado: false,
+        },
+      });
+      clientePublicoCreated = true;
+    }
+
+    return {
+      rolesCreated,
+      rolesUpdated,
+      sucursalCreated,
+      cajaCreated,
+      listaPrecioCreated,
+      clientePublicoCreated,
+    };
   } finally {
     await client.$disconnect();
   }
@@ -137,7 +160,7 @@ export async function seedAllTenantDefaults(): Promise<void> {
   for (const t of tenants) {
     const result = await seedTenantDefaults(t.slug);
     console.info(
-      `[tenant seed] ${t.slug}: roles_created=${result.rolesCreated}, roles_updated=${result.rolesUpdated}, sucursal_creada=${result.sucursalCreated}, caja_creada=${result.cajaCreated}, lista_creada=${result.listaPrecioCreated}`,
+      `[tenant seed] ${t.slug}: roles_created=${result.rolesCreated}, roles_updated=${result.rolesUpdated}, sucursal_creada=${result.sucursalCreated}, caja_creada=${result.cajaCreated}, lista_creada=${result.listaPrecioCreated}, cliente_publico=${result.clientePublicoCreated}`,
     );
   }
   console.info("[tenant seed-all] done.");

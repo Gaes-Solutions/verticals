@@ -1,6 +1,7 @@
 import type { LineaCalculada, TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
 import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
@@ -170,10 +171,18 @@ async function nextFolio(tx: Tx, sucursalId: string, sucursalCodigo: string): Pr
 function validarPagos(
   totalPersistir: Decimal,
   pagos: VentaCreateInput["pagos"],
+  clienteId: string | undefined,
 ): {
   totalCobrado: Decimal;
   cambio: Decimal;
+  pagoFiado: Decimal;
 } {
+  const pagoFiado = pagos
+    .filter((p) => p.metodo === "credito_fiado")
+    .reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
+  if (pagoFiado.gt(ZERO) && !clienteId) {
+    throw new VentaError(400, "Venta a fiado requiere clienteId del cliente deudor");
+  }
   const totalCobrado = pagos.reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
   if (totalCobrado.lt(totalPersistir)) {
     throw new VentaError(400, "Pagos insuficientes", {
@@ -183,12 +192,15 @@ function validarPagos(
   }
   const cambio = totalCobrado.minus(totalPersistir);
   if (cambio.gt(ZERO)) {
+    if (pagoFiado.gt(ZERO)) {
+      throw new VentaError(400, "Venta a fiado no debe generar cambio");
+    }
     const efectivo = pagos.find((p) => p.metodo === "efectivo");
     if (!efectivo) {
       throw new VentaError(400, "Cambio requiere al menos un pago en efectivo");
     }
   }
-  return { totalCobrado, cambio };
+  return { totalCobrado, cambio, pagoFiado };
 }
 
 async function ejecutarPreviewSegura(
@@ -284,7 +296,11 @@ export async function crearVenta(
   );
   const lineasCalc = buildLineasCalculo(ticket, input, snapshots);
   const totales = totalesVenta(ticket, lineasCalc);
-  const { totalCobrado, cambio } = validarPagos(totales.totalVenta, input.pagos);
+  const { totalCobrado, cambio, pagoFiado } = validarPagos(
+    totales.totalVenta,
+    input.pagos,
+    input.clienteId,
+  );
 
   try {
     return await client.$transaction((tx) =>
@@ -294,7 +310,7 @@ export async function crearVenta(
         input,
         lineasCalc,
         usuarioId,
-        totales: { ...totales, totalCobrado, cambio },
+        totales: { ...totales, totalCobrado, cambio, pagoFiado },
       }),
     );
   } catch (err) {
@@ -305,6 +321,9 @@ export async function crearVenta(
         stockActual: err.stockActual,
         intentado: err.intentado,
       });
+    }
+    if (err instanceof FiadoError) {
+      throw new VentaError(err.statusCode, err.message, err.extra);
     }
     throw err;
   }
@@ -324,6 +343,7 @@ interface PersistirVentaParams {
     iepsVenta: Decimal;
     totalCobrado: Decimal;
     cambio: Decimal;
+    pagoFiado: Decimal;
   };
 }
 
@@ -421,6 +441,14 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
     },
   });
   await insertarLineasYPagos(tx, venta.id, p.lineasCalc, p.input.pagos);
+  if (p.totales.pagoFiado.gt(0) && p.input.clienteId) {
+    await aplicarCargoFiado(tx, {
+      clienteId: p.input.clienteId,
+      ventaId: venta.id,
+      monto: p.totales.pagoFiado.toString(),
+      usuarioId: p.usuarioId,
+    });
+  }
   return {
     ventaId: venta.id,
     folio: venta.folio,

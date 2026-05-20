@@ -52,7 +52,7 @@ export async function createTenant(opts: CreateTenantOptions): Promise<void> {
 
   const seedResult = await seedTenantDefaults(opts.slug);
   console.info(
-    `[tenant create] seed defaults: roles_creados=${seedResult.rolesCreated}, sucursal_creada=${seedResult.sucursalCreated}, caja_creada=${seedResult.cajaCreated}, lista_creada=${seedResult.listaPrecioCreated}`,
+    `[tenant create] seed defaults: roles_creados=${seedResult.rolesCreated}, sucursal_creada=${seedResult.sucursalCreated}, caja_creada=${seedResult.cajaCreated}, lista_creada=${seedResult.listaPrecioCreated}, cliente_publico=${seedResult.clientePublicoCreated}`,
   );
 
   console.info(`[tenant create] ${opts.slug} listo (status=trial)`);

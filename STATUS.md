@@ -7,9 +7,10 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 🎉 **8 de 8 tareas cerradas — Hito 1 POS Core retail CERRADO al 100%**. Pendientes opcionales 1.5.c autofactura pública y 1.6.b ESC/POS Rust se cierran cuando Gaby tenga dominio + hardware listos
-- **Tarea actual**: Hito 2 — Comercial. Apartados, CxC formal, devoluciones parciales, clientes B2C/B2B, cotizaciones→pedidos, promociones avanzadas, programa lealtad puntos
-- **Próximo paso concreto**: Empezar 2.1 con modelo 4.8 Clientes (B2C separados de B2B, multi-direcciones, fiados informales, multi-usuarios B2B). Luego 2.2 Apartados/CxC/Devoluciones. **Recomendado primero**: hacer las 3 tareas externas pendientes de Hito 0 (Hetzner CPX31 + dominio staging + GitHub remote+CI), para desplegar el Hito 1 en staging real y mostrarlo a los 5 clientes piloto antes de seguir con Hito 2
+- **Fase**: 🎉 Hito 1 cerrado · Hito 0 deploy stack listo (esperando cuentas externas Hetzner+dominio cuando haya cliente piloto comprometido). Trabajo activo: **Hito 2 Comercial**
+- **Progreso Hito 2**: 2.1 Clientes B2C + fiados cerrado. Siguiente: 2.2 Clientes B2B + crédito formal
+- **Tarea actual**: 2.2 Modelo 4.8.b — Clientes B2B (`clientes_b2b`, contactos, direcciones envío, líneas de crédito, multi-listas-precio, vendedores asignados con comisión)
+- **Próximo paso concreto**: Schema tenant clientes_b2b + cliente_b2b_contactos + cliente_b2b_direcciones + cliente_b2b_creditos + cliente_b2b_listas_precio + cliente_b2b_vendedor_asignado. Migration cross-tenant. Endpoints `/t/clientes-b2b` CRUD + autorización crédito + tests. Documentos S3 y portal autoservicio se difieren a V1.5/Hito 3
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -171,6 +172,53 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-20 — Hito 2.1 Clientes B2C + fiados cerrado
+- **Schema tenant 4.8** (7 modelos + 3 enums nuevos):
+  - `Cliente` (B2C) con tipo enum [publico_general|frecuente|vip|empleado] + is_default flag, nombre/apellidos separados (CFDI), email/teléfono principales, fecha_nacimiento + género, RFC unique + regimenFiscalSat + usoCfdiDefault + codigoPostalFiscal + direccionFacturacion jsonb, cliente_grupo_id FK, vendedor_asignado_id FK, permite_fiado + limite_fiado, acepta_marketing opt-in, idioma_preferido, notas, is_active + archived_at. **Vinculación PHR diferida a Hito 3 Salud** (campo patient_master_id NO incluido todavía)
+  - `ClienteDireccion` (multi: Casa/Oficina/Mamá con calle+CP+lat/lng+is_default_envio/facturacion swap)
+  - `ClienteTelefono` (multi: Celular/Casa/Trabajo con flag whatsapp + es_principal swap)
+  - `ClienteGrupo` (segmentación: código único + descuento_default_pct + lista_precio_codigo + color/icono)
+  - `ClienteEtiqueta` (tags libres many-to-many, PK compuesta cliente+etiqueta)
+  - `Fiado` (1 fila por cliente: monto_total + fecha_ultimo_movimiento + estado [activo|liquidado|incobrable])
+  - `FiadoMovimiento` (append-only: cargo_venta | abono_pago | ajuste_+/- | regularizacion_cxc, con venta_id FK opcional + metodo_pago + comprobante_url)
+- **Migration `add_clientes_b2c_fiados`** aplicada cross-tenant via shadow schema postgres.
+- **Migration adicional `add_credito_fiado_metodo`** agrega valor `credito_fiado` al enum `VentaPagoMetodo` (`ALTER TYPE ... ADD VALUE`).
+- **Seed extendido**: `seedTenantDefaults` ahora crea cliente "Público en general" con `isDefault=true` + tipo `publico_general` por tenant. Re-aplicado a 6 tenants existentes.
+- **Service `clientes/fiado-service.ts`**:
+  - `aplicarCargoFiado(tx, input)`: valida cliente.permiteFiado, calcula nuevo total, rechaza con `FiadoError 409` si excede `limite_fiado`, actualiza fiado + crea movimiento `cargo_venta` referencia venta_id
+  - `aplicarAbonoFiado(client, input)`: en `$transaction` valida monto ≤ saldoActual, marca `liquidado` si saldo=0, crea movimiento `abono_pago` con método de pago + comprobante opcional
+  - `disponibleFiado(limite, total)`: helper computado para vista
+  - `ensureFiado(tx, clienteId)`: upsert idempotente
+- **Endpoints `/t/clientes*`**:
+  - GET `/t/clientes` lista paginada con búsqueda multi-criterio (`?q=` matchea nombre + apellidos + rfc + email + telefonoPrincipal + telefonos relacionales) + filtros tipo/grupo/permiteFiado/isActive
+  - GET `/t/clientes/default` (cliente Público en general para POS quick-pick)
+  - GET `/t/clientes/:id` detalle full con direcciones+telefonos+etiquetas+fiado+movimientos
+  - POST/PATCH/DELETE bloquean modificar/archivar el cliente `isDefault=true` (público en general read-only)
+  - POST `/:id/direcciones`, `:id/telefonos`, `:id/etiquetas` con swap automático de is_default_*
+  - DELETE `/:id/direcciones/:dirId`, `/:id/etiquetas/:etiqueta`
+  - GET `/:id/fiado` retorna `{limite, usado, disponible, estado, movimientos}`
+  - POST `/:id/fiado/abonar` (permiso `clientes.fiado_gestionar`)
+  - GET/POST `/t/clientes/grupos` CRUD grupos
+- **Integración cross-módulo en `crearVenta`** (apps/api/src/modules/tenant/ventas/service.ts):
+  - `validarPagos` ahora detecta método `credito_fiado`, requiere `clienteId` (400 si falta), prohíbe cambio (400 si genera)
+  - Tras persistir la venta, si hay `pagoFiado > 0` invoca `aplicarCargoFiado` en la misma transaction → valida límite + crea cargo + recalcula fiado.monto_total
+  - `FiadoError` mapeado a `VentaError` con statusCode + extra preservados
+- **25 tests integración nuevos** en `tenant-clientes.test.ts`:
+  - Seed: GET /default, listado ordena público primero, PATCH/DELETE del público → 403
+  - CRUD B2C: crear con RFC case-insensitive normalizado a UPPER, RFC malformado → 400, RFC duplicado → 409, búsqueda por nombre/teléfono/RFC parcial, cajero puede leer pero no crear, PATCH actualiza limiteFiado
+  - Sub-recursos: 2 direcciones con swap is_default_envio, 2 teléfonos con swap es_principal + flag whatsapp, agregar/eliminar etiqueta
+  - **Fiados**: GET fiado con disponible computado, venta `credito_fiado` $200 dentro de límite $300 carga al fiado, segunda venta excede límite → 409 con extra.disponible, venta a fiado sin clienteId → 400, abono parcial reduce saldo, abono > saldo → 409, abono total marca `liquidado`, cliente sin permiteFiado → 409
+  - Grupos: crear grupo con descuentoDefaultPct + asignar cliente al grupo
+- **Suite total: 171 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 230 tests verdes en ~14s**
+- **Diferidos** (decisiones explícitas):
+  - Clientes B2B (`clientes_b2b` + contactos + crédito formal + listas precio + vendedores) → Hito 2.2 siguiente
+  - Vinculación PHR cliente↔patient_master → Hito 3 Salud
+  - Búsqueda semántica vector_embedding pgvector → V1.5
+  - Validación RFC contra SAT API → V2 (V1 solo regex)
+  - Regularización fiado → CxC formal → Hito 2.4 cuando exista CxC
+  - Job apartado_expirado + interés moratorio CxC → V2 con BullMQ
+- **Próxima sesión empieza en**: 2.2 Clientes B2B + crédito formal — modelo 4.8.b con tablas razón social + contactos + direcciones envío + líneas crédito + multi-listas-precio + comisión multi-vendedor.
 
 ### 2026-05-17 — 🎉 Hito 1.7 Demo cajero retail end-to-end + cierre Hito 1 completo
 - **Script CLI verificado** `apps/api/scripts/demo-cajero-retail.ts` que ejecuta el flujo completo del POS retail contra una API live, con salida colorizada y asserts en cada paso:

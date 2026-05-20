@@ -141,6 +141,8 @@ model Usuario {
   cortes            Corte[]
   cfdisEmitidos     Cfdi[]                 @relation("CfdiEmitidoPor")
   cfdisCancelados   Cfdi[]                 @relation("CfdiCanceladoPor")
+  clientesAsignados Cliente[]              @relation("ClienteVendedorAsignado")
+  fiadoMovimientos  FiadoMovimiento[]
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -758,6 +760,7 @@ enum VentaPagoMetodo {
   transferencia
   vale
   monedero
+  credito_fiado
   otro
 }
 
@@ -789,13 +792,15 @@ model Venta {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  sucursal     Sucursal     @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  caja         Caja?        @relation(fields: [cajaId], references: [id], onDelete: SetNull)
-  usuario      Usuario      @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
-  canceladaPor Usuario?     @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  sucursal     Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja         Caja?             @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario      Usuario           @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
+  canceladaPor Usuario?          @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  cliente      Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   lineas       VentaLinea[]
   pagos        VentaPago[]
   cfdis        Cfdi[]
+  fiadoCargos  FiadoMovimiento[]
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -1065,4 +1070,186 @@ model Cfdi {
   @@index([rfcReceptor])
   @@index([fechaEmision])
   @@map("cfdis")
+}
+
+// ============================================================
+// 4.8 — Clientes B2C + grupos + etiquetas + direcciones + teléfonos + fiados
+// B2B (clientes_b2b) → 2.2 ; vinculación PHR → Hito 3 Salud ; pgvector → V1.5
+// ============================================================
+
+enum ClienteTipo {
+  publico_general
+  frecuente
+  vip
+  empleado
+}
+
+enum FiadoEstado {
+  activo
+  liquidado
+  incobrable
+}
+
+enum FiadoMovimientoTipo {
+  cargo_venta
+  abono_pago
+  ajuste_positivo
+  ajuste_negativo
+  regularizacion_cxc
+}
+
+model Cliente {
+  id                   String      @id @default(cuid())
+  tipo                 ClienteTipo @default(frecuente)
+  isDefault            Boolean     @default(false) @map("is_default")
+  nombre               String
+  apellidos            String?
+  emailPrincipal       String?     @map("email_principal")
+  telefonoPrincipal    String?     @map("telefono_principal")
+  fechaNacimiento      DateTime?   @map("fecha_nacimiento") @db.Date
+  genero               String?
+  rfc                  String?
+  regimenFiscalSat     String?     @map("regimen_fiscal_sat")
+  usoCfdiDefault       String?     @map("uso_cfdi_default")
+  codigoPostalFiscal   String?     @map("codigo_postal_fiscal")
+  direccionFacturacion Json?       @map("direccion_facturacion")
+  clienteGrupoId       String?     @map("cliente_grupo_id")
+  vendedorAsignadoId   String?     @map("vendedor_asignado_id")
+  permiteFiado         Boolean     @default(false) @map("permite_fiado")
+  limiteFiado          Decimal     @default(0) @map("limite_fiado") @db.Decimal(14, 2)
+  aceptaMarketing      Boolean     @default(false) @map("acepta_marketing")
+  idiomaPreferido      String      @default("es-MX") @map("idioma_preferido")
+  notas                String?
+  isActive             Boolean     @default(true) @map("is_active")
+  archivedAt           DateTime?   @map("archived_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  grupo            ClienteGrupo?      @relation(fields: [clienteGrupoId], references: [id], onDelete: SetNull)
+  vendedorAsignado Usuario?           @relation("ClienteVendedorAsignado", fields: [vendedorAsignadoId], references: [id], onDelete: SetNull)
+  direcciones      ClienteDireccion[]
+  telefonos        ClienteTelefono[]
+  etiquetas        ClienteEtiqueta[]
+  fiado            Fiado?
+  ventas           Venta[]
+
+  @@unique([rfc])
+  @@index([nombre])
+  @@index([telefonoPrincipal])
+  @@index([emailPrincipal])
+  @@index([isActive])
+  @@index([clienteGrupoId])
+  @@map("clientes")
+}
+
+model ClienteDireccion {
+  id                   String   @id @default(cuid())
+  clienteId            String   @map("cliente_id")
+  etiqueta             String
+  calle                String
+  numeroExterior       String?  @map("numero_exterior")
+  numeroInterior       String?  @map("numero_interior")
+  colonia              String?
+  municipio            String?
+  estado               String?
+  codigoPostal         String?  @map("codigo_postal")
+  pais                 String   @default("MX")
+  referencias          String?
+  lat                  Decimal? @db.Decimal(10, 7)
+  lng                  Decimal? @db.Decimal(10, 7)
+  isDefaultEnvio       Boolean  @default(false) @map("is_default_envio")
+  isDefaultFacturacion Boolean  @default(false) @map("is_default_facturacion")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@map("cliente_direcciones")
+}
+
+model ClienteTelefono {
+  id          String   @id @default(cuid())
+  clienteId   String   @map("cliente_id")
+  etiqueta    String
+  telefono    String
+  whatsapp    Boolean  @default(false)
+  esPrincipal Boolean  @default(false) @map("es_principal")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([telefono])
+  @@map("cliente_telefonos")
+}
+
+model ClienteGrupo {
+  id                  String   @id @default(cuid())
+  codigo              String   @unique
+  nombre              String
+  descripcion         String?
+  descuentoDefaultPct Decimal? @map("descuento_default_pct") @db.Decimal(5, 2)
+  listaPrecioCodigo   String?  @map("lista_precio_codigo")
+  color               String?
+  icono               String?
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  clientes Cliente[]
+
+  @@map("cliente_grupos")
+}
+
+model ClienteEtiqueta {
+  clienteId String   @map("cliente_id")
+  etiqueta  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@id([clienteId, etiqueta])
+  @@index([etiqueta])
+  @@map("cliente_etiquetas")
+}
+
+model Fiado {
+  id                    String      @id @default(cuid())
+  clienteId             String      @unique @map("cliente_id")
+  montoTotal            Decimal     @default(0) @map("monto_total") @db.Decimal(14, 2)
+  fechaUltimoMovimiento DateTime?   @map("fecha_ultimo_movimiento")
+  estado                FiadoEstado @default(activo)
+  notas                 String?
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  cliente     Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  movimientos FiadoMovimiento[]
+
+  @@index([estado])
+  @@map("fiados")
+}
+
+model FiadoMovimiento {
+  id             String              @id @default(cuid())
+  fiadoId        String              @map("fiado_id")
+  tipo           FiadoMovimientoTipo
+  monto          Decimal             @db.Decimal(14, 2)
+  ventaId        String?             @map("venta_id")
+  referenciaTipo String?             @map("referencia_tipo")
+  referenciaId   String?             @map("referencia_id")
+  metodoPago     String?             @map("metodo_pago")
+  comprobanteUrl String?             @map("comprobante_url")
+  motivo         String?
+  usuarioId      String              @map("usuario_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  fiado   Fiado   @relation(fields: [fiadoId], references: [id], onDelete: Restrict)
+  venta   Venta?  @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([fiadoId, createdAt])
+  @@index([ventaId])
+  @@map("fiado_movimientos")
 }
