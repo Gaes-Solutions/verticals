@@ -65,6 +65,9 @@ importers:
       '@gaespos/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@gaespos/fiscal':
+        specifier: workspace:*
+        version: link:../../packages/fiscal
       '@gaespos/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions

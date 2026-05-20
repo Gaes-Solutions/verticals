@@ -5,6 +5,7 @@ import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
+import cfdisRoutes from "./modules/tenant/cfdis/routes.js";
 import cortesRoutes from "./modules/tenant/cortes/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
 import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
@@ -21,10 +22,18 @@ import tenantRoutes from "./modules/tenants/routes.js";
 import authPlugin from "./plugins/auth.js";
 import dbPlugin from "./plugins/db.js";
 import errorHandlerPlugin from "./plugins/error-handler.js";
+import fiscalPlugin, { type FiscalProviderFactory } from "./plugins/fiscal.js";
 import securityPlugin from "./plugins/security.js";
 import tenantContextPlugin from "./plugins/tenant-context.js";
 
-export async function buildApp(config: Config): Promise<FastifyInstance> {
+export interface BuildAppOptions {
+  fiscalProviderFactory?: FiscalProviderFactory;
+}
+
+export async function buildApp(
+  config: Config,
+  opts: BuildAppOptions = {},
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger:
       config.NODE_ENV === "development"
@@ -44,6 +53,10 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   await app.register(securityPlugin, { config });
   await app.register(dbPlugin);
   await app.register(authPlugin, { config });
+  await app.register(
+    fiscalPlugin,
+    opts.fiscalProviderFactory ? { factory: opts.fiscalProviderFactory } : {},
+  );
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
@@ -67,6 +80,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
       await tenantApp.register(preciosRoutes, { prefix: "/precios" });
       await tenantApp.register(ventasRoutes, { prefix: "/ventas" });
       await tenantApp.register(cortesRoutes);
+      await tenantApp.register(cfdisRoutes);
     },
     { prefix: "/t" },
   );

@@ -21,6 +21,7 @@
     "@fastify/rate-limit": "^10.2.2",
     "@fastify/sensible": "^6.0.3",
     "@gaespos/db": "workspace:*",
+    "@gaespos/fiscal": "workspace:*",
     "@gaespos/permissions": "workspace:*",
     "@gaespos/pricing": "workspace:*",
     "@node-rs/argon2": "^2.0.2",

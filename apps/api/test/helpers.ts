@@ -40,9 +40,12 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
   };
 }
 
-export async function buildTestApp(overrides: Partial<Config> = {}): Promise<FastifyInstance> {
+export async function buildTestApp(
+  overrides: Partial<Config> = {},
+  opts: Parameters<typeof buildApp>[1] = {},
+): Promise<FastifyInstance> {
   const config = makeTestConfig(overrides);
-  const app = await buildApp(config);
+  const app = await buildApp(config, opts);
   await app.ready();
   return app;
 }

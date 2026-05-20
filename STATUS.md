@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 5 de 8 tareas cerradas (1.0 + 1.1 + 1.2 + 1.3 + 1.4)
-- **Tarea actual**: 1.5 Modelo 4.19 — CFDI 4.0 + Facturama + autofacturación QR. Generación CFDI desde ventas cobradas, integración Facturama V1 (PAC default), cancelación CFDI con motivo SAT, autofacturación pública con QR.
-- **Próximo paso concreto**: Schema master `cfdis_emitidos` (multi-tenant para portal autofacturación), tenant schema `cfdi_config` (RFC emisor, certificados, plantilla). Service Facturama wrapper. Endpoints `POST /t/ventas/:id/cfdi/emitir`, `POST /t/cfdis/:id/cancelar`, portal público `POST /autofactura` con QR generado en ticket. Pruebas con Facturama sandbox.
+- **Progreso Hito 1**: 6 de 8 tareas cerradas (1.0 + 1.1 + 1.2 + 1.3 + 1.4 + 1.5)
+- **Tarea actual**: 1.6 Print Bridge Tauri V1 — driver Rust nativo Tauri para Epson TM-T20III/T88VI ESC/POS, plantillas HTML/CSS de tickets y cortes, descubrimiento USB/red local. App `apps/print-bridge` separada que corre como sidecar del POS desktop.
+- **Próximo paso concreto**: Crear app Tauri `apps/print-bridge` con Rust core. Renderizar ticket HTML via servidor local (Vite static). Cliente HTTP local que recibe POST con `{tipo: ticket|corte, html|json}`. Driver ESC/POS via `escpos-rs`. Descubrimiento impresoras USB con `rusb`. Endpoint backend `GET /t/ventas/:id/ticket-render` y `GET /t/cortes/:id/ticket-render` que devuelven JSON estructurado + HTML para que el Bridge imprima.
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -21,7 +21,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 - [x] **1.2 Modelo 4.7 Productos + variantes + inventario + motor precios**
 - [x] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
 - [x] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
-- [ ] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR**
+- [x] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR** (autofactura pública diferida a 1.5.c — endpoints tenant cerrados)
 - [ ] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)**
 - [ ] **1.7 Demo cajero retail end-to-end**
 
@@ -171,6 +171,46 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-17 — Hito 1.5 Modelo 4.19 CFDI 4.0 + Facturama cerrado (autofactura pública diferida)
+- **Paquete `@gaespos/fiscal` nuevo** abstrayendo el PAC:
+  - `FiscalProvider` interface (emitir + cancelar) — permite swappear PAC sin tocar lógica de negocio
+  - `MockFacturamaClient`: implementación determinista para tests con UUID v4 random + XML CFDI 4.0 simulado + PDF base64 mock; helpers `failNextEmit/failNextCancel`
+  - `FacturamaClient`: cliente HTTP real contra Facturama API (sandbox/prod), Basic auth + timeout 15s + descarga XML/PDF post-timbrado
+  - Tipos exportados: `UsoCfdi` (G01/G03/D01/P01/S01), `FormaPagoSat` (01/02/03/04/28/99), `MetodoPagoSat` (PUE/PPD), `RegimenFiscalSat` (12 regímenes principales), `TipoComprobante`, `MotivoCancelacionSat` (01/02/03/04), `CfdiEmitirInput/Result`, `CfdiCancelarInput/Result`, `FiscalError`
+  - 3 tests unit del mock (emitir determinista, cancelar Cancelado, failNext)
+- **Schema tenant 4.19** (2 modelos + 4 enums):
+  - `CfdiConfig` singleton-like (rfcEmisor unique, razonSocial, regimenSat, códigoPostal+lugarExpedicion, serieDefault+folioCounter, facturamaApiKey + ambiente sandbox/prod, autofacturaActiva + diasAutofactura). Certificados .cer/.key NO guardados (Facturama panel los tiene)
+  - `Cfdi` (ventaId unique 1:1, serie+folio unique, folioFiscal UUID SAT unique, fecha emisión/timbrado, snapshot completo emisor+receptor con RFC/razonSocial/CP/régimen/usoCFDI, subtotal/iva/ieps/total, estado [pendiente|vigente|cancelado|error], facturamaId + sellos SAT + cadenaOriginal, **xml + pdfBase64 inline V1**, cancelación motivo + folioRelacion + canceladoAt, emitidoPor + canceladoPor FKs, autofacturaToken unique para portal público)
+  - `Venta.cfdiId` ahora @unique (1:1 con Cfdi)
+- **Migration `add_cfdi_config_emitidos`** aplicada cross-tenant via shadow schema postgres.
+- **Permisos**: agregado `CFDI_CONFIGURAR` al catálogo (los 3 LEER/EMITIR/CANCELAR ya existían).
+- **Plugin Fastify `fiscal`** (`apps/api/src/plugins/fiscal.ts`): `FiscalProviderFactory` decorador en app instance. `buildApp(config, {fiscalProviderFactory?})` lo acepta opcional — default usa `FacturamaClient`. Tests inyectan `MockFacturamaClient` via factory. Limpio cero magia.
+- **Service `cfdis/service.ts`**:
+  - `nextFolio`: upsert+increment del `folioCounter` en `CfdiConfig` (no concurrency-safe sin transaction, pero V1 aceptable; Hito 5 lo blinda con SELECT FOR UPDATE)
+  - `emitirCfdi`: valida venta cobrada, no facturada (estado pendiente/vigente), config activa → crea row CFDI en pendiente → llama provider → en éxito actualiza con folioFiscal+sellos+xml+pdf+estado vigente y setea `venta.cfdiId`; en error actualiza estado=error + errorMensaje y lanza CfdiError 502
+  - `cancelarCfdi`: solo cancela vigentes, motivo 01 requiere folioFiscalRelacionado, llama provider y actualiza estado=cancelado
+  - `buildFiscalPayload`: mapea Venta+Lineas+CfdiConfig al input del provider, usa snapshot del producto (nombre/sku) para descripción del concepto
+- **Endpoints `/t/cfdis*` + `/t/ventas/:id/cfdi/emitir`**:
+  - `GET /t/cfdis/config` (CFDI_CONFIGURAR) — devuelve config SIN exponer `facturamaApiKey` raw, sólo `facturamaApiKeyConfigured: true`
+  - `PUT /t/cfdis/config` (CFDI_CONFIGURAR) — upsert (200 si existe, 201 si nuevo); valida formato RFC, regimen 3 dígitos, CP 5 dígitos
+  - `POST /t/ventas/:id/cfdi/emitir` (CFDI_EMITIR) — body con receptor (RFC, razónSocial, CP, régimen, usoCfdi, formaPago, correo opcional)
+  - `POST /t/cfdis/:id/cancelar` (CFDI_CANCELAR) — body motivo (01-04) + folioFiscalRelacionado opcional
+  - `GET /t/cfdis` lista paginada con filtros estado/rfcReceptor/folioFiscal/desde/hasta (helper `buildCfdiWhere`)
+  - `GET /t/cfdis/:id` detalle (sin xml/pdf inline en JSON para no inflar respuesta)
+  - `GET /t/cfdis/:id/xml` y `/pdf` descarga con content-type + content-disposition correctos
+- **15 tests integración** en `tenant-cfdis.test.ts` cubriendo:
+  - Config: GET sin configurar → 404, emitir sin config → 409, PUT crea 201, GET no expone apiKey raw
+  - Emisión: owner emite OK con UUID válido, venta.cfdiId se actualiza, doble CFDI sobre misma venta → 409, cajero sin CFDI_CONFIGURAR → 403, lista incluye emitido, detalle no expone xml/pdf inline, XML/PDF descargables con content-type correcto
+  - Cancelación: cancela vigente con motivo 02 → Cancelado, doble cancel → 409, motivo 01 sin folioRelacion → 400
+- **Suite total: 141 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 200 tests verdes**
+- **Diferidos**:
+  - **1.5.c portal público autofactura con QR** (token JWT, ticket POS lleva URL con `?t=token`): es el endpoint público SIN auth tenant que reusa `emitirCfdi(..., esAutofactura: true)`. Lo cierro como `1.5.c` antes del Hito 1.7 demo
+  - XML/PDF a S3 con presigned URLs → V1.5 (V1 inline en DB)
+  - Notas crédito (tipo E), PPD + complemento pagos → Hito 2 (devoluciones)
+  - Concurrency hardening del folioCounter (SELECT FOR UPDATE) → Hito 5
+  - Catálogos SAT completos (no enums limitados): cuando el cliente lo pida
+- **Próxima sesión empieza en**: 1.6 Print Bridge Tauri V1 — Rust + escpos-rs + descubrimiento USB para Epson TM-T20III/T88VI. Después 1.5.c (autofactura) y 1.7 demo end-to-end.
 
 ### 2026-05-17 — Hito 1.4 Modelo 4.11 Cortes X/Z + arqueo MX cerrado
 - **Schema tenant 4.11** (3 modelos + 3 enums nuevos):

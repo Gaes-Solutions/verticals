@@ -195,32 +195,38 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 **Total cierre 1.4: 125 tests API + 22 permissions + 16 pricing + 18 db = 181 verdes en ~14s**
 
 ### 1.5 Modelo 4.19 — CFDI 4.0 + Facturama + autofacturación QR
-**Schema tenant + master SAT:**
-- [ ] `cfdis` (id, venta_id nullable, tipo enum [ingreso|egreso|nomina|pago|traslado], folio_interno, uuid_sat, fecha_emision, fecha_timbrado, emisor_rfc, receptor_rfc, receptor_nombre, uso_cfdi, regimen_fiscal, forma_pago, metodo_pago, moneda, tipo_cambio, subtotal, descuento, total, xml_path, pdf_path, estado enum [borrador|emitido|cancelado|error], cancelacion_motivo, cancelado_at, created_at)
-- [ ] `cfdi_relacionados` (cfdi_id, cfdi_relacionado_uuid, tipo_relacion)
-- [ ] `cfdi_conceptos` (id, cfdi_id, clave_prod_serv, no_identificacion, descripcion, cantidad, unidad, valor_unitario, importe, descuento, impuestos jsonb)
-- [ ] Tablas master SAT (`packages/sat-catalogos`): `sat_uso_cfdi`, `sat_regimen_fiscal`, `sat_forma_pago`, `sat_metodo_pago`, `sat_clave_prod_serv`, `sat_clave_unidad`, `sat_pais` — seed con catálogos oficiales SAT
-- [ ] `autofactura_tokens` (id, venta_id, token unique, expira_at, usado_at, ip_uso) — para QR ticket
+**Schema tenant** (master SAT diferido a Hito 2 cuando se requieran catálogos completos):
+- [x] `cfdi_config` singleton-like (rfcEmisor unique, razonSocial, regimenFiscalSat, codigoPostal+lugarExpedicion, serieDefault+folioCounter, facturamaApiKey + ambiente sandbox/prod, autofactura settings, certificados NO almacenados V1)
+- [x] `cfdis` (ventaId unique 1:1, serie+folio unique, folioFiscal UUID SAT unique, fechas emisión/timbrado, snapshot completo emisor+receptor con RFC/razón/CP/régimen/usoCFDI/correo, subtotal/iva/ieps/total, estado [pendiente|vigente|cancelado|error], facturamaId + sellos SAT + cadenaOriginal, **xml + pdfBase64 inline V1**, cancelación motivo + folioRelacion + canceladoAt, emitidoPor + canceladoPor FKs, **autofacturaToken unique** opcional + esAutofactura flag)
+- [x] `Venta.cfdiId` @unique para relación 1:1
+- Diferido a Hito 2: master SAT (sat_uso_cfdi/regimen/forma/metodo/clave_prod_serv/clave_unidad) — V1 usa enums Zod con 5 usos, 6 formas pago, 12 regímenes principales
 
-**Package `packages/fiscal/`:**
-- [ ] Wrapper Facturama V4 API (REST): `emitirCfdi(params)`, `cancelarCfdi(uuid, motivo)`, `descargarPdf(uuid)`, `descargarXml(uuid)`
-- [ ] Validaciones pre-timbrado: RFC válido, datos receptor completos, conceptos con clave SAT
-- [ ] Lógica selección IVA: 8% si sucursal es zona frontera, 16% resto
-- [ ] Tests con MSW mock Facturama (no llamar API real en CI)
+**Package `@gaespos/fiscal`** (nuevo workspace):
+- [x] `FiscalProvider` interface (emitir, cancelar) — desacopla PAC
+- [x] `FacturamaClient`: cliente HTTP real contra Facturama API (sandbox|prod), Basic auth + timeout 15s + descarga XML/PDF post-timbrado
+- [x] `MockFacturamaClient`: determinista para tests con UUID + XML CFDI 4.0 simulado + PDF base64 mock, helpers `failNextEmit/failNextCancel`
+- [x] Tipos exportados completos (UsoCfdi, FormaPagoSat, MetodoPagoSat, RegimenFiscalSat, MotivoCancelacionSat, CfdiEmitirInput/Result, FiscalError)
+- [x] 3 tests unit del mock
+- Diferido a 1.5.b+: validación RFC pre-timbrado avanzada, IVA 8% frontera (V1 usa tasaIva del producto), MSW para `FacturamaClient` (test contra sandbox manual)
 
-**API endpoints:**
-- [ ] `POST /ventas/:id/cfdi` (emite CFDI desde venta, requiere datos receptor)
-- [ ] `POST /cfdis/:id/cancelar` (motivo SAT obligatorio)
-- [ ] `GET /cfdis/:id/pdf` y `/xml`
-- [ ] `GET /cfdis` (lista con filtros)
-- [ ] **Endpoint público** `POST /autofactura/:token` (cliente captura RFC desde QR del ticket, emite CFDI sin requerir cuenta)
-- [ ] `GET /autofactura/:token` (ver datos venta para previsualizar)
+**API endpoints `/t/cfdis*`:**
+- [x] GET/PUT `/t/cfdis/config` (CFDI_CONFIGURAR) — NO expone `facturamaApiKey` raw en GET
+- [x] POST `/t/ventas/:id/cfdi/emitir` (CFDI_EMITIR) — body receptor (RFC/razón/CP/régimen/uso/forma/correo)
+- [x] POST `/t/cfdis/:id/cancelar` (CFDI_CANCELAR) — motivo SAT obligatorio + folioRelacion si motivo 01
+- [x] GET `/t/cfdis` lista paginada con filtros estado/rfcReceptor/folioFiscal/desde/hasta
+- [x] GET `/t/cfdis/:id` (sin xml/pdf inline en JSON)
+- [x] GET `/t/cfdis/:id/xml` y `/pdf` descarga con content-type + content-disposition
+- [ ] **1.5.c diferido**: endpoint público `POST /autofactura` (token JWT en QR del ticket, sin auth tenant; reusa `emitirCfdi(..., esAutofactura: true)`)
+
+**Plugin Fastify fiscal:**
+- [x] `FiscalProviderFactory` decorador en app instance
+- [x] `buildApp(config, {fiscalProviderFactory?})` opcional — default `FacturamaClient`, tests inyectan `MockFacturamaClient`
 
 **Tests integración:**
-- [ ] Emisión CFDI desde venta cobrada genera UUID válido (mock Facturama)
-- [ ] Token autofactura expira en 72h por defecto
-- [ ] Cancelación CFDI <72h sin motivo aprobación; >72h requiere motivo + aceptación
-- [ ] Timbrado CFDI P95 <3s (con mock)
+- [x] 15 tests `tenant-cfdis.test.ts` con MockFacturamaClient inyectado: config sin configurar→404, emitir sin config→409, PUT crea→201, GET no expone apiKey, emisión OK con UUID válido, venta.cfdiId actualizada, doble CFDI sobre misma venta→409, cajero sin CFDI_CONFIGURAR→403, lista incluye emitido, detalle sin xml/pdf inline, XML/PDF descargables con content-type correcto, cancelación motivo 02→Cancelado, doble cancel→409, motivo 01 sin folioRelacion→400
+- Diferido a 1.7 demo: P95 timbrado <3s (necesita sandbox real)
+
+**Total cierre 1.5 (sin autofactura): 141 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 200 verdes en ~14s**
 
 ### 1.6 Print Bridge Tauri V1
 **Servicio `apps/print-bridge/`:**
