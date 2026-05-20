@@ -425,6 +425,7 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
       ...(p.input.cajaId ? { cajaId: p.input.cajaId } : {}),
       usuarioId: p.usuarioId,
       ...(p.input.clienteId ? { clienteId: p.input.clienteId } : {}),
+      ...(p.input.clienteB2bId ? { clienteB2bId: p.input.clienteB2bId } : {}),
       estado: "cobrada",
       canal: p.input.canal,
       ...(p.input.listaPrecioCodigo ? { listaPrecioCodigo: p.input.listaPrecioCodigo } : {}),

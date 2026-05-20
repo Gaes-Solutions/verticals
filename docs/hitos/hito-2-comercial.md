@@ -79,27 +79,30 @@
 
 **Total cierre 2.1: 230 tests verdes**
 
-### 2.2 Modelo 4.8.b — Clientes B2B + crédito
+### 2.2 Modelo 4.8.b — Clientes B2B + crédito ✅ CERRADO
 **Schema tenant:**
-- [ ] `clientes_b2b` (razón social + RFC validado + régimen + nivel_mayoreo_id + lista_precio_principal_id + vendedor_asignado_id + dias_credito_default 15/30/45/60 + requiere_orden_compra + requiere_aprobacion_interna + monto_aprobacion_required)
-- [ ] `cliente_b2b_contactos` (multi: Gerente Compras/Asistente/Almacenista + es_decisor + es_pagador)
-- [ ] `cliente_b2b_direcciones` (multi sucursales/bodegas envío)
-- [ ] `cliente_b2b_creditos` (línea autorizada + utilizada computed + dias_credito + tasa_interes_mora + max 1 activa por cliente)
-- [ ] `cliente_b2b_listas_precio` (priorizadas + vigencia)
-- [ ] `cliente_b2b_vendedor_asignado` (multi-vendedor con comision_pct_override)
+- [x] `ClienteB2b` con razónSocial+RFC unique+régimen+nivelMayoreoId FK+listaPrecioPrincipalCodigo+diasCreditoDefault+condicionesPago enum+requiereOrdenCompra+formatoFacturaPreferido+requiereAprobacionInterna+montoAprobacionRequired
+- [x] `ClienteB2bContacto` multi con esDecisor/esPagador
+- [x] `ClienteB2bDireccion` multi con contactoRecepcion+horarioRecepcion+swap isDefaultEnvio
+- [x] `ClienteB2bCredito` con max 1 activa por cliente (renovaciones archivan previa automáticamente)
+- [x] `ClienteB2bListaPrecio` M2M con prioridad+vigencia
+- [x] `ClienteB2bVendedorAsignado` PK compuesta cliente+usuario+tipo con comisionPctOverride
+- [x] Extensión `Venta`: nuevo `clienteB2bId` FK opcional
 
-**Diferido a V1.5:** `cliente_b2b_documentos` (S3) y `cliente_b2b_usuarios` (portal autoservicio Hito 3)
+**Diferidos:** `cliente_b2b_documentos` (S3) → V1.5 ; `cliente_b2b_usuarios` (portal autoservicio) → Hito 3
 
-**API endpoints:**
-- [ ] `/t/clientes-b2b` CRUD + búsqueda
-- [ ] `POST /t/clientes-b2b/:id/credito` (autoriza línea + log auditable)
-- [ ] `POST /t/clientes-b2b/:id/contactos`, `:id/direcciones`, `:id/listas-precio`, `:id/vendedores`
+**API endpoints `/t/clientes-b2b*`:**
+- [x] CRUD + búsqueda multi-criterio (razónSocial/nombreComercial/rfc/email/teléfono + contactos relacional) + filtros industria/nivelMayoreo/condicionesPago/isActive
+- [x] POST `/:id/credito` (CLIENTES_FIADO_GESTIONAR; archiva línea activa anterior automáticamente)
+- [x] POST `/:id/contactos`, `/:id/direcciones`, `/:id/listas-precio` (upsert con validación lista existe→404), `/:id/vendedores` (upsert con validación usuario→404)
+- [ ] **Diferido a 2.4 CxC**: método pago `credito_b2b` que valida `linea_disponible = autorizada - sum(cxc abiertas)`
 
 **Tests integración:**
-- [ ] CRUD B2B, validación RFC + régimen
-- [ ] Crédito: línea_disponible = autorizada - utilizada (calculado en vivo)
-- [ ] Multi-vendedor: comisión se divide configurable
-- [ ] Venta a B2B con crédito: valida línea_disponible antes; rechaza si excedería
+- [x] 15 tests `tenant-clientes-b2b.test.ts`: CRUD + RFC duplicate + búsqueda parcial + detalle con todas las relaciones + PATCH; 3 contactos con roles (decisor/pagador); 2 direcciones con swap is_default_envio + recepción info; crédito $50k → autorización archiva, $100k crea nueva (max 1 activa); listas precio: PUBLICO asignada, lista inexistente→404; multi-vendedor (principal + cobranza al mismo cliente); venta con `clienteB2bId` cobra OK y persiste referencia
+- [ ] Diferido a 2.4: línea_disponible computado contra CxC abiertas
+- [ ] Diferido a V2: validación SAT API
+
+**Total cierre 2.2: 186 tests API + 22 perm + 16 pricing + 18 db + 3 fiscal = 245 verdes**
 
 ### 2.3 Modelo 4.9 Apartados
 **Schema tenant:**

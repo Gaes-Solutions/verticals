@@ -40,6 +40,7 @@ export const ventaCreateSchema = z.object({
   sucursalId: z.string().min(1),
   cajaId: z.string().optional(),
   clienteId: z.string().optional(),
+  clienteB2bId: z.string().optional(),
   canal: z.enum(["pos", "ecommerce", "mayoreo"]).default("pos"),
   listaPrecioCodigo: z.string().optional(),
   cuponCodigo: z.string().optional(),

@@ -8,9 +8,9 @@
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
 - **Fase**: 🎉 Hito 1 cerrado · Hito 0 deploy stack listo (esperando cuentas externas Hetzner+dominio cuando haya cliente piloto comprometido). Trabajo activo: **Hito 2 Comercial**
-- **Progreso Hito 2**: 2.1 Clientes B2C + fiados cerrado. Siguiente: 2.2 Clientes B2B + crédito formal
-- **Tarea actual**: 2.2 Modelo 4.8.b — Clientes B2B (`clientes_b2b`, contactos, direcciones envío, líneas de crédito, multi-listas-precio, vendedores asignados con comisión)
-- **Próximo paso concreto**: Schema tenant clientes_b2b + cliente_b2b_contactos + cliente_b2b_direcciones + cliente_b2b_creditos + cliente_b2b_listas_precio + cliente_b2b_vendedor_asignado. Migration cross-tenant. Endpoints `/t/clientes-b2b` CRUD + autorización crédito + tests. Documentos S3 y portal autoservicio se difieren a V1.5/Hito 3
+- **Progreso Hito 2**: 2.1 B2C + 2.2 B2B cerrados. Siguiente: 2.3 Apartados
+- **Tarea actual**: 2.3 Modelo 4.9 Apartados — reserva de stock + abonos + liquidación con conversión a venta + cancelación con pena
+- **Próximo paso concreto**: Schema tenant `apartados` + `apartado_items` + `apartado_abonos`. Service `aplicarApartadoReserva` que reusa `aplicarAjuste` con tipo `apartado_reservado` (nuevo). Endpoints crear/abonar/liquidar/cancelar. Stock reservado por sucursal incrementa al crear apartado, libera al cancelar/expirar/liquidar (y entonces decrementa stockActual)
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -172,6 +172,40 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-20 — Hito 2.2 Clientes B2B + crédito formal cerrado
+- **Schema tenant 4.8.b** (6 modelos + 3 enums nuevos):
+  - `ClienteB2b` (razonSocial + nombreComercial, **RFC unique** validado, regimenFiscalSat, datos contacto, sitio_web, representante_legal, industria, tamaño_negocio, **nivelMayoreoId FK opcional** a NivelPrecioMayoreo, **listaPrecioPrincipalCodigo** opcional, diasCreditoDefault 0-180, condicionesPago enum [contado|credito|mixto], requiereOrdenCompra toggle del cliente, formatoFacturaPreferido enum [pdf|xml|pdf_xml], **requiereAprobacionInterna + montoAprobacionRequired** para órdenes mayores a X, notas, isActive+archivedAt)
+  - `ClienteB2bContacto` (multi: Gerente Compras/Asistente/Contadora con flags esDecisor + esPagador)
+  - `ClienteB2bDireccion` (multi sucursales/bodegas envío con contactoRecepcionNombre/Telefono + horarioRecepcion + swap isDefaultEnvio)
+  - `ClienteB2bCredito` (lineaAutorizada + diasCredito + tasaInteresMoraPct + permiteFacturasVencidas + garantiaDocumentada + vigencia + aprobadoPorId FK Usuario, **max 1 activa por cliente**, renovaciones archivan la anterior)
+  - `ClienteB2bListaPrecio` join M2M (cliente_b2b + lista + prioridad + vigencia) — un cliente puede tener varias listas con orden de prelación
+  - `ClienteB2bVendedorAsignado` join (cliente_b2b + usuario + tipo enum [principal|secundario|cobranza] + **comisionPctOverride** opcional + vigencia) — PK compuesta permite mismo vendedor en distintos roles
+- **Extensión `Venta`**: nuevo campo `clienteB2bId` (FK opcional a ClienteB2b) + index. Permite que la venta apunte a B2B en vez de B2C (mutuamente excluyentes en práctica).
+- **Migration `add_clientes_b2b_credito`** (199 líneas) aplicada cross-tenant via shadow schema postgres.
+- **Endpoints `/t/clientes-b2b*`**:
+  - GET lista paginada con `buildB2bWhere` (búsqueda multi-criterio: razonSocial/nombreComercial/rfc/email/telefonoPrincipal + contactos relacionales con `.some`) + filtros industria/nivelMayoreo/condicionesPago/isActive
+  - GET `/:id` detalle full con nivelMayoreo + contactos activos + direcciones + créditos (ordenados desc) + listasPrecio (incluye lista) + vendedoresAsignados (incluye usuario)
+  - POST con validación `nivelMayoreoId` existe (404) y `listaPrecioPrincipalCodigo` existe (404)
+  - PATCH/DELETE soft-archive (sin guard de read-only porque B2B no tiene un "público en general")
+  - POST `/:id/contactos` (multi-contacto)
+  - POST `/:id/direcciones` con swap isDefaultEnvio
+  - POST `/:id/credito` (permiso `clientes.fiado_gestionar`): archiva la línea activa anterior + crea nueva. Aprobador = `req.principal.userId`
+  - POST `/:id/listas-precio` upsert (cliente_b2b + lista_id PK), valida lista existe (404)
+  - POST `/:id/vendedores` upsert (cliente_b2b + usuario + tipo PK), valida usuario existe (404)
+- **15 tests integración nuevos** en `tenant-clientes-b2b.test.ts`:
+  - CRUD: crear con flags fiscales completos, RFC duplicado → 409, búsqueda parcial razón social + RFC, detalle con todas las relaciones, PATCH notas
+  - Sub-recursos: agregar 3 contactos con roles (decisor/pagador), 2 direcciones con swap is_default_envio + recepción contact info
+  - Créditos: autorizar línea de $50,000 con tasaInteresMora + notas; segunda autorización ($100,000) archiva la primera automáticamente (max 1 activa)
+  - Listas precio: asignar PUBLICO con prioridad, lista inexistente → 404
+  - Vendedores: asignar principal con comisionOverride 7.5%, segundo rol "cobranza" sobre mismo cliente (PK compuesta permite ambos)
+  - **Venta a B2B**: crear venta con `clienteB2bId` (sin clienteId) cobra correctamente y persiste la referencia para detalle
+- **Suite total: 186 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 245 tests verdes en ~14s**
+- **Diferidos**:
+  - `cliente_b2b_documentos` (acta constitutiva, comprobante domicilio, ID, RIF, pagaré con S3) → V1.5
+  - `cliente_b2b_usuarios` (portal autoservicio B2B con su propio login) → Hito 3 B2B portal
+  - Método pago `credito_b2b` que valida `linea_disponible = autorizada - sum(cxc abiertas)` → Hito 2.4 cuando exista CxC formal
+- **Próxima sesión empieza en**: 2.3 Apartados — reserva de stock con abonos, liquidación a venta, cancelación con pena de cancelación. Reusará `aplicarAjuste` con tipo nuevo `apartado_reservado`.
 
 ### 2026-05-20 — Hito 2.1 Clientes B2C + fiados cerrado
 - **Schema tenant 4.8** (7 modelos + 3 enums nuevos):

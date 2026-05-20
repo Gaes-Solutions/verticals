@@ -6,6 +6,7 @@ import healthRoutes from "./modules/health/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
 import cfdisRoutes from "./modules/tenant/cfdis/routes.js";
+import clientesB2bRoutes from "./modules/tenant/clientes-b2b/routes.js";
 import clientesRoutes from "./modules/tenant/clientes/routes.js";
 import cortesRoutes from "./modules/tenant/cortes/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
@@ -85,6 +86,7 @@ export async function buildApp(
       await tenantApp.register(cfdisRoutes);
       await tenantApp.register(ticketsRoutes);
       await tenantApp.register(clientesRoutes, { prefix: "/clientes" });
+      await tenantApp.register(clientesB2bRoutes, { prefix: "/clientes-b2b" });
     },
     { prefix: "/t" },
   );

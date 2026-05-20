@@ -127,22 +127,24 @@ model Usuario {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  lastLoginSucursal Sucursal?              @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
-  sucursales        UsuarioSucursal[]
-  roles             UsuarioRol[]           @relation("UsuarioRol_Usuario")
-  rolesAsignados    UsuarioRol[]           @relation("UsuarioRol_AsignadoPor")
-  vistasGuardadas   UsuarioVistaGuardada[]
-  movimientos       InventarioMovimiento[]
-  ventasCreadas     Venta[]                @relation("VentaUsuarioCreador")
-  ventasCanceladas  Venta[]                @relation("VentaUsuarioCancelador")
-  aperturasAbiertas CajaApertura[]         @relation("CajaAperturaUsuario")
-  aperturasCerradas CajaApertura[]         @relation("CajaAperturaCerradaPor")
-  cajaMovimientos   CajaMovimiento[]
-  cortes            Corte[]
-  cfdisEmitidos     Cfdi[]                 @relation("CfdiEmitidoPor")
-  cfdisCancelados   Cfdi[]                 @relation("CfdiCanceladoPor")
-  clientesAsignados Cliente[]              @relation("ClienteVendedorAsignado")
-  fiadoMovimientos  FiadoMovimiento[]
+  lastLoginSucursal    Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
+  sucursales           UsuarioSucursal[]
+  roles                UsuarioRol[]                 @relation("UsuarioRol_Usuario")
+  rolesAsignados       UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
+  vistasGuardadas      UsuarioVistaGuardada[]
+  movimientos          InventarioMovimiento[]
+  ventasCreadas        Venta[]                      @relation("VentaUsuarioCreador")
+  ventasCanceladas     Venta[]                      @relation("VentaUsuarioCancelador")
+  aperturasAbiertas    CajaApertura[]               @relation("CajaAperturaUsuario")
+  aperturasCerradas    CajaApertura[]               @relation("CajaAperturaCerradaPor")
+  cajaMovimientos      CajaMovimiento[]
+  cortes               Corte[]
+  cfdisEmitidos        Cfdi[]                       @relation("CfdiEmitidoPor")
+  cfdisCancelados      Cfdi[]                       @relation("CfdiCanceladoPor")
+  clientesAsignados    Cliente[]                    @relation("ClienteVendedorAsignado")
+  clientesB2bAsignados ClienteB2bVendedorAsignado[]
+  fiadoMovimientos     FiadoMovimiento[]
+  creditosB2bAprobados ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -600,7 +602,8 @@ model NivelPrecioMayoreo {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  listas ListaPrecio[]
+  listas      ListaPrecio[]
+  clientesB2b ClienteB2b[]
 
   @@map("niveles_precio_mayoreo")
 }
@@ -620,8 +623,9 @@ model ListaPrecio {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
-  nivelMayoreo NivelPrecioMayoreo? @relation(fields: [nivelMayoreoId], references: [id], onDelete: SetNull)
+  nivelMayoreo NivelPrecioMayoreo?     @relation(fields: [nivelMayoreoId], references: [id], onDelete: SetNull)
   items        ListaPrecioItem[]
+  clientesB2b  ClienteB2bListaPrecio[]
 
   @@index([tipo, isActive])
   @@map("listas_precios")
@@ -771,6 +775,7 @@ model Venta {
   cajaId            String?     @map("caja_id")
   usuarioId         String      @map("usuario_id")
   clienteId         String?     @map("cliente_id")
+  clienteB2bId      String?     @map("cliente_b2b_id")
   estado            VentaEstado @default(borrador)
   canal             VentaCanal  @default(pos)
   moneda            String      @default("MXN")
@@ -797,6 +802,7 @@ model Venta {
   usuario      Usuario           @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
   canceladaPor Usuario?          @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
   cliente      Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteB2b   ClienteB2b?       @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
   lineas       VentaLinea[]
   pagos        VentaPago[]
   cfdis        Cfdi[]
@@ -806,6 +812,7 @@ model Venta {
   @@index([estado, createdAt])
   @@index([sucursalId, cobradaAt])
   @@index([clienteId])
+  @@index([clienteB2bId])
   @@map("ventas")
 }
 
@@ -1252,4 +1259,177 @@ model FiadoMovimiento {
   @@index([fiadoId, createdAt])
   @@index([ventaId])
   @@map("fiado_movimientos")
+}
+
+// ============================================================
+// 4.8.b — Clientes B2B + crédito formal + multi-vendedor con comisión
+// Documentos S3 → V1.5 ; portal autoservicio (usuarios) → Hito 3
+// ============================================================
+
+enum CondicionesPagoB2b {
+  contado
+  credito
+  mixto
+}
+
+enum FormatoFacturaB2b {
+  pdf
+  xml
+  pdf_xml
+}
+
+enum VendedorB2bTipo {
+  principal
+  secundario
+  cobranza
+}
+
+model ClienteB2b {
+  id                         String             @id @default(cuid())
+  razonSocial                String             @map("razon_social")
+  nombreComercial            String?            @map("nombre_comercial")
+  rfc                        String             @unique
+  regimenFiscalSat           String             @map("regimen_fiscal_sat")
+  usoCfdiDefault             String?            @map("uso_cfdi_default")
+  codigoPostalFiscal         String?            @map("codigo_postal_fiscal")
+  direccionFiscal            Json?              @map("direccion_fiscal")
+  emailPrincipal             String?            @map("email_principal")
+  telefonoPrincipal          String?            @map("telefono_principal")
+  sitioWeb                   String?            @map("sitio_web")
+  representanteLegal         String?            @map("representante_legal")
+  industria                  String?
+  tamanoNegocio              String?            @map("tamano_negocio")
+  nivelMayoreoId             String?            @map("nivel_mayoreo_id")
+  listaPrecioPrincipalCodigo String?            @map("lista_precio_principal_codigo")
+  diasCreditoDefault         Int                @default(0) @map("dias_credito_default")
+  condicionesPago            CondicionesPagoB2b @default(contado) @map("condiciones_pago")
+  requiereOrdenCompra        Boolean            @default(false) @map("requiere_orden_compra")
+  formatoFacturaPreferido    FormatoFacturaB2b  @default(pdf_xml) @map("formato_factura_preferido")
+  requiereAprobacionInterna  Boolean            @default(false) @map("requiere_aprobacion_interna")
+  montoAprobacionRequired    Decimal?           @map("monto_aprobacion_required") @db.Decimal(14, 2)
+  notas                      String?
+  isActive                   Boolean            @default(true) @map("is_active")
+  archivedAt                 DateTime?          @map("archived_at")
+  createdAt                  DateTime           @default(now()) @map("created_at")
+  updatedAt                  DateTime           @updatedAt @map("updated_at")
+
+  nivelMayoreo        NivelPrecioMayoreo?          @relation(fields: [nivelMayoreoId], references: [id], onDelete: SetNull)
+  contactos           ClienteB2bContacto[]
+  direcciones         ClienteB2bDireccion[]
+  creditos            ClienteB2bCredito[]
+  listasPrecio        ClienteB2bListaPrecio[]
+  vendedoresAsignados ClienteB2bVendedorAsignado[]
+  ventas              Venta[]
+
+  @@index([razonSocial])
+  @@index([rfc])
+  @@index([nivelMayoreoId])
+  @@index([isActive])
+  @@map("clientes_b2b")
+}
+
+model ClienteB2bContacto {
+  id           String   @id @default(cuid())
+  clienteB2bId String   @map("cliente_b2b_id")
+  nombre       String
+  apellidos    String?
+  puesto       String?
+  email        String?
+  telefono     String?
+  whatsapp     Boolean  @default(false)
+  esDecisor    Boolean  @default(false) @map("es_decisor")
+  esPagador    Boolean  @default(false) @map("es_pagador")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  clienteB2b ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+
+  @@index([clienteB2bId])
+  @@map("cliente_b2b_contactos")
+}
+
+model ClienteB2bDireccion {
+  id                        String   @id @default(cuid())
+  clienteB2bId              String   @map("cliente_b2b_id")
+  etiqueta                  String
+  calle                     String
+  numeroExterior            String?  @map("numero_exterior")
+  numeroInterior            String?  @map("numero_interior")
+  colonia                   String?
+  municipio                 String?
+  estado                    String?
+  codigoPostal              String?  @map("codigo_postal")
+  pais                      String   @default("MX")
+  referencias               String?
+  lat                       Decimal? @db.Decimal(10, 7)
+  lng                       Decimal? @db.Decimal(10, 7)
+  contactoRecepcionNombre   String?  @map("contacto_recepcion_nombre")
+  contactoRecepcionTelefono String?  @map("contacto_recepcion_telefono")
+  horarioRecepcion          String?  @map("horario_recepcion")
+  isDefaultEnvio            Boolean  @default(false) @map("is_default_envio")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  clienteB2b ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+
+  @@index([clienteB2bId])
+  @@map("cliente_b2b_direcciones")
+}
+
+model ClienteB2bCredito {
+  id                      String    @id @default(cuid())
+  clienteB2bId            String    @map("cliente_b2b_id")
+  lineaAutorizada         Decimal   @map("linea_autorizada") @db.Decimal(14, 2)
+  diasCredito             Int       @default(30) @map("dias_credito")
+  tasaInteresMoraPct      Decimal?  @map("tasa_interes_mora_pct") @db.Decimal(5, 2)
+  permiteFacturasVencidas Boolean   @default(false) @map("permite_facturas_vencidas")
+  garantiaDocumentada     String?   @map("garantia_documentada")
+  vigenteDesde            DateTime  @default(now()) @map("vigente_desde")
+  vigenteHasta            DateTime? @map("vigente_hasta")
+  aprobadoPorId           String    @map("aprobado_por_id")
+  aprobadoAt              DateTime  @default(now()) @map("aprobado_at")
+  notasAutorizacion       String?   @map("notas_autorizacion")
+  isActive                Boolean   @default(true) @map("is_active")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  clienteB2b  ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+  aprobadoPor Usuario    @relation("ClienteB2bCreditoAprobadoPor", fields: [aprobadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([clienteB2bId, isActive])
+  @@map("cliente_b2b_creditos")
+}
+
+model ClienteB2bListaPrecio {
+  clienteB2bId  String    @map("cliente_b2b_id")
+  listaPrecioId String    @map("lista_precio_id")
+  prioridad     Int       @default(100)
+  vigenteDesde  DateTime? @map("vigente_desde")
+  vigenteHasta  DateTime? @map("vigente_hasta")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  clienteB2b ClienteB2b  @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+  lista      ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Restrict)
+
+  @@id([clienteB2bId, listaPrecioId])
+  @@index([clienteB2bId])
+  @@map("cliente_b2b_listas_precio")
+}
+
+model ClienteB2bVendedorAsignado {
+  clienteB2bId        String          @map("cliente_b2b_id")
+  usuarioId           String          @map("usuario_id")
+  tipo                VendedorB2bTipo @default(principal)
+  comisionPctOverride Decimal?        @map("comision_pct_override") @db.Decimal(5, 2)
+  vigenteDesde        DateTime        @default(now()) @map("vigente_desde")
+  vigenteHasta        DateTime?       @map("vigente_hasta")
+  createdAt           DateTime        @default(now()) @map("created_at")
+
+  clienteB2b ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@id([clienteB2bId, usuarioId, tipo])
+  @@index([usuarioId])
+  @@map("cliente_b2b_vendedores_asignados")
 }
