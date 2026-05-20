@@ -139,6 +139,8 @@ model Usuario {
   aperturasCerradas CajaApertura[]         @relation("CajaAperturaCerradaPor")
   cajaMovimientos   CajaMovimiento[]
   cortes            Corte[]
+  cfdisEmitidos     Cfdi[]                 @relation("CfdiEmitidoPor")
+  cfdisCancelados   Cfdi[]                 @relation("CfdiCanceladoPor")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -779,7 +781,7 @@ model Venta {
   totalCobrado      Decimal     @default(0) @map("total_cobrado") @db.Decimal(14, 4)
   cambioDado        Decimal     @default(0) @map("cambio_dado") @db.Decimal(14, 4)
   observaciones     String?
-  cfdiId            String?     @map("cfdi_id")
+  cfdiId            String?     @unique @map("cfdi_id")
   canceladaMotivo   String?     @map("cancelada_motivo")
   canceladaPorId    String?     @map("cancelada_por_id")
   cobradaAt         DateTime?   @map("cobrada_at")
@@ -793,6 +795,7 @@ model Venta {
   canceladaPor Usuario?     @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
   lineas       VentaLinea[]
   pagos        VentaPago[]
+  cfdis        Cfdi[]
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -951,4 +954,115 @@ model Corte {
   @@unique([aperturaId, numero])
   @@index([aperturaId, tipo])
   @@map("cortes")
+}
+
+// ============================================================
+// 4.19 — CFDI 4.0 emisión vía Facturama + autofactura QR
+// Certificados .cer/.key NO almacenados V1 (Facturama panel los tiene)
+// XML/PDF inline V1; S3 a V1.5
+// ============================================================
+
+enum CfdiAmbiente {
+  sandbox
+  prod
+}
+
+enum CfdiEstado {
+  pendiente
+  vigente
+  cancelado
+  error
+}
+
+enum CfdiTipoComprobante {
+  I
+  E
+  T
+  N
+  P
+}
+
+enum CfdiMetodoPago {
+  PUE
+  PPD
+}
+
+model CfdiConfig {
+  id                 String       @id @default(cuid())
+  rfcEmisor          String       @map("rfc_emisor")
+  razonSocialEmisor  String       @map("razon_social_emisor")
+  regimenFiscalSat   String       @map("regimen_fiscal_sat")
+  codigoPostalEmisor String       @map("codigo_postal_emisor")
+  lugarExpedicion    String       @map("lugar_expedicion")
+  serieDefault       String       @default("A") @map("serie_default")
+  folioCounter       Int          @default(0) @map("folio_counter")
+  facturamaApiKey    String       @map("facturama_api_key")
+  facturamaAmbiente  CfdiAmbiente @default(sandbox) @map("facturama_ambiente")
+  correoEmisor       String?      @map("correo_emisor")
+  telefonoEmisor     String?      @map("telefono_emisor")
+  autofacturaActiva  Boolean      @default(true) @map("autofactura_activa")
+  diasAutofactura    Int          @default(30) @map("dias_autofactura")
+  isActive           Boolean      @default(true) @map("is_active")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@unique([rfcEmisor])
+  @@map("cfdi_config")
+}
+
+model Cfdi {
+  id                       String              @id @default(cuid())
+  ventaId                  String              @unique @map("venta_id")
+  serie                    String
+  folio                    String
+  folioFiscal              String?             @unique @map("folio_fiscal")
+  fechaEmision             DateTime            @default(now()) @map("fecha_emision")
+  fechaTimbrado            DateTime?           @map("fecha_timbrado")
+  tipoComprobante          CfdiTipoComprobante @default(I) @map("tipo_comprobante")
+  metodoPago               CfdiMetodoPago      @default(PUE) @map("metodo_pago")
+  formaPago                String              @map("forma_pago")
+  usoCfdi                  String              @map("uso_cfdi")
+  rfcEmisor                String              @map("rfc_emisor")
+  razonSocialEmisor        String              @map("razon_social_emisor")
+  regimenFiscalEmisor      String              @map("regimen_fiscal_emisor")
+  lugarExpedicion          String              @map("lugar_expedicion")
+  rfcReceptor              String              @map("rfc_receptor")
+  razonSocialReceptor      String              @map("razon_social_receptor")
+  codigoPostalReceptor     String              @map("codigo_postal_receptor")
+  regimenFiscalReceptor    String              @map("regimen_fiscal_receptor")
+  correoReceptor           String?             @map("correo_receptor")
+  subtotal                 Decimal             @db.Decimal(14, 4)
+  descuento                Decimal             @default(0) @db.Decimal(14, 4)
+  iva                      Decimal             @default(0) @db.Decimal(14, 4)
+  ieps                     Decimal             @default(0) @db.Decimal(14, 4)
+  total                    Decimal             @db.Decimal(14, 4)
+  moneda                   String              @default("MXN")
+  estado                   CfdiEstado          @default(pendiente)
+  facturamaId              String?             @map("facturama_id")
+  selloDigitalCfdi         String?             @map("sello_digital_cfdi")
+  selloSat                 String?             @map("sello_sat")
+  noCertificadoSat         String?             @map("no_certificado_sat")
+  cadenaOriginalSat        String?             @map("cadena_original_sat")
+  xml                      String?             @db.Text
+  pdfBase64                String?             @map("pdf_base64") @db.Text
+  errorMensaje             String?             @map("error_mensaje")
+  cancelacionMotivo        String?             @map("cancelacion_motivo")
+  cancelacionFolioRelacion String?             @map("cancelacion_folio_relacion")
+  canceladoAt              DateTime?           @map("cancelado_at")
+  emitidoPorId             String              @map("emitido_por_id")
+  canceladoPorId           String?             @map("cancelado_por_id")
+  autofacturaToken         String?             @unique @map("autofactura_token")
+  esAutofactura            Boolean             @default(false) @map("es_autofactura")
+  createdAt                DateTime            @default(now()) @map("created_at")
+  updatedAt                DateTime            @updatedAt @map("updated_at")
+
+  venta        Venta    @relation(fields: [ventaId], references: [id], onDelete: Restrict)
+  emitidoPor   Usuario  @relation("CfdiEmitidoPor", fields: [emitidoPorId], references: [id], onDelete: Restrict)
+  canceladoPor Usuario? @relation("CfdiCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([serie, folio])
+  @@index([estado])
+  @@index([rfcReceptor])
+  @@index([fechaEmision])
+  @@map("cfdis")
 }

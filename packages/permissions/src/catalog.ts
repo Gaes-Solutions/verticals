@@ -48,6 +48,7 @@ export const PERMISSIONS = {
   CFDI_LEER: "cfdi.leer",
   CFDI_EMITIR: "cfdi.emitir",
   CFDI_CANCELAR: "cfdi.cancelar",
+  CFDI_CONFIGURAR: "cfdi.configurar",
 
   REPORTES_VENTAS: "reportes.ventas",
   REPORTES_INVENTARIO: "reportes.inventario",
@@ -149,6 +150,7 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "cfdi.leer": { category: "cfdi", description: "Consultar CFDIs emitidos" },
   "cfdi.emitir": { category: "cfdi", description: "Emitir CFDIs desde ventas" },
   "cfdi.cancelar": { category: "cfdi", description: "Cancelar CFDIs" },
+  "cfdi.configurar": { category: "cfdi", description: "Configurar emisor CFDI y PAC" },
 
   "reportes.ventas": { category: "reportes", description: "Ver reportes de ventas" },
   "reportes.inventario": { category: "reportes", description: "Ver reportes de inventario" },
