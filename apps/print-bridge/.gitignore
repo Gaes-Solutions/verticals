@@ -1,0 +1,8 @@
+target/
+Cargo.lock
+src-tauri/target/
+dist/
+*.dSYM
+*.AppImage
+*.dmg
+*.msi

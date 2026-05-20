@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Progreso Hito 1**: 6 de 8 tareas cerradas (1.0 + 1.1 + 1.2 + 1.3 + 1.4 + 1.5)
-- **Tarea actual**: 1.6 Print Bridge Tauri V1 — driver Rust nativo Tauri para Epson TM-T20III/T88VI ESC/POS, plantillas HTML/CSS de tickets y cortes, descubrimiento USB/red local. App `apps/print-bridge` separada que corre como sidecar del POS desktop.
-- **Próximo paso concreto**: Crear app Tauri `apps/print-bridge` con Rust core. Renderizar ticket HTML via servidor local (Vite static). Cliente HTTP local que recibe POST con `{tipo: ticket|corte, html|json}`. Driver ESC/POS via `escpos-rs`. Descubrimiento impresoras USB con `rusb`. Endpoint backend `GET /t/ventas/:id/ticket-render` y `GET /t/cortes/:id/ticket-render` que devuelven JSON estructurado + HTML para que el Bridge imprima.
+- **Progreso Hito 1**: 7 de 8 tareas cerradas (1.0-1.6 + 1.6.a contract). 1.6.b ESC/POS Rust real y 1.5.c autofactura quedan como sub-tareas opcionales antes/durante 1.7
+- **Tarea actual**: 1.7 Demo cajero retail end-to-end — flujo completo en staging: login cajero → apertura caja → POS busca producto barcode → cobro multi-pago → ticket → CFDI Facturama sandbox → corte Z. Replaces Eleventa para 1-2 clientes piloto retail
+- **Próximo paso concreto**: Decidir si el demo es CLI scripted (curl/fetch que ejecuta el flujo completo con asserts) o requiere mini UI web. Recomendado: script CLI end-to-end que demuestra los endpoints encadenados + un README con el flujo paso a paso para el cliente. UI POS web completa cae fuera del Hito 1 (es Hito 2+). Pendiente: 1.5.c autofactura y 1.6.b ESC/POS Rust se cierran cuando Gaby tenga hardware/dominio listos
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -22,7 +22,7 @@ Ver checklist completo en [`docs/hitos/hito-1-pos-core.md`](docs/hitos/hito-1-po
 - [x] **1.3 Modelo 4.9 Ventas básicas + multi-pago + tickets**
 - [x] **1.4 Modelo 4.11 Cortes X/Z con denominaciones MX**
 - [x] **1.5 Modelo 4.19 CFDI 4.0 + Facturama + autofacturación QR** (autofactura pública diferida a 1.5.c — endpoints tenant cerrados)
-- [ ] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)**
+- [x] **1.6 Print Bridge Tauri V1 (Epson TM-T20III/T88VI)** (1.6.a contrato JSON + endpoints backend; 1.6.b ESC/POS Rust real cuando Gaby tenga TM-T20III)
 - [ ] **1.7 Demo cajero retail end-to-end**
 
 ## 📋 Hito 0 — Infra base · Progreso
@@ -171,6 +171,35 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-17 — Hito 1.6.a Print Bridge contrato JSON + endpoints backend cerrado
+- **Endpoints backend nuevos** (`apps/api/src/modules/tenant/tickets/`):
+  - `GET /t/ventas/:id/ticket` (VENTAS_LEER) — devuelve `TicketVenta` JSON estructurado: emisor (RFC, razónSocial, sucursal con codigo/nombre/teléfono/dirección, caja), venta (folio, fecha, cajero, cliente, canal, moneda), líneas (numero, sku, descripcion, cantidad, precioUnit, subtotal, descuento), pagos (metodo, monto, ultimosCuatro), totales (subtotal, descuentoTotal, ivaTotal, iepsTotal, total, totalCobrado, cambioDado), cfdi opcional (folioFiscal UUID, serie+folio, fechaTimbrado, selloDigital+selloSat+noCertificado+cadenaOriginal, rfc+razónSocial receptor), autofactura opcional con `urlPortal + expiraAt`
+  - `GET /t/cortes/:id/ticket` (CORTE_IMPRIMIR) — devuelve `TicketCorte`: emisor (sucursal+caja), corte (tipo X|Z, numero, desdeAt/hastaAt, cajero), ventas (count, canceladas, total), desglosePorMetodo, desgloseMovimientos (entradas/salidas/neto), efectivo (esperado/contado/diferencia), denominaciones (billetes+monedas), observaciones
+- **Decisión**: el backend genera el JSON estructurado del ticket; el Print Bridge (Rust nativo) lo recibe via HTTP local y renderiza ESC/POS. Esto desacopla el contrato (estable, testeable) de la implementación de hardware (compleja, requiere device físico).
+- **App `apps/print-bridge` scaffold Rust + Tauri 2**:
+  - `Cargo.toml`: tauri 2 + axum 0.7 + serde + tokio + tower-http CORS. `escpos` y `rusb` comentados (descomentar en 1.6.b cuando se implemente la impresión real)
+  - `src/main.rs`: HTTP server local `127.0.0.1:9876` con endpoints `/status` (healthcheck) y `POST /print/ticket` (recibe Ticket JSON, loggea, devuelve `{ok, queued}`)
+  - `src/types.rs`: structs Rust con `serde::Deserialize` que matchean exactamente el contrato JSON del backend (`Ticket` discriminated por `tipo: "venta"|"corte"`)
+  - `README.md` extenso documentando: por qué existe, estado actual (contrato listo, ESC/POS pendiente), cómo arrancar local, decisiones cerradas (standalone vs embebido, solo USB V1, solo Epson V1, sin cola persistente V1, sin firma comandos V1)
+  - Excluido del workspace pnpm (`!apps/print-bridge` en `pnpm-workspace.yaml`) porque es Rust nativo, no Node
+- **5 tests integración nuevos** en `tenant-tickets.test.ts`:
+  - Venta sin CFDI: ticket completo con sucursal+caja+cajero+líneas+pagos+totales+cambio, cfdi=null, autofactura=null (porque sin config)
+  - Venta CON CFDI vigente: ticket incluye bloque cfdi con folioFiscal UUID válido + rfcReceptor; autofactura con `/autofactura/<slug>/venta/<id>` y expiraAt
+  - Venta inexistente → 404
+  - Corte: ticket con cabecera + ventas + desglose + denominaciones (billetes 200=1, 50=1, monedas 10=8 → efectivo contado 330)
+  - Corte inexistente → 404
+- **Suite total: 146 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 205 tests verdes**
+- **Diferidos a 1.6.b (cuando Gaby tenga TM-T20III en escritorio)**:
+  - Implementar `escpos` Rust en `src/main.rs:print_ticket`: parsear Ticket → comandos ESC/POS (INIT, encoding LATIN1, líneas, separadores, QR autofactura, cortar papel)
+  - `rusb` para enumerar impresoras USB conectadas + endpoint `GET /printers`
+  - Configuración local (qué impresora por defecto, encoding, anchura caracteres 32|42|48)
+  - Build instalador Tauri por OS (Windows .msi, macOS .dmg, Linux .AppImage)
+- **Diferidos a V1.5**:
+  - Impresoras red TCP/IP (Star TSP650, Zebra, etc.)
+  - Cola persistente con Redis local + retries
+  - Multi-equipo en red con token compartido
+- **Próxima sesión empieza en**: 1.7 Demo cajero retail end-to-end. Pendientes opcionales 1.5.c autofactura pública + 1.6.b ESC/POS Rust quedan para cuando Gaby tenga dominio + hardware listos.
 
 ### 2026-05-17 — Hito 1.5 Modelo 4.19 CFDI 4.0 + Facturama cerrado (autofactura pública diferida)
 - **Paquete `@gaespos/fiscal` nuevo** abstrayendo el PAC:

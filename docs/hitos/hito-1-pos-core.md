@@ -229,24 +229,31 @@ Construir el **núcleo POS retail vendible** que reemplaza Eleventa para 1-2 cli
 **Total cierre 1.5 (sin autofactura): 141 tests API + 22 permissions + 16 pricing + 18 db + 3 fiscal = 200 verdes en ~14s**
 
 ### 1.6 Print Bridge Tauri V1
-**Servicio `apps/print-bridge/`:**
-- [ ] Proyecto Tauri Rust + sidecar HTTP local 127.0.0.1:9100
-- [ ] Endpoint `POST /print/ticket` recibe `{html, css, impresora?, ancho_mm?}` → renderiza a ESC/POS → manda a impresora
-- [ ] Endpoint `GET /print/impresoras` lista impresoras disponibles (USB + red)
-- [ ] Driver Epson TM-T20III (USB) y TM-T88VI (red) certificados
-- [ ] Auto-detect impresora default por config local
-- [ ] Healthcheck `GET /health`
+**1.6.a contrato JSON + endpoints backend (cerrado):**
+- [x] Endpoint `GET /t/ventas/:id/ticket` devuelve `TicketVenta` JSON estructurado (emisor con sucursal+caja+dirección, venta folio+cajero+canal, líneas con sku/descripcion/cantidad/precio/subtotal/descuento, pagos con metodo+monto+ultimosCuatro, totales completos, cfdi opcional con folioFiscal+sellos+receptor, autofactura opcional con urlPortal+expiraAt)
+- [x] Endpoint `GET /t/cortes/:id/ticket` devuelve `TicketCorte` (corte+ventas+desglose por método+movimientos+efectivo esperado/contado/diferencia+denominaciones+observaciones)
+- [x] 5 tests integración cubriendo venta sin/con CFDI, autofactura URL, corte con denominaciones, 404 venta/corte inexistentes
+- [x] Scaffold `apps/print-bridge` Rust + Tauri 2: Cargo.toml (axum+tokio+serde), src/main.rs (HTTP server 127.0.0.1:9876 con `/status` y `POST /print/ticket`), src/types.rs (structs Rust matcheando contrato JSON via serde discriminator `tipo`)
+- [x] README extenso documentando decisiones (standalone vs embebido, USB-only V1, Epson-only V1, sin cola V1, sin firma comandos V1)
+- [x] Excluido de pnpm workspace (`!apps/print-bridge`) porque es crate Rust nativo
 
-**Integración API → Bridge:**
-- [ ] Web POS hace `fetch('http://127.0.0.1:9100/print/ticket', {body: html})` al cobrar
-- [ ] Fallback PDF descarga si bridge no responde
-- [ ] Endpoint `apps/api` `GET /tickets/:venta_id/render` retorna `{html, css}` para envío al bridge
+**1.6.b implementación ESC/POS Rust (diferido — requiere hardware en escritorio Gaby):**
+- [ ] `escpos` crate: parsear Ticket → comandos ESC/POS (INIT, encoding LATIN1, líneas, separadores, QR autofactura via QRCODE command, cortar papel)
+- [ ] `rusb` enumera impresoras USB → `GET /printers`
+- [ ] Configuración local (impresora default, encoding, anchura caracteres 32|42|48)
+- [ ] Driver Epson TM-T20III (USB) y TM-T88VI (USB+red) verificados con hardware
+- [ ] Build instalador Tauri por OS (Windows .msi, macOS .dmg, Linux .AppImage) — empaquetado firmado/notarizado va en Hito 5
 
-**Tests:**
-- [ ] Unit test renderer ESC/POS
-- [ ] Manual test con impresora real (Epson TM-T20III en escritorio Gaby)
+**Integración POS Web → Bridge (cuando 1.6.b esté):**
+- [x] Backend `GET /t/ventas/:id/ticket` devuelve JSON estable
+- [ ] POS web hace `fetch('http://127.0.0.1:9876/print/ticket', {body: ticketJson})` post-cobro
+- [ ] Fallback PDF/print web nativo si bridge no responde
 
-**Nota:** El empaquetado firmado/notarizado del Tauri shell completo va en Hito 5. En Hito 1 basta con que corra local con `cargo tauri dev` para demo.
+**Tests V1 (CI):**
+- [x] Unit del contrato JSON via integration tests del backend
+- Manual con impresora real → 1.6.b en escritorio Gaby
+
+**Nota:** Para Hito 1.7 demo en staging, el ticket se muestra como JSON/HTML en navegador. La impresión física ESC/POS es nice-to-have post-Hito 1.
 
 ### 1.7 Demo cajero retail end-to-end
 - [ ] Flujo completo grabado (GIF/MP4 <2min):

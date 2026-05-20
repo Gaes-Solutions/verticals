@@ -15,6 +15,7 @@ import productosRoutes from "./modules/tenant/productos/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
 import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
+import ticketsRoutes from "./modules/tenant/tickets/routes.js";
 import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import variantesRoutes from "./modules/tenant/variantes/routes.js";
 import ventasRoutes from "./modules/tenant/ventas/routes.js";
@@ -81,6 +82,7 @@ export async function buildApp(
       await tenantApp.register(ventasRoutes, { prefix: "/ventas" });
       await tenantApp.register(cortesRoutes);
       await tenantApp.register(cfdisRoutes);
+      await tenantApp.register(ticketsRoutes);
     },
     { prefix: "/t" },
   );
