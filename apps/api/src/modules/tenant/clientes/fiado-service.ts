@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { type CrearCxcResult, CxcError, crearCuentaCobrar } from "../cxc/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -125,6 +126,83 @@ export async function aplicarAbonoFiado(
     });
 
     return { saldoRestante: saldoNuevo.toString(), estado };
+  });
+}
+
+export interface RegularizarFiadoInput {
+  clienteId: string;
+  sucursalId: string;
+  monto: string;
+  diasCreditoOtorgados: number;
+  tasaInteresMoraPct?: number | null;
+  motivo: string;
+  usuarioId: string;
+}
+
+export interface RegularizarFiadoResult {
+  saldoFiadoRestante: string;
+  cxc: CrearCxcResult;
+}
+
+export async function regularizarFiadoToCxc(
+  client: TenantClient,
+  input: RegularizarFiadoInput,
+): Promise<RegularizarFiadoResult> {
+  return client.$transaction(async (tx) => {
+    const cliente = await tx.cliente.findUnique({ where: { id: input.clienteId } });
+    if (!cliente) throw new FiadoError(404, "Cliente no encontrado");
+
+    const fiado = await ensureFiado(tx, input.clienteId);
+    const saldoActual = new Decimal(fiado.montoTotal.toString());
+    const monto = new Decimal(input.monto);
+    if (monto.gt(saldoActual)) {
+      throw new FiadoError(409, "Monto a regularizar excede el saldo de fiado", {
+        saldoActual: saldoActual.toString(),
+        intentado: monto.toString(),
+      });
+    }
+
+    const saldoNuevo = saldoActual.minus(monto);
+    const estado = saldoNuevo.eq(ZERO) ? "liquidado" : "activo";
+    await tx.fiado.update({
+      where: { id: fiado.id },
+      data: {
+        montoTotal: saldoNuevo.toString(),
+        fechaUltimoMovimiento: new Date(),
+        estado,
+      },
+    });
+
+    let cxc: CrearCxcResult;
+    try {
+      cxc = await crearCuentaCobrar(tx, {
+        sucursalId: input.sucursalId,
+        tipoOrigen: "regularizacion_fiado",
+        clienteId: input.clienteId,
+        montoOriginal: monto.toString(),
+        diasCreditoOtorgados: input.diasCreditoOtorgados,
+        ...(input.tasaInteresMoraPct !== undefined && input.tasaInteresMoraPct !== null
+          ? { tasaInteresMoraPct: input.tasaInteresMoraPct }
+          : {}),
+        notas: `Regularización de fiado cliente ${cliente.nombre}: ${input.motivo}`,
+      });
+    } catch (err) {
+      if (err instanceof CxcError) throw new FiadoError(err.statusCode, err.message, err.extra);
+      throw err;
+    }
+
+    await tx.fiadoMovimiento.create({
+      data: {
+        fiadoId: fiado.id,
+        tipo: "regularizacion_cxc",
+        monto: monto.toString(),
+        referenciaTipo: "cuenta_cobrar",
+        referenciaId: cxc.cuentaCobrarId,
+        usuarioId: input.usuarioId,
+      },
+    });
+
+    return { saldoFiadoRestante: saldoNuevo.toString(), cxc };
   });
 }
 

@@ -3,35 +3,58 @@ import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
+import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
+import camasRoutes from "./modules/tenant/camas/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
+import cfdisRecibidosRoutes from "./modules/tenant/cfdis-recibidos/routes.js";
 import cfdisRoutes from "./modules/tenant/cfdis/routes.js";
+import citasRoutes from "./modules/tenant/citas/routes.js";
 import clientesB2bRoutes from "./modules/tenant/clientes-b2b/routes.js";
 import clientesRoutes from "./modules/tenant/clientes/routes.js";
+import consultasRoutes from "./modules/tenant/consultas/routes.js";
 import cortesRoutes from "./modules/tenant/cortes/routes.js";
+import cotizacionesRoutes from "./modules/tenant/cotizaciones/routes.js";
+import cxcRoutes from "./modules/tenant/cxc/routes.js";
+import devolucionesRoutes from "./modules/tenant/devoluciones/routes.js";
+import diotRoutes from "./modules/tenant/diot/routes.js";
+import hospitalizacionesRoutes from "./modules/tenant/hospitalizaciones/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
 import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
 import lotesRoutes from "./modules/tenant/lotes/routes.js";
 import marcasRoutes from "./modules/tenant/marcas/routes.js";
+import mascotasRoutes from "./modules/tenant/mascotas/routes.js";
+import medicosRoutes from "./modules/tenant/medicos/routes.js";
+import ordenesCompraRoutes from "./modules/tenant/ordenes-compra/routes.js";
+import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
+import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
+import recargasRoutes from "./modules/tenant/recargas/routes.js";
+import recetasRoutes from "./modules/tenant/recetas/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
 import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
 import ticketsRoutes from "./modules/tenant/tickets/routes.js";
 import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
+import vacunacionesRoutes from "./modules/tenant/vacunaciones/routes.js";
 import variantesRoutes from "./modules/tenant/variantes/routes.js";
 import ventasRoutes from "./modules/tenant/ventas/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
+import aiPlugin, { type AiProviderFactory } from "./plugins/ai.js";
 import authPlugin from "./plugins/auth.js";
 import dbPlugin from "./plugins/db.js";
 import errorHandlerPlugin from "./plugins/error-handler.js";
 import fiscalPlugin, { type FiscalProviderFactory } from "./plugins/fiscal.js";
+import recargasPlugin, { type RecargaProviderFactory } from "./plugins/recargas.js";
 import securityPlugin from "./plugins/security.js";
 import tenantContextPlugin from "./plugins/tenant-context.js";
 
 export interface BuildAppOptions {
   fiscalProviderFactory?: FiscalProviderFactory;
+  recargaProviderFactory?: RecargaProviderFactory;
+  aiProviderFactory?: AiProviderFactory;
 }
 
 export async function buildApp(
@@ -61,11 +84,18 @@ export async function buildApp(
     fiscalPlugin,
     opts.fiscalProviderFactory ? { factory: opts.fiscalProviderFactory } : {},
   );
+  await app.register(
+    recargasPlugin,
+    opts.recargaProviderFactory ? { factory: opts.recargaProviderFactory } : {},
+  );
+  await app.register(aiPlugin, opts.aiProviderFactory ? { factory: opts.aiProviderFactory } : {});
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
   await app.register(tenantRoutes, { prefix: "/tenants" });
+  await app.register(partnersRoutes, { prefix: "/partners" });
+  await app.register(partnersPublicRoutes);
 
   await app.register(
     async (tenantApp) => {
@@ -89,6 +119,24 @@ export async function buildApp(
       await tenantApp.register(clientesRoutes, { prefix: "/clientes" });
       await tenantApp.register(clientesB2bRoutes, { prefix: "/clientes-b2b" });
       await tenantApp.register(apartadosRoutes, { prefix: "/apartados" });
+      await tenantApp.register(cxcRoutes, { prefix: "/cxc" });
+      await tenantApp.register(cotizacionesRoutes, { prefix: "/cotizaciones" });
+      await tenantApp.register(pedidosRoutes, { prefix: "/pedidos" });
+      await tenantApp.register(devolucionesRoutes);
+      await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
+      await tenantApp.register(pacientesRoutes, { prefix: "/pacientes" });
+      await tenantApp.register(medicosRoutes, { prefix: "/medicos" });
+      await tenantApp.register(agendaRoutes, { prefix: "/agenda" });
+      await tenantApp.register(citasRoutes, { prefix: "/citas" });
+      await tenantApp.register(consultasRoutes, { prefix: "/consultas" });
+      await tenantApp.register(recetasRoutes, { prefix: "/recetas" });
+      await tenantApp.register(mascotasRoutes, { prefix: "/mascotas" });
+      await tenantApp.register(vacunacionesRoutes, { prefix: "/vacunaciones" });
+      await tenantApp.register(camasRoutes, { prefix: "/camas" });
+      await tenantApp.register(hospitalizacionesRoutes, { prefix: "/hospitalizaciones" });
+      await tenantApp.register(cfdisRecibidosRoutes, { prefix: "/cfdis-recibidos" });
+      await tenantApp.register(ordenesCompraRoutes, { prefix: "/ordenes-compra" });
+      await tenantApp.register(diotRoutes, { prefix: "/diot" });
     },
     { prefix: "/t" },
   );

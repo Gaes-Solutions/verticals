@@ -2,15 +2,15 @@
 
 > **Cómo usar:** Claude actualiza este archivo al final de cada sesión productiva. Si una sesión se trunca o hay que retomar después, este archivo dice exactamente dónde quedamos.
 
-**Última actualización:** 2026-05-15
+**Última actualización:** 2026-05-26
 
 ## 🎯 Estado actual
 
-- **Fase**: Hito 1 — POS Core retail (semana 3-6). Hito 0 al 9/12; las 3 pendientes (0.10/0.11/0.12) son acciones externas de Gaby (Hetzner + dominio + GitHub remote) y se completan en paralelo, no bloquean código Hito 1.
-- **Fase**: 🎉 Hito 1 cerrado · Hito 0 deploy stack listo (esperando cuentas externas Hetzner+dominio cuando haya cliente piloto comprometido). Trabajo activo: **Hito 2 Comercial**
-- **Progreso Hito 2**: 2.1 B2C + 2.2 B2B + 2.3 Apartados cerrados. Siguiente: 2.4 CxC formal
-- **Tarea actual**: 2.4 Modelo 4.9 CxC formal — `cuentas_cobrar` auto-creadas al cobrar venta con método `credito`, abonos manuales, estado activa/vencida/liquidada, regularización fiado→CxC, método pago `credito_b2b` que valida línea_disponible
-- **Próximo paso concreto**: Schema `CuentaCobrar` + `CxcPago` + integración con `crearVenta` (método nuevo `credito` para B2B con línea autorizada) + endpoint POST regularizar fiado a CxC. Interés moratorio job nocturno → V2
+- **Fase**: 🎉 Hito 1+2 cerrados · 🎉 **HITO 3 COMPLETO** (5 verticales piloto operativos: Retail/Mayoreo + Abarrotes + Salud Humana + Salud Vet + Salud N3 + Despacho/Partners) · Hito 0 deploy stack listo
+- **Progreso Hito 3**: 3.1 ✅ + 3.2 ✅ + 3.3 ✅ + 3.4 ✅ + 3.5 ✅ + 3.6 ✅ — **CERRADO al 100%**
+- **Tarea actual**: Hito 3 cerrado. Decidir arranque Hito 4 (Digital y marketing: ecommerce + WhatsApp + Doctoralia + telemedicina Daily.co) o consolidación (commit/tag + deploy Hito 0.10-0.12)
+- **Próximo paso concreto**: pendiente visto bueno de Gaby para commit del checkpoint Hito 3 + tag `hito-3-verticales-v1`. Luego planificar Hito 4 con Análisis 10 roadmap.
+- **Cómo probar lo construido**: `pnpm test:dev` (suite completa) · demos CLI live: `pnpm --filter @gaespos/api demo:clinica-vet` (salud), `demo:abarrotes` (recargas+IEPS, requiere API con `RECARGA_PROVIDER=mock`), `demo:despacho` (CFDIs+DIOT+partners). Frontends son hitos posteriores (backend-first).
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso
@@ -172,6 +172,244 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 - Script root `test:dev` (con dotenv) para local; `test` puro para CI
 - TODO 0.7 cerrado: tests unitarios CLI gaes-migrate utils (validateSlug, tenantSchemaName, tenantDatabaseUrl)
 - **Próxima sesión empieza en**: 0.10 Hetzner CPX31 + Coolify install + dominio staging
+
+### 2026-05-26 — 🎉 Hito 3.6 Demo Hito 3 CERRADO · **HITO 3 COMPLETO**
+- **3 demos CLI nuevos** (`apps/api/scripts/`) que ejecutan los verticales contra la API LIVE con salida colorizada paso a paso + asserts (mismo patrón que `demo:retail`/`demo:comercial`):
+  - `demo-clinica-vet.ts` (`pnpm --filter @gaespos/api demo:clinica-vet`) — **15 pasos verde**: tenant salud plan growth → equipo (médico/enfermera/recepción) → verifica 55 CIE-10 (25 vet) + 12 vacunas → paciente humano EXP-* → consulta SOAP firmada inmutable → receta RX-* con QR validado → mascota MAS-* → vacuna antirrábica con lote + cartilla próxima dosis +365d → camas GEN/UCI → hospitalización HOSP-* (cama→ocupada + cargo estancia auto $2500) → medicación c/8h×5d expande 15 kardex → enfermera aplica dosis → signos vitales T°39.5+SatO2 89% dispara alertas `fiebreAlta, hipoxemia` → alta genera venta borrador $2,500
+  - `demo-abarrotes.ts` (`demo:abarrotes`, requiere API con `RECARGA_PROVIDER=mock`) — **8 pasos verde**: tenant + cajero → caja → config proveedor mock saldo $5000 → recarga Telcel $100 cobra $102 (margen $2) → Bait pospago $200 con referencia → saldo tras 2 ops $4,700 → producto cigarros IEPS 160% → venta desglosa IEPS $37.14 + IVA $9.66 aparte (regla SAT)
+  - `demo-despacho.ts` (`demo:despacho`, usa dotenv para masterPrisma) — **9 pasos verde**: tenant despacho + contador (30 categorías contables seed) → upload CFDI XML combustible $1,160 (parser extrae UUID+IVA) → **auto-categorización IA mock confianza 0.95 → G-606 Combustibles** → OC OC-* → recepción vincula CFDI → DIOT TXT `04|03|GAS800101AAA|...|320.00|...` formato SAT + partner contador → link → click cookie 90d → referral paying (plan starter $499) → comisión 25% = $124.75 → aprobar → payout SPEI $124.75
+- **Soporte `RECARGA_PROVIDER=mock` en `server.ts`** (mismo patrón que `FISCAL_PROVIDER=mock`): inyecta MockRecargaProvider para demos/dev sin cuenta RecargaKi real. AI usa MockAiProvider automático si no hay `ANTHROPIC_API_KEY`.
+- Bugs menores corregidos durante construcción: login tenant usa `tenantSlug` en body (no header); endpoint validar receta requiere token tenant (validación pública por subdominio es hito posterior); venta expone desglose IEPS en GET detalle (no en POST); DIOT export es texto plano (fetch directo, no JSON.parse); `export {}` en cada script para aislar scope global TS.
+- Typecheck verde · lint 0 errores (61 warnings pre-existentes) · **suite 481 tests sigue verde**.
+- **HITO 3 COMPLETO**: 3.1 Abarrotes ✅ + 3.2 Salud Humana ✅ + 3.3 Salud Vet ✅ + 3.4 Salud N3 ✅ + 3.5 Partners+Despacho ✅ + 3.6 Demos ✅. Los 5 clientes piloto tienen su vertical operativo en backend.
+- **Pendiente cierre**: commit checkpoint + tag `hito-3-verticales-v1` (espera visto bueno Gaby — git requiere aprobación).
+
+### 2026-05-26 — 🎉 Hito 3.5 Partners + Despacho contable CERRADO al 100%
+- **Schema master 4.2 Partners** (7 modelos + 7 enums, migration `add_partners` 276 SQL): `Partner` (codigo+RFC unique+nivel bronze/silver/gold/diamond+comisionPctOverride+estado), `PartnerBranding` (slug público white-label V1.5), `PartnerLink` (slug+UTM+contadores clicks/signups/paidConversions), `Referral` (cookie attribution 90d+estado click→signup→trial→paying→churned+tenantId@unique), `Commission` (periodoYYYYMM+montoBase+pct+monto+estado, unique referral+periodo), `Payout` (agrupa commissions+retenciones ISR/IVA+metodoPago SPEI/PayPal/Stripe), `PartnerInvitacion` (token+expira).
+- **Schema tenant 4.12 Despacho** (6 modelos + 7 enums, migration `add_despacho_contable` 232 SQL): `CfdiRecibido` (uuidSat unique+tipo I/E/N/P/T+emisor/receptor+impuestos desglosados+xmlRaw+origen upload/facturama/webhook), `CategoriaContable` (cuenta SAT+tipo+esDeducibleSat+ivaAcreditable+claveProdServSatRegex para heurística+jerarquía padre/hijo), `CfdiRecibidoCategorizacion` (categorizadoPor ia/regla/manual+iaModelo+iaConfianza+override), `OrdenCompra` (folio OC-*+state machine borrador→enviada→recibida_parcial/total+vincula CFDI), `OrdenCompraLinea`+`OrdenCompraFolioCounter`. **30 categorías contables MX seed** con regex SAT.
+- **9 permisos nuevos**: CFDIS_RECIBIDOS_LEER/UPLOAD/CATEGORIZAR/CANCELAR + COMPRAS_OC_LEER/CREAR/AUTORIZAR/RECIBIR + DIOT_GENERAR (contador_interno + dueño todos; almacen LEER/CREAR/RECIBIR OC).
+- **Paquete nuevo `@gaespos/ai`**: `AiProvider` interface + `AnthropicClient` (Claude Haiku 4.5 + **prompt caching** system ephemeral, crítico costos) + `MockAiProvider` determinista + `categorizeByHeuristic` (regex claveProdServ→categoría, fallback sin créditos/IA falla) + 6 unit tests. Plugin Fastify `aiProviderFactory` (cae a Mock sin ANTHROPIC_API_KEY).
+- **Módulos**: `cfdis-recibidos/` (parser CFDI 4.0 puro sin deps + upload idempotente por UUID + auto-categorize IA con fallback + override manual + cancelar); `ordenes-compra/` (CRUD + state machine + recepción parcial/total con validación cantidad excedida 409 + vincula CFDI); `diot/` (genera reporte agrupado por RFC de CFDIs categorizados deducibles + export TXT formato SAT separador `|`); `partners/` master (invitación→aceptar→link→click cookie 90d→onTenantCreated→transición estados→recalcular nivel umbral→comisión periodo idempotente→aprobar/rechazar→payout agrupa→marcar pagado cascada).
+- **82 tests integración nuevos** (18 partners + 25 despacho/CFDIs/OC/DIOT + 6 unit AI + otros): flujo partner completo invitación→payout, CFDI upload+IA+fallback+override+cancelar, OC recepción parcial→total+excede 409, DIOT TXT formato, RBAC. **Suite total 481 verde.**
+- **Diferidos V1.5+**: portal partner frontend (→Hito 6), conciliación bancaria, white-label dominio custom, ISR/IVA auto-retención payouts, BullMQ cron auto-recalcular comisiones (V1 manual via endpoint), Facturama webhook real-time (V1 cron + upload manual).
+
+### 2026-05-25 — 🎉 Hito 3.4 Salud N3 hospitalización CERRADO al 100%
+- **Schema tenant 4.16 hospitalización** (6 modelos nuevos + 6 enums + polimorfismo XOR paciente/mascota en `Hospitalizacion` y `SignoVitalHospital`):
+  - `Cama` — codigo único per-sucursal, tipo [general/cuidados_intensivos/aislamiento/cirugia_recuperacion/pediatria], estado [libre/ocupada/limpieza/mantenimiento/fuera_de_servicio], tarifaPorNoche default
+  - `Hospitalizacion` — folio HOSP-{CODIGO}-NNNNNN, paciente XOR mascota, medicoResponsable, diagnosticoIngreso (CIE-10) + diagnosticoIngresoTexto fallback, motivoIngreso, notasIngreso, fechaIngreso/Egreso, motivoEgreso, altaPorId, observacionesAlta, **ventaAlAltaId @unique** (1:1 con Venta de alta), estado [activa/alta/fallecimiento/fuga/traslado_externo], tarifaEstanciaDiaria snapshot
+  - `HospitalizacionFolioCounter` atómico per-sucursal
+  - `MedicacionProgramada` — hospitalización + medicamentoCatalogoId + snapshot nombre + dosis (capturada por médico, **NO IA decide**) + via + frecuenciaHoras + horaInicio + duracionDias + indicacionMedica + recetaId? opcional + estado [activa/suspendida/completada] + suspendidaAt + motivoSuspension + prescritaPorId
+  - `KardexAplicacion` append-only — medicacionProgramadaId + horaProgramada + horaAplicada? + enfermeraAplicadorId? + estado [pendiente/aplicada/omitida/reprogramada] + motivoOmision + notas + reaccionAdversaObservada + **alertaEnviadaAt** (anti-spam worker)
+  - `SignoVitalHospital` granular — hospitalización + paciente XOR mascota + capturadoPor + hora + T°/FC/FR/SatO2/PA sist+diast/glucosa/dolor escala/llenadoCapilar/mucosasColor + observaciones + **alertasMarcadas JSONB** (rule-based)
+  - `CargoHospital` append-only — hospitalizacionId + tipo [estancia_diaria/medicamento/procedimiento/laboratorio/imagenologia/consumible/honorarios_medicos/otro] + descripcion + cantidad + precioUnitario + monto + productoId? + **facturadoEnVentaId @nullable + facturadoAt** (marcado al darAlta)
+- **8 permisos nuevos**: CAMAS_LEER/GESTIONAR + HOSPITALIZACION_LEER/CREAR/ALTA + MEDICACION_PROGRAMAR + KARDEX_LEER/APLICAR/REPROGRAMAR. Distribuidos: dueño/gerente todos, médico (LEER/CREAR/PROGRAMAR/KARDEX_LEER+APLICAR+REPROGRAMAR), enfermera (LEER + KARDEX_LEER+APLICAR), recepción (LEER + ALTA + CAMAS_GESTIONAR para cambio limpieza→libre + KARDEX_LEER).
+- **Migration `add_salud_hospitalizacion`** (278 SQL) vía CLI shadow-database cross-tenant.
+- **Módulos `apps/api/.../`**:
+  - `camas/` CRUD + filtro sucursal/tipo/estado + endpoint `POST /:id/cambiar-estado` (bloquea cambio si tiene hospitalización activa, 409)
+  - `hospitalizaciones/` con service complejo:
+    - `ingresarPaciente` (atómico: valida cama libre+isActive+misma sucursal → cama→ocupada → crea Hospitalización folio HOSP-* → crea cargo estancia_diaria automático con tarifa de cama)
+    - `programarMedicacion` (médico captura dosis/frecuencia/duración + firma → service **expande N entradas KardexAplicacion** según frecuenciaHoras×duracionDias)
+    - `aplicarKardex` (enfermera; estado=aplicada graba horaAplicada+enfermeraAplicadorId; omitida requiere motivoOmision 400; reprogramada requiere nuevaHoraProgramada 400; re-aplicar 409 append-only)
+    - `capturarSignoVital` con `evaluarAlertasSignoVital` rule-based: fiebreAlta T≥39, hipotermia T≤35, taquicardia FC>180, bradicardia FC<40, hipoxemia SatO2<90, hipertensión PAsist>180, hipoglucemia<60, hiperglucemia>250. **NO IA decisional**.
+    - `agregarCargo` (Decimal cantidad×precioUnitario → monto preciso 4 decimales)
+    - `darAlta` (atómico: suspende todas medicaciones activas con motivo "Alta: ..." → cama→limpieza → si `generarVenta!==false` && cargos no facturados crea **Venta borrador** folio normal con total=suma cargos + `ventaAlAltaId` poblado + CargosHospital marcados `facturadoEnVentaId+facturadoAt`)
+  - `suspenderMedicacion` independiente con motivoSuspension obligatorio
+- **Worker `apps/api/src/workers/medicacion-alarmas.ts`**:
+  - `AlarmChannel` interface (testeable sin BullMQ): método `enviar(payload)` con kardexId+medicacionProgramadaId+hospitalizacionId+medicamentoNombre+dosis+via+horaProgramada+pacienteNombre|mascotaNombre+sucursalId
+  - `InMemoryAlarmChannel` para tests (acumula en array)
+  - `escanearKardexParaAlarmar(client, channel, opts)`: query kardex estado=pendiente + alertaEnviadaAt IS NULL + horaProgramada en ventana próxima [ahora, ahora+15min default]; valida med+hosp activos; envía via channel; marca `alertaEnviadaAt=ahora` (anti-spam: 2do escaneo no re-envía)
+  - V1: in-process worker. V1.5: agregar BullMQ + Redis cron job + push notifications a app móvil enfermería
+- **Endpoints `/t/camas/*` y `/t/hospitalizaciones/*`**: 4 camas + 12 hospitalización (POST `/`, POST `/:id/medicaciones`, POST `/medicaciones/:id/suspender`, GET `/kardex`, POST `/kardex/:id/aplicar`, POST `/:id/signos-vitales`, POST `/:id/cargos`, POST `/:id/alta`, GET listado paginado, GET detalle con include cama+paciente+mascota+medico+meds+kardex+signos+cargos+ventaAlAlta)
+- **30 tests integración** (`tenant-salud-hospitalizacion.test.ts`):
+  - CRUD camas (general+UCI con tarifa, filtro estado=libre, RBAC enfermera sin GESTIONAR 403)
+  - Ingreso paciente humano + cama→ocupada + cargo estancia_diaria auto (monto=tarifaPorNoche)
+  - Cama ya ocupada 409 con extra={estadoActual: "ocupada"}
+  - **XOR completo**: paciente+mascota juntos 400, ninguno 400
+  - Ingreso mascota vet en UCI (verifica polimorfismo)
+  - Cambio estado cama ocupada bloqueado 409 con mensaje "dar alta antes"
+  - Listado filtra mascotaId; detalle muestra paciente humano + mascota null
+  - **Medicación**: RBAC enfermera sin MEDICACION_PROGRAMAR 403; médico programa Amoxicilina 500mg c/8h×5d → **15 kardex generados con horas correlativas c/8h verificadas**
+  - Enfermera aplica primer kardex (estado→aplicada + enfermeraAplicador poblado)
+  - Re-aplicar kardex aplicada 409 (append-only)
+  - Omitir sin motivoOmision 400; con motivoOmision 204
+  - Suspender medicación: query directo a Prisma verifica estado=suspendida + motivoSuspension
+  - **Signos vitales con alertas**: normales sin alertas, fiebreAlta T=39.5, hipoxemia+taquicardia múltiples
+  - **Worker alarmas**: escaneo con ventana 10min detecta y envía; segundo escaneo enviadas=0 (anti-spam via alertaEnviadaAt)
+  - Cargos manuales: procedimiento 1×450, medicamento 3×50=150 (Decimal preciso)
+  - **Dar alta**: recepción → ventaBorradorId no null, montoTotal=suma cargos, cama→limpieza, hospitalizacion.estado=alta + fechaEgreso + ventaAlAlta vinculada + todos los cargos con facturadoEnVentaId
+  - Alta duplicada 409
+  - Recepción cambia cama limpieza→libre (CAMAS_GESTIONAR ya tiene)
+- **Decisión Venta sin VentaLinea**: para evitar migration adicional a VentaLinea (que requiere productoId+varianteId NOT NULL), la Venta de alta se crea sin líneas con total=suma cargos; el frontend consume desglose via relación `cargosHospitalFacturados` que ya existe. Limpio + sin migration extra.
+- Suite total: **358 tests verde** en 116s. Lint sin errores nuevos.
+- **Diferidos a V1.5+**: Laboratorio (EstudioLaboratorio + integración IDEXX vet / referencia humano), Imagenología (DICOM viewer + JPG; IA hallazgos NO por regla línea roja), Expo-push notifications app móvil enfermería (→ Hito 5 multi-plataforma), Hoja de evolución diaria firmada NOM-024 N3, Triaje IA (línea roja — NO).
+
+### 2026-05-22 — 🎉 Hito 3.3 Salud Vet CERRADO al 100%
+- **Schema tenant 4.15 vet** (3 modelos nuevos + 3 enums + polimorfismo Consulta/Receta/Cita/SignoVital):
+  - `Mascota` (numeroExpediente MAS-NNNNNN + especie [perro/gato/ave/conejo/huron/reptil/pez/roedor/otro] + raza + sexo + esEsterilizado + fechaNacimiento [aproximada flag] + color + **microchip** + pesoActualKg + tutorClienteId opcional FK Cliente + medicoAsignadoId + alergias/antecedentes/medicamentos crónicos JSONB + fechaDefuncion + causaDefuncion)
+  - `VacunaCatalogo` (nombre comercial + principio activo + tipo + aplicaHumano/Vet + especiesAplicables JSONB + esquemaDefault Humano/Vet JSONB + viaAplicacion + intervaloRefuerzosDias + isObligatoriaCartillaNacional flag SSa MX)
+  - `Vacunacion` (paciente XOR mascota + vacunaCatalogoId + medicoAplicador + **numeroLote + caducidadLote obligatorios para rastreabilidad ante retiros del mercado** + marcaSnapshot + viaAdministracion + dosisAplicada + reaccionAdversaObservada + proximaAplicacionFecha calculada determinista)
+- **Polimorfismo XOR validado en aplicación**: Cita, Consulta, Receta, ConsultaSignoVital ahora aceptan `pacienteId?` XOR `mascotaId?` (uno y solo uno). ALTER TABLE hace pacienteId nullable y agrega mascotaId + relación inversa.
+- **2 enums nuevos**: MascotaEspecie (9 valores), MascotaSexo (macho|hembra|desconocido), CartillaTipo (humano_basico_ssa|complementario|vet_perro|vet_gato|vet_otro — preparado para Cartilla model en 3.4).
+- **7 permisos nuevos**: MASCOTAS_LEER/CREAR/ACTUALIZAR/ARCHIVAR, VACUNAS_LEER/APLICAR/GESTIONAR_CARTILLA. Distribuidos: dueño/gerente todos, médico todos excepto archivar/gestionar, enfermera lectura+aplicar, recepción CRUD básico + aplicar vacuna.
+- **Migration `add_salud_vet`** (189 SQL) vía CLI shadow-database cross-tenant.
+- **Seed catálogos vet** integrado a `seedClinicalCatalogs`:
+  - **25 CIE-10 vet** (V-001 a V-025: parvovirosis canina, moquillo, calicivirus felino, rinotraqueítis, dermatitis atópica, sarna sarcóptica, otitis, IRC, diabetes felina, hipertiroidismo felino, atropello, cuerpo extraño GI, etc.)
+  - **12 medicamentos vet PLM** (Drontal Plus, Bravecto, NexGard, Synulox, Marbofloxacina, Meloxicam Vet, Rimadyl, Cerenia, Frontline Plus, Caninsulin, Apoquel, Acepromacina) con `dosisRecomendadaVet` JSONB por especie con mg/kg + frecuencia de referencia. **NO IA calcula** — médico lee y decide.
+  - **12 vacunas catálogo** (humanas SSa: BCG, HepB, Pentavalente, SRP, Influenza, Td, VPH + vet: Vanguard Plus 5/CV-L, Antirrábica canina, Bordetella, Triple felina FVRCP, Leucemia felina FeLV) con esquemasDefaultHumano/Vet JSONB y intervaloRefuerzosDias.
+- **Módulos `apps/api/.../`**:
+  - `mascotas/` CRUD con búsqueda multi-criterio (nombre/expediente/microchip/raza), filtro por especie/tutor/médico, archivar, generador MAS-NNNNNN. Marcar defunción via PATCH.
+  - `vacunaciones/` con `procesarAplicacion` validando XOR paciente/mascota + vacunaCatalogoId existente, próxima fecha calculada automáticamente de `intervaloRefuerzosDias`. GET `/cartilla?pacienteId=` o `?mascotaId=` retorna sujeto + vacunaciones aplicadas con estado [vigente|proxima|vencida] (próxima ≤ 30 días) + lista proximasDosis ordenada con diasFaltantes.
+  - `consultas/diagnosticos/catalogo` ahora soporta query `?vertical=humano|vet|todos` (default todos).
+  - Citas/Consultas/Recetas routes con validación XOR explícita (400 si ambos o ninguno).
+- **19 tests integración** (`tenant-salud-vet.test.ts`):
+  - Catálogos vet sembrados (CIE V-007 parvovirosis, Bravecto/Drontal G vet, Antirrábica canina + Triple felina con `aplicaVet=true`)
+  - CRUD mascota con búsqueda por microchip + filtro por especie + PATCH peso
+  - Flujo full: cita mascota (sin pacienteId) → checkin → consulta SOAP vet con dx parvovirosis firmada → receta vet con Meloxicam (QR muestra "Firulais (perro)" sin paciente) → vacuna Antirrábica con lote/caducidad + próxima dosis +365 días calculada determinista
+  - **Cobertura XOR**: cita 400 si paciente+mascota juntos, 400 si ninguno; consulta 400 mismo; vacunación 400 mismo
+  - Cartilla muestra vacunaciones aplicadas con estado + próximas dosis ordenadas
+  - Permisos: recepción aplica vacuna OK (tiene VACUNAS_APLICAR) pero NO puede DELETE registro cartilla (sin VACUNAS_GESTIONAR_CARTILLA, 403)
+- Suite total: **328 tests verde** en 102s. Lint sin errores.
+- **Diferidos a 3.4 / V1.5+**: hospitalización N3 (Cama + AsignacionHospital + KardexAplicacion + MedicacionProgramada + alarmas push BullMQ + SignosHospital + CargosHospital), laboratorio (EstudioLaboratorio + integración IDEXX), imagenología (DICOM + JPG viewer + IA hallazgos), pediatría vet (curvas crecimiento por raza), CartillaPaciente model cached (V1 computed en query), resumen IA visitas al abrir expediente (Hito 4 IA features), Doctoralia perfil vet público (Hito 4).
+
+### 2026-05-22 — 🎉 Hito 3.2 Salud Humana base CERRADO al 100%
+- **Schema tenant 4.15 V1** (10 modelos + 7 enums nuevos):
+  - `Paciente` (numeroExpediente EXP-NNNNNN único + datos demográficos completos + alergias/antecedentes/medicamentos crónicos JSONB + tutorClienteId FK opcional a Cliente B2C + medicoAsignadoId + clasificacionRiesgo capturada por médico)
+  - `Medico` (extensión 1:1 de Usuario con cédula profesional + especialidades + bio + firma electrónica + acepta telemedicina + isPerfilPublicoDoctoralia)
+  - `Agenda` (medico + sucursal + diaSemana recurrente O fechaEspecifica + horarios + duracion slot + tiposSlots)
+  - `AgendaBloqueo` (vacaciones/congreso/personal/incapacidad/cerrado_sucursal con motivoPublico)
+  - `MotivoCitaCatalogo` (catalogo nombre+vertical+duracionDefault)
+  - `Cita` (folio CT-{CODIGO}-NNNNNN + estado [programada→confirmada→checkin→en_consulta→completada/cancelada/no_asistio] + signos vitales recepción + tiempoEspera computado)
+  - `Consulta` SOAP (citaId @unique opcional + paciente + medico + tipo + sintomas/exploración/diagnóstico CIE-10/diferenciales/pronóstico/plan/resumenParaTutor + estado [borrador|firmada|enmendada|cancelada] inmutable post-firma NOM-024 + consultaOriginalId para enmiendas + firmaElectronicaAplicadaUrl snapshot)
+  - `ConsultaSignoVital` historial granular (peso/T°/FC/FR/presión/SatO2/glucosa)
+  - `DiagnosticoCatalogo` CIE-10/CIE-11 humano+vet
+  - `MedicamentoCatalogo` (nombre comercial + principio activo + concentración + clasificacionCofepris [G_I-VI|vet|OTC] + dosisRecomendada{Pediatrica,Adulto,Vet} JSONB de REFERENCIA + interaccionesConocidas + alergiasRelacionadas — **NO motor IA**)
+  - `Receta` (folio RX-{CODIGO}-NNNNNN + qrValidacionToken único para validación pública + esGrupoControlado + numeroRecetarioOficial COFEPRIS + fechaExpiracion + estado [emitida|surtida|cancelada|expirada])
+  - `RecetaItem` (snapshot del medicamento + dosis manual capturada por médico + alertasAplicadas array JSONB)
+  - `CitaFolioCounter` + `RecetaFolioCounter` atómicos
+- **3 roles preset nuevos**: medico (CRUD consultas + recetas + agenda), enfermera (checkin + lectura), recepcion (agenda + checkin + cobros). Gerente extendido con todos los permisos clínicos.
+- **18 permisos nuevos**: PACIENTES_LEER/CREAR/ACTUALIZAR/ARCHIVAR, MEDICOS_LEER/EDITAR_PERFIL, AGENDA_LEER/GESTIONAR/BLOQUEAR, CITAS_LEER/CREAR/GESTIONAR/CHECKIN/CANCELAR, CONSULTAS_LEER/CREAR/FIRMAR/ENMENDAR, RECETAS_LEER/EMITIR/CANCELAR.
+- **Migration `add_salud_humana`** (549 SQL, la mayor del proyecto) vía CLI shadow-database aplicada cross-tenant.
+- **Seed catálogos clínicos** nuevo módulo `seed-clinical-catalogs.ts` integrado en `seedTenantDefaults`:
+  - **30 CIE-10** top medicina humana general (J00/J06.9/J20.9 respiratorias, A09 gastro, N39.0 UI, E11.9 DM2, I10 HTA, J45.9 asma, K21.9 ERGE, R51 cefalea, F32.9 depresión, F41.1 ansiedad, etc.)
+  - **25 medicamentos PLM** top (Tempra/Advil/Naproxeno OTC/G_IV; Amoxil/Augmentin/Bactrim/Ciprolet antibióticos; Pantoprazol/Omeprazol IBP; Losartán/Norvasc/Atenolol antihipertensivos; Metformina; Salbutamol inhalador; Atorvastatina; Plasil antiemético; Ambroxol; Hidrocortisona tópica; Postday G_II controlado). Cada medicamento con `dosisRecomendadaPediatrica`+`dosisRecomendadaAdulto` JSONB para LECTURA del médico (NO IA calcula).
+  - **8 motivos de cita** seed (Consulta general/seguimiento/primera vez/chequeo anual/urgencia/vacunación/control postoperatorio/telemedicina) — vertical "humana" o "ambos".
+- **Módulos `apps/api/src/modules/tenant/`**:
+  - `pacientes/` CRUD con búsqueda multi-criterio (nombre/apellidos/expediente/CURP/teléfono/email), archivar, generador automático `EXP-NNNNNN`
+  - `medicos/` PUT upsert perfil clínico (cédula, especialidades, bio, firma, telemedicina, perfil público Doctoralia)
+  - `agenda/` CRUD horarios recurrentes (diaSemana) y específicos (fecha), bloqueos por tipo con validación fechaFin>fechaInicio
+  - `citas/` con state machine `programada→confirmada→checkin→en_consulta→completada/cancelada/no_asistio` (transiciones validadas con error 409 explicando válidas), check-in con signos vitales recepción y tiempo de espera computado automáticamente
+  - `consultas/` SOAP con `crear` (borrador) → `editar` (solo borrador) → `firmar` (estado=firmada **inmutable NOM-024**) → `enmendar` (clona a nueva consulta vinculada `consultaOriginalId` + marca original `enmendada`). PATCH a firmada → 409. Catálogo CIE-10 público.
+  - `recetas/` con `crear` que detecta automáticamente G_II/G_III/requiereRecetarioOficial del catálogo y exige `numeroRecetarioOficial` COFEPRIS (409 sin él). QR token único 48 hex para validación pública. Endpoint `GET /validar/:token` retorna datos completos + flag `vigente` cuando `estado=emitida AND fechaExpiracion>now`.
+- **27 tests integración** (`tenant-salud-humana.test.ts`) cubriendo:
+  - Catálogos sembrados (CIE-10 ≥25 dx, PLM ≥20 meds, motivos de cita)
+  - CRUD pacientes con búsqueda por nombre/expediente/CURP
+  - Flujo full agenda recurrente → cita programada → checkin con signos vitales → iniciar consulta → SOAP borrador → editar → firmar → PATCH bloqueado 409 → emitir receta con QR → validación pública QR
+  - Receta G_II sin numeroRecetarioOficial → 409, con él → OK
+  - Cancelar receta + re-cancelar → 409
+  - Enmienda consulta firmada crea nueva borrador con `consultaOriginalId` enlazado y marca original `enmendada`
+  - Permisos RBAC diferenciados: enfermera sin CONSULTAS_FIRMAR/RECETAS_EMITIR → 403, recepción sin CONSULTAS_CREAR → 403
+  - Bloqueo agenda + validación fechas invertidas → 400
+- Suite total: **309 tests verde** en 92s. Lint sin errores.
+- **Diferidos a V1.5+**: PHR cross-tenant master DB con FHIR + sync, vacunas (Vacuna/Vacunacion/CartillaPaciente) + cartilla SS MX obligatoria, pediatría (curvas crecimiento OMS + hitos desarrollo), motor reglas interacciones que cruza automáticamente alergias del paciente vs medicamento, telemedicina Daily.co (→ Hito 4), vector embeddings búsqueda semántica consultas/medicamentos, perfil público Doctoralia (→ Hito 4), validación cédula profesional vs SSa API real.
+
+### 2026-05-21 — 🎉 Hito 3.1 Abarrotes CERRADO al 100%
+- **Schema tenant 4.14** (4 modelos + 4 enums nuevos):
+  - `RecargaProveedorConfig` per-tenant: proveedor enum [recargaki|mtscellular|pymeya|mock] unique + api_url/api_key/webhook_secret encrypted + isPrimario/isActive + **saldoPrefondeado** decimal + **saldoAlertaMinimo** + comisionProveedorPct + lastRechargeAt + totalConsumidoLifetime
+  - `Recarga` folio único per-sucursal `RC-{CODIGO}-NNNNNN`, tipo [tiempo_aire|pago_servicio], 10 compañías enum (telcel/movistar/att/bait/unefon/virgin_mobile/maz/spentel/freedom_pop/bait_pospago V1), numeroTelefonico 10 dígitos + referenciaCapturada opcional (servicios), montoSolicitado vs montoCobradoCliente con comisionTenant separado, costoRealTenant, folioProveedor (referencia agregador para reclamos), respuestaProveedor JSONB raw, estado [pendiente|exitosa|fallida|reembolsada|disputada], motivoFalla, intentosTotales, reembolsadaAt/PorId/Motivo, disputadaAt/Motivo, vinculación con `cajaApertura` y `venta` opcionales
+  - `RecargaReintento` append-only — intento_numero + respuesta JSONB + errorMensaje
+  - `RecargaFolioCounter` atómico per-sucursal
+- **4 permisos nuevos**: RECARGAS_LEER/VENDER/REEMBOLSAR/CONFIGURAR. Presets: gerente todos, cajero LEER+VENDER, vendedor LEER+VENDER.
+- **Migration `add_recargas`** (145 SQL) vía CLI shadow-database, aplicada cross-tenant.
+- **Paquete nuevo `@gaespos/recargas`** (5 archivos + tests):
+  - `types.ts` con `RechargeProvider` interface (`recargar` + `consultarEstado`), `RecargaInput`/`RecargaResult` + `RecargaError`
+  - `catalogo.ts` hardcoded V1: 9 compañías tiempo_aire + Bait pospago con montos válidos + 3 proveedores agregadores. `validarMonto` + `validarNumeroMx` helpers
+  - `mock.ts` `MockRecargaProvider` determinista con idempotency memo + opciones para tests (`failNextRecharge`, `rejectNextRecharge`, `numerosInvalidos`)
+  - `recargaki.ts` `RecargaKiClient` stub V1 (lanza `RECARGAKI_NOT_CONFIGURED` si api_key vacío/stub-*; URLs reales se conectan cuando Gaby contrate)
+  - **17 unit tests** del catálogo + mock + validaciones (idempotencia, monto telcel válido vs inválido, número MX 10 dígitos)
+- **Plugin Fastify `apps/api/src/plugins/recargas.ts`** mismo patrón que fiscal: `recargaProviderFactory` decorator con defaultFactory RecargaKi + override para tests con Mock
+- **Módulo `apps/api/src/modules/tenant/recargas/`**:
+  - `service.ts` con `procesarRecarga` (valida número MX + monto compañía + referencia si servicio + apertura caja, saldo prefondeado suficiente → 409 si no, llama provider con idempotency key derivado de recarga.id, **retry 1x automático** si falla primer intento, persiste RecargaReintento append-only por cada intento, actualiza saldo del proveedor solo si exitosa), `reembolsarRecarga` (solo fallidas/disputadas, devuelve saldo prefondeado), `marcarDisputada` (flag para investigación con agregador), `consultarSaldos` con `bajo` flag cuando saldoActual ≤ alertaMinimo
+  - `routes.ts` 8 endpoints `/t/recargas/*`: catalogo público + saldos por proveedor + config proveedor (PUT upsert per-codigo) + list paginado + detalle + procesar + reembolsar + marcar-disputada
+- **23 tests integración** (`tenant-recargas.test.ts`) cubriendo catálogo público no expone `mock` provider, sin proveedor configurado→409, config proveedor + roles, recarga exitosa descuenta saldo + comisión calculada, validaciones (número/monto/referencia/montoCobrado<solicitado), retry 1x cuando primera intento rechazada→exitosa→intentosTotales=2 + 2 RecargaReintento records, fallida en ambos intentos NO descuenta saldo, saldo insuficiente→409, reembolso reverses saldo + marca estado=reembolsada + 409 si re-reembolsar + 409 si reembolsar exitosa + 403 si cajero, disputar permite reembolso después, filtros lista. Mock provider con `setOptions()` helper público.
+- **IEPS completado** (3.1.d): motor `calcularImpuestosLinea` ahora descompone IEPS+IVA del precio final según tipo:
+  - **Porcentaje** (cigarro 160%, cerveza 53%): `base = subtotal / ((1+iepsPct)×(1+ivaPct))`, IEPS=base×iepsPct, IVA=(base+IEPS)×ivaPct ← SAT MX aplica IVA sobre IEPS
+  - **Cuota_por_unidad** (refresco azucarado $1.5375/L): IEPS=cantidad×cuota, IVA aplica solo sobre baseSinIeps (cuota NO entra a base IVA por norma SAT)
+  - `tasaIeps` JSONB formato `{tipo, valor}` validado con `parseIepsSpec`
+  - CFDI 4.0 ahora pasa `aplicaIeps + tasaIeps` por concepto (calculado proporcionalmente del IEPS por línea)
+- **4 tests IEPS** verifican aritmética exacta cigarro 2 cajetillas $150.80 → IEPS $80 + IVA $20.80, cerveza $35.46 → IEPS $10.59 + IVA $4.89, refresco 3×$17 → IEPS $4.6125 + IVA $6.398, CFDI emitido con cigarros lleva monto IEPS correcto. Suite total: **282 tests verde** en 73s.
+- **Diferidos V1.5/V2**: cron monitor saldo prefondeado bajo via BullMQ + WhatsApp/email al dueño, RecargaKi API real cuando Gaby contrate cuenta, V2 expansión servicios (CFE/SIAPA/Telmex/Megacable) reusará `Recarga` con `tipo=pago_servicio` y nuevas compañías al enum, webhook secret para confirmación async de algunos agregadores.
+
+### 2026-05-20 — 🎉 Hito 2.7 Demo comercial end-to-end CERRADO · Hito 2 al 100%
+- **Script nuevo `apps/api/scripts/demo-comercial.ts`** (~620 líneas) registrado como `pnpm --filter @gaespos/api demo:comercial`. Acompaña al `demo:retail` de Hito 1; cada uno ataca un flujo distinto sin duplicar setup.
+- **20 pasos verificados contra API LIVE en mock fiscal** (corrida real exitosa):
+  1-7. Setup tenant + admin → owner → cajero/vendedor/almacen + CFDI sandbox + 3 productos obra (cemento, tubo PVC, grava) con stock 200 c/u + apertura caja $1,000
+  8-9. **Apartado**: cliente B2C aparta 5 cementos con abono inicial $500 → 2 abonos parciales → liquida → genera venta con folio + stockReservado libera + stockActual −5
+  10-11. **Fiado**: venta `credito_fiado` 3 tubos PVC $1,392 sube saldo informal; **regularización fiado→CxC**: $1,000 se convierte a CxC formal con interés 2%, fiado queda en $392
+  12-13. **Cotización B2B**: vendedor cotiza 30 cementos $6,960 → envía email a `compras@construbajio.com` con PDF placeholder → owner acepta (firma electrónica simulada V1)
+  14-16. **Pedido + aprobación umbralizada**: convertir-pedido genera PD-* en estadoAprobacion=`pendiente` (>$5K umbral del cliente), almacen intenta preparar→409 con mensaje claro, owner aprueba
+  17. **Tracking paquetería**: almacen prepara→marca enviado con Estafeta+guía+URL→marca entregado
+  18. **Convertir-venta credito_b2b**: cajero convierte pedido entregado → venta canal=mayoreo, stock−30, **CxC automática** CXC-* enlazada, línea B2B disponible cae de $50K a $43,040
+  19. **Devolución con nota_credito_cxc**: 5 cementos defectuosos devueltos con `reponeStock=false` (merma net-zero), reembolso $1,160 **abona automáticamente a la CxC** del pedido
+  20. **Pago final CxC**: cajero registra abono efectivo $5,800 → CxC pasa a estado=liquidada con saldo=0
+- **Fix infra**: helper `call()` del demo solo agrega `Content-Type: application/json` cuando hay body (Fastify rechazaba POST sin body cuando declaras content-type JSON).
+- **Hito 2 Comercial CERRADO al 100%**. 7/7 sub-tareas verde. Suite total: **255 tests** + 2 demos CLI end-to-end (retail+comercial) funcionando contra API real.
+- **Próximos pasos**: tag `hito-2-comercial-v1`. Arrancar Hito 3 Verticales (decisión pendiente: arrancar por Abarrotes o Salud Vet primero).
+
+### 2026-05-20 — Hito 2.6 Cotizaciones → Pedidos B2B cerrado
+- **Schema tenant 4.10** (6 modelos + 4 enums nuevos):
+  - `Cotizacion` (folio único per-sucursal `QT-{CODIGO}-NNNNNN` + clienteB2bId + vendedorId + estado [borrador|enviada|aceptada|rechazada|vencida|convertida] + totales completos + `fechaVencimiento` + `condicionesPago` snapshot + `pdfFirmadoUrl` + `enviadoCanal` enum [email|whatsapp|descarga|otro] + `enviadoDestino` + `aceptadoAt`/`rechazadoAt`/`rechazoMotivo` + `pedidoId @unique` 1:1 cuando convertida)
+  - `CotizacionLinea` snapshot inmutable misma estructura que VentaLinea (sin lote/serie)
+  - `CotizacionFolioCounter` atómico per-sucursal
+  - `Pedido` (folio único `PD-{CODIGO}-NNNNNN` + clienteB2bId + vendedorId + `cotizacionId @unique` opcional + estado [creado|preparando|enviado|entregado|cancelado] + `estadoAprobacion` [no_requiere|pendiente|aprobada|rechazada] + `aprobadoPorId`/`aprobadoAt`/`rechazadoMotivo` + totales + `ordenCompraCliente` + `direccionEnvioId` FK a ClienteB2bDireccion + `paqueteria`/`trackingExterno`/`trackingUrl` + `fechaEntregaEstimada` + `ventaId @unique` cuando convertido)
+  - `PedidoLinea` + `PedidoFolioCounter` atómico
+- **5 permisos nuevos**: COTIZACIONES_LEER/ENVIAR/GESTIONAR_ESTADO + PEDIDOS_LEER/CREAR/APROBAR/GESTIONAR/CONVERTIR_VENTA. Presets: gerente todos, vendedor lee+crea+gestiona (sin aprobar), cajero lee+convertir_venta (la cobranza al entregar), almacen lee+gestiona (preparar/enviar/entregar).
+- **Migration `add_cotizaciones_pedidos`** (240 SQL) vía CLI shadow-database, aplicada cross-tenant.
+- **Módulo `apps/api/src/modules/tenant/cotizaciones/`**:
+  - `service.ts` con `crearCotizacion` (motor cascada precios → snapshots por línea + folio + estado borrador, fechaVencimiento derivada de diasVigencia), `enviarCotizacion` (estado=enviada + pdfPlaceholderUrl V1; PDF real con Puppeteer + firma digital → V1.5), `aceptarCotizacion` (valida no vencida), `rechazarCotizacion`. Estado transitions enforced con 409 cuando no aplica
+  - `routes.ts` 6 endpoints `/t/cotizaciones/*`
+- **Módulo `apps/api/src/modules/tenant/pedidos/`**:
+  - `service.ts` con `crearPedido` (directo sin cotización + motor cascada), `convertirCotizacionAPedido` (atomic tx: copia líneas+totales del snapshot, marca cotizacion.estado=convertida+pedidoId, hereda `estadoAprobacion` según `cliente_b2b.requiereAprobacionInterna` + `montoAprobacionRequired` comparado con total), `aprobarPedido`/`rechazarPedido` (gate gerente), state machine `marcarPreparando` (creado→preparando, valida aprobación OK) → `marcarEnviado` con paqueteria+trackingExterno+trackingUrl → `marcarEntregado` (enviado→entregado), `cancelarPedido` (rechazo si entregado o ya ventaId), `convertirAVenta` (entregado → crea Venta canal=mayoreo + descuenta stock con `ajuste_negativo` + valida `credito_b2b` contra línea + **crea CxC automática** desde la venta vía `crearCxcDesdeVentaB2b`, marca pedido.ventaId)
+  - `routes.ts` 10 endpoints `/t/pedidos/*` con permisos diferenciados
+- **17 tests integración** (`tenant-cotizaciones-pedidos.test.ts`) cubriendo: vendedor crea cotización borrador, **flujo full** cot→enviar→aceptar→convertir→preparar→enviar→entregar→convertir-venta con stock decrementado y `pedido.ventaId` enlazado al final, cliente con `requiereAprobacionInterna` bloquea preparar→409 hasta aprobar, monto bajo umbral → no_requiere → preparar OK, aprobar→preparar happy path, rechazar pedido, vendedor sin PEDIDOS_APROBAR→403, aceptar borrador no enviado→409, convertir cotización rechazada→409, entregar sin enviado→409, convertir pedido no entregado→409, doble convert cotización→409 ya pedidoId, cancelar pedido entregado→409, filtros lista (clienteB2bId, estadoAprobacion=pendiente, estado=entregado), **convertir-venta con `credito_b2b` crea CxC automática y consume línea**. Suite total: **255 tests verde** en 64s.
+- **Diferidos a V1.5/V2**: generación PDF real con Puppeteer + firma electrónica cliente, recordatorios automáticos vencimiento via BullMQ, integración paqueterías (Estafeta/DHL/FedEx) consulta tracking, cancelación parcial líneas pedido, validación stock disponible al crear pedido (V1 sólo se valida al convertir-venta), pedido directo sin cotización con motor de aprobación adicional.
+
+### 2026-05-20 — Hito 2.5 Devoluciones con CFDI Egreso cerrado
+- **Schema tenant 4.9.d** (3 modelos + 4 enums nuevos):
+  - `Devolucion` (folio único per-sucursal `DV-{CODIGO}-NNNNNN` + `tipo` [total|parcial] + `motivo` [defectuoso|cambio_opinion|talla_color|error_cobro|garantia|otro] + `metodoReembolso` [efectivo|tarjeta_misma|saldo_a_favor|vale|transferencia|nota_credito_cxc|nota_credito_fiado] + totales devueltos + `reponeStockDefault` + `aprobadoPorId` para flujo V1.5 + estado [procesada|cancelada])
+  - `DevolucionLinea` (snapshot inmutable, `ventaLineaId` link, `cantidadDevuelta`, `reponeStock` per-linea con override, `motivoLinea` opcional)
+  - `DevolucionFolioCounter` atómico per-sucursal (mismo patrón que ventas/apartados/cxc)
+- **Refactor Cfdi**: removido `@unique` de `Cfdi.ventaId` (una venta puede tener 1 Ingreso + N Egresos), agregados campos `devolucionId @unique` + `tipoRelacionSat` + `cfdiRelacionadoUuids[]` para soportar CFDI Egreso con relación SAT tipo 03 (Nota de crédito).
+- **Extensión `@gaespos/fiscal`**: tipo `CfdiEmitirInput` ahora acepta `cfdisRelacionados?: { tipoRelacion; uuids[] }` para que el mock y Facturama V1.5 generen el nodo `CfdiRelacionados` correcto.
+- **Inventario service**: nuevo tipo `devolucion_cliente` en `MovimientoTipoFront` con signo +1 (reusa el mismo enum del schema).
+- **Permisos cajero/vendedor extendidos**: añadido `VENTAS_DEVOLVER` por default (referencia Square/Shopify retail estándar — refunds rutinarios al register). Manager approval umbralizado queda para V1.5.
+- **Bonus infra cumplido**: la migration `add_devoluciones` (140 SQL) se generó vía `pnpm migrate make tenant add_devoluciones` (el CLI shadow-database introducido en Hito 2.4 sigue funcionando perfectamente para schema deltas multi-tabla).
+- **Módulo `apps/api/src/modules/tenant/devoluciones/`**:
+  - `service.ts` con `procesarDevolucion(client, provider, usuarioId, ventaId, input)`:
+    - Carga venta (valida cobrada, no cancelada), valida método reembolso compatible (`nota_credito_fiado` requiere cliente B2C y pago previo `credito_fiado`, `nota_credito_cxc` requiere `cuentaCobrar` enlazada)
+    - `validateAndCalcLineas`: calcula cantidad ya devuelta acumulada por VentaLinea (sumando devoluciones procesadas), valida `cantidadDev <= disponible` (409 con extra `disponible/intentado`), proporciona prorrateo de iva/ieps/subtotal según `cantidadDev / cantidadOriginal`
+    - Determina `tipo` total si todas las líneas devueltas = cantidad original, parcial en otro caso
+    - Genera folio + crea registros + por cada línea: `aplicarAjuste(devolucion_cliente, +N)` SIEMPRE (las piezas vuelven al inventario); si `reponeStock=false`, adicionalmente `aplicarAjuste(merma, -N)` (net 0 en stock pero 2 movimientos para audit/trazabilidad)
+    - Aplica reembolso: `nota_credito_fiado` → `aplicarAbonoFiado` (reduce saldo), `nota_credito_cxc` → `registrarPago` (abona a CxC), otros métodos solo se registran
+    - Si venta tiene CFDI Ingreso vigente y `input.cfdiEgreso` provisto: emite CFDI Egreso (tipoComprobante="E") con `cfdisRelacionados={tipoRelacion:"03", uuids:[ingreso.folioFiscal]}`, hereda emisor/receptor del Ingreso, persiste en `Cfdi` con link `devolucionId @unique` + `tipoRelacionSat="03"`, estado pendiente→vigente; si timbrado falla mantiene estado=error
+  - `routes.ts` 3 endpoints: `POST /t/ventas/:id/devolver` (gate `VENTAS_DEVOLVER`, factory provider por config tenant, 409 si pide cfdiEgreso pero CFDI no configurado), `GET /t/devoluciones` con filtros (estado/tipo/motivo/metodoReembolso/sucursal/venta/usuario/desde/hasta), `GET /t/devoluciones/:id` con detalle líneas+CFDI
+- **15 tests integración nuevos** (`tenant-devoluciones.test.ts`) cubriendo: devolución parcial repone stock con `devolucion_cliente`, defectuoso con `reponeStockDefault=false` produce net-zero stock + 2 movimientos audit, override per-linea, tipo total vs parcial, cantidad acumulada (segunda devolución rechazada 409 con extra `disponible`), ventaLineaId cruzado entre ventas → 400, venta cancelada → 409, `nota_credito_fiado` reduce saldo fiado / 400 sin clienteId / 409 sin credito_fiado previo, `nota_credito_cxc` registra pago en CxC asociada, CFDI Egreso emitido cuando hay Ingreso vigente / `cfdiEgresoId=null` si no hay Ingreso, listado filtrado por motivo/ventaId, rol almacen sin VENTAS_DEVOLVER → 403. Suite total: **238 tests verde**.
+- **Diferidos a Hito 2.7/V1.5**: cancelación de devolución (revertir stock + reversal CFDI Egreso), aprobación de devoluciones >umbral por gerente, motivo `defectuoso` con devolución a proveedor (`devolucion_proveedor` movimiento), refunds automáticos a tarjeta vía Stripe/Conekta (hoy queda en mano del cajero).
+
+### 2026-05-20 — Hito 2.4 CxC formal cerrado
+- **Schema tenant 4.9.c** (3 modelos + 2 enums nuevos):
+  - `CuentaCobrar` con folio único per-sucursal `CXC-{CODIGO}-{NNNNNN}`, `tipoOrigen` enum [venta_credito|regularizacion_fiado|manual|apertura_saldo_inicial], `clienteId` O `clienteB2bId` (exactamente uno), `ventaId @unique` (opcional, link 1:1 a venta), `vendedorId` + `comisionPagadaAVendedor` flag para Hito 4 comisiones, `montoOriginal`/`montoPagado`/`currency`, `fechaEmision`/`fechaVencimiento`/`diasCreditoOtorgados`, `tasaInteresMoraPct`/`interesAcumulado` (interés job nocturno → V2), estado [activa|vencida|liquidada|incobrable|condonada]
+  - `CxcPago` append-only (metodo VentaPagoMetodo + monto + referencia + comprobanteUrl + usuarioId)
+  - `CxcFolioCounter` atómico per-sucursal (mismo patrón que ventas/apartados)
+- **Enum extendido**: `VentaPagoMetodo` ahora incluye `credito_b2b` (junto al `credito_fiado` informal B2C).
+- **4 permisos nuevos**: CXC_LEER/CREAR/COBRAR/CONDONAR. Roles preset: gerente (4), cajero (LEER+COBRAR), vendedor (LEER+CREAR+COBRAR), contador_interno (LEER+COBRAR).
+- **Bonus infra**: nuevo CLI `pnpm migrate make <target> <name>` que genera migrations vía shadow database temporal — reutilizable para todas las migrations futuras. Resuelve la limitación de `prisma migrate dev` con multi-schema.
+- **Migration `add_cxc`** generada (102 líneas SQL: enums + tablas + 7 FKs + índices) y aplicada cross-tenant.
+- **Módulo `apps/api/src/modules/tenant/cxc/`**:
+  - `service.ts` con `lineaCreditoDisponible(clienteB2bId)` (autorizada - sum CxC abiertas), `validarCreditoB2bSuficiente`, `crearCuentaCobrar` (genera folio + fechaVencimiento computada), `crearCxcDesdeVentaB2b`, `registrarPago` (marca liquidada cuando saldo=0, rechaza pagos sobre liquidada/condonada), `condonarCxc`, `marcarIncobrable`. `CxcError` con statusCode+extra estructurado.
+  - `routes.ts` 8 endpoints `/t/cxc/*`: GET list (filtros estado/tipoOrigen/cliente/vendidasAntes), GET /linea-credito, GET /:id, POST manual, POST /:id/pagos, POST /:id/condonar, POST /:id/incobrable, POST /regularizar-fiado
+- **Integración `crearVenta`**: detecta `pago.metodo === "credito_b2b"`, valida `clienteB2bId` requerido + línea suficiente ANTES de la transacción, dentro de la tx crea la CxC con `tipoOrigen=venta_credito` heredando `diasCredito` y `tasaInteresMoraPct` de la línea activa. Rechaza cambio cuando hay pago a crédito.
+- **Regularización fiado→CxC** en `fiado-service.ts`: nueva `regularizarFiadoToCxc` que en una sola tx reduce el saldo de fiado vía `FiadoMovimiento(tipo=regularizacion_cxc)` + crea CxC `tipoOrigen=regularizacion_fiado` ligada via `referenciaTipo/referenciaId`.
+- **23 tests integración nuevos** (`tenant-cxc.test.ts`) cubriendo: línea crédito sin/con CxC abiertas, CxC manual + permisos cajero, pagos parciales/totales/excedidos, venta credito_b2b auto-CxC + consumo línea + 409 si excede + 400 si cambio + 400 sin clienteB2bId, condonar/incobrable + 403 cajero, regularización fiado con saldo restante, filtros lista. Suite total: 223 tests verde.
 
 ### 2026-05-20 — Hito 2.3 Apartados cerrado
 - **Schema tenant 4.9.b** (4 modelos + 2 enums nuevos):

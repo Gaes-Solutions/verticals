@@ -1,14 +1,30 @@
 import { MockFacturamaClient } from "@gaespos/fiscal";
+import { MockRecargaProvider } from "@gaespos/recargas";
 import { buildApp } from "./app.js";
+import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const useMockFiscal = process.env.FISCAL_PROVIDER === "mock";
-  const mockClient = useMockFiscal ? new MockFacturamaClient() : null;
-  const app = await buildApp(config, mockClient ? { fiscalProviderFactory: () => mockClient } : {});
+  const useMockRecarga = process.env.RECARGA_PROVIDER === "mock";
+
+  const opts: BuildAppOptions = {};
+  if (useMockFiscal) {
+    const mockClient = new MockFacturamaClient();
+    opts.fiscalProviderFactory = () => mockClient;
+  }
+  if (useMockRecarga) {
+    const mockRecarga = new MockRecargaProvider();
+    opts.recargaProviderFactory = () => mockRecarga;
+  }
+
+  const app = await buildApp(config, opts);
   if (useMockFiscal) {
     app.log.warn("⚠️  FISCAL_PROVIDER=mock — usando MockFacturamaClient (no apto producción)");
+  }
+  if (useMockRecarga) {
+    app.log.warn("⚠️  RECARGA_PROVIDER=mock — usando MockRecargaProvider (no apto producción)");
   }
 
   const shutdown = async (signal: string): Promise<void> => {

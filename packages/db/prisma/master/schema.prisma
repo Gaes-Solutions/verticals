@@ -120,3 +120,261 @@ model AuditLog {
   @@index([resource, resourceId])
   @@map("audit_log")
 }
+
+// ============================================================
+// HITO 3.5 — Programa Partners (cross-tenant, master DB)
+// Modelo 4.2 · Análisis flujo 9 Partner Contador
+// Comisión lifetime 25-40% según nivel sobre subscriptions
+// pagadas de tenants referidos por el partner.
+// ============================================================
+
+enum PartnerTipo {
+  contador
+  integrador
+  consultor
+  agencia
+  otro
+
+  @@map("partner_tipo")
+}
+
+enum PartnerNivel {
+  bronze
+  silver
+  gold
+  diamond
+
+  @@map("partner_nivel")
+}
+
+enum PartnerEstado {
+  invitado
+  activo
+  pausado
+  terminado
+
+  @@map("partner_estado")
+}
+
+enum ReferralEstado {
+  click
+  signup
+  trial
+  paying
+  churned
+
+  @@map("referral_estado")
+}
+
+enum CommissionEstado {
+  pendiente
+  aprobada
+  pagada
+  rechazada
+  disputada
+
+  @@map("commission_estado")
+}
+
+enum PayoutEstado {
+  pendiente
+  en_proceso
+  pagado
+  fallido
+
+  @@map("payout_estado")
+}
+
+enum PayoutMetodo {
+  spei
+  paypal
+  stripe_connect
+  otro
+
+  @@map("payout_metodo")
+}
+
+model Partner {
+  id                       String        @id @default(cuid())
+  codigo                   String        @unique
+  razonSocial              String        @map("razon_social")
+  rfc                      String?       @unique
+  emailContacto            String        @unique @map("email_contacto")
+  telefonoContacto         String?       @map("telefono_contacto")
+  tipo                     PartnerTipo
+  nivel                    PartnerNivel  @default(bronze)
+  comisionPctOverride      Decimal?      @map("comision_pct_override") @db.Decimal(5, 2)
+  estado                   PartnerEstado @default(invitado)
+  termsAcceptedAt          DateTime?     @map("terms_accepted_at")
+  isAcceptingNewReferrals  Boolean       @default(true) @map("is_accepting_new_referrals")
+  bankAccount              Json?         @map("bank_account")
+  ciudad                   String?
+  estadoMx                 String?       @map("estado_mx")
+  paginaWeb                String?       @map("pagina_web")
+  notasInternas            String?       @map("notas_internas")
+  fechaIngreso             DateTime?     @map("fecha_ingreso")
+  fechaTerminacion         DateTime?     @map("fecha_terminacion")
+  createdAt                DateTime      @default(now()) @map("created_at")
+  updatedAt                DateTime      @updatedAt @map("updated_at")
+
+  branding     PartnerBranding?
+  links        PartnerLink[]
+  referrals    Referral[]
+  commissions  Commission[]
+  payouts      Payout[]
+  invitaciones PartnerInvitacion[]
+
+  @@index([nivel])
+  @@index([estado])
+  @@index([tipo])
+  @@map("partners")
+}
+
+model PartnerBranding {
+  id              String   @id @default(cuid())
+  partnerId       String   @unique @map("partner_id")
+  slugPublico     String   @unique @map("slug_publico")
+  logoUrl         String?  @map("logo_url")
+  colorPrimario   String?  @map("color_primario")
+  colorSecundario String?  @map("color_secundario")
+  tagline         String?
+  dominioPartner  String?  @unique @map("dominio_partner")
+  bioPublica      String?  @map("bio_publica")
+  isPublicoActivo Boolean  @default(false) @map("is_publico_activo")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@map("partner_branding")
+}
+
+model PartnerLink {
+  id              String   @id @default(cuid())
+  partnerId       String   @map("partner_id")
+  slug            String   @unique
+  nombre          String
+  targetPath      String   @default("/signup") @map("target_path")
+  utmSource       String?  @map("utm_source")
+  utmMedium       String?  @map("utm_medium")
+  utmCampaign     String?  @map("utm_campaign")
+  isActive        Boolean  @default(true) @map("is_active")
+  clicksTotal     Int      @default(0) @map("clicks_total")
+  signupsTotal    Int      @default(0) @map("signups_total")
+  paidConversions Int      @default(0) @map("paid_conversions")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  partner   Partner    @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  referrals Referral[]
+
+  @@index([partnerId])
+  @@map("partner_links")
+}
+
+model Referral {
+  id                   String         @id @default(cuid())
+  partnerId            String         @map("partner_id")
+  linkId               String         @map("link_id")
+  tenantId             String?        @unique @map("tenant_id")
+  estado               ReferralEstado @default(click)
+  cookieValue          String?        @unique @map("cookie_value")
+  firstClickAt         DateTime?      @map("first_click_at")
+  signupAt             DateTime?      @map("signup_at")
+  trialStartAt         DateTime?      @map("trial_start_at")
+  paidStartAt          DateTime?      @map("paid_start_at")
+  churnedAt            DateTime?      @map("churned_at")
+  atribucionExpiraEn   DateTime?      @map("atribucion_expira_en")
+  ipPrimerClick        String?        @map("ip_primer_click")
+  userAgentPrimerClick String?        @map("user_agent_primer_click")
+  notas                String?
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  partner     Partner      @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  link        PartnerLink  @relation(fields: [linkId], references: [id], onDelete: Restrict)
+  commissions Commission[]
+
+  @@index([partnerId, estado])
+  @@index([linkId])
+  @@index([tenantId])
+  @@index([atribucionExpiraEn])
+  @@map("referrals")
+}
+
+model Commission {
+  id                  String           @id @default(cuid())
+  partnerId           String           @map("partner_id")
+  referralId          String           @map("referral_id")
+  tenantId            String           @map("tenant_id")
+  periodoYyyymm       String           @map("periodo_yyyymm")
+  montoBaseTenantPaid Decimal          @map("monto_base_tenant_paid") @db.Decimal(14, 2)
+  porcentajeAplicado  Decimal          @map("porcentaje_aplicado") @db.Decimal(5, 2)
+  montoComision       Decimal          @map("monto_comision") @db.Decimal(14, 2)
+  moneda              String           @default("MXN")
+  estado              CommissionEstado @default(pendiente)
+  aprobadaAt          DateTime?        @map("aprobada_at")
+  aprobadaPorAdminId  String?          @map("aprobada_por_admin_id")
+  rechazadaAt         DateTime?        @map("rechazada_at")
+  rechazadaMotivo     String?          @map("rechazada_motivo")
+  pagadaAt            DateTime?        @map("pagada_at")
+  payoutId            String?          @map("payout_id")
+  notas               String?
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  partner  Partner  @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  payout   Payout?  @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@unique([referralId, periodoYyyymm])
+  @@index([partnerId, periodoYyyymm])
+  @@index([estado])
+  @@index([payoutId])
+  @@map("commissions")
+}
+
+model Payout {
+  id                String       @id @default(cuid())
+  partnerId         String       @map("partner_id")
+  periodoYyyymm     String       @map("periodo_yyyymm")
+  montoTotal        Decimal      @map("monto_total") @db.Decimal(14, 2)
+  retencionIsr      Decimal      @default(0) @map("retencion_isr") @db.Decimal(14, 2)
+  retencionIva      Decimal      @default(0) @map("retencion_iva") @db.Decimal(14, 2)
+  montoNeto         Decimal      @map("monto_neto") @db.Decimal(14, 2)
+  moneda            String       @default("MXN")
+  metodoPago        PayoutMetodo
+  estado            PayoutEstado @default(pendiente)
+  folioBancario     String?      @map("folio_bancario")
+  fechaPago         DateTime?    @map("fecha_pago")
+  invoicePartnerUrl String?      @map("invoice_partner_url")
+  motivoFalla       String?      @map("motivo_falla")
+  creadoPorAdminId  String?      @map("creado_por_admin_id")
+  notas             String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  partner     Partner      @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  commissions Commission[]
+
+  @@unique([partnerId, periodoYyyymm])
+  @@index([estado])
+  @@map("payouts")
+}
+
+model PartnerInvitacion {
+  id            String    @id @default(cuid())
+  partnerId     String    @map("partner_id")
+  token         String    @unique
+  expiresAt     DateTime  @map("expires_at")
+  acceptedAt    DateTime? @map("accepted_at")
+  enviadaA      String    @map("enviada_a")
+  enviadaPorId  String?   @map("enviada_por_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([expiresAt])
+  @@map("partner_invitaciones")
+}

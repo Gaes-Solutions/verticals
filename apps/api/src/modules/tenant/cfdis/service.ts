@@ -70,6 +70,11 @@ function buildFiscalPayload(
     },
     conceptos: venta.lineas.map((l) => {
       const snapshot = l.snapshotProducto as { skuPadre?: string; nombreProducto?: string };
+      const iepsNum = Number(l.iepsTotal.toString());
+      const subtotalNum = Number(l.subtotal.toString());
+      const baseIeps = subtotalNum > 0 ? subtotalNum - iepsNum : 0;
+      const tasaIepsCalc =
+        iepsNum > 0 && baseIeps > 0 ? (iepsNum / baseIeps).toFixed(6) : "0.000000";
       return {
         claveProdServ: "01010101",
         claveUnidad: "H87",
@@ -80,6 +85,8 @@ function buildFiscalPayload(
         importe: l.subtotal.toString(),
         aplicaIva: Number(l.ivaTotal.toString()) > 0,
         tasaIva: Number(l.ivaTotal.toString()) > 0 ? "0.160000" : "0.000000",
+        aplicaIeps: iepsNum > 0,
+        tasaIeps: tasaIepsCalc,
       };
     }),
     subtotal: venta.subtotal.toString(),
@@ -96,6 +103,7 @@ type VentaConLineas = NonNullable<Awaited<ReturnType<TenantClient["venta"]["find
     precioUnitario: { toString: () => string };
     subtotal: { toString: () => string };
     ivaTotal: { toString: () => string };
+    iepsTotal: { toString: () => string };
     snapshotProducto: unknown;
   }>;
 };

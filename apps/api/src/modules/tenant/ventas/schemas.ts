@@ -24,6 +24,7 @@ export const ventaPagoInputSchema = z.object({
     "vale",
     "monedero",
     "credito_fiado",
+    "credito_b2b",
     "otro",
   ]),
   monto: positiveDecimalString,

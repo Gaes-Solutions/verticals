@@ -20,12 +20,22 @@ export type RegimenFiscalSat =
 
 export type TipoComprobante = "I" | "E" | "T" | "N" | "P";
 
+/**
+ * Tipos de relación CFDI según SAT (catálogo c_TipoRelacion).
+ * "03" = Nota de crédito de los documentos relacionados.
+ */
+export type TipoRelacionSat = "01" | "02" | "03" | "04" | "05" | "06" | "07";
+
 export interface CfdiEmitirInput {
   serie?: string;
   folio: string;
   fecha: Date;
   lugarExpedicion: string;
   tipoComprobante: TipoComprobante;
+  cfdisRelacionados?: {
+    tipoRelacion: TipoRelacionSat;
+    uuids: string[];
+  };
   metodoPago: MetodoPagoSat;
   formaPago: FormaPagoSat;
   moneda: string;

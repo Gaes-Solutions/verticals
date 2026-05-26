@@ -9,13 +9,15 @@ export type MovimientoTipoFront =
   | "ajuste_positivo"
   | "ajuste_negativo"
   | "merma"
-  | "consumo_interno";
+  | "consumo_interno"
+  | "devolucion_cliente";
 
 const TIPO_SIGNO: Record<MovimientoTipoFront, 1 | -1> = {
   ajuste_positivo: 1,
   ajuste_negativo: -1,
   merma: -1,
   consumo_interno: -1,
+  devolucion_cliente: 1,
 };
 
 export interface AjusteInput {

@@ -25,6 +25,87 @@ export const PERMISSIONS = {
   APARTADOS_LIQUIDAR: "apartados.liquidar",
   APARTADOS_CANCELAR: "apartados.cancelar",
 
+  CXC_LEER: "cxc.leer",
+  CXC_CREAR: "cxc.crear",
+  CXC_COBRAR: "cxc.cobrar",
+  CXC_CONDONAR: "cxc.condonar",
+
+  COTIZACIONES_LEER: "cotizaciones.leer",
+  COTIZACIONES_ENVIAR: "cotizaciones.enviar",
+  COTIZACIONES_GESTIONAR_ESTADO: "cotizaciones.gestionar_estado",
+
+  PEDIDOS_LEER: "pedidos.leer",
+  PEDIDOS_CREAR: "pedidos.crear",
+  PEDIDOS_APROBAR: "pedidos.aprobar",
+  PEDIDOS_GESTIONAR: "pedidos.gestionar",
+  PEDIDOS_CONVERTIR_VENTA: "pedidos.convertir_venta",
+
+  RECARGAS_LEER: "recargas.leer",
+  RECARGAS_VENDER: "recargas.vender",
+  RECARGAS_REEMBOLSAR: "recargas.reembolsar",
+  RECARGAS_CONFIGURAR: "recargas.configurar",
+
+  PACIENTES_LEER: "pacientes.leer",
+  PACIENTES_CREAR: "pacientes.crear",
+  PACIENTES_ACTUALIZAR: "pacientes.actualizar",
+  PACIENTES_ARCHIVAR: "pacientes.archivar",
+
+  MEDICOS_LEER: "medicos.leer",
+  MEDICOS_EDITAR_PERFIL: "medicos.editar_perfil",
+
+  AGENDA_LEER: "agenda.leer",
+  AGENDA_GESTIONAR: "agenda.gestionar",
+  AGENDA_BLOQUEAR: "agenda.bloquear",
+
+  CITAS_LEER: "citas.leer",
+  CITAS_CREAR: "citas.crear",
+  CITAS_GESTIONAR: "citas.gestionar",
+  CITAS_CHECKIN: "citas.checkin",
+  CITAS_CANCELAR: "citas.cancelar",
+
+  CONSULTAS_LEER: "consultas.leer",
+  CONSULTAS_CREAR: "consultas.crear",
+  CONSULTAS_FIRMAR: "consultas.firmar",
+  CONSULTAS_ENMENDAR: "consultas.enmendar",
+
+  RECETAS_LEER: "recetas.leer",
+  RECETAS_EMITIR: "recetas.emitir",
+  RECETAS_CANCELAR: "recetas.cancelar",
+
+  MASCOTAS_LEER: "mascotas.leer",
+  MASCOTAS_CREAR: "mascotas.crear",
+  MASCOTAS_ACTUALIZAR: "mascotas.actualizar",
+  MASCOTAS_ARCHIVAR: "mascotas.archivar",
+
+  VACUNAS_LEER: "vacunas.leer",
+  VACUNAS_APLICAR: "vacunas.aplicar",
+  VACUNAS_GESTIONAR_CARTILLA: "vacunas.gestionar_cartilla",
+
+  CAMAS_LEER: "camas.leer",
+  CAMAS_GESTIONAR: "camas.gestionar",
+
+  HOSPITALIZACION_LEER: "hospitalizacion.leer",
+  HOSPITALIZACION_CREAR: "hospitalizacion.crear",
+  HOSPITALIZACION_ALTA: "hospitalizacion.alta",
+
+  MEDICACION_PROGRAMAR: "medicacion.programar",
+
+  KARDEX_LEER: "kardex.leer",
+  KARDEX_APLICAR: "kardex.aplicar",
+  KARDEX_REPROGRAMAR: "kardex.reprogramar",
+
+  CFDIS_RECIBIDOS_LEER: "cfdis_recibidos.leer",
+  CFDIS_RECIBIDOS_UPLOAD: "cfdis_recibidos.upload",
+  CFDIS_RECIBIDOS_CATEGORIZAR: "cfdis_recibidos.categorizar",
+  CFDIS_RECIBIDOS_CANCELAR: "cfdis_recibidos.cancelar",
+
+  COMPRAS_OC_LEER: "compras_oc.leer",
+  COMPRAS_OC_CREAR: "compras_oc.crear",
+  COMPRAS_OC_AUTORIZAR: "compras_oc.autorizar",
+  COMPRAS_OC_RECIBIR: "compras_oc.recibir",
+
+  DIOT_GENERAR: "diot.generar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -125,6 +206,204 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "apartados.cancelar": {
     category: "apartados",
     description: "Cancelar apartado (libera stock + aplica pena)",
+  },
+
+  "cxc.leer": { category: "cxc", description: "Consultar cuentas por cobrar" },
+  "cxc.crear": { category: "cxc", description: "Crear CxC manual o desde venta a crédito" },
+  "cxc.cobrar": { category: "cxc", description: "Registrar pagos a cuentas por cobrar" },
+  "cxc.condonar": { category: "cxc", description: "Condonar saldo de CxC (incobrable/perdón)" },
+
+  "cotizaciones.leer": { category: "cotizaciones", description: "Consultar cotizaciones" },
+  "cotizaciones.enviar": {
+    category: "cotizaciones",
+    description: "Enviar cotización al cliente (PDF + email/WhatsApp)",
+  },
+  "cotizaciones.gestionar_estado": {
+    category: "cotizaciones",
+    description: "Aceptar, rechazar o convertir cotizaciones a pedido",
+  },
+
+  "pedidos.leer": { category: "pedidos", description: "Consultar pedidos B2B" },
+  "pedidos.crear": {
+    category: "pedidos",
+    description: "Crear pedidos B2B (directo o desde cotización)",
+  },
+  "pedidos.aprobar": {
+    category: "pedidos",
+    description: "Aprobar/rechazar pedidos B2B que requieren aprobación interna",
+  },
+  "pedidos.gestionar": {
+    category: "pedidos",
+    description: "Preparar/marcar enviado/entregado/cancelar pedidos",
+  },
+  "pedidos.convertir_venta": {
+    category: "pedidos",
+    description: "Convertir pedido entregado a venta cobrada",
+  },
+
+  "recargas.leer": { category: "recargas", description: "Consultar recargas y servicios cobrados" },
+  "recargas.vender": {
+    category: "recargas",
+    description: "Procesar recargas tiempo aire y cobro de servicios",
+  },
+  "recargas.reembolsar": {
+    category: "recargas",
+    description: "Reembolsar recarga fallida/disputada y devolver saldo",
+  },
+  "recargas.configurar": {
+    category: "recargas",
+    description: "Configurar proveedor agregador (api_key + saldo alerta)",
+  },
+
+  "pacientes.leer": { category: "pacientes", description: "Consultar expedientes de pacientes" },
+  "pacientes.crear": { category: "pacientes", description: "Crear paciente local" },
+  "pacientes.actualizar": { category: "pacientes", description: "Editar datos del paciente" },
+  "pacientes.archivar": { category: "pacientes", description: "Archivar paciente" },
+
+  "medicos.leer": {
+    category: "medicos",
+    description: "Consultar perfil de médicos del consultorio",
+  },
+  "medicos.editar_perfil": {
+    category: "medicos",
+    description: "Editar perfil clínico (cédula, especialidades, firma)",
+  },
+
+  "agenda.leer": { category: "agenda", description: "Ver horarios y disponibilidad médica" },
+  "agenda.gestionar": {
+    category: "agenda",
+    description: "Crear y editar horarios de atención",
+  },
+  "agenda.bloquear": {
+    category: "agenda",
+    description: "Bloquear agenda por vacaciones / incapacidad / cierre",
+  },
+
+  "citas.leer": { category: "citas", description: "Consultar citas" },
+  "citas.crear": { category: "citas", description: "Agendar nueva cita" },
+  "citas.gestionar": { category: "citas", description: "Reagendar / marcar inicio consulta" },
+  "citas.checkin": {
+    category: "citas",
+    description: "Registrar llegada del paciente + signos vitales recepción",
+  },
+  "citas.cancelar": { category: "citas", description: "Cancelar citas" },
+
+  "consultas.leer": { category: "consultas", description: "Consultar expediente SOAP" },
+  "consultas.crear": { category: "consultas", description: "Iniciar consulta médica" },
+  "consultas.firmar": {
+    category: "consultas",
+    description: "Firmar electrónicamente consulta (vuelve inmutable, NOM-024)",
+  },
+  "consultas.enmendar": {
+    category: "consultas",
+    description: "Crear enmienda a consulta firmada (nueva versión vinculada)",
+  },
+
+  "recetas.leer": { category: "recetas", description: "Consultar recetas emitidas" },
+  "recetas.emitir": {
+    category: "recetas",
+    description: "Emitir receta médica con firma electrónica",
+  },
+  "recetas.cancelar": { category: "recetas", description: "Cancelar receta emitida" },
+
+  "mascotas.leer": { category: "mascotas", description: "Consultar expedientes de mascotas (vet)" },
+  "mascotas.crear": { category: "mascotas", description: "Registrar mascota nueva" },
+  "mascotas.actualizar": { category: "mascotas", description: "Editar datos de la mascota" },
+  "mascotas.archivar": {
+    category: "mascotas",
+    description: "Archivar mascota (defunción / inactividad)",
+  },
+
+  "vacunas.leer": {
+    category: "vacunas",
+    description: "Consultar cartilla de vacunación de paciente/mascota",
+  },
+  "vacunas.aplicar": {
+    category: "vacunas",
+    description: "Registrar aplicación de vacuna con lote y caducidad",
+  },
+  "vacunas.gestionar_cartilla": {
+    category: "vacunas",
+    description: "Editar/anular registros de cartilla",
+  },
+
+  "camas.leer": {
+    category: "hospitalizacion",
+    description: "Consultar camas y su estado",
+  },
+  "camas.gestionar": {
+    category: "hospitalizacion",
+    description: "Crear/editar camas y cambiar estado (limpieza, mantenimiento, fuera de servicio)",
+  },
+
+  "hospitalizacion.leer": {
+    category: "hospitalizacion",
+    description: "Consultar hospitalizaciones, signos vitales y cargos",
+  },
+  "hospitalizacion.crear": {
+    category: "hospitalizacion",
+    description: "Ingresar paciente/mascota a hospitalización",
+  },
+  "hospitalizacion.alta": {
+    category: "hospitalizacion",
+    description: "Dar de alta y generar venta con cargos acumulados",
+  },
+
+  "medicacion.programar": {
+    category: "hospitalizacion",
+    description: "Programar/suspender medicación intrahospitalaria",
+  },
+
+  "kardex.leer": {
+    category: "hospitalizacion",
+    description: "Consultar kardex de aplicaciones",
+  },
+  "kardex.aplicar": {
+    category: "hospitalizacion",
+    description: "Registrar aplicación u omisión de medicación programada",
+  },
+  "kardex.reprogramar": {
+    category: "hospitalizacion",
+    description: "Reprogramar dosis pendientes del kardex",
+  },
+
+  "cfdis_recibidos.leer": {
+    category: "despacho",
+    description: "Consultar CFDIs recibidos (XMLs de proveedores)",
+  },
+  "cfdis_recibidos.upload": {
+    category: "despacho",
+    description: "Subir XML/ZIP de CFDIs recibidos",
+  },
+  "cfdis_recibidos.categorizar": {
+    category: "despacho",
+    description: "Asignar/sobrescribir categoría contable a un CFDI recibido",
+  },
+  "cfdis_recibidos.cancelar": {
+    category: "despacho",
+    description: "Marcar CFDI recibido como cancelado (verificación PAC)",
+  },
+
+  "compras_oc.leer": {
+    category: "compras",
+    description: "Consultar órdenes de compra",
+  },
+  "compras_oc.crear": {
+    category: "compras",
+    description: "Crear orden de compra en borrador",
+  },
+  "compras_oc.autorizar": {
+    category: "compras",
+    description: "Autorizar orden de compra y enviarla a proveedor",
+  },
+  "compras_oc.recibir": {
+    category: "compras",
+    description: "Marcar recepción parcial o total + vincular CFDI recibido",
+  },
+
+  "diot.generar": {
+    category: "despacho",
+    description: "Generar archivo DIOT TXT formato SAT del periodo",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

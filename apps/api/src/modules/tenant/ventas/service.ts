@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
 import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
+import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import type { VentaCreateInput } from "./schemas.js";
@@ -44,6 +45,7 @@ interface VarianteSnapshot {
   aplicaIva: boolean;
   tasaIva: string;
   aplicaIeps: boolean;
+  tasaIeps: unknown;
 }
 
 async function loadSnapshots(
@@ -76,6 +78,7 @@ async function loadSnapshots(
         aplicaIva: v.producto.aplicaIva,
         tasaIva: v.producto.tasaIva.toString(),
         aplicaIeps: v.producto.aplicaIeps,
+        tasaIeps: v.producto.tasaIeps,
       },
     ]),
   );
@@ -101,23 +104,77 @@ interface LineaCalculo {
   serieId?: string;
 }
 
+interface IepsSpec {
+  tipo: "porcentaje" | "cuota_por_unidad";
+  valor: number;
+}
+
+function parseIepsSpec(raw: unknown): IepsSpec | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const tipo = obj.tipo;
+  const valor = Number(obj.valor);
+  if (
+    (tipo !== "porcentaje" && tipo !== "cuota_por_unidad") ||
+    !Number.isFinite(valor) ||
+    valor <= 0
+  ) {
+    return null;
+  }
+  return { tipo, valor };
+}
+
+/**
+ * Descompone subtotal (precio_final × cantidad) en IEPS+IVA+base.
+ * Asume precio capturado incluye TODOS los impuestos. SAT MX: IEPS aplica sobre
+ * la base, IVA aplica sobre (base + IEPS).
+ *
+ * Para `porcentaje` (cigarro 160%, cerveza 53%):
+ *   precio = base × (1 + iepsPct) × (1 + ivaPct)
+ *   base = subtotal / ((1 + iepsPct) × (1 + ivaPct))
+ *   iepsTotal = base × iepsPct
+ *   ivaTotal = (base + iepsTotal) × ivaPct
+ *
+ * Para `cuota_por_unidad` (refresco $1.5375/L): IEPS es fijo por cantidad y va
+ * ANTES del IVA. base + iepsCuota = baseConIeps. precio = baseConIeps × (1+ivaPct).
+ *   iepsTotal = cantidad × cuota
+ *   baseConIeps = subtotal / (1 + ivaPct)
+ *   ivaTotal = subtotal − baseConIeps
+ */
 function calcularImpuestosLinea(
   lineaCalc: LineaCalculada,
   snapshot: VarianteSnapshot,
 ): { ivaUnit: Decimal; ivaTotal: Decimal; iepsUnit: Decimal; iepsTotal: Decimal } {
   const cantidad = new Decimal(lineaCalc.cantidad.toString());
   const subtotal = new Decimal(lineaCalc.subtotal.toString());
+  const iepsSpec = snapshot.aplicaIeps ? parseIepsSpec(snapshot.tasaIeps) : null;
+  const ivaPct = snapshot.aplicaIva ? new Decimal(snapshot.tasaIva).div(HUNDRED) : ZERO;
 
+  let iepsTotal = ZERO;
   let ivaTotal = ZERO;
-  if (snapshot.aplicaIva) {
-    const tasa = new Decimal(snapshot.tasaIva);
-    const baseSinIva = subtotal.div(HUNDRED.plus(tasa)).mul(HUNDRED);
+
+  if (iepsSpec?.tipo === "porcentaje") {
+    const iepsPct = new Decimal(iepsSpec.valor).div(HUNDRED);
+    const base = subtotal.div(new Decimal(1).plus(iepsPct).mul(new Decimal(1).plus(ivaPct)));
+    iepsTotal = base.mul(iepsPct);
+    ivaTotal = base.plus(iepsTotal).mul(ivaPct);
+  } else if (iepsSpec?.tipo === "cuota_por_unidad") {
+    // Cuota IEPS (ej. refresco azucarado) no entra a base del IVA en MX.
+    // precio = base × (1 + ivaPct) + cuota × cantidad
+    iepsTotal = new Decimal(iepsSpec.valor).mul(cantidad);
+    if (iepsTotal.gt(subtotal)) iepsTotal = subtotal;
+    if (snapshot.aplicaIva) {
+      const subtotalSinIeps = subtotal.minus(iepsTotal);
+      const base = subtotalSinIeps.div(new Decimal(1).plus(ivaPct));
+      ivaTotal = subtotalSinIeps.minus(base);
+    }
+  } else if (snapshot.aplicaIva) {
+    const baseSinIva = subtotal.div(new Decimal(1).plus(ivaPct));
     ivaTotal = subtotal.minus(baseSinIva);
   }
-  const ivaUnit = cantidad.gt(ZERO) ? ivaTotal.div(cantidad) : ZERO;
 
-  const iepsTotal = ZERO;
-  const iepsUnit = ZERO;
+  const ivaUnit = cantidad.gt(ZERO) ? ivaTotal.div(cantidad) : ZERO;
+  const iepsUnit = cantidad.gt(ZERO) ? iepsTotal.div(cantidad) : ZERO;
 
   return { ivaUnit, ivaTotal, iepsUnit, iepsTotal };
 }
@@ -172,16 +229,24 @@ function validarPagos(
   totalPersistir: Decimal,
   pagos: VentaCreateInput["pagos"],
   clienteId: string | undefined,
+  clienteB2bId: string | undefined,
 ): {
   totalCobrado: Decimal;
   cambio: Decimal;
   pagoFiado: Decimal;
+  pagoCreditoB2b: Decimal;
 } {
   const pagoFiado = pagos
     .filter((p) => p.metodo === "credito_fiado")
     .reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
   if (pagoFiado.gt(ZERO) && !clienteId) {
     throw new VentaError(400, "Venta a fiado requiere clienteId del cliente deudor");
+  }
+  const pagoCreditoB2b = pagos
+    .filter((p) => p.metodo === "credito_b2b")
+    .reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
+  if (pagoCreditoB2b.gt(ZERO) && !clienteB2bId) {
+    throw new VentaError(400, "Venta a crédito B2B requiere clienteB2bId");
   }
   const totalCobrado = pagos.reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
   if (totalCobrado.lt(totalPersistir)) {
@@ -192,15 +257,15 @@ function validarPagos(
   }
   const cambio = totalCobrado.minus(totalPersistir);
   if (cambio.gt(ZERO)) {
-    if (pagoFiado.gt(ZERO)) {
-      throw new VentaError(400, "Venta a fiado no debe generar cambio");
+    if (pagoFiado.gt(ZERO) || pagoCreditoB2b.gt(ZERO)) {
+      throw new VentaError(400, "Venta con pago a crédito (fiado o B2B) no debe generar cambio");
     }
     const efectivo = pagos.find((p) => p.metodo === "efectivo");
     if (!efectivo) {
       throw new VentaError(400, "Cambio requiere al menos un pago en efectivo");
     }
   }
-  return { totalCobrado, cambio, pagoFiado };
+  return { totalCobrado, cambio, pagoFiado, pagoCreditoB2b };
 }
 
 async function ejecutarPreviewSegura(
@@ -296,11 +361,26 @@ export async function crearVenta(
   );
   const lineasCalc = buildLineasCalculo(ticket, input, snapshots);
   const totales = totalesVenta(ticket, lineasCalc);
-  const { totalCobrado, cambio, pagoFiado } = validarPagos(
+  const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b } = validarPagos(
     totales.totalVenta,
     input.pagos,
     input.clienteId,
+    input.clienteB2bId,
   );
+
+  let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
+  if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
+    try {
+      creditoB2b = await validarCreditoB2bSuficiente(
+        client,
+        input.clienteB2bId,
+        pagoCreditoB2b.toString(),
+      );
+    } catch (err) {
+      if (err instanceof CxcError) throw new VentaError(err.statusCode, err.message, err.extra);
+      throw err;
+    }
+  }
 
   try {
     return await client.$transaction((tx) =>
@@ -310,7 +390,8 @@ export async function crearVenta(
         input,
         lineasCalc,
         usuarioId,
-        totales: { ...totales, totalCobrado, cambio, pagoFiado },
+        totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b },
+        creditoB2b,
       }),
     );
   } catch (err) {
@@ -323,6 +404,9 @@ export async function crearVenta(
       });
     }
     if (err instanceof FiadoError) {
+      throw new VentaError(err.statusCode, err.message, err.extra);
+    }
+    if (err instanceof CxcError) {
       throw new VentaError(err.statusCode, err.message, err.extra);
     }
     throw err;
@@ -344,7 +428,9 @@ interface PersistirVentaParams {
     totalCobrado: Decimal;
     cambio: Decimal;
     pagoFiado: Decimal;
+    pagoCreditoB2b: Decimal;
   };
+  creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null;
 }
 
 async function descontarStockLineas(
@@ -448,6 +534,18 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
       ventaId: venta.id,
       monto: p.totales.pagoFiado.toString(),
       usuarioId: p.usuarioId,
+    });
+  }
+  if (p.totales.pagoCreditoB2b.gt(0) && p.input.clienteB2bId && p.creditoB2b) {
+    await crearCxcDesdeVentaB2b(tx, {
+      ventaId: venta.id,
+      sucursalId: p.sucursalId,
+      clienteB2bId: p.input.clienteB2bId,
+      vendedorId: p.usuarioId,
+      montoCredito: p.totales.pagoCreditoB2b.toString(),
+      diasCredito: p.creditoB2b.diasCredito,
+      tasaInteresMoraPct: p.creditoB2b.tasaInteresMoraPct,
+      notas: `Venta ${folio} a crédito B2B`,
     });
   }
   return {

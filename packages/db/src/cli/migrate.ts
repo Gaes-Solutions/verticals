@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { masterPrisma } from "../client.js";
 import { seedAllTenantDefaults, seedTenantDefaults } from "../seed-tenant.js";
+import { makeMigration } from "./make-migration.js";
 import { migrateMaster } from "./master.js";
 import { createTenant, listTenants, migrateAllTenants, migrateTenant } from "./tenant.js";
 
@@ -84,6 +85,21 @@ tenant
       await masterPrisma.$disconnect();
     }
   });
+
+const make = program
+  .command("make <target> <name>")
+  .description("Genera una migration nueva via shadow schema. target: master|tenant")
+  .action(async (target: string, name: string) => {
+    if (target !== "master" && target !== "tenant") {
+      throw new Error(`target inválido: "${target}". Usa "master" o "tenant".`);
+    }
+    try {
+      await makeMigration(target, name);
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+void make;
 
 tenant
   .command("seed-all")

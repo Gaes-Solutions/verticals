@@ -1,5 +1,7 @@
 import { PRESET_ROLES_RETAIL } from "@gaespos/permissions";
 import { masterPrisma } from "./client.js";
+import { seedCategoriasContables } from "./seed-categorias-contables.js";
+import { seedClinicalCatalogs } from "./seed-clinical-catalogs.js";
 import { createTenantClient } from "./tenant-client.js";
 
 export interface SeedTenantDefaultsOptions {
@@ -23,6 +25,11 @@ export interface SeedTenantDefaultsResult {
   cajaCreated: boolean;
   listaPrecioCreated: boolean;
   clientePublicoCreated: boolean;
+  diagnosticosClinicosCreados: number;
+  medicamentosClinicosCreados: number;
+  motivosCitaCreados: number;
+  vacunasCreados: number;
+  categoriasContablesCreadas: number;
 }
 
 export async function seedTenantDefaults(
@@ -138,6 +145,9 @@ export async function seedTenantDefaults(
       clientePublicoCreated = true;
     }
 
+    const clinical = await seedClinicalCatalogs(client);
+    const contables = await seedCategoriasContables(client);
+
     return {
       rolesCreated,
       rolesUpdated,
@@ -145,6 +155,11 @@ export async function seedTenantDefaults(
       cajaCreated,
       listaPrecioCreated,
       clientePublicoCreated,
+      diagnosticosClinicosCreados: clinical.diagnosticosCreados,
+      medicamentosClinicosCreados: clinical.medicamentosCreados,
+      motivosCitaCreados: clinical.motivosCreados,
+      vacunasCreados: clinical.vacunasCreados,
+      categoriasContablesCreadas: contables.categoriasCreadas,
     };
   } finally {
     await client.$disconnect();

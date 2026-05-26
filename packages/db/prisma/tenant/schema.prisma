@@ -79,6 +79,28 @@ model Sucursal {
   ventaFolioCounter    VentaFolioCounter?
   apartados            Apartado[]
   apartadoFolioCounter ApartadoFolioCounter?
+  cuentasCobrar        CuentaCobrar[]
+  cxcFolioCounter      CxcFolioCounter?
+  devoluciones         Devolucion[]
+  devolucionFolioCounter DevolucionFolioCounter?
+  cotizaciones         Cotizacion[]
+  cotizacionFolioCounter CotizacionFolioCounter?
+  pedidos              Pedido[]
+  pedidoFolioCounter   PedidoFolioCounter?
+  recargas             Recarga[]
+  recargaFolioCounter  RecargaFolioCounter?
+  citas                Cita[]
+  citaFolioCounter     CitaFolioCounter?
+  consultas            Consulta[]
+  recetas              Receta[]
+  recetaFolioCounter   RecetaFolioCounter?
+  agendas              Agenda[]
+  agendaBloqueos       AgendaBloqueo[]
+  camas                Cama[]
+  hospitalizaciones    Hospitalizacion[]
+  hospitalizacionFolioCounter HospitalizacionFolioCounter?
+  ordenesCompra         OrdenCompra[]
+  ordenCompraFolioCounter OrdenCompraFolioCounter?
 
   @@index([isActive])
   @@map("sucursales")
@@ -98,10 +120,11 @@ model Caja {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  sucursal  Sucursal       @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  ventas    Venta[]
-  aperturas CajaApertura[]
-  apartados Apartado[]
+  sucursal     Sucursal       @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  ventas       Venta[]
+  aperturas    CajaApertura[]
+  apartados    Apartado[]
+  devoluciones Devolucion[]
 
   @@unique([sucursalId, codigo])
   @@index([sucursalId, isActive])
@@ -130,27 +153,62 @@ model Usuario {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  lastLoginSucursal    Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
-  sucursales           UsuarioSucursal[]
-  roles                UsuarioRol[]                 @relation("UsuarioRol_Usuario")
-  rolesAsignados       UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
-  vistasGuardadas      UsuarioVistaGuardada[]
-  movimientos          InventarioMovimiento[]
-  ventasCreadas        Venta[]                      @relation("VentaUsuarioCreador")
-  ventasCanceladas     Venta[]                      @relation("VentaUsuarioCancelador")
-  aperturasAbiertas    CajaApertura[]               @relation("CajaAperturaUsuario")
-  aperturasCerradas    CajaApertura[]               @relation("CajaAperturaCerradaPor")
-  cajaMovimientos      CajaMovimiento[]
-  cortes               Corte[]
-  cfdisEmitidos        Cfdi[]                       @relation("CfdiEmitidoPor")
-  cfdisCancelados      Cfdi[]                       @relation("CfdiCanceladoPor")
-  clientesAsignados    Cliente[]                    @relation("ClienteVendedorAsignado")
-  clientesB2bAsignados ClienteB2bVendedorAsignado[]
-  fiadoMovimientos     FiadoMovimiento[]
-  creditosB2bAprobados ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
-  apartadosCreados     Apartado[]                   @relation("ApartadoUsuarioCreador")
-  apartadosCancelados  Apartado[]                   @relation("ApartadoUsuarioCancelador")
-  apartadoAbonos       ApartadoAbono[]
+  lastLoginSucursal     Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
+  sucursales            UsuarioSucursal[]
+  roles                 UsuarioRol[]                 @relation("UsuarioRol_Usuario")
+  rolesAsignados        UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
+  vistasGuardadas       UsuarioVistaGuardada[]
+  movimientos           InventarioMovimiento[]
+  ventasCreadas         Venta[]                      @relation("VentaUsuarioCreador")
+  ventasCanceladas      Venta[]                      @relation("VentaUsuarioCancelador")
+  aperturasAbiertas     CajaApertura[]               @relation("CajaAperturaUsuario")
+  aperturasCerradas     CajaApertura[]               @relation("CajaAperturaCerradaPor")
+  cajaMovimientos       CajaMovimiento[]
+  cortes                Corte[]
+  cfdisEmitidos         Cfdi[]                       @relation("CfdiEmitidoPor")
+  cfdisCancelados       Cfdi[]                       @relation("CfdiCanceladoPor")
+  clientesAsignados     Cliente[]                    @relation("ClienteVendedorAsignado")
+  clientesB2bAsignados  ClienteB2bVendedorAsignado[]
+  fiadoMovimientos      FiadoMovimiento[]
+  creditosB2bAprobados  ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
+  apartadosCreados      Apartado[]                   @relation("ApartadoUsuarioCreador")
+  apartadosCancelados   Apartado[]                   @relation("ApartadoUsuarioCancelador")
+  apartadoAbonos        ApartadoAbono[]
+  cuentasCobrarVendedor CuentaCobrar[]               @relation("CuentaCobrarVendedor")
+  cxcPagos              CxcPago[]
+  devolucionesProcesadas Devolucion[]                @relation("DevolucionProcesadaPor")
+  devolucionesAprobadas  Devolucion[]                @relation("DevolucionAprobadaPor")
+  devolucionesCanceladas Devolucion[]                @relation("DevolucionCanceladaPor")
+  cotizacionesVendedor   Cotizacion[]                @relation("CotizacionVendedor")
+  pedidosVendedor        Pedido[]                    @relation("PedidoVendedor")
+  pedidosAprobados       Pedido[]                    @relation("PedidoAprobadoPor")
+  pedidosCancelados      Pedido[]                    @relation("PedidoCanceladoPor")
+  recargasProcesadas     Recarga[]                   @relation("RecargaProcesadaPor")
+  recargasReembolsadas   Recarga[]                   @relation("RecargaReembolsadaPor")
+  medicoPerfil           Medico?
+  pacientesAsignados     Paciente[]                  @relation("PacienteMedicoAsignado")
+  agendas                Agenda[]                    @relation("AgendaMedico")
+  agendaBloqueos         AgendaBloqueo[]             @relation("AgendaBloqueoMedico")
+  citasMedico            Cita[]                      @relation("CitaMedico")
+  citasCheckin           Cita[]                      @relation("CitaCheckinPor")
+  citasCanceladas        Cita[]                      @relation("CitaCanceladaPor")
+  consultasMedico        Consulta[]                  @relation("ConsultaMedico")
+  consultasEnfermera     Consulta[]                  @relation("ConsultaEnfermeraAsistente")
+  consultasFirmadas      Consulta[]                  @relation("ConsultaFirmadaPor")
+  recetasMedico          Receta[]                    @relation("RecetaMedico")
+  recetasCanceladas      Receta[]                    @relation("RecetaCanceladaPor")
+  mascotasAsignadas      Mascota[]                   @relation("MascotaMedicoAsignado")
+  vacunacionesAplicador  Vacunacion[]                @relation("VacunacionAplicador")
+  hospitalizacionesMedico Hospitalizacion[]          @relation("HospitalizacionMedico")
+  hospitalizacionesAltaPor Hospitalizacion[]         @relation("HospitalizacionAltaPor")
+  medicacionesPrescritas MedicacionProgramada[]      @relation("MedicacionProgramadaPrescritaPor")
+  kardexAplicaciones     KardexAplicacion[]          @relation("KardexEnfermeraAplicador")
+  signosHospitalCapturados SignoVitalHospital[]      @relation("SignoVitalHospitalCapturadoPor")
+  cargosHospitalCapturados CargoHospital[]           @relation("CargoHospitalCapturadoPor")
+  cfdisRecibidosUpload  CfdiRecibido[]               @relation("CfdiRecibidoUploadedPor")
+  cfdiCategorizacionesAsignadas CfdiRecibidoCategorizacion[] @relation("CfdiCategorizacionAsignadoPor")
+  ordenesCompraCreadas  OrdenCompra[]                @relation("OrdenCompraCreadoPor")
+  ordenesCompraAutorizadas OrdenCompra[]             @relation("OrdenCompraAutorizadoPor")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -772,6 +830,7 @@ enum VentaPagoMetodo {
   vale
   monedero
   credito_fiado
+  credito_b2b
   otro
 }
 
@@ -816,6 +875,12 @@ model Venta {
   pagos        VentaPago[]
   cfdis        Cfdi[]
   fiadoCargos  FiadoMovimiento[]
+  cuentaCobrar CuentaCobrar?
+  devoluciones Devolucion[]
+  pedido       Pedido?
+  recargas     Recarga[]
+  hospitalizacionAlta Hospitalizacion? @relation("HospitalizacionVentaAlAlta")
+  cargosHospitalFacturados CargoHospital[] @relation("CargoHospitalFacturadoEnVenta")
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -846,7 +911,8 @@ model VentaLinea {
   descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
   snapshotProducto    Json    @map("snapshot_producto")
 
-  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  venta             Venta              @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  devolucionLineas  DevolucionLinea[]
 
   @@unique([ventaId, numero])
   @@index([productoId])
@@ -925,6 +991,7 @@ model CajaApertura {
   cerradaPor  Usuario?         @relation("CajaAperturaCerradaPor", fields: [cerradaPorId], references: [id], onDelete: SetNull)
   movimientos CajaMovimiento[]
   cortes      Corte[]
+  recargas    Recarga[]
 
   @@index([cajaId, estado])
   @@index([sucursalId, estado])
@@ -1033,7 +1100,10 @@ model CfdiConfig {
 
 model Cfdi {
   id                       String              @id @default(cuid())
-  ventaId                  String              @unique @map("venta_id")
+  ventaId                  String              @map("venta_id")
+  devolucionId             String?             @unique @map("devolucion_id")
+  tipoRelacionSat          String?             @map("tipo_relacion_sat")
+  cfdiRelacionadoUuids     String[]            @default([]) @map("cfdi_relacionado_uuids")
   serie                    String
   folio                    String
   folioFiscal              String?             @unique @map("folio_fiscal")
@@ -1077,12 +1147,14 @@ model Cfdi {
   createdAt                DateTime            @default(now()) @map("created_at")
   updatedAt                DateTime            @updatedAt @map("updated_at")
 
-  venta        Venta    @relation(fields: [ventaId], references: [id], onDelete: Restrict)
-  emitidoPor   Usuario  @relation("CfdiEmitidoPor", fields: [emitidoPorId], references: [id], onDelete: Restrict)
-  canceladoPor Usuario? @relation("CfdiCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  venta        Venta       @relation(fields: [ventaId], references: [id], onDelete: Restrict)
+  emitidoPor   Usuario     @relation("CfdiEmitidoPor", fields: [emitidoPorId], references: [id], onDelete: Restrict)
+  canceladoPor Usuario?    @relation("CfdiCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  devolucion   Devolucion? @relation("DevolucionCfdiEgreso", fields: [devolucionId], references: [id], onDelete: SetNull)
 
   @@unique([serie, folio])
   @@index([estado])
+  @@index([ventaId])
   @@index([rfcReceptor])
   @@index([fechaEmision])
   @@map("cfdis")
@@ -1149,6 +1221,9 @@ model Cliente {
   fiado            Fiado?
   ventas           Venta[]
   apartados        Apartado[]
+  cuentasCobrar    CuentaCobrar[]
+  pacientesTutor   Paciente[]        @relation("PacienteTutor")
+  mascotasTutor    Mascota[]         @relation("MascotaTutor")
 
   @@unique([rfc])
   @@index([nombre])
@@ -1331,6 +1406,9 @@ model ClienteB2b {
   vendedoresAsignados ClienteB2bVendedorAsignado[]
   ventas              Venta[]
   apartados           Apartado[]
+  cuentasCobrar       CuentaCobrar[]
+  cotizaciones        Cotizacion[]
+  pedidos             Pedido[]
 
   @@index([razonSocial])
   @@index([rfc])
@@ -1383,6 +1461,7 @@ model ClienteB2bDireccion {
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
   clienteB2b ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+  pedidos    Pedido[]
 
   @@index([clienteB2bId])
   @@map("cliente_b2b_direcciones")
@@ -1563,4 +1642,1628 @@ model ApartadoFolioCounter {
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
 
   @@map("apartado_folio_counters")
+}
+
+// ============================================================
+// 4.9.c — Cuentas por Cobrar formal (CFDI-able)
+// Distinta a Fiado informal (sin papeles, libreta de abarrotes)
+// Job nocturno interés moratorio + recordatorios → V2 con BullMQ
+// ============================================================
+
+enum CxcTipoOrigen {
+  venta_credito
+  regularizacion_fiado
+  manual
+  apertura_saldo_inicial
+}
+
+enum CxcEstado {
+  activa
+  vencida
+  liquidada
+  incobrable
+  condonada
+}
+
+model CuentaCobrar {
+  id                      String        @id @default(cuid())
+  folio                   String
+  sucursalId              String        @map("sucursal_id")
+  tipoOrigen              CxcTipoOrigen @map("tipo_origen")
+  clienteId               String?       @map("cliente_id")
+  clienteB2bId            String?       @map("cliente_b2b_id")
+  ventaId                 String?       @unique @map("venta_id")
+  vendedorId              String?       @map("vendedor_id")
+  comisionPagadaAVendedor Boolean       @default(false) @map("comision_pagada_a_vendedor")
+  montoOriginal           Decimal       @map("monto_original") @db.Decimal(14, 4)
+  montoPagado             Decimal       @default(0) @map("monto_pagado") @db.Decimal(14, 4)
+  currency                String        @default("MXN")
+  fechaEmision            DateTime      @default(now()) @map("fecha_emision")
+  fechaVencimiento        DateTime      @map("fecha_vencimiento")
+  diasCreditoOtorgados    Int           @map("dias_credito_otorgados")
+  tasaInteresMoraPct      Decimal?      @map("tasa_interes_mora_pct") @db.Decimal(5, 2)
+  interesAcumulado        Decimal       @default(0) @map("interes_acumulado") @db.Decimal(14, 4)
+  estado                  CxcEstado     @default(activa)
+  notas                   String?
+  liquidadaAt             DateTime?     @map("liquidada_at")
+  condonadaAt             DateTime?     @map("condonada_at")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  sucursal   Sucursal    @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  cliente    Cliente?    @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteB2b ClienteB2b? @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
+  venta      Venta?      @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  vendedor   Usuario?    @relation("CuentaCobrarVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
+  pagos      CxcPago[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado, fechaVencimiento])
+  @@index([clienteId])
+  @@index([clienteB2bId])
+  @@map("cuentas_cobrar")
+}
+
+model CxcPago {
+  id             String          @id @default(cuid())
+  cuentaCobrarId String          @map("cuenta_cobrar_id")
+  metodo         VentaPagoMetodo
+  monto          Decimal         @db.Decimal(14, 4)
+  referencia     String?
+  comprobanteUrl String?         @map("comprobante_url")
+  usuarioId      String          @map("usuario_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  cuentaCobrar CuentaCobrar @relation(fields: [cuentaCobrarId], references: [id], onDelete: Cascade)
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([cuentaCobrarId, createdAt])
+  @@map("cxc_pagos")
+}
+
+model CxcFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("cxc_folio_counters")
+}
+
+// ============================================================
+// 4.9.d — Devoluciones (Hito 2.5)
+// ============================================================
+
+enum DevolucionTipo {
+  total
+  parcial
+}
+
+enum DevolucionMotivo {
+  defectuoso
+  cambio_opinion
+  talla_color
+  error_cobro
+  garantia
+  otro
+}
+
+enum DevolucionReembolsoMetodo {
+  efectivo
+  tarjeta_misma
+  saldo_a_favor
+  vale
+  transferencia
+  nota_credito_cxc
+  nota_credito_fiado
+}
+
+enum DevolucionEstado {
+  procesada
+  cancelada
+}
+
+model Devolucion {
+  id                  String                    @id @default(cuid())
+  folio               String
+  sucursalId          String                    @map("sucursal_id")
+  cajaId              String?                   @map("caja_id")
+  usuarioId           String                    @map("usuario_id")
+  ventaId             String                    @map("venta_id")
+  tipo                DevolucionTipo
+  motivo              DevolucionMotivo
+  motivoDetalle       String?                   @map("motivo_detalle")
+  subtotalDevuelto    Decimal                   @map("subtotal_devuelto") @db.Decimal(14, 4)
+  descuentoDevuelto   Decimal                   @default(0) @map("descuento_devuelto") @db.Decimal(14, 4)
+  ivaDevuelto         Decimal                   @default(0) @map("iva_devuelto") @db.Decimal(14, 4)
+  iepsDevuelto        Decimal                   @default(0) @map("ieps_devuelto") @db.Decimal(14, 4)
+  totalDevuelto       Decimal                   @map("total_devuelto") @db.Decimal(14, 4)
+  metodoReembolso     DevolucionReembolsoMetodo @map("metodo_reembolso")
+  referenciaReembolso String?                   @map("referencia_reembolso")
+  reponeStockDefault  Boolean                   @default(true) @map("repone_stock_default")
+  estado              DevolucionEstado          @default(procesada)
+  notas               String?
+  aprobadoPorId       String?                   @map("aprobado_por_id")
+  procesadoAt         DateTime                  @default(now()) @map("procesado_at")
+  canceladaMotivo     String?                   @map("cancelada_motivo")
+  canceladoAt         DateTime?                 @map("cancelado_at")
+  canceladoPorId      String?                   @map("cancelado_por_id")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+
+  sucursal     Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja         Caja?             @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario      Usuario           @relation("DevolucionProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
+  venta        Venta             @relation(fields: [ventaId], references: [id], onDelete: Restrict)
+  aprobadoPor  Usuario?          @relation("DevolucionAprobadaPor", fields: [aprobadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor Usuario?          @relation("DevolucionCanceladaPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  lineas       DevolucionLinea[]
+  cfdiEgreso   Cfdi?             @relation("DevolucionCfdiEgreso")
+
+  @@unique([sucursalId, folio])
+  @@index([ventaId])
+  @@index([sucursalId, procesadoAt])
+  @@index([estado])
+  @@map("devoluciones")
+}
+
+model DevolucionLinea {
+  id               String            @id @default(cuid())
+  devolucionId     String            @map("devolucion_id")
+  ventaLineaId     String            @map("venta_linea_id")
+  numero           Int
+  varianteId       String            @map("variante_id")
+  cantidadDevuelta Decimal           @map("cantidad_devuelta") @db.Decimal(18, 3)
+  precioUnitario   Decimal           @map("precio_unitario") @db.Decimal(14, 4)
+  subtotal         Decimal           @db.Decimal(14, 4)
+  ivaTotal         Decimal           @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal        Decimal           @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  totalLinea       Decimal           @map("total_linea") @db.Decimal(14, 4)
+  reponeStock      Boolean           @map("repone_stock")
+  motivoLinea      DevolucionMotivo? @map("motivo_linea")
+  snapshotProducto Json              @map("snapshot_producto")
+
+  devolucion Devolucion @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
+  ventaLinea VentaLinea @relation(fields: [ventaLineaId], references: [id], onDelete: Restrict)
+
+  @@unique([devolucionId, numero])
+  @@unique([devolucionId, ventaLineaId])
+  @@index([ventaLineaId])
+  @@index([varianteId])
+  @@map("devolucion_lineas")
+}
+
+model DevolucionFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("devolucion_folio_counters")
+}
+
+// ============================================================
+// 4.10 — Cotizaciones y Pedidos B2B (Hito 2.6)
+// ============================================================
+
+enum CotizacionEstado {
+  borrador
+  enviada
+  aceptada
+  rechazada
+  vencida
+  convertida
+}
+
+enum CotizacionCanalEnvio {
+  email
+  whatsapp
+  descarga
+  otro
+}
+
+enum PedidoEstado {
+  creado
+  preparando
+  enviado
+  entregado
+  cancelado
+}
+
+enum PedidoEstadoAprobacion {
+  no_requiere
+  pendiente
+  aprobada
+  rechazada
+}
+
+model Cotizacion {
+  id                String                @id @default(cuid())
+  folio             String
+  sucursalId        String                @map("sucursal_id")
+  clienteB2bId     String                @map("cliente_b2b_id")
+  vendedorId       String                @map("vendedor_id")
+  estado            CotizacionEstado      @default(borrador)
+  moneda            String                @default("MXN")
+  listaPrecioCodigo String?               @map("lista_precio_codigo")
+  cuponCodigo       String?               @map("cupon_codigo")
+  subtotal          Decimal               @default(0) @db.Decimal(14, 4)
+  descuentoTotal    Decimal               @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  ivaTotal          Decimal               @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal         Decimal               @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  total             Decimal               @default(0) @db.Decimal(14, 4)
+  fechaEmision      DateTime              @default(now()) @map("fecha_emision")
+  fechaVencimiento  DateTime              @map("fecha_vencimiento")
+  condicionesPago   String?               @map("condiciones_pago")
+  notas             String?
+  pdfFirmadoUrl     String?               @map("pdf_firmado_url")
+  enviadoAt         DateTime?             @map("enviado_at")
+  enviadoCanal      CotizacionCanalEnvio? @map("enviado_canal")
+  enviadoDestino    String?               @map("enviado_destino")
+  aceptadoAt        DateTime?             @map("aceptado_at")
+  rechazadoAt       DateTime?             @map("rechazado_at")
+  rechazoMotivo     String?               @map("rechazo_motivo")
+  pedidoId          String?               @unique @map("pedido_id")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  sucursal   Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  clienteB2b ClienteB2b        @relation(fields: [clienteB2bId], references: [id], onDelete: Restrict)
+  vendedor   Usuario           @relation("CotizacionVendedor", fields: [vendedorId], references: [id], onDelete: Restrict)
+  lineas     CotizacionLinea[]
+  pedido     Pedido?           @relation("PedidoFromCotizacion")
+
+  @@unique([sucursalId, folio])
+  @@index([estado, fechaVencimiento])
+  @@index([clienteB2bId])
+  @@index([vendedorId])
+  @@map("cotizaciones")
+}
+
+model CotizacionLinea {
+  id                  String  @id @default(cuid())
+  cotizacionId        String  @map("cotizacion_id")
+  numero              Int
+  productoId          String  @map("producto_id")
+  varianteId          String  @map("variante_id")
+  cantidad            Decimal @db.Decimal(18, 3)
+  precioUnitario      Decimal @map("precio_unitario") @db.Decimal(14, 4)
+  precioOriginal      Decimal @map("precio_original") @db.Decimal(14, 4)
+  descuentoUnitario   Decimal @default(0) @map("descuento_unitario") @db.Decimal(14, 4)
+  subtotal            Decimal @db.Decimal(14, 4)
+  ivaUnitario         Decimal @default(0) @map("iva_unitario") @db.Decimal(14, 4)
+  ivaTotal            Decimal @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsUnitario        Decimal @default(0) @map("ieps_unitario") @db.Decimal(14, 4)
+  iepsTotal           Decimal @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  totalLinea          Decimal @map("total_linea") @db.Decimal(14, 4)
+  descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
+  snapshotProducto    Json    @map("snapshot_producto")
+
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  @@unique([cotizacionId, numero])
+  @@index([varianteId])
+  @@map("cotizacion_lineas")
+}
+
+model CotizacionFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("cotizacion_folio_counters")
+}
+
+model Pedido {
+  id                   String                @id @default(cuid())
+  folio                String
+  sucursalId           String                @map("sucursal_id")
+  clienteB2bId         String                @map("cliente_b2b_id")
+  vendedorId           String                @map("vendedor_id")
+  cotizacionId         String?               @unique @map("cotizacion_id")
+  estado               PedidoEstado          @default(creado)
+  estadoAprobacion     PedidoEstadoAprobacion @default(no_requiere) @map("estado_aprobacion")
+  aprobadoPorId        String?               @map("aprobado_por_id")
+  aprobadoAt           DateTime?             @map("aprobado_at")
+  rechazadoMotivo      String?               @map("rechazado_motivo")
+  moneda               String                @default("MXN")
+  subtotal             Decimal               @default(0) @db.Decimal(14, 4)
+  descuentoTotal       Decimal               @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  ivaTotal             Decimal               @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal            Decimal               @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  total                Decimal               @default(0) @db.Decimal(14, 4)
+  ordenCompraCliente   String?               @map("orden_compra_cliente")
+  direccionEnvioId     String?               @map("direccion_envio_id")
+  paqueteria           String?
+  trackingExterno      String?               @map("tracking_externo")
+  trackingUrl          String?               @map("tracking_url")
+  fechaEntregaEstimada DateTime?             @map("fecha_entrega_estimada")
+  notas                String?
+  ventaId              String?               @unique @map("venta_id")
+  enviadoAt            DateTime?             @map("enviado_at")
+  entregadoAt          DateTime?             @map("entregado_at")
+  canceladoAt          DateTime?             @map("cancelado_at")
+  canceladoPorId       String?               @map("cancelado_por_id")
+  canceladoMotivo      String?               @map("cancelado_motivo")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  sucursal       Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  clienteB2b     ClienteB2b           @relation(fields: [clienteB2bId], references: [id], onDelete: Restrict)
+  vendedor       Usuario              @relation("PedidoVendedor", fields: [vendedorId], references: [id], onDelete: Restrict)
+  cotizacion     Cotizacion?          @relation("PedidoFromCotizacion", fields: [cotizacionId], references: [id], onDelete: SetNull)
+  aprobadoPor    Usuario?             @relation("PedidoAprobadoPor", fields: [aprobadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor   Usuario?             @relation("PedidoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  direccionEnvio ClienteB2bDireccion? @relation(fields: [direccionEnvioId], references: [id], onDelete: SetNull)
+  venta          Venta?               @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  lineas         PedidoLinea[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado])
+  @@index([estadoAprobacion])
+  @@index([clienteB2bId])
+  @@index([vendedorId])
+  @@map("pedidos")
+}
+
+model PedidoLinea {
+  id                  String  @id @default(cuid())
+  pedidoId            String  @map("pedido_id")
+  numero              Int
+  productoId          String  @map("producto_id")
+  varianteId          String  @map("variante_id")
+  cantidad            Decimal @db.Decimal(18, 3)
+  precioUnitario      Decimal @map("precio_unitario") @db.Decimal(14, 4)
+  precioOriginal      Decimal @map("precio_original") @db.Decimal(14, 4)
+  descuentoUnitario   Decimal @default(0) @map("descuento_unitario") @db.Decimal(14, 4)
+  subtotal            Decimal @db.Decimal(14, 4)
+  ivaUnitario         Decimal @default(0) @map("iva_unitario") @db.Decimal(14, 4)
+  ivaTotal            Decimal @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsUnitario        Decimal @default(0) @map("ieps_unitario") @db.Decimal(14, 4)
+  iepsTotal           Decimal @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  totalLinea          Decimal @map("total_linea") @db.Decimal(14, 4)
+  descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
+  snapshotProducto    Json    @map("snapshot_producto")
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@unique([pedidoId, numero])
+  @@index([varianteId])
+  @@map("pedido_lineas")
+}
+
+model PedidoFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("pedido_folio_counters")
+}
+
+// ============================================================
+// 4.14 — Recargas tiempo aire + servicios (Hito 3.1 Abarrotes)
+// ============================================================
+
+enum RecargaProveedorCodigo {
+  recargaki
+  mtscellular
+  pymeya
+  mock
+}
+
+enum RecargaCompaniaCodigo {
+  telcel
+  movistar
+  att
+  bait
+  unefon
+  virgin_mobile
+  maz
+  spentel
+  freedom_pop
+  bait_pospago
+}
+
+enum RecargaTipo {
+  tiempo_aire
+  pago_servicio
+}
+
+enum RecargaEstado {
+  pendiente
+  exitosa
+  fallida
+  reembolsada
+  disputada
+}
+
+model RecargaProveedorConfig {
+  id                   String                 @id @default(cuid())
+  proveedorCodigo      RecargaProveedorCodigo @unique @map("proveedor_codigo")
+  apiUrl               String?                @map("api_url")
+  apiKeyEncrypted      String?                @map("api_key_encrypted")
+  webhookSecretEncrypted String?              @map("webhook_secret_encrypted")
+  isPrimario           Boolean                @default(false) @map("is_primario")
+  isActive             Boolean                @default(true) @map("is_active")
+  saldoPrefondeado     Decimal                @default(0) @map("saldo_prefondeado") @db.Decimal(14, 4)
+  saldoAlertaMinimo    Decimal                @default(500) @map("saldo_alerta_minimo") @db.Decimal(14, 4)
+  comisionProveedorPct Decimal?               @map("comision_proveedor_pct") @db.Decimal(5, 2)
+  lastRechargeAt       DateTime?              @map("last_recharge_at")
+  totalConsumidoLifetime Decimal              @default(0) @map("total_consumido_lifetime") @db.Decimal(14, 4)
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+
+  recargas Recarga[]
+
+  @@index([isPrimario])
+  @@index([isActive])
+  @@map("recarga_proveedor_config")
+}
+
+model Recarga {
+  id                    String                 @id @default(cuid())
+  folio                 String
+  sucursalId            String                 @map("sucursal_id")
+  cajaAperturaId        String?                @map("caja_apertura_id")
+  usuarioId             String                 @map("usuario_id")
+  ventaId               String?                @map("venta_id")
+  tipo                  RecargaTipo            @default(tiempo_aire)
+  companiaCodigo        RecargaCompaniaCodigo  @map("compania_codigo")
+  proveedorConfigId     String                 @map("proveedor_config_id")
+  proveedorCodigo       RecargaProveedorCodigo @map("proveedor_codigo")
+  numeroTelefonico      String                 @map("numero_telefonico")
+  referenciaCapturada   String?                @map("referencia_capturada")
+  montoSolicitado       Decimal                @map("monto_solicitado") @db.Decimal(14, 4)
+  montoCobradoCliente   Decimal                @map("monto_cobrado_cliente") @db.Decimal(14, 4)
+  comisionTenant        Decimal                @default(0) @map("comision_tenant") @db.Decimal(14, 4)
+  comisionProveedor     Decimal                @default(0) @map("comision_proveedor") @db.Decimal(14, 4)
+  costoRealTenant       Decimal                @map("costo_real_tenant") @db.Decimal(14, 4)
+  folioProveedor        String?                @map("folio_proveedor")
+  respuestaProveedor    Json?                  @map("respuesta_proveedor")
+  estado                RecargaEstado          @default(pendiente)
+  motivoFalla           String?                @map("motivo_falla")
+  intentosTotales       Int                    @default(0) @map("intentos_totales")
+  reembolsadaAt         DateTime?              @map("reembolsada_at")
+  reembolsadaPorId      String?                @map("reembolsada_por_id")
+  reembolsoMotivo       String?                @map("reembolso_motivo")
+  disputadaAt           DateTime?              @map("disputada_at")
+  disputaMotivo         String?                @map("disputa_motivo")
+  procesadoAt           DateTime?              @map("procesado_at")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+
+  sucursal       Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  cajaApertura   CajaApertura?          @relation(fields: [cajaAperturaId], references: [id], onDelete: SetNull)
+  usuario        Usuario                @relation("RecargaProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
+  reembolsadaPor Usuario?               @relation("RecargaReembolsadaPor", fields: [reembolsadaPorId], references: [id], onDelete: SetNull)
+  venta          Venta?                 @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  proveedorConfig RecargaProveedorConfig @relation(fields: [proveedorConfigId], references: [id], onDelete: Restrict)
+  reintentos     RecargaReintento[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado, createdAt])
+  @@index([companiaCodigo])
+  @@index([proveedorCodigo])
+  @@index([numeroTelefonico])
+  @@index([ventaId])
+  @@map("recargas")
+}
+
+model RecargaReintento {
+  id            String   @id @default(cuid())
+  recargaId     String   @map("recarga_id")
+  intentoNumero Int      @map("intento_numero")
+  respuesta     Json?
+  errorMensaje  String?  @map("error_mensaje")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  recarga Recarga @relation(fields: [recargaId], references: [id], onDelete: Cascade)
+
+  @@unique([recargaId, intentoNumero])
+  @@index([recargaId, createdAt])
+  @@map("recarga_reintentos")
+}
+
+model RecargaFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("recarga_folio_counters")
+}
+
+// ============================================================
+// 4.15 — Salud Humana V1 (Hito 3.2)
+// Scope V1: Paciente local + Médico + Agenda + Cita + Consulta SOAP + Receta.
+// Diferidos: PHR cross-tenant master DB, vacunas+cartilla+pediatría, motor
+// reglas interacciones automático (V1 catálogo data, sin cruce auto).
+// REGLA: NO IA clínica decisional — ni diagnóstico, ni dosis, ni interpretación.
+// ============================================================
+
+enum PacienteSexo {
+  masculino
+  femenino
+  otro
+  no_especificado
+}
+
+enum PacienteClasificacionRiesgo {
+  bajo
+  medio
+  alto
+  critico
+}
+
+enum ConsultaTipo {
+  primera_vez
+  seguimiento
+  urgencia
+  control_post_cirugia
+  telemedicina
+}
+
+enum ConsultaPronostico {
+  favorable
+  reservado
+  grave
+  desconocido
+}
+
+enum ConsultaEstado {
+  borrador
+  firmada
+  enmendada
+  cancelada
+}
+
+enum CitaEstado {
+  programada
+  confirmada
+  checkin
+  en_consulta
+  completada
+  cancelada
+  no_asistio
+}
+
+enum AgendaBloqueoTipo {
+  vacaciones
+  congreso
+  personal
+  incapacidad
+  cerrado_sucursal
+}
+
+enum RecetaEstado {
+  emitida
+  surtida
+  cancelada
+  expirada
+}
+
+enum MedicamentoClasificacionCofepris {
+  G_I
+  G_II
+  G_III
+  G_IV
+  G_V
+  G_VI
+  vet
+  OTC
+}
+
+model Paciente {
+  id                       String                       @id @default(cuid())
+  numeroExpediente         String                       @map("numero_expediente")
+  nombre                   String
+  apellidoPaterno          String?                      @map("apellido_paterno")
+  apellidoMaterno          String?                      @map("apellido_materno")
+  fechaNacimiento          DateTime?                    @map("fecha_nacimiento")
+  sexo                     PacienteSexo                 @default(no_especificado)
+  curp                     String?
+  rfc                      String?
+  telefonoPrincipal        String?                      @map("telefono_principal")
+  emailPrincipal           String?                      @map("email_principal")
+  direccion                Json?
+  ocupacion                String?
+  estadoCivil              String?                      @map("estado_civil")
+  contactoEmergenciaNombre String?                      @map("contacto_emergencia_nombre")
+  contactoEmergenciaTel    String?                      @map("contacto_emergencia_tel")
+  tipoSangre               String?                      @map("tipo_sangre")
+  alergias                 Json                         @default("[]")
+  antecedentesPatologicos  Json                         @default("[]") @map("antecedentes_patologicos")
+  antecedentesFamiliares   Json                         @default("[]") @map("antecedentes_familiares")
+  medicamentosCronicos     Json                         @default("[]") @map("medicamentos_cronicos")
+  tutorClienteId           String?                      @map("tutor_cliente_id")
+  medicoAsignadoId         String?                      @map("medico_asignado_id")
+  etiquetas                Json                         @default("[]")
+  notasInternas            String?                      @map("notas_internas")
+  alertasPersonalizadas    Json                         @default("[]") @map("alertas_personalizadas")
+  clasificacionRiesgo      PacienteClasificacionRiesgo? @map("clasificacion_riesgo")
+  fechaPrimeraVisita       DateTime?                    @map("fecha_primera_visita")
+  isActive                 Boolean                      @default(true) @map("is_active")
+  archivedAt               DateTime?                    @map("archived_at")
+  createdAt                DateTime                     @default(now()) @map("created_at")
+  updatedAt                DateTime                     @updatedAt @map("updated_at")
+
+  tutor          Cliente?       @relation("PacienteTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
+  medicoAsignado Usuario?       @relation("PacienteMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
+  citas          Cita[]
+  consultas      Consulta[]
+  recetas        Receta[]
+  signosVitales  ConsultaSignoVital[]
+  vacunaciones   Vacunacion[]
+  hospitalizaciones Hospitalizacion[]
+  signosHospital SignoVitalHospital[] @relation("SignoVitalHospitalPaciente")
+
+  @@unique([numeroExpediente])
+  @@index([nombre, apellidoPaterno])
+  @@index([curp])
+  @@index([telefonoPrincipal])
+  @@index([medicoAsignadoId])
+  @@index([isActive])
+  @@map("pacientes")
+}
+
+model Medico {
+  id                   String   @id @default(cuid())
+  usuarioId            String   @unique @map("usuario_id")
+  cedulaProfesional    String?  @map("cedula_profesional")
+  especialidades       Json     @default("[]")
+  subespecialidades    Json     @default("[]")
+  anosExperiencia      Int?     @map("anos_experiencia")
+  idiomasAtencion      Json     @default("[\"es-MX\"]") @map("idiomas_atencion")
+  bio                  String?
+  fotoPerfilUrl        String?  @map("foto_perfil_url")
+  consultorios         Json     @default("[]")
+  precioConsultaPrimera Decimal? @map("precio_consulta_primera") @db.Decimal(14, 2)
+  precioConsultaSeguimiento Decimal? @map("precio_consulta_seguimiento") @db.Decimal(14, 2)
+  aceptaSeguros        Json     @default("[]") @map("acepta_seguros")
+  firmaElectronicaUrl  String?  @map("firma_electronica_url")
+  aceptaTelemedicina   Boolean  @default(false) @map("acepta_telemedicina")
+  isPerfilPublicoDoctoralia Boolean @default(false) @map("is_perfil_publico_doctoralia")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@map("medicos")
+}
+
+model Agenda {
+  id                  String   @id @default(cuid())
+  medicoUsuarioId     String   @map("medico_usuario_id")
+  sucursalId          String   @map("sucursal_id")
+  diaSemana           Int?     @map("dia_semana")
+  fechaEspecifica     DateTime? @map("fecha_especifica") @db.Date
+  horaInicio          String   @map("hora_inicio")
+  horaFin             String   @map("hora_fin")
+  duracionSlotMinutos Int      @default(30) @map("duracion_slot_minutos")
+  tiposSlots          Json     @default("[\"consulta\"]") @map("tipos_slots")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  medico   Usuario  @relation("AgendaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Cascade)
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@index([medicoUsuarioId, sucursalId, isActive])
+  @@index([fechaEspecifica])
+  @@map("agendas")
+}
+
+model AgendaBloqueo {
+  id              String            @id @default(cuid())
+  medicoUsuarioId String?           @map("medico_usuario_id")
+  sucursalId      String?           @map("sucursal_id")
+  fechaInicio     DateTime          @map("fecha_inicio")
+  fechaFin        DateTime          @map("fecha_fin")
+  tipo            AgendaBloqueoTipo
+  motivoPublico   String?           @map("motivo_publico")
+  notasInternas   String?           @map("notas_internas")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  medico   Usuario?  @relation("AgendaBloqueoMedico", fields: [medicoUsuarioId], references: [id], onDelete: Cascade)
+  sucursal Sucursal? @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@index([medicoUsuarioId, fechaInicio])
+  @@index([sucursalId, fechaInicio])
+  @@map("agenda_bloqueos")
+}
+
+model MotivoCitaCatalogo {
+  id                    String   @id @default(cuid())
+  nombre                String
+  vertical              String   @default("humana")
+  duracionDefaultMinutos Int     @default(30) @map("duracion_default_minutos")
+  costoReferencia       Decimal? @map("costo_referencia") @db.Decimal(14, 2)
+  requiereAnticipo      Boolean  @default(false) @map("requiere_anticipo")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  citas Cita[]
+
+  @@unique([nombre, vertical])
+  @@index([isActive])
+  @@map("motivos_cita_catalogo")
+}
+
+model Cita {
+  id                      String     @id @default(cuid())
+  folio                   String
+  pacienteId              String?    @map("paciente_id")
+  mascotaId               String?    @map("mascota_id")
+  medicoUsuarioId         String     @map("medico_usuario_id")
+  sucursalId              String     @map("sucursal_id")
+  motivoCitaId            String?    @map("motivo_cita_id")
+  motivoTexto             String?    @map("motivo_texto")
+  consultorioRoom         String?    @map("consultorio_room")
+  recursosClinicosAsignados Json     @default("[]") @map("recursos_clinicos_asignados")
+  fechaProgramada         DateTime   @map("fecha_programada")
+  duracionEstimadaMinutos Int        @default(30) @map("duracion_estimada_minutos")
+  estado                  CitaEstado @default(programada)
+  pesoCheckinKg           Decimal?   @map("peso_checkin_kg") @db.Decimal(6, 2)
+  temperaturaCheckinC     Decimal?   @map("temperatura_checkin_c") @db.Decimal(4, 1)
+  preQuestionsResponses   Json?      @map("pre_questions_responses")
+  notasRecepcion          String?    @map("notas_recepcion")
+  fechaCheckinAt          DateTime?  @map("fecha_checkin_at")
+  checkinPorId            String?    @map("checkin_por_id")
+  fechaInicioConsulta     DateTime?  @map("fecha_inicio_consulta")
+  fechaFinConsulta        DateTime?  @map("fecha_fin_consulta")
+  tiempoEsperaMinutos     Int?       @map("tiempo_espera_minutos")
+  duracionConsultaMinutos Int?       @map("duracion_consulta_minutos")
+  canceladoAt             DateTime?  @map("cancelado_at")
+  canceladoPorId          String?    @map("cancelado_por_id")
+  canceladoMotivo         String?    @map("cancelado_motivo")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  paciente     Paciente?           @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota      Mascota?            @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medico       Usuario             @relation("CitaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
+  sucursal     Sucursal            @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  motivoCita   MotivoCitaCatalogo? @relation(fields: [motivoCitaId], references: [id], onDelete: SetNull)
+  checkinPor   Usuario?            @relation("CitaCheckinPor", fields: [checkinPorId], references: [id], onDelete: SetNull)
+  canceladoPor Usuario?            @relation("CitaCanceladaPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  consulta     Consulta?
+
+  @@unique([sucursalId, folio])
+  @@index([medicoUsuarioId, fechaProgramada])
+  @@index([pacienteId, fechaProgramada])
+  @@index([mascotaId, fechaProgramada])
+  @@index([estado, fechaProgramada])
+  @@map("citas")
+}
+
+model CitaFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("cita_folio_counters")
+}
+
+model DiagnosticoCatalogo {
+  id                String   @id @default(cuid())
+  codigoCie10       String   @map("codigo_cie10")
+  codigoCie11       String?  @map("codigo_cie11")
+  nombreEs          String   @map("nombre_es")
+  nombreEn          String?  @map("nombre_en")
+  aplicaHumano      Boolean  @default(true) @map("aplica_humano")
+  aplicaVet         Boolean  @default(false) @map("aplica_vet")
+  categoria         String?
+  isPrecargadoGlobal Boolean @default(false) @map("is_precargado_global")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  consultasPrincipal Consulta[] @relation("ConsultaDiagnosticoPrincipal")
+  hospitalizacionesIngreso Hospitalizacion[]
+
+  @@unique([codigoCie10])
+  @@index([nombreEs])
+  @@index([aplicaHumano])
+  @@index([aplicaVet])
+  @@map("diagnosticos_catalogo")
+}
+
+model MedicamentoCatalogo {
+  id                          String                          @id @default(cuid())
+  nombreComercial             String                          @map("nombre_comercial")
+  principioActivo             String                          @map("principio_activo")
+  concentracion               String?
+  presentacion                String?
+  viaAdministracion           String?                         @map("via_administracion")
+  categoria                   String?
+  clasificacionCofepris       MedicamentoClasificacionCofepris @default(OTC) @map("clasificacion_cofepris")
+  requiereRecetarioOficial    Boolean                         @default(false) @map("requiere_recetario_oficial")
+  esControladoVet             Boolean                         @default(false) @map("es_controlado_vet")
+  dosisRecomendadaPediatrica  Json?                           @map("dosis_recomendada_pediatrica")
+  dosisRecomendadaAdulto      Json?                           @map("dosis_recomendada_adulto")
+  dosisRecomendadaVet         Json?                           @map("dosis_recomendada_vet")
+  interaccionesConocidas      Json                            @default("[]") @map("interacciones_conocidas")
+  alergiasRelacionadas        Json                            @default("[]") @map("alergias_relacionadas")
+  efectosAdversos             Json                            @default("[]") @map("efectos_adversos")
+  precioReferenciaMercado     Decimal?                        @map("precio_referencia_mercado") @db.Decimal(14, 2)
+  isPrecargadoGlobal          Boolean                         @default(false) @map("is_precargado_global")
+  isActive                    Boolean                         @default(true) @map("is_active")
+  createdAt                   DateTime                        @default(now()) @map("created_at")
+  updatedAt                   DateTime                        @updatedAt @map("updated_at")
+
+  recetaItems RecetaItem[]
+  medicacionesProgramadas MedicacionProgramada[]
+
+  @@index([nombreComercial])
+  @@index([principioActivo])
+  @@index([clasificacionCofepris])
+  @@map("medicamentos_catalogo")
+}
+
+model Consulta {
+  id                          String              @id @default(cuid())
+  citaId                      String?             @unique @map("cita_id")
+  pacienteId                  String?             @map("paciente_id")
+  mascotaId                   String?             @map("mascota_id")
+  medicoUsuarioId             String              @map("medico_usuario_id")
+  enfermeraAsistenteId        String?             @map("enfermera_asistente_id")
+  sucursalId                  String              @map("sucursal_id")
+  fechaConsulta               DateTime            @map("fecha_consulta")
+  duracionMinutos             Int?                @map("duracion_minutos")
+  tipo                        ConsultaTipo        @default(seguimiento)
+  motivoConsulta              String?             @map("motivo_consulta")
+  sintomas                    Json                @default("[]")
+  tiempoEvolucion             String?             @map("tiempo_evolucion")
+  tratamientosPrevios         String?             @map("tratamientos_previos")
+  signosVitales               Json?               @map("signos_vitales")
+  exploracionAparatos         Json?               @map("exploracion_aparatos")
+  diagnosticoPrincipalId      String?             @map("diagnostico_principal_id")
+  diagnosticoPrincipalTexto   String?             @map("diagnostico_principal_texto")
+  diagnosticosDiferenciales   Json                @default("[]") @map("diagnosticos_diferenciales")
+  pronostico                  ConsultaPronostico  @default(desconocido)
+  planTratamiento             String?             @map("plan_tratamiento")
+  siguienteControlDias        Int?                @map("siguiente_control_dias")
+  notasClinicasInternas       String?             @map("notas_clinicas_internas")
+  resumenParaTutor            String?             @map("resumen_para_tutor")
+  estado                      ConsultaEstado      @default(borrador)
+  firmadaAt                   DateTime?           @map("firmada_at")
+  firmadaPorMedicoUsuarioId   String?             @map("firmada_por_medico_usuario_id")
+  firmaElectronicaAplicadaUrl String?             @map("firma_electronica_aplicada_url")
+  consultaOriginalId          String?             @map("consulta_original_id")
+  enmiendaMotivo              String?             @map("enmienda_motivo")
+  canceladaAt                 DateTime?           @map("cancelada_at")
+  canceladaMotivo             String?             @map("cancelada_motivo")
+  createdAt                   DateTime            @default(now()) @map("created_at")
+  updatedAt                   DateTime            @updatedAt @map("updated_at")
+
+  cita                  Cita?                @relation(fields: [citaId], references: [id], onDelete: SetNull)
+  paciente              Paciente?            @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota               Mascota?             @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medico                Usuario              @relation("ConsultaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
+  enfermeraAsistente    Usuario?             @relation("ConsultaEnfermeraAsistente", fields: [enfermeraAsistenteId], references: [id], onDelete: SetNull)
+  sucursal              Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  diagnosticoPrincipal  DiagnosticoCatalogo? @relation("ConsultaDiagnosticoPrincipal", fields: [diagnosticoPrincipalId], references: [id], onDelete: SetNull)
+  firmadaPor            Usuario?             @relation("ConsultaFirmadaPor", fields: [firmadaPorMedicoUsuarioId], references: [id], onDelete: SetNull)
+  consultaOriginal      Consulta?            @relation("ConsultaEnmiendas", fields: [consultaOriginalId], references: [id], onDelete: SetNull)
+  enmiendas             Consulta[]           @relation("ConsultaEnmiendas")
+  signosVitalesHistorial ConsultaSignoVital[]
+  recetas               Receta[]
+
+  @@index([pacienteId, fechaConsulta])
+  @@index([mascotaId, fechaConsulta])
+  @@index([medicoUsuarioId, fechaConsulta])
+  @@index([estado])
+  @@map("consultas")
+}
+
+model ConsultaSignoVital {
+  id                     String   @id @default(cuid())
+  consultaId             String   @map("consulta_id")
+  pacienteId             String?  @map("paciente_id")
+  mascotaId              String?  @map("mascota_id")
+  momento                DateTime
+  pesoKg                 Decimal? @map("peso_kg") @db.Decimal(6, 2)
+  temperaturaC           Decimal? @map("temperatura_c") @db.Decimal(4, 1)
+  frecuenciaCardiaca     Int?     @map("frecuencia_cardiaca")
+  frecuenciaRespiratoria Int?     @map("frecuencia_respiratoria")
+  presionSistolica       Int?     @map("presion_sistolica")
+  presionDiastolica      Int?     @map("presion_diastolica")
+  saturacionO2           Decimal? @map("saturacion_o2") @db.Decimal(5, 2)
+  glucosaMgDl            Decimal? @map("glucosa_mg_dl") @db.Decimal(6, 2)
+  tiempoLlenadoCapilarSeg Decimal? @map("tiempo_llenado_capilar_seg") @db.Decimal(4, 1)
+  mucosasColor           String?  @map("mucosas_color")
+  notas                  String?
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  consulta Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  paciente Paciente? @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+  mascota  Mascota?  @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+
+  @@index([pacienteId, momento])
+  @@index([mascotaId, momento])
+  @@map("consulta_signos_vitales")
+}
+
+model Receta {
+  id                       String       @id @default(cuid())
+  folio                    String
+  sucursalId               String       @map("sucursal_id")
+  consultaId               String?      @map("consulta_id")
+  pacienteId               String?      @map("paciente_id")
+  mascotaId                String?      @map("mascota_id")
+  medicoUsuarioId          String       @map("medico_usuario_id")
+  fechaEmision             DateTime     @default(now()) @map("fecha_emision")
+  vigenciaDias             Int          @default(30) @map("vigencia_dias")
+  fechaExpiracion          DateTime     @map("fecha_expiracion")
+  qrValidacionToken        String       @unique @map("qr_validacion_token")
+  firmaElectronicaUrl      String?      @map("firma_electronica_url")
+  estado                   RecetaEstado @default(emitida)
+  enviadaWhatsappAt        DateTime?    @map("enviada_whatsapp_at")
+  enviadaEmailAt           DateTime?    @map("enviada_email_at")
+  pdfUrl                   String?      @map("pdf_url")
+  esGrupoControlado        Boolean      @default(false) @map("es_grupo_controlado")
+  numeroRecetarioOficial   String?      @map("numero_recetario_oficial")
+  instruccionesGeneralesTutor String?   @map("instrucciones_generales_tutor")
+  canceladaAt              DateTime?    @map("cancelada_at")
+  canceladaPorId           String?      @map("cancelada_por_id")
+  canceladaMotivo          String?      @map("cancelada_motivo")
+  createdAt                DateTime     @default(now()) @map("created_at")
+  updatedAt                DateTime     @updatedAt @map("updated_at")
+
+  sucursal    Sucursal     @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  consulta    Consulta?    @relation(fields: [consultaId], references: [id], onDelete: SetNull)
+  paciente    Paciente?    @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota     Mascota?     @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medico      Usuario      @relation("RecetaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
+  canceladaPor Usuario?    @relation("RecetaCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  items       RecetaItem[]
+  medicacionesProgramadas MedicacionProgramada[] @relation("MedicacionProgramadaReceta")
+
+  @@unique([sucursalId, folio])
+  @@index([pacienteId, fechaEmision])
+  @@index([mascotaId, fechaEmision])
+  @@index([medicoUsuarioId, fechaEmision])
+  @@index([estado])
+  @@map("recetas")
+}
+
+model RecetaItem {
+  id                       String   @id @default(cuid())
+  recetaId                 String   @map("receta_id")
+  numero                   Int
+  medicamentoCatalogoId    String?  @map("medicamento_catalogo_id")
+  nombreSnapshot           String   @map("nombre_snapshot")
+  concentracionSnapshot    String?  @map("concentracion_snapshot")
+  presentacionSnapshot     String?  @map("presentacion_snapshot")
+  dosisUnidad              String   @map("dosis_unidad")
+  dosisCantidad            Decimal  @map("dosis_cantidad") @db.Decimal(10, 3)
+  dosisVia                 String   @map("dosis_via")
+  frecuenciaHoras          Decimal  @map("frecuencia_horas") @db.Decimal(6, 2)
+  duracionDias             Int      @map("duracion_dias")
+  totalUnidadesDispensar   Decimal? @map("total_unidades_dispensar") @db.Decimal(10, 3)
+  instruccionesAdministracion String? @map("instrucciones_administracion")
+  alertasAplicadas         Json     @default("[]") @map("alertas_aplicadas")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  receta      Receta               @relation(fields: [recetaId], references: [id], onDelete: Cascade)
+  medicamento MedicamentoCatalogo? @relation(fields: [medicamentoCatalogoId], references: [id], onDelete: SetNull)
+
+  @@unique([recetaId, numero])
+  @@index([medicamentoCatalogoId])
+  @@map("receta_items")
+}
+
+model RecetaFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("receta_folio_counters")
+}
+
+// ============================================================
+// 4.15 Salud Vet (Hito 3.3) — Mascota + Vacunas + Cartilla
+// Diferidos a 3.4/V1.5: hospitalización N3, laboratorio, imagenología.
+// Polimorfismo: Consulta/Receta/ConsultaSignoVital/Cita aceptan paciente
+// humano XOR mascota (validado en service layer).
+// ============================================================
+
+enum MascotaEspecie {
+  perro
+  gato
+  ave
+  conejo
+  huron
+  reptil
+  pez
+  roedor
+  otro
+}
+
+enum MascotaSexo {
+  macho
+  hembra
+  desconocido
+}
+
+enum CartillaTipo {
+  humano_basico_ssa
+  humano_complementario
+  vet_perro
+  vet_gato
+  vet_otro
+}
+
+model Mascota {
+  id                       String          @id @default(cuid())
+  numeroExpediente         String          @map("numero_expediente")
+  nombre                   String
+  especie                  MascotaEspecie
+  raza                     String?
+  sexo                     MascotaSexo     @default(desconocido)
+  esEsterilizado           Boolean         @default(false) @map("es_esterilizado")
+  fechaNacimiento          DateTime?       @map("fecha_nacimiento")
+  fechaNacimientoAproximada Boolean        @default(false) @map("fecha_nacimiento_aproximada")
+  color                    String?
+  microchip                String?
+  pesoActualKg             Decimal?        @map("peso_actual_kg") @db.Decimal(6, 2)
+  fotoUrl                  String?         @map("foto_url")
+  tutorClienteId           String?         @map("tutor_cliente_id")
+  medicoAsignadoId         String?         @map("medico_asignado_id")
+  alergias                 Json            @default("[]")
+  antecedentesPatologicos  Json            @default("[]") @map("antecedentes_patologicos")
+  medicamentosCronicos     Json            @default("[]") @map("medicamentos_cronicos")
+  etiquetas                Json            @default("[]")
+  notasInternas            String?         @map("notas_internas")
+  alertasPersonalizadas    Json            @default("[]") @map("alertas_personalizadas")
+  fechaPrimeraVisita       DateTime?       @map("fecha_primera_visita")
+  fechaDefuncion           DateTime?       @map("fecha_defuncion")
+  causaDefuncion           String?         @map("causa_defuncion")
+  isActive                 Boolean         @default(true) @map("is_active")
+  archivedAt               DateTime?       @map("archived_at")
+  createdAt                DateTime        @default(now()) @map("created_at")
+  updatedAt                DateTime        @updatedAt @map("updated_at")
+
+  tutor          Cliente?             @relation("MascotaTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
+  medicoAsignado Usuario?             @relation("MascotaMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
+  citas          Cita[]
+  consultas      Consulta[]
+  recetas        Receta[]
+  signosVitales  ConsultaSignoVital[]
+  vacunaciones   Vacunacion[]
+  hospitalizaciones Hospitalizacion[]
+  signosHospital SignoVitalHospital[] @relation("SignoVitalHospitalMascota")
+
+  @@unique([numeroExpediente])
+  @@index([nombre])
+  @@index([microchip])
+  @@index([tutorClienteId])
+  @@index([medicoAsignadoId])
+  @@index([especie])
+  @@index([isActive])
+  @@map("mascotas")
+}
+
+model VacunaCatalogo {
+  id                          String   @id @default(cuid())
+  nombreComercial             String   @map("nombre_comercial")
+  principioActivo             String?  @map("principio_activo")
+  tipo                        String?
+  aplicaHumano                Boolean  @default(false) @map("aplica_humano")
+  aplicaVet                   Boolean  @default(false) @map("aplica_vet")
+  especiesAplicables          Json     @default("[]") @map("especies_aplicables")
+  esquemaDefaultHumano        Json?    @map("esquema_default_humano")
+  esquemaDefaultVet           Json?    @map("esquema_default_vet")
+  viaAplicacion               String?  @map("via_aplicacion")
+  intervaloRefuerzosDias      Int?     @map("intervalo_refuerzos_dias")
+  isObligatoriaCartillaNacional Boolean @default(false) @map("is_obligatoria_cartilla_nacional")
+  precioReferencia            Decimal? @map("precio_referencia") @db.Decimal(14, 2)
+  isPrecargadoGlobal          Boolean  @default(false) @map("is_precargado_global")
+  isActive                    Boolean  @default(true) @map("is_active")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  vacunaciones Vacunacion[]
+
+  @@index([aplicaHumano])
+  @@index([aplicaVet])
+  @@index([nombreComercial])
+  @@map("vacunas_catalogo")
+}
+
+model Vacunacion {
+  id                          String    @id @default(cuid())
+  pacienteId                  String?   @map("paciente_id")
+  mascotaId                   String?   @map("mascota_id")
+  vacunaCatalogoId            String    @map("vacuna_catalogo_id")
+  medicoAplicadorId           String    @map("medico_aplicador_id")
+  fechaAplicacion             DateTime  @map("fecha_aplicacion")
+  numeroLote                  String    @map("numero_lote")
+  caducidadLote               DateTime  @map("caducidad_lote")
+  marcaSnapshot               String?   @map("marca_snapshot")
+  viaAdministracion           String?   @map("via_administracion")
+  dosisAplicada               String?   @map("dosis_aplicada")
+  reaccionAdversaObservada    String?   @map("reaccion_adversa_observada")
+  proximaAplicacionFecha      DateTime? @map("proxima_aplicacion_fecha")
+  notas                       String?
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+
+  vacuna          VacunaCatalogo @relation(fields: [vacunaCatalogoId], references: [id], onDelete: Restrict)
+  medicoAplicador Usuario        @relation("VacunacionAplicador", fields: [medicoAplicadorId], references: [id], onDelete: Restrict)
+  paciente        Paciente?      @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
+  mascota         Mascota?       @relation(fields: [mascotaId], references: [id], onDelete: Cascade)
+
+  @@index([pacienteId, fechaAplicacion])
+  @@index([mascotaId, fechaAplicacion])
+  @@index([numeroLote])
+  @@index([proximaAplicacionFecha])
+  @@map("vacunaciones")
+}
+
+// ============================================================
+// HITO 3.4 — Salud N3 hospitalización (vet + humano)
+// Camas, Hospitalizacion, MedicacionProgramada, KardexAplicacion,
+// SignoVitalHospital, CargoHospital. Polimorfismo XOR paciente/mascota
+// validado en capa servicio.
+// ============================================================
+
+enum CamaTipo {
+  general
+  cuidados_intensivos
+  aislamiento
+  cirugia_recuperacion
+  pediatria
+}
+
+enum CamaEstado {
+  libre
+  ocupada
+  limpieza
+  mantenimiento
+  fuera_de_servicio
+}
+
+enum HospitalizacionEstado {
+  activa
+  alta
+  fallecimiento
+  fuga
+  traslado_externo
+}
+
+enum MedicacionProgramadaEstado {
+  activa
+  suspendida
+  completada
+}
+
+enum KardexAplicacionEstado {
+  pendiente
+  aplicada
+  omitida
+  reprogramada
+}
+
+enum CargoHospitalTipo {
+  estancia_diaria
+  medicamento
+  procedimiento
+  laboratorio
+  imagenologia
+  consumible
+  honorarios_medicos
+  otro
+}
+
+model Cama {
+  id             String     @id @default(cuid())
+  sucursalId     String     @map("sucursal_id")
+  codigo         String
+  nombre         String?
+  tipo           CamaTipo   @default(general)
+  estado         CamaEstado @default(libre)
+  tarifaPorNoche Decimal?   @map("tarifa_por_noche") @db.Decimal(14, 2)
+  notas          String?
+  isActive       Boolean    @default(true) @map("is_active")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  sucursal         Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  hospitalizaciones Hospitalizacion[]
+
+  @@unique([sucursalId, codigo])
+  @@index([sucursalId, estado])
+  @@index([tipo])
+  @@map("camas")
+}
+
+model Hospitalizacion {
+  id                      String                @id @default(cuid())
+  folio                   String
+  sucursalId              String                @map("sucursal_id")
+  camaId                  String                @map("cama_id")
+  pacienteId              String?               @map("paciente_id")
+  mascotaId               String?               @map("mascota_id")
+  medicoResponsableId     String                @map("medico_responsable_id")
+  diagnosticoIngresoId    String?               @map("diagnostico_ingreso_id")
+  diagnosticoIngresoTexto String?               @map("diagnostico_ingreso_texto")
+  motivoIngreso           String                @map("motivo_ingreso")
+  notasIngreso            String?               @map("notas_ingreso")
+  fechaIngreso            DateTime              @map("fecha_ingreso")
+  fechaEgreso             DateTime?             @map("fecha_egreso")
+  motivoEgreso            String?               @map("motivo_egreso")
+  altaPorId               String?               @map("alta_por_id")
+  observacionesAlta       String?               @map("observaciones_alta")
+  ventaAlAltaId           String?               @unique @map("venta_al_alta_id")
+  estado                  HospitalizacionEstado @default(activa)
+  tarifaEstanciaDiaria    Decimal?              @map("tarifa_estancia_diaria") @db.Decimal(14, 2)
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  sucursal               Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  cama                   Cama                   @relation(fields: [camaId], references: [id], onDelete: Restrict)
+  paciente               Paciente?              @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota                Mascota?               @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medicoResponsable      Usuario                @relation("HospitalizacionMedico", fields: [medicoResponsableId], references: [id], onDelete: Restrict)
+  diagnosticoIngreso     DiagnosticoCatalogo?   @relation(fields: [diagnosticoIngresoId], references: [id], onDelete: SetNull)
+  altaPor                Usuario?               @relation("HospitalizacionAltaPor", fields: [altaPorId], references: [id], onDelete: SetNull)
+  ventaAlAlta            Venta?                 @relation("HospitalizacionVentaAlAlta", fields: [ventaAlAltaId], references: [id], onDelete: SetNull)
+  medicacionesProgramadas MedicacionProgramada[]
+  signosVitales          SignoVitalHospital[]
+  cargos                 CargoHospital[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado, fechaIngreso])
+  @@index([pacienteId])
+  @@index([mascotaId])
+  @@index([camaId])
+  @@index([medicoResponsableId])
+  @@map("hospitalizaciones")
+}
+
+model HospitalizacionFolioCounter {
+  sucursalId  String   @id @map("sucursal_id")
+  ultimoFolio Int      @default(0) @map("ultimo_folio")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("hospitalizacion_folio_counters")
+}
+
+model MedicacionProgramada {
+  id                      String                     @id @default(cuid())
+  hospitalizacionId       String                     @map("hospitalizacion_id")
+  medicamentoCatalogoId   String                     @map("medicamento_catalogo_id")
+  medicamentoNombreSnapshot String                   @map("medicamento_nombre_snapshot")
+  dosis                   String
+  via                     String
+  frecuenciaHoras         Int                        @map("frecuencia_horas")
+  horaInicio              DateTime                   @map("hora_inicio")
+  duracionDias            Int                        @map("duracion_dias")
+  indicacionMedica        String                     @map("indicacion_medica")
+  recetaId                String?                    @map("receta_id")
+  estado                  MedicacionProgramadaEstado @default(activa)
+  suspendidaAt            DateTime?                  @map("suspendida_at")
+  motivoSuspension        String?                    @map("motivo_suspension")
+  prescritaPorId          String                     @map("prescrita_por_id")
+  createdAt               DateTime                   @default(now()) @map("created_at")
+  updatedAt               DateTime                   @updatedAt @map("updated_at")
+
+  hospitalizacion Hospitalizacion     @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
+  medicamento     MedicamentoCatalogo @relation(fields: [medicamentoCatalogoId], references: [id], onDelete: Restrict)
+  receta          Receta?             @relation("MedicacionProgramadaReceta", fields: [recetaId], references: [id], onDelete: SetNull)
+  prescritaPor    Usuario             @relation("MedicacionProgramadaPrescritaPor", fields: [prescritaPorId], references: [id], onDelete: Restrict)
+  aplicaciones    KardexAplicacion[]
+
+  @@index([hospitalizacionId, estado])
+  @@index([medicamentoCatalogoId])
+  @@map("medicaciones_programadas")
+}
+
+model KardexAplicacion {
+  id                       String                 @id @default(cuid())
+  medicacionProgramadaId   String                 @map("medicacion_programada_id")
+  horaProgramada           DateTime               @map("hora_programada")
+  horaAplicada             DateTime?              @map("hora_aplicada")
+  enfermeraAplicadorId     String?                @map("enfermera_aplicador_id")
+  estado                   KardexAplicacionEstado @default(pendiente)
+  motivoOmision            String?                @map("motivo_omision")
+  notas                    String?
+  reaccionAdversaObservada String?                @map("reaccion_adversa_observada")
+  alertaEnviadaAt          DateTime?              @map("alerta_enviada_at")
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+
+  medicacionProgramada MedicacionProgramada @relation(fields: [medicacionProgramadaId], references: [id], onDelete: Cascade)
+  enfermeraAplicador   Usuario?             @relation("KardexEnfermeraAplicador", fields: [enfermeraAplicadorId], references: [id], onDelete: SetNull)
+
+  @@index([medicacionProgramadaId, horaProgramada])
+  @@index([estado, horaProgramada])
+  @@index([alertaEnviadaAt])
+  @@map("kardex_aplicaciones")
+}
+
+model SignoVitalHospital {
+  id                String   @id @default(cuid())
+  hospitalizacionId String   @map("hospitalizacion_id")
+  pacienteId        String?  @map("paciente_id")
+  mascotaId         String?  @map("mascota_id")
+  capturadoPorId    String   @map("capturado_por_id")
+  hora              DateTime
+  temperaturaC      Decimal? @map("temperatura_c") @db.Decimal(4, 2)
+  frecuenciaCardiaca Int?    @map("frecuencia_cardiaca")
+  frecuenciaRespiratoria Int? @map("frecuencia_respiratoria")
+  saturacionO2      Int?     @map("saturacion_o2")
+  presionSistolica  Int?     @map("presion_sistolica")
+  presionDiastolica Int?     @map("presion_diastolica")
+  glucosa           Decimal? @db.Decimal(6, 2)
+  dolorEscala       Int?     @map("dolor_escala")
+  tiempoLlenadoCapilarSeg Decimal? @map("tiempo_llenado_capilar_seg") @db.Decimal(4, 2)
+  mucosasColor      String?  @map("mucosas_color")
+  observaciones     String?
+  alertasMarcadas   Json     @default("[]") @map("alertas_marcadas")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  hospitalizacion Hospitalizacion @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
+  paciente        Paciente?       @relation("SignoVitalHospitalPaciente", fields: [pacienteId], references: [id], onDelete: SetNull)
+  mascota         Mascota?        @relation("SignoVitalHospitalMascota", fields: [mascotaId], references: [id], onDelete: SetNull)
+  capturadoPor    Usuario         @relation("SignoVitalHospitalCapturadoPor", fields: [capturadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([hospitalizacionId, hora])
+  @@map("signos_vitales_hospital")
+}
+
+model CargoHospital {
+  id                  String            @id @default(cuid())
+  hospitalizacionId   String            @map("hospitalizacion_id")
+  tipo                CargoHospitalTipo
+  descripcion         String
+  cantidad            Decimal           @default(1) @db.Decimal(14, 3)
+  precioUnitario      Decimal           @map("precio_unitario") @db.Decimal(14, 4)
+  monto               Decimal           @db.Decimal(14, 4)
+  productoId          String?           @map("producto_id")
+  facturadoEnVentaId  String?           @map("facturado_en_venta_id")
+  facturadoAt         DateTime?         @map("facturado_at")
+  capturadoPorId      String            @map("capturado_por_id")
+  observaciones       String?
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  hospitalizacion Hospitalizacion @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
+  facturadoEnVenta Venta?         @relation("CargoHospitalFacturadoEnVenta", fields: [facturadoEnVentaId], references: [id], onDelete: SetNull)
+  capturadoPor    Usuario         @relation("CargoHospitalCapturadoPor", fields: [capturadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([hospitalizacionId, tipo])
+  @@index([facturadoEnVentaId])
+  @@map("cargos_hospital")
+}
+
+// ============================================================
+// HITO 3.5 — Despacho contable (Modelo 4.12)
+// CFDIs recibidos (upload manual + descarga SAT) +
+// auto-categorización IA Anthropic con fallback heurístico +
+// OC a proveedores + DIOT export TXT formato SAT.
+// ============================================================
+
+enum CfdiRecibidoTipoComprobante {
+  I
+  E
+  N
+  P
+  T
+}
+
+enum CfdiRecibidoEstado {
+  vigente
+  cancelado
+}
+
+enum CfdiRecibidoOrigen {
+  upload_manual
+  facturama_retrieve
+  webhook
+}
+
+enum CategoriaContableTipo {
+  activo
+  pasivo
+  capital
+  ingreso
+  gasto
+  costo
+}
+
+enum CategorizadoPor {
+  ia
+  regla_heuristica
+  manual
+}
+
+enum OrdenCompraEstado {
+  borrador
+  enviada
+  recibida_parcial
+  recibida_total
+  cancelada
+}
+
+enum CfdiMetodoPagoEnum {
+  PUE
+  PPD
+}
+
+model CfdiRecibido {
+  id                  String                       @id @default(cuid())
+  uuidSat             String                       @unique @map("uuid_sat")
+  tipoComprobante     CfdiRecibidoTipoComprobante  @map("tipo_comprobante")
+  serie               String?
+  folio               String?
+  emisorRfc           String                       @map("emisor_rfc")
+  emisorRazonSocial   String                       @map("emisor_razon_social")
+  receptorRfc         String                       @map("receptor_rfc")
+  receptorRazonSocial String?                      @map("receptor_razon_social")
+  fechaEmision        DateTime                     @map("fecha_emision")
+  fechaTimbrado       DateTime?                    @map("fecha_timbrado")
+  subtotal            Decimal                      @db.Decimal(14, 4)
+  descuento           Decimal                      @default(0) @db.Decimal(14, 4)
+  ivaTrasladado       Decimal                      @default(0) @map("iva_trasladado") @db.Decimal(14, 4)
+  ivaRetenido         Decimal                      @default(0) @map("iva_retenido") @db.Decimal(14, 4)
+  isrRetenido         Decimal                      @default(0) @map("isr_retenido") @db.Decimal(14, 4)
+  iepsTrasladado      Decimal                      @default(0) @map("ieps_trasladado") @db.Decimal(14, 4)
+  total               Decimal                      @db.Decimal(14, 4)
+  moneda              String                       @default("MXN")
+  tipoCambio          Decimal                      @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
+  metodoPago          CfdiMetodoPagoEnum?          @map("metodo_pago")
+  formaPago           String?                      @map("forma_pago")
+  usoCfdi             String?                      @map("uso_cfdi")
+  versionSat          String                       @default("4.0") @map("version_sat")
+  xmlRaw              String                       @map("xml_raw")
+  pdfUrl              String?                      @map("pdf_url")
+  estado              CfdiRecibidoEstado           @default(vigente)
+  canceladoAt         DateTime?                    @map("cancelado_at")
+  origen              CfdiRecibidoOrigen           @default(upload_manual)
+  uploadedByUsuarioId String?                      @map("uploaded_by_usuario_id")
+  procesado           Boolean                      @default(false)
+  procesadoAt         DateTime?                    @map("procesado_at")
+  errorProcesamiento  String?                      @map("error_procesamiento")
+  ordenCompraId       String?                      @map("orden_compra_id")
+  movimientoBancarioId String?                     @map("movimiento_bancario_id")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
+
+  uploadedPor    Usuario?                       @relation("CfdiRecibidoUploadedPor", fields: [uploadedByUsuarioId], references: [id], onDelete: SetNull)
+  ordenCompra    OrdenCompra?                   @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
+  categorizacion CfdiRecibidoCategorizacion?
+
+  @@index([emisorRfc, fechaEmision])
+  @@index([fechaEmision])
+  @@index([estado])
+  @@index([procesado])
+  @@index([ordenCompraId])
+  @@map("cfdis_recibidos")
+}
+
+model CategoriaContable {
+  id                 String                @id @default(cuid())
+  codigoContable     String                @unique @map("codigo_contable")
+  nombre             String
+  tipo               CategoriaContableTipo
+  esDeducibleSat     Boolean               @default(false) @map("es_deducible_sat")
+  ivaAcreditable     Boolean               @default(false) @map("iva_acreditable")
+  isrRetenibleDefault Decimal?             @map("isr_retenible_default") @db.Decimal(5, 2)
+  parentId           String?               @map("parent_id")
+  colorUi            String?               @map("color_ui")
+  descripcion        String?
+  claveProdServSatRegex String?            @map("clave_prod_serv_sat_regex")
+  isPrecargadoGlobal Boolean               @default(false) @map("is_precargado_global")
+  isActive           Boolean               @default(true) @map("is_active")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  parent          CategoriaContable?           @relation("CategoriaContableJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
+  hijos           CategoriaContable[]          @relation("CategoriaContableJerarquia")
+  categorizaciones CfdiRecibidoCategorizacion[]
+
+  @@index([tipo])
+  @@index([esDeducibleSat])
+  @@map("categorias_contables")
+}
+
+model CfdiRecibidoCategorizacion {
+  id                    String          @id @default(cuid())
+  cfdiRecibidoId        String          @unique @map("cfdi_recibido_id")
+  categoriaContableId   String          @map("categoria_contable_id")
+  categorizadoPor       CategorizadoPor @map("categorizado_por")
+  iaModelo              String?         @map("ia_modelo")
+  iaConfianza           Decimal?        @map("ia_confianza") @db.Decimal(4, 3)
+  iaJustificacion       String?         @map("ia_justificacion")
+  reglaAplicada         String?         @map("regla_aplicada")
+  asignadoPorUsuarioId  String?         @map("asignado_por_usuario_id")
+  override              Boolean         @default(false)
+  asignadoAt            DateTime        @default(now()) @map("asignado_at")
+
+  cfdiRecibido     CfdiRecibido      @relation(fields: [cfdiRecibidoId], references: [id], onDelete: Cascade)
+  categoria        CategoriaContable @relation(fields: [categoriaContableId], references: [id], onDelete: Restrict)
+  asignadoPor      Usuario?          @relation("CfdiCategorizacionAsignadoPor", fields: [asignadoPorUsuarioId], references: [id], onDelete: SetNull)
+
+  @@index([categoriaContableId])
+  @@map("cfdi_recibido_categorizaciones")
+}
+
+model OrdenCompra {
+  id                  String            @id @default(cuid())
+  folio               String
+  sucursalId          String            @map("sucursal_id")
+  proveedorRfc        String            @map("proveedor_rfc")
+  proveedorRazonSocial String           @map("proveedor_razon_social")
+  proveedorEmail      String?           @map("proveedor_email")
+  estado              OrdenCompraEstado @default(borrador)
+  fechaCreacion       DateTime          @default(now()) @map("fecha_creacion")
+  fechaEsperada       DateTime?         @map("fecha_esperada")
+  fechaRecepcion      DateTime?         @map("fecha_recepcion")
+  observaciones       String?
+  subtotal            Decimal           @default(0) @db.Decimal(14, 4)
+  ivaTotal            Decimal           @default(0) @map("iva_total") @db.Decimal(14, 4)
+  total               Decimal           @default(0) @db.Decimal(14, 4)
+  creadoPorUsuarioId  String            @map("creado_por_usuario_id")
+  autorizadoPorId     String?           @map("autorizado_por_id")
+  autorizadoAt        DateTime?         @map("autorizado_at")
+  canceladaMotivo     String?           @map("cancelada_motivo")
+  canceladaAt         DateTime?         @map("cancelada_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  sucursal       Sucursal           @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  creadoPor      Usuario            @relation("OrdenCompraCreadoPor", fields: [creadoPorUsuarioId], references: [id], onDelete: Restrict)
+  autorizadoPor  Usuario?           @relation("OrdenCompraAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: SetNull)
+  lineas         OrdenCompraLinea[]
+  cfdisVinculados CfdiRecibido[]
+
+  @@unique([sucursalId, folio])
+  @@index([estado, fechaCreacion])
+  @@index([proveedorRfc])
+  @@map("ordenes_compra")
+}
+
+model OrdenCompraLinea {
+  id              String   @id @default(cuid())
+  ordenCompraId   String   @map("orden_compra_id")
+  numero          Int
+  productoId      String?  @map("producto_id")
+  descripcion     String
+  cantidad        Decimal  @db.Decimal(14, 3)
+  precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(14, 4)
+  monto           Decimal  @db.Decimal(14, 4)
+  cantidadRecibida Decimal @default(0) @map("cantidad_recibida") @db.Decimal(14, 3)
+  ivaPct          Decimal  @default(16) @map("iva_pct") @db.Decimal(5, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  ordenCompra OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+
+  @@index([ordenCompraId])
+  @@map("ordenes_compra_lineas")
+}
+
+model OrdenCompraFolioCounter {
+  sucursalId   String   @id @map("sucursal_id")
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("orden_compra_folio_counters")
 }

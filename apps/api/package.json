@@ -12,7 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "demo:retail": "tsx scripts/demo-cajero-retail.ts"
+    "demo:retail": "tsx scripts/demo-cajero-retail.ts",
+    "demo:comercial": "tsx scripts/demo-comercial.ts",
+    "demo:clinica-vet": "tsx scripts/demo-clinica-vet.ts",
+    "demo:abarrotes": "tsx scripts/demo-abarrotes.ts",
+    "demo:despacho": "dotenv -e ../../.env -- tsx scripts/demo-despacho.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -21,10 +25,12 @@
     "@fastify/jwt": "^9.0.4",
     "@fastify/rate-limit": "^10.2.2",
     "@fastify/sensible": "^6.0.3",
+    "@gaespos/ai": "workspace:*",
     "@gaespos/db": "workspace:*",
     "@gaespos/fiscal": "workspace:*",
     "@gaespos/permissions": "workspace:*",
     "@gaespos/pricing": "workspace:*",
+    "@gaespos/recargas": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
     "decimal.js": "^10.4.3",
     "fastify": "^5.2.0",
