@@ -8,6 +8,11 @@ import doctoraliaTenantRoutes, {
 } from "./modules/doctoralia/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
+import phrTenantRoutes, {
+  patientAuthRoutes,
+  patientEmergencyPublicRoutes,
+  patientPortalRoutes,
+} from "./modules/patient-portal/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
@@ -130,6 +135,9 @@ export async function buildApp(
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);
   await app.register(doctoraliaPublicRoutes);
+  await app.register(patientAuthRoutes, { prefix: "/auth/patient" });
+  await app.register(patientPortalRoutes, { prefix: "/patient-portal" });
+  await app.register(patientEmergencyPublicRoutes);
 
   await app.register(
     async (tenantApp) => {
@@ -182,6 +190,7 @@ export async function buildApp(
       await tenantApp.register(campanasRoutes, { prefix: "/campanas" });
       await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
       await tenantApp.register(doctoraliaTenantRoutes, { prefix: "/doctoralia" });
+      await tenantApp.register(phrTenantRoutes, { prefix: "/phr" });
     },
     { prefix: "/t" },
   );

@@ -19,13 +19,20 @@ type TenantTokenPayload = {
   kind: "tenant";
 };
 
-type TokenPayload = AdminTokenPayload | TenantTokenPayload;
+type PatientTokenPayload = {
+  sub: string;
+  phoneE164: string;
+  kind: "patient";
+};
+
+type TokenPayload = AdminTokenPayload | TenantTokenPayload | PatientTokenPayload;
 
 declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticatePatient: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -83,6 +90,17 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "tenant") {
       return rejectUnauthorized(reply, "Se requiere sesión de usuario de tenant");
+    }
+  });
+
+  app.decorate("authenticatePatient", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "patient") {
+      return rejectUnauthorized(reply, "Se requiere sesión de paciente");
     }
   });
 };

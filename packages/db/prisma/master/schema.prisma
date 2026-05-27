@@ -411,21 +411,283 @@ enum ReviewModeracionStatus {
 }
 
 /** Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR). */
-model PacienteMaster {
-  id              String    @id @default(cuid())
-  nombre          String
-  apellidos       String?
-  email           String    @unique
-  telefono        String?
-  otpVerificadoAt DateTime? @map("otp_verificado_at")
-  archivedAt      DateTime? @map("archived_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+enum PatientSexAtBirth {
+  male
+  female
+  intersex
+  unknown
+}
 
-  reviews PublicReview[]
+enum FhirResourceType {
+  Encounter
+  Observation
+  Condition
+  AllergyIntolerance
+  Immunization
+  MedicationRequest
+  DiagnosticReport
+  Procedure
+  CarePlan
+}
+
+enum PatientRecordStatus {
+  draft
+  final
+  amended
+  cancelled
+}
+
+enum ConsentScope {
+  full_phr
+  appointments_only
+  prescriptions_only
+  vaccines_only
+}
+
+enum ConsentSubjectType {
+  patient
+  pet
+}
+
+enum FamilyRelationship {
+  mother
+  father
+  legal_guardian
+  spouse
+  caregiver
+  sibling
+  other
+}
+
+enum FamilyPermissionScope {
+  full
+  view_only
+  agendar_only
+  custom
+}
+
+enum FamilyConsentStatus {
+  pending
+  accepted
+  revoked
+}
+
+enum PhrAuditActorType {
+  patient
+  tenant_user
+  system
+}
+
+enum PhrAuditAction {
+  viewed_summary
+  viewed_record
+  created_record
+  modified_record
+  shared_record
+  exported_data
+}
+
+/**
+ * Paciente del PHR cross-tenant. Identidad principal = phoneE164 (WhatsApp, ref.
+ * Apple Health/Doctoralia). email opcional sigue sirviendo a reseñas Doctoralia.
+ * Cifrado at-rest de campos sensibles diferido a hito de hardening.
+ */
+model PacienteMaster {
+  id               String             @id @default(cuid())
+  phoneE164        String?            @unique @map("phone_e164")
+  email            String?            @unique
+  nombre           String
+  apellidos        String?
+  preferredName    String?            @map("preferred_name")
+  birthDate        DateTime?          @map("birth_date") @db.Date
+  sexAtBirth       PatientSexAtBirth? @map("sex_at_birth")
+  genderIdentity   String?            @map("gender_identity")
+  rfc              String?
+  curp             String?
+  country          String             @default("MX")
+  address          Json?
+  bloodType        String?            @map("blood_type")
+  languagePreferred String            @default("es-MX") @map("language_preferred")
+  weightKg         Decimal?           @map("weight_kg") @db.Decimal(6, 2)
+  heightCm         Decimal?           @map("height_cm") @db.Decimal(6, 2)
+  metadata         Json?
+  telefono         String?
+  otpVerificadoAt  DateTime?          @map("otp_verificado_at")
+  archivedAt       DateTime?          @map("archived_at")
+  deletedAt        DateTime?          @map("deleted_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  reviews     PublicReview[]
+  logins      PatientLogin[]
+  records     PatientRecord[]
+  consents    PatientConsent[]
+  emergencyQr PatientEmergencyQr?
+  auditLogs   PatientAuditLog[]
+  dependientes PatientFamily[] @relation("dependiente")
+  tutorias    PatientFamily[] @relation("tutor")
 
   @@index([email])
+  @@index([phoneE164])
+  @@index([rfc, country])
+  @@index([curp])
   @@map("pacientes_master")
+}
+
+model PatientLogin {
+  id               String    @id @default(cuid())
+  patientId        String    @map("patient_id")
+  deviceFingerprint String   @map("device_fingerprint")
+  deviceName       String?   @map("device_name")
+  deviceTrustedUntil DateTime? @map("device_trusted_until")
+  lastOtpSentAt    DateTime? @map("last_otp_sent_at")
+  otpMethod        String?   @map("otp_method")
+  lastLoginAt      DateTime? @map("last_login_at")
+  lastLoginIp      String?   @map("last_login_ip")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, deviceFingerprint])
+  @@index([patientId])
+  @@map("patient_logins")
+}
+
+/**
+ * Reto OTP para login sin contraseña. Se guarda el hash del código (no el código)
+ * y expira. V1 envía vía mensajeria mock (WhatsApp).
+ */
+model PatientAuthChallenge {
+  id         String    @id @default(cuid())
+  phoneE164  String    @map("phone_e164")
+  codeHash   String    @map("code_hash")
+  method     String    @default("whatsapp")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([phoneE164, consumedAt])
+  @@map("patient_auth_challenges")
+}
+
+model PatientFamily {
+  id                          String                @id @default(cuid())
+  dependienteId               String                @map("dependiente_id")
+  tutorId                     String                @map("tutor_id")
+  relationshipType            FamilyRelationship    @map("relationship_type")
+  permissionScope             FamilyPermissionScope @default(view_only) @map("permission_scope")
+  permissionDetails           Json?                 @map("permission_details")
+  consentStatus               FamilyConsentStatus   @default(pending) @map("consent_status")
+  consentRequiredFromDependent Boolean              @default(false) @map("consent_required_from_dependent")
+  consentAcceptedAt           DateTime?             @map("consent_accepted_at")
+  validUntil                  DateTime?             @map("valid_until")
+  createdAt                   DateTime              @default(now()) @map("created_at")
+  updatedAt                   DateTime              @updatedAt @map("updated_at")
+
+  dependiente PacienteMaster @relation("dependiente", fields: [dependienteId], references: [id], onDelete: Cascade)
+  tutor       PacienteMaster @relation("tutor", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@unique([dependienteId, tutorId])
+  @@index([tutorId])
+  @@map("patient_family")
+}
+
+/**
+ * Consentimiento del paciente/tutor a un tenant para leer/escribir PHR.
+ * Máx 1 activo por (subjectType, subjectId, tenantId) — enforced en servicio.
+ */
+model PatientConsent {
+  id           String             @id @default(cuid())
+  subjectType  ConsentSubjectType @default(patient) @map("subject_type")
+  subjectId    String             @map("subject_id")
+  patientId    String             @map("patient_id")
+  tenantId     String             @map("tenant_id")
+  scope        ConsentScope       @default(full_phr)
+  revocable    Boolean            @default(true)
+  termsVersion String             @default("v1") @map("terms_version")
+  ipAtGrant    String?            @map("ip_at_grant")
+  grantedAt    DateTime           @default(now()) @map("granted_at")
+  revokedAt    DateTime?          @map("revoked_at")
+
+  patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([subjectType, subjectId, tenantId])
+  @@index([tenantId])
+  @@map("patient_consents")
+}
+
+/**
+ * Evento clínico cross-tenant en formato FHIR R4 (JSONB). Lo publica la clínica
+ * (tenant) con consent; el portal del paciente lo lee cross-tenant.
+ */
+model PatientRecord {
+  id                String              @id @default(cuid())
+  patientId         String              @map("patient_id")
+  tenantId          String              @map("tenant_id")
+  createdByUserId   String?             @map("created_by_user_id")
+  resourceType      FhirResourceType    @map("resource_type")
+  resourceSubtype   String?             @map("resource_subtype")
+  effectiveDate     DateTime            @map("effective_date")
+  status            PatientRecordStatus @default(final)
+  data              Json
+  summaryText       String?             @map("summary_text")
+  isCritical        Boolean             @default(false) @map("is_critical")
+  isVisibleToPatient Boolean            @default(true) @map("is_visible_to_patient")
+  parentRecordId    String?             @map("parent_record_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, effectiveDate])
+  @@index([patientId, resourceType, effectiveDate])
+  @@index([tenantId, createdAt])
+  @@index([isCritical, patientId])
+  @@map("patient_records")
+}
+
+model PatientEmergencyQr {
+  id            String   @id @default(cuid())
+  patientId     String   @unique @map("patient_id")
+  qrToken       String   @unique @map("qr_token")
+  isActive      Boolean  @default(true) @map("is_active")
+  visibleFields Json     @default("[]") @map("visible_fields")
+  regeneratedAt DateTime @default(now()) @map("regenerated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_emergency_qr")
+}
+
+/**
+ * Bitácora append-only de accesos al PHR (LFPDPPP + ARCO). Toda lectura
+ * cross-tenant escribe aquí.
+ */
+model PatientAuditLog {
+  id           String             @id @default(cuid())
+  patientId    String             @map("patient_id")
+  subjectType  ConsentSubjectType @default(patient) @map("subject_type")
+  subjectId    String             @map("subject_id")
+  tenantId     String?            @map("tenant_id")
+  actorType    PhrAuditActorType  @map("actor_type")
+  userId       String?            @map("user_id")
+  action       PhrAuditAction
+  resourceType String?            @map("resource_type")
+  resourceId   String?            @map("resource_id")
+  reason       String?
+  ipAddress    String?            @map("ip_address")
+  userAgent    String?            @map("user_agent")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("patient_audit_log")
 }
 
 model PublicProfessional {

@@ -127,6 +127,10 @@ export const PERMISSIONS = {
   DOCTORALIA_RESENAS_DENUNCIAR: "doctoralia.resenas_denunciar",
   DOCTORALIA_ADMIN_VALIDAR: "doctoralia.admin_validar",
 
+  PHR_PUBLICAR_REGISTRO: "phr.publicar_registro",
+  PHR_SOLICITAR_CONSENT: "phr.solicitar_consent",
+  PHR_LEER_CONSENTIDO: "phr.leer_consentido",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -500,6 +504,19 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "doctoralia.admin_validar": {
     category: "doctoralia",
     description: "Validar cédula y aprobar publicación (rol admin GaesSoft)",
+  },
+
+  "phr.publicar_registro": {
+    category: "phr",
+    description: "Publicar un evento clínico al PHR cross-tenant del paciente (con consent)",
+  },
+  "phr.solicitar_consent": {
+    category: "phr",
+    description: "Solicitar consentimiento del paciente para acceder a su PHR",
+  },
+  "phr.leer_consentido": {
+    category: "phr",
+    description: "Leer el PHR cross-tenant del paciente cuando hay consentimiento activo",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

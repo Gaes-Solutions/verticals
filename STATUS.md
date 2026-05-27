@@ -7,10 +7,10 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🚧 **Hito 4 Digital y marketing EN CURSO** — 🎉 **4.1 Ecommerce CERRADO** (incl. PRIMER FRONTEND)
-- **Progreso Hito 4**: 4.1 Ecommerce ✅ (`815ec1c`) · 4.2 Marketing ✅ (`694413c`) · 🎉 **4.3 Doctoralia (núcleo) ✅ CERRADO** — perfiles públicos cross-tenant (master DB) + búsqueda FTS+filtros + reseñas verificadas con moderación heurística + validación admin SSA + respuesta/denuncia médico (**28 tests doctoralia**, suite apps/api verde). Siguiente: 4.4 Portal paciente PHR.
-- **Tarea actual**: cerrar 4.3 (commit rama→main ff) y arrancar 4.4 Portal paciente — PHR unificado + telemedicina Daily.co (mock) según Flujo 7 / Modelo 4.17.
-- **Próximo paso concreto**: commitear checkpoint 4.3, luego planificar 4.4 (alcance PHR paciente, OTP real sobre `PacienteMaster.otpVerificadoAt`, telemedicina mock Daily). Telemedicina + fees 5%/3%/0% diferidos a 4.4 (parte de booking/portal, no del núcleo de perfiles).
-- **Diferido de 4.3 a 4.4/V1.5**: booking/citas cross-tenant desde marketplace, fees por reserva (5%/3%/0%), telemedicina Daily.co, moderación IA real (hoy heurística determinística reemplazable sin tocar callers), búsqueda PostGIS por distancia (hoy FTS `searchText contains` + filtros ciudad/estado).
+- **Progreso Hito 4**: 4.1 Ecommerce ✅ (`815ec1c`) · 4.2 Marketing ✅ (`694413c`) · 4.3 Doctoralia ✅ (`f38b13e`) · 🎉 **4.4 Portal paciente PHR (núcleo) ✅ CERRADO** — PHR unificado cross-tenant (master DB) + login OTP phone_e164 sin contraseña + consentimientos + gestión familiar + audit log LFPDPPP + QR emergencia + puente clínica→PHR con consent gating (**24 tests patient-portal**, suite apps/api verde). Siguiente: 4.5 Demo Hito 4.
+- **Tarea actual**: cerrar 4.4 (commit rama→main ff) y arrancar 4.5 Demo Hito 4 (tienda + Doctoralia + campañas + portal paciente end-to-end CLI).
+- **Decisiones 4.4 (2026-05-27)**: núcleo = PHR lado lectura (difiere booking/anti-no-show/telemedicina) · identidad phone_e164 + OTP real (WhatsApp mock) · cifrado pgcrypto DIFERIDO a hito hardening (V1 protege con auth+consent+audit).
+- **Diferido de 4.4 a fase 2/V1.5**: booking cross-tenant + anti-no-show + telemedicina Daily.co + fee 5%, pet PHR (pet_master/pet_records), wearables Apple/Google Health, cifrado pgcrypto AES-256+KMS, embeddings pgvector + IA al paciente (anonimización pre-LLM), export HL7 FHIR real, storage 10GB, frontend `apps/salud-paciente`.
 - **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
 - **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
 - **Decisiones Hito 4 (2026-05-26)**: orden Ecommerce→Marketing→Doctoralia→Portal paciente; tienda Next.js real; integraciones mock adapters V1; email Resend. Ver [`docs/hitos/hito-4-digital.md`](docs/hitos/hito-4-digital.md).
@@ -94,6 +94,16 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-27 — 🎉 Hito 4.4 Portal paciente PHR (núcleo) CERRADO
+- **Master DB**: `PacienteMaster` expandido a PHR (phone_e164 identidad, email opcional, birthDate/sexAtBirth/bloodType/address/metadata, deletedAt ARCO). Nuevos: `PatientLogin`, `PatientAuthChallenge`, `PatientFamily`, `PatientConsent` (polimórfico patient|pet), `PatientRecord` (FHIR R4 JSONB), `PatientEmergencyQr`, `PatientAuditLog` append-only. Migration `add_phr`.
+- **Auth paciente**: token kind `patient` + `authenticatePatient`. `/auth/patient/request-otp` + `/verify-otp` (OTP 6 dígitos hash sha256, TTL 5min, vía mensajeria mock WhatsApp, device trust 30d). Identidad = phone_e164 sin contraseña.
+- **Portal `/patient-portal/*`**: me/perfil, expediente unificado cross-tenant (audit en cada lectura), datos críticos, consents (otorgar/revocar), familia (menor tutor-legal auto-aceptado / adulto por phone con consent pending), emergency-qr, audit, export ARCO.
+- **Puente clínica `/t/phr/*`**: registrar consentimiento, publicar registro (gated por consent.scope que cubre resourceType), leer expediente consentido (filtra por scope + audit). 3 permisos PHR_* en rol medico.
+- **Capa consent + audit**: paciente/tutor accede directo; tenant solo con consent activo; scope mapea a resourceTypes (full_phr=*, prescriptions_only=MedicationRequest, etc.). Revocar consent bloquea tenant pero NO borra registros.
+- **24 tests** `patient-portal.test.ts` (OTP, expediente cross-tenant 2 clínicas = el moat, consent gating bidireccional, scope parcial, familia menor/adulto, QR público opt-in, audit, export ARCO, revocación). Suite apps/api verde.
+- **REGLA respetada**: NO auto-diagnóstico/síntomas/triage. El portal solo muestra registros, no interpreta.
+- Diferido a 4.4 fase 2: booking + anti-no-show + telemedicina Daily.co + fee 5%, pet PHR, wearables, pgcrypto, IA paciente.
 
 ### 2026-05-27 — 🎉 Hito 4.3 Portal Doctoralia (núcleo) CERRADO
 - **Master DB**: `PacienteMaster` (cimiento PHR), `PublicProfessional` (+ `medicoIdLocal` link al Medico del tenant, `@@unique`), `PublicProfessionalLocation`, `PublicReview` (portable al médico), `PublicProfessionalSearchIndex`. Migrations `add_doctoralia` + `add_doctoralia_medico_link`.

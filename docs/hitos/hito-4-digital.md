@@ -147,6 +147,46 @@ Cierre del Hito 4 = tienda online operativa + campañas WhatsApp/email + Doctora
 - Validación cédula vs SSa API real
 - Frontend portal `apps/web-doctoralia`
 
+## 4.4 Portal paciente — PHR unificado (Flujo 7, Modelo 4.3, master DB)
+
+**Decisiones (confirmadas 2026-05-27)**:
+- **Núcleo V1 = PHR unificado lado lectura** (el moat: primer PHR bien hecho de LATAM). Incluye expediente cross-tenant + consentimientos + gestión familiar + audit log LFPDPPP + QR emergencia + puente clínica→PHR. **Difiere** booking/anti-no-show/telemedicina (→ 4.4 fase 2), wearables, storage extra, export FHIR real, pet PHR.
+- **Identidad phone_e164** (E.164, WhatsApp) con **login OTP sin contraseña** (ref. Apple Health/Doctoralia). `PacienteMaster` migra a phone-primary; email pasa a opcional (sigue sirviendo a reseñas Doctoralia). OTP vía `@gaespos/mensajeria` mock V1. Recordar dispositivo 30d.
+- **Cifrado at-rest pgcrypto DIFERIDO** a un hito de hardening pre-producción. V1 protege con auth + consent + audit log. (Decisión registrada; no es recorte de scope, es secuenciación.)
+- **PHR vive en master DB** (no per-tenant) — es el moat cross-tenant. La clínica (tenant) **publica** eventos clínicos al PHR vía puente con consent; el portal del paciente lee cross-tenant.
+- **REGLA DURA**: NO asistente de síntomas / auto-diagnóstico / triage. Ver `project_gaes_pos_no_autodiagnostico`.
+
+### 4.4.a Schema master PHR + migration + permisos ✅
+- [x] `PacienteMaster` expandido — phoneE164 único (identidad), email opcional único, legalName/preferredName, birthDate, sexAtBirth, genderIdentity, rfc/curp opcional, country, address JSONB, bloodType, languagePreferred, weight/height + timestamps, metadata JSONB, deletedAt (ARCO soft delete). Conserva nombre/apellidos (compat reseñas Doctoralia).
+- [x] `PatientLogin` — device sessions (fingerprint, deviceName, trustedUntil 30d, lastOtp method/at, lastLogin, revokedAt)
+- [x] `PatientAuthChallenge` — reto OTP (phoneE164, codeHash, method, expiresAt, consumedAt, attempts) para verificación real
+- [x] `PatientFamily` — dependiente↔tutor (relationshipType, permissionScope [full/view_only/agendar_only/custom], permissionDetails JSONB, consentStatus, consentRequiredFromDependent, validUntil)
+- [x] `PatientConsent` — polimórfico subjectType [patient|pet] + subjectId + tenantId, scope [full_phr/appointments_only/prescriptions_only/vaccines_only], grantedAt/revokedAt, revocable, termsVersion, ipAtGrant. Máx 1 activo por (subjectType, subjectId, tenantId).
+- [x] `PatientRecord` — evento clínico cross-tenant: patientId, tenantId, createdByUserId, resourceType FHIR [Encounter/Observation/Condition/AllergyIntolerance/Immunization/MedicationRequest/DiagnosticReport/Procedure/CarePlan], resourceSubtype, effectiveDate, status [draft/final/amended/cancelled], data JSONB FHIR R4, summaryText, isCritical, isVisibleToPatient, parentRecordId. (pgvector embeddings → diferido)
+- [x] `PatientEmergencyQr` — qrToken único, isActive, visibleFields JSONB opt-in (bloodType/allergies/chronic/meds/contacto), regeneratedAt (ref. Apple Health Medical ID)
+- [x] `PatientAuditLog` — append-only: patientId, subjectType/subjectId, tenantId, actorType [patient|tenant_user|system], userId, action [viewed_summary/viewed_record/created_record/modified_record/shared_record/exported_data], resourceType/resourceId, reason, ip, userAgent
+- [x] Permisos tenant (clínica↔PHR): PHR_PUBLICAR_REGISTRO, PHR_SOLICITAR_CONSENT, PHR_LEER_CONSENTIDO. (Autorización del paciente = por ownership + scope familiar, no RBAC de tenant.)
+- [x] Migration `add_phr` (master)
+
+### 4.4.b Auth paciente OTP + servicios + endpoints portal ✅
+- [x] Auth paciente: token kind `patient` + `authenticatePatient` decorator + `PatientPrincipal`. `/auth/patient/request-otp` (phone→reto, envía vía mock) y `/auth/patient/verify-otp` (code→JWT paciente + device trust opcional 30d).
+- [x] Portal `apps/api/.../patient-portal/` (authenticatePatient): GET /me, GET /expediente (unificado cross-tenant propio + dependientes según scope, filtra isVisibleToPatient, **registra audit**), GET /criticos, consents (listar/otorgar/revocar), familia (CRUD + scope), emergency-qr (generar/ver), GET /audit, GET /export (ARCO JSON).
+- [x] Público (sin auth): GET /emergency/:qrToken → solo visibleFields opt-in.
+- [x] Puente clínica→PHR `apps/api/.../t/phr/` (authenticateTenant + perms): POST /registros (publica evento clínico, **exige consent activo** del tenant sobre el paciente), POST /consent-solicitudes (solicita consentimiento), GET /pacientes/:id/expediente (lee PHR consentido + **audit**).
+- [x] Capa de consentimiento + audit: toda lectura cross-tenant valida consent (paciente/tutor accede directo siempre; tenant solo con consent.scope que cubre el resourceType) y escribe `PatientAuditLog`.
+
+### 4.4.c Tests integración ✅
+- [x] OTP request→verify→JWT; expediente unificado lee de varios tenants; **consent gating** (sin consent la clínica no lee, paciente sí); dependiente accede según permissionScope; clínica publica registro solo con consent; QR emergencia público muestra solo opt-in; audit log registra cada lectura; export ARCO completo; revocar consent bloquea lectura tenant pero NO borra registros.
+
+### 4.4.d Diferidos a 4.4 fase 2 / V1.5
+- Booking cross-tenant portal→tenant + anti-no-show (`patient_appointments` + `patient_reputation`) + telemedicina Daily.co + fee 5%
+- Pet PHR (`pet_master` + `pet_records` separados, tutor_patient_id)
+- Wearables (`patient_external_data_links` Apple Health/Google Health Connect lectura)
+- Cifrado at-rest pgcrypto AES-256 + KMS (hito hardening)
+- Embeddings pgvector búsqueda semántica + resumen/explicación IA al paciente (anonimización pre-LLM)
+- Export HL7 FHIR real, storage 10GB extra, particionado pg_partman
+- Frontend `apps/salud-paciente`
+
 ## Performance budgets
 - Catálogo público (ISR): TTFB <200ms
 - Recalcular carrito: <150ms P95
