@@ -378,3 +378,170 @@ model PartnerInvitacion {
   @@index([expiresAt])
   @@map("partner_invitaciones")
 }
+
+// ============================================================
+// HITO 4.3 — Portal Doctoralia (Modelo 4.17, master DB cross-tenant)
+// Perfiles médicos publicables + búsqueda + reseñas portables al médico.
+// Reservas portal→tenant y telemedicina Daily.co diferidos a 4.3 fase 2.
+// ============================================================
+
+enum ProfesionalTipo {
+  medico_humano
+  veterinario
+  dentista
+  nutriologo
+  psicologo
+}
+
+enum ProfesionalStatus {
+  borrador
+  en_revision
+  publicado
+  suspendido
+  desactivado
+}
+
+enum ReviewModeracionStatus {
+  pendiente
+  auto_aprobado_ia
+  revision_humana
+  publicado
+  rechazado
+  denunciado_medico
+}
+
+/** Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR). */
+model PacienteMaster {
+  id              String    @id @default(cuid())
+  nombre          String
+  apellidos       String?
+  email           String    @unique
+  telefono        String?
+  otpVerificadoAt DateTime? @map("otp_verificado_at")
+  archivedAt      DateTime? @map("archived_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  reviews PublicReview[]
+
+  @@index([email])
+  @@map("pacientes_master")
+}
+
+model PublicProfessional {
+  id                   String            @id @default(cuid())
+  tenantIdPrincipal    String            @map("tenant_id_principal")
+  tenantIdsAdicionales Json              @default("[]") @map("tenant_ids_adicionales")
+  medicoIdLocal        String?           @map("medico_id_local")
+  tipo                 ProfesionalTipo
+  nombrePublico        String            @map("nombre_publico")
+  slugSeo              String            @unique @map("slug_seo")
+  cedulaProfesional    String?           @map("cedula_profesional")
+  cedulaEspecialidad   String?           @map("cedula_especialidad")
+  especialidades       Json              @default("[]")
+  validadaSsaAt        DateTime?         @map("validada_ssa_at")
+  validadaPorAdminAt   DateTime?         @map("validada_por_admin_at")
+  fotoPerfilUrl        String?           @map("foto_perfil_url")
+  bioCorta             String?           @map("bio_corta")
+  bioLarga             String?           @map("bio_larga")
+  anosExperiencia      Int?              @map("anos_experiencia")
+  idiomas              Json              @default("[\"es-MX\"]")
+  genero               String?
+  atiendeNinos         Boolean           @default(true) @map("atiende_ninos")
+  atiendeAdultos       Boolean           @default(true) @map("atiende_adultos")
+  aceptaTelemedicina   Boolean           @default(false) @map("acepta_telemedicina")
+  aceptaMismoDia       Boolean           @default(false) @map("acepta_mismo_dia")
+  status               ProfesionalStatus @default(borrador)
+  scorePromedio        Decimal           @default(0) @map("score_promedio") @db.Decimal(3, 2)
+  totalResenas         Int               @default(0) @map("total_resenas")
+  feePlataformaPct     Decimal           @default(5) @map("fee_plataforma_pct") @db.Decimal(5, 2)
+  archivedAt           DateTime?         @map("archived_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  ubicaciones PublicProfessionalLocation[]
+  reviews     PublicReview[]
+  searchIndex PublicProfessionalSearchIndex?
+
+  @@unique([tenantIdPrincipal, medicoIdLocal])
+  @@index([tipo, status])
+  @@index([cedulaProfesional])
+  @@map("public_professionals")
+}
+
+model PublicProfessionalLocation {
+  id              String   @id @default(cuid())
+  professionalId  String   @map("professional_id")
+  tenantId        String   @map("tenant_id")
+  nombreLugar     String   @map("nombre_lugar")
+  direccion       String?
+  lat             Decimal? @db.Decimal(10, 7)
+  lng             Decimal? @db.Decimal(10, 7)
+  ciudad          String
+  estado          String
+  colonia         String?
+  cp              String?
+  telefonoPublico String?  @map("telefono_publico")
+  horarioAtencion Json?    @map("horario_atencion")
+  esPrincipal     Boolean  @default(false) @map("es_principal")
+  activa          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@index([ciudad, estado])
+  @@map("public_professional_locations")
+}
+
+model PublicReview {
+  id                String                 @id @default(cuid())
+  professionalId    String                 @map("professional_id")
+  pacienteMasterId  String                 @map("paciente_master_id")
+  bookingId         String?                @map("booking_id")
+  verificada        Boolean                @default(false)
+  ratingGeneral     Int                    @map("rating_general")
+  ratingPuntualidad Int?                   @map("rating_puntualidad")
+  ratingExplicacion Int?                   @map("rating_explicacion")
+  ratingTrato       Int?                   @map("rating_trato")
+  comentario        String?
+  moderacionStatus  ReviewModeracionStatus @default(pendiente) @map("moderacion_status")
+  moderacionIaScore Json?                  @map("moderacion_ia_score")
+  publicadaAt       DateTime?              @map("publicada_at")
+  helpfulCount      Int                    @default(0) @map("helpful_count")
+  reportadaCount    Int                    @default(0) @map("reportada_count")
+  respuestaMedico   String?                @map("respuesta_medico")
+  arcoAnonymizedAt  DateTime?              @map("arco_anonymized_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  paciente     PacienteMaster     @relation(fields: [pacienteMasterId], references: [id], onDelete: Restrict)
+
+  @@index([professionalId, moderacionStatus])
+  @@index([pacienteMasterId])
+  @@map("public_reviews")
+}
+
+model PublicProfessionalSearchIndex {
+  professionalId     String   @id @map("professional_id")
+  searchText         String   @map("search_text")
+  ciudad             String?
+  estado             String?
+  tipo               ProfesionalTipo
+  scoreRanking       Decimal  @default(0) @map("score_ranking") @db.Decimal(8, 4)
+  aceptaTelemedicina Boolean  @default(false) @map("acepta_telemedicina")
+  aceptaMismoDia     Boolean  @default(false) @map("acepta_mismo_dia")
+  idiomas            Json     @default("[]")
+  atiendeNinos       Boolean  @default(true) @map("atiende_ninos")
+  atiendeAdultos     Boolean  @default(true) @map("atiende_adultos")
+  refreshedAt        DateTime @default(now()) @map("refreshed_at")
+
+  professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([ciudad, estado])
+  @@index([tipo])
+  @@index([scoreRanking])
+  @@map("public_professional_search_index")
+}

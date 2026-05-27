@@ -1,6 +1,6 @@
 # Hito 4 — Digital y marketing
 
-> **Estado:** En curso · 4.1 Ecommerce ✅ · 4.2 Marketing ✅ CERRADO (2026-05-27) · **Sub-hito activo:** 4.3 Doctoralia + telemedicina
+> **Estado:** En curso · 4.1 Ecommerce ✅ · 4.2 Marketing ✅ · 4.3 Doctoralia (núcleo) ✅ CERRADO (2026-05-27) · **Sub-hito activo:** 4.4 Portal paciente
 > **Análisis:** [4.21 Ecommerce](../analisis/04-modelo-datos/4.21-ecommerce.md) · [4.18 Promociones/Marketing](../analisis/04-modelo-datos/4.18-promociones-marketing.md) · [4.17 Portal Doctoralia](../analisis/04-modelo-datos/4.17-portal-doctoralia.md) · [Flujo 7 Paciente portal](../analisis/03-flujos/07-paciente-portal.md) · [Análisis 7 Integraciones](../analisis/07-integraciones.md)
 
 ## Objetivo del Hito 4
@@ -113,6 +113,39 @@ Cierre del Hito 4 = tienda online operativa + campañas WhatsApp/email + Doctora
 
 ### 4.2.h Diferidos V1.5+
 - Constructor visual de segmentos (V2), referidos C2C (V2), tiers de lealtad activos (V2), BullMQ real para envíos, WhatsApp/SMS reales (cuando Gaby contrate Meta/Twilio).
+
+---
+
+## 4.3 Portal Doctoralia (Modelo 4.17, master DB)
+
+**Decisiones (confirmadas 2026-05-27)**: núcleo V1 = perfiles cross-tenant + búsqueda + reseñas portables (reservas portal→tenant y telemedicina Daily.co → 4.3 fase 2) · `PacienteMaster` mínimo en master DB (cimiento del PHR para 4.4) · búsqueda FTS + filtros ciudad/estado/especialidad (PostGIS geoespacial → V1.5) · solo API V1 (frontend portal → demo 4.5).
+
+**Por qué master DB**: la búsqueda y las reseñas son cross-tenant (un paciente busca médicos de cualquier consultorio). Reseñas portables siguen al médico (`PublicProfessional`), no al tenant → si cambia de consultorio, sus reseñas viajan con él. Es el efecto Doctoralia.
+
+### 4.3.a Schema master Doctoralia + migration ✅
+- [x] `PacienteMaster` mínimo — id, nombre, apellidos, email único, teléfono, otpVerificadoAt, soft delete. Cimiento PHR (4.4 lo expande con FHIR).
+- [x] `PublicProfessional` — tenantIdPrincipal + tenantIdsAdicionales JSONB + **medicoIdLocal** (link al `Medico` del tenant, `@@unique(tenantId, medicoIdLocal)`), tipo [medico_humano/veterinario/dentista/nutriologo/psicologo], nombrePublico, slugSeo único auto, cédula+especialidad, validadaSsaAt/validadaPorAdminAt, foto, bio corta/larga, añosExperiencia, idiomas, atiendeNiños/Adultos, aceptaTelemedicina/mismoDia, status [borrador/en_revision/publicado/suspendido/desactivado], scorePromedio+totalReseñas denormalizado, feePlataformaPct (default 5%), soft delete
+- [x] `PublicProfessionalLocation` — professionalId, tenantId, nombreLugar, direccion, lat/lng (Decimal V1, PostGIS V1.5), ciudad/estado/colonia/cp, teléfono, horario JSONB, esPrincipal, activa
+- [x] `PublicReview` — professionalId, bookingId opcional V1 (verificación por pacienteMasterId verificado + flag verificada si hay booking), pacienteMasterId, ratingGeneral 1-5 + subratings, comentario, moderacionStatus [pendiente/auto_aprobado_ia/revision_humana/publicado/rechazado/denunciado_medico], moderacionIaScore JSONB, arcoAnonymizedAt (campo listo; endpoint ARCO → 4.4), respuestaMedico, helpful/reportada count. **Portables al médico.**
+- [x] `PublicProfessionalSearchIndex` (tabla denormalizada) — professionalId, searchText (nombre+especialidades+ciudad+estado normalizado), ciudad/estado, scoreRanking (score × boost log(reseñas)), aceptaTelemedicina/mismoDia, idiomas/niños/adultos. Refresh al publicar/actualizar/recalcular score; se borra si no está publicado.
+- [x] 6 permisos: DOCTORALIA_PERFIL_GESTIONAR/PUBLICAR + RESENAS_LEER/RESPONDER/DENUNCIAR (rol `medico` preset) + ADMIN_VALIDAR. Médico edita su perfil via JWT tenant; admin GaesSoft valida via auth admin.
+- [x] Migrations `add_doctoralia` + `add_doctoralia_medico_link` (master)
+
+### 4.3.b Servicios + endpoints públicos ✅
+- [x] `apps/api/.../doctoralia/` 3 plugins: **tenant** (bajo `/t`, médico gestiona su perfil/ubicaciones/reseñas vía `medicoIdLocal`), **admin** (`authenticateAdmin`: cola pendientes, validar cédula+publicar, suspender, moderar reseñas), **público** (sin auth).
+- [x] Búsqueda pública `GET /doctoralia/buscar` — FTS por searchText (contains insensitive V1) + filtros ciudad/estado/tipo/aceptaTelemedicina/niños + orden scoreRanking. Detalle por slug `GET /doctoralia/profesionales/:slug` (solo publicados).
+- [x] Reseñas: crear (verifica `PacienteMaster.otpVerificadoAt`, **moderación heurística determinística** — spam/ofensivo/contacto → revision_humana, limpio → publicado; reemplazable por IA sin tocar callers), responder/denunciar (médico), moderar (admin). Recalcula scorePromedio+totalReseñas. Anti-duplicado por paciente.
+- [x] Auth dual: paciente por registro+confirmación (OTP real → 4.4) para reseñas; médico por JWT tenant + permisos; admin GaesSoft para validar/moderar/suspender.
+
+### 4.3.c Tests integración ✅
+- [x] **28 tests** (`doctoralia.test.ts`): funciones puras (slugify, moderación); perfil borrador→en_revision→admin publica→aparece en búsqueda; no aparece en borrador; búsqueda por ciudad/telemedicina; reseña verificada limpia auto-publica+recalcula score; reseña ofensiva→revision_humana sin afectar score; duplicado→409; médico responde/denuncia (baja conteo); admin modera escalada; admin suspende→sale de búsqueda; RBAC (recepción sin permiso→403, admin sin token→401).
+
+### 4.3.d Diferidos a 4.3 fase 2 / V1.5
+- Reservas portal→tenant (`public_bookings` + sincronización webhook master↔tenant + anti-no-show + slots caché)
+- Telemedicina Daily.co (`telemedicine_sessions` + salas + tokens efímeros + grabación)
+- PostGIS búsqueda geoespacial por radio
+- Validación cédula vs SSa API real
+- Frontend portal `apps/web-doctoralia`
 
 ## Performance budgets
 - Catálogo público (ISR): TTFB <200ms

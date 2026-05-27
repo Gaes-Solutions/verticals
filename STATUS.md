@@ -7,9 +7,10 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🚧 **Hito 4 Digital y marketing EN CURSO** — 🎉 **4.1 Ecommerce CERRADO** (incl. PRIMER FRONTEND)
-- **Progreso Hito 4**: 4.1 Ecommerce ✅ (commit `815ec1c`) · 🎉 **4.2 Marketing ✅ CERRADO** (promos + RFM + campañas+worker + lealtad, 11 tests, **424 tests apps/api verde**). Siguiente: 4.3 Doctoralia + telemedicina (Modelo 4.17).
-- **Tarea actual**: arrancar 4.3 Portal Doctoralia — perfiles médicos cross-tenant (master DB) + reseñas portables + búsqueda PostGIS+FTS + telemedicina Daily.co (mock) + fees 5%/3%/0%. Planificar con Análisis 4.17 + Flujo 7.
-- **Próximo paso concreto**: commitear checkpoint 4.2 (rama→main ff, como 4.1) y planificar 4.3 con decisiones (alcance perfiles cross-tenant master, mock Daily.co, búsqueda PostGIS V1 vs FTS simple). Decisiones 4.2 cumplidas: 5 piezas, worker in-process (`procesarColaEnvios`), plantillas dual-scope.
+- **Progreso Hito 4**: 4.1 Ecommerce ✅ (`815ec1c`) · 4.2 Marketing ✅ (`694413c`) · 🎉 **4.3 Doctoralia (núcleo) ✅ CERRADO** — perfiles públicos cross-tenant (master DB) + búsqueda FTS+filtros + reseñas verificadas con moderación heurística + validación admin SSA + respuesta/denuncia médico (**28 tests doctoralia**, suite apps/api verde). Siguiente: 4.4 Portal paciente PHR.
+- **Tarea actual**: cerrar 4.3 (commit rama→main ff) y arrancar 4.4 Portal paciente — PHR unificado + telemedicina Daily.co (mock) según Flujo 7 / Modelo 4.17.
+- **Próximo paso concreto**: commitear checkpoint 4.3, luego planificar 4.4 (alcance PHR paciente, OTP real sobre `PacienteMaster.otpVerificadoAt`, telemedicina mock Daily). Telemedicina + fees 5%/3%/0% diferidos a 4.4 (parte de booking/portal, no del núcleo de perfiles).
+- **Diferido de 4.3 a 4.4/V1.5**: booking/citas cross-tenant desde marketplace, fees por reserva (5%/3%/0%), telemedicina Daily.co, moderación IA real (hoy heurística determinística reemplazable sin tocar callers), búsqueda PostGIS por distancia (hoy FTS `searchText contains` + filtros ciudad/estado).
 - **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
 - **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
 - **Decisiones Hito 4 (2026-05-26)**: orden Ecommerce→Marketing→Doctoralia→Portal paciente; tienda Next.js real; integraciones mock adapters V1; email Resend. Ver [`docs/hitos/hito-4-digital.md`](docs/hitos/hito-4-digital.md).
@@ -93,6 +94,16 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-27 — 🎉 Hito 4.3 Portal Doctoralia (núcleo) CERRADO
+- **Master DB**: `PacienteMaster` (cimiento PHR), `PublicProfessional` (+ `medicoIdLocal` link al Medico del tenant, `@@unique`), `PublicProfessionalLocation`, `PublicReview` (portable al médico), `PublicProfessionalSearchIndex`. Migrations `add_doctoralia` + `add_doctoralia_medico_link`.
+- **6 permisos** DOCTORALIA_* (rol `medico` preset hereda perfil+reseñas; ADMIN_VALIDAR para superadmin).
+- **Módulo `doctoralia/`** 3 plugins: tenant (médico gestiona su perfil/ubicaciones/reseñas), admin (`authenticateAdmin`: cola, validar cédula+publicar, suspender, moderar), público sin auth (búsqueda FTS+filtros, perfil por slug, registro/confirmación paciente, alta reseña).
+- **Moderación heurística determinística** (spam/ofensivo/contacto→revision_humana, limpio→publicado); reemplazable por IA sin tocar callers. Línea roja respetada: modera texto público, NO contenido clínico.
+- **Score** scorePromedio+totalReseñas recalculado desde reseñas publicadas; searchIndex refrescado al publicar/recalcular (se borra si no publicado).
+- **28 tests** `doctoralia.test.ts` (puras + perfil lifecycle + búsqueda + reseñas + RBAC + admin). **Suite apps/api: 452 tests verde** (424→+28).
+- Decisión clave de diseño: review `moderacionStatus` vivo = `publicado` cuando auto-aprueba (la decisión `auto_aprobado_ia` se guarda en `moderacionIaScore.decision`).
+- **Diferido a 4.4/V1.5**: booking portal→tenant, fees por reserva, telemedicina Daily.co, OTP real, ARCO anonimize endpoint, PostGIS geoespacial, frontend `apps/web-doctoralia`.
 
 ### 2026-04-27 — Sesión inicial setup
 - Cerré Análisis 9 (Arquitectura) y Análisis 10 (Roadmap) en memory de Claude

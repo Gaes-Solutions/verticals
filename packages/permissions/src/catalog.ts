@@ -120,6 +120,13 @@ export const PERMISSIONS = {
   PLANTILLAS_GESTIONAR: "plantillas.gestionar",
   LEALTAD_GESTIONAR: "lealtad.gestionar",
 
+  DOCTORALIA_PERFIL_GESTIONAR: "doctoralia.perfil_gestionar",
+  DOCTORALIA_PERFIL_PUBLICAR: "doctoralia.perfil_publicar",
+  DOCTORALIA_RESENAS_LEER: "doctoralia.resenas_leer",
+  DOCTORALIA_RESENAS_RESPONDER: "doctoralia.resenas_responder",
+  DOCTORALIA_RESENAS_DENUNCIAR: "doctoralia.resenas_denunciar",
+  DOCTORALIA_ADMIN_VALIDAR: "doctoralia.admin_validar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -468,6 +475,31 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "lealtad.gestionar": {
     category: "marketing",
     description: "Configurar programa de lealtad y ajustar puntos",
+  },
+
+  "doctoralia.perfil_gestionar": {
+    category: "doctoralia",
+    description: "Editar el perfil público del profesional (bio, especialidades, ubicaciones)",
+  },
+  "doctoralia.perfil_publicar": {
+    category: "doctoralia",
+    description: "Enviar el perfil a revisión / publicarlo en el marketplace",
+  },
+  "doctoralia.resenas_leer": {
+    category: "doctoralia",
+    description: "Consultar reseñas públicas recibidas",
+  },
+  "doctoralia.resenas_responder": {
+    category: "doctoralia",
+    description: "Responder públicamente a una reseña",
+  },
+  "doctoralia.resenas_denunciar": {
+    category: "doctoralia",
+    description: "Denunciar una reseña para revisión humana",
+  },
+  "doctoralia.admin_validar": {
+    category: "doctoralia",
+    description: "Validar cédula y aprobar publicación (rol admin GaesSoft)",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

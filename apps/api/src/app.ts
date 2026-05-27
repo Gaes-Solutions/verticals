@@ -2,6 +2,10 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
+import doctoraliaTenantRoutes, {
+  doctoraliaAdminRoutes,
+  doctoraliaPublicRoutes,
+} from "./modules/doctoralia/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
@@ -124,6 +128,8 @@ export async function buildApp(
   await app.register(tenantRoutes, { prefix: "/tenants" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
+  await app.register(doctoraliaAdminRoutes);
+  await app.register(doctoraliaPublicRoutes);
 
   await app.register(
     async (tenantApp) => {
@@ -175,6 +181,7 @@ export async function buildApp(
       await tenantApp.register(segmentosRoutes, { prefix: "/segmentos" });
       await tenantApp.register(campanasRoutes, { prefix: "/campanas" });
       await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
+      await tenantApp.register(doctoraliaTenantRoutes, { prefix: "/doctoralia" });
     },
     { prefix: "/t" },
   );
