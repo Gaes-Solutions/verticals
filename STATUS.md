@@ -6,11 +6,13 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hito 1+2 cerrados · 🎉 **HITO 3 COMPLETO** (5 verticales piloto operativos: Retail/Mayoreo + Abarrotes + Salud Humana + Salud Vet + Salud N3 + Despacho/Partners) · Hito 0 deploy stack listo
-- **Progreso Hito 3**: 3.1 ✅ + 3.2 ✅ + 3.3 ✅ + 3.4 ✅ + 3.5 ✅ + 3.6 ✅ — **CERRADO al 100%**
-- **Tarea actual**: Hito 3 cerrado. Decidir arranque Hito 4 (Digital y marketing: ecommerce + WhatsApp + Doctoralia + telemedicina Daily.co) o consolidación (commit/tag + deploy Hito 0.10-0.12)
-- **Próximo paso concreto**: pendiente visto bueno de Gaby para commit del checkpoint Hito 3 + tag `hito-3-verticales-v1`. Luego planificar Hito 4 con Análisis 10 roadmap.
-- **Cómo probar lo construido**: `pnpm test:dev` (suite completa) · demos CLI live: `pnpm --filter @gaespos/api demo:clinica-vet` (salud), `demo:abarrotes` (recargas+IEPS, requiere API con `RECARGA_PROVIDER=mock`), `demo:despacho` (CFDIs+DIOT+partners). Frontends son hitos posteriores (backend-first).
+- **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🚧 **Hito 4 Digital y marketing EN CURSO** — 🎉 **4.1 Ecommerce CERRADO** (incl. PRIMER FRONTEND)
+- **Progreso Hito 4**: 4.1 Ecommerce ✅ (schema + adapters pagos/email + backend + 14 tests + tienda Next.js que compila y arranca). Siguiente: 4.2 Marketing (promos + RFM + campañas WhatsApp/email/SMS)
+- **Tarea actual**: arrancar 4.2 Marketing (Modelo 4.18) — motor promos automáticas, segmentación RFM, campañas multicanal (WhatsApp Cloud + email Resend + SMS Twilio mock), lealtad puntos. Reusa clientes/ventas + alimenta recovery de carrito abandonado de 4.1.
+- **Próximo paso concreto**: planificar 4.2 con Análisis 4.18. Confirmar scope V1 (qué canales, motor promos automáticas vs cupones simples, RFM).
+- **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
+- **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
+- **Decisiones Hito 4 (2026-05-26)**: orden Ecommerce→Marketing→Doctoralia→Portal paciente; tienda Next.js real; integraciones mock adapters V1; email Resend. Ver [`docs/hitos/hito-4-digital.md`](docs/hitos/hito-4-digital.md).
 - **Bloqueos**: Ninguno mid-código. Externos pendientes: Hetzner/dominio/GitHub (no bloquean código local).
 
 ## 📋 Hito 1 — POS Core retail · Progreso

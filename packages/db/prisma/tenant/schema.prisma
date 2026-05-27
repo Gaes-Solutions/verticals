@@ -101,6 +101,9 @@ model Sucursal {
   hospitalizacionFolioCounter HospitalizacionFolioCounter?
   ordenesCompra         OrdenCompra[]
   ordenCompraFolioCounter OrdenCompraFolioCounter?
+  pedidosEcommercePickup PedidoEcommerce[]
+  configPickup          ConfigPickupSucursal?
+  pickupPedidos         PickupPedido[]
 
   @@index([isActive])
   @@map("sucursales")
@@ -209,6 +212,8 @@ model Usuario {
   cfdiCategorizacionesAsignadas CfdiRecibidoCategorizacion[] @relation("CfdiCategorizacionAsignadoPor")
   ordenesCompraCreadas  OrdenCompra[]                @relation("OrdenCompraCreadoPor")
   ordenesCompraAutorizadas OrdenCompra[]             @relation("OrdenCompraAutorizadoPor")
+  resenasRespondidas    ProductoResena[]             @relation("ResenaRespondidaPor")
+  pickupsResponsable    PickupPedido[]               @relation("PickupResponsable")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -463,6 +468,7 @@ model Producto {
   atributos            ProductoAtributo[]
   tags                 ProductoTag[]
   reglasPrecioProducto ReglaPrecioProducto[]
+  productoPublicado    ProductoPublicado?
 
   @@index([categoriaId])
   @@index([marcaId])
@@ -881,6 +887,7 @@ model Venta {
   recargas     Recarga[]
   hospitalizacionAlta Hospitalizacion? @relation("HospitalizacionVentaAlAlta")
   cargosHospitalFacturados CargoHospital[] @relation("CargoHospitalFacturadoEnVenta")
+  pedidoEcommerce     PedidoEcommerce? @relation("PedidoEcommerceVenta")
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -1224,6 +1231,10 @@ model Cliente {
   cuentasCobrar    CuentaCobrar[]
   pacientesTutor   Paciente[]        @relation("PacienteTutor")
   mascotasTutor    Mascota[]         @relation("MascotaTutor")
+  carritosEcommerce CarritoEcommerce[]
+  pedidosEcommerce PedidoEcommerce[]
+  resenas          ProductoResena[]
+  wishlists        Wishlist[]
 
   @@unique([rfc])
   @@index([nombre])
@@ -3266,4 +3277,449 @@ model OrdenCompraFolioCounter {
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
 
   @@map("orden_compra_folio_counters")
+}
+
+// ============================================================
+// HITO 4.1 — Ecommerce (Modelo 4.21)
+// Tienda online Next.js por subdominio. pedidos_ecommerce ≠ ventas:
+// al confirmar pago el pedido genera una Venta canal=ecommerce.
+// ============================================================
+
+enum CarritoCanal {
+  web
+  mobile
+  whatsapp
+}
+
+enum CarritoEstado {
+  activo
+  abandonado
+  convertido
+  expirado
+}
+
+enum PedidoEcommerceEstadoPago {
+  pendiente
+  pago_confirmado
+  pago_fallido
+  reembolsado
+}
+
+enum PedidoEcommerceEstado {
+  recibido
+  pago_confirmado
+  preparando
+  listo_pickup
+  enviado
+  en_camino
+  entregado
+  recogido
+  cancelado
+}
+
+enum PedidoEcommerceMetodoEnvio {
+  paqueteria
+  click_collect
+  envio_local
+}
+
+enum TarifaEnvioTipoCalculo {
+  fija
+  por_peso
+  por_monto
+}
+
+enum EnvioPaqueteria {
+  fedex
+  estafeta
+  paquete_express
+  huipix
+  propio
+}
+
+enum ResenaEstado {
+  pendiente
+  aprobada
+  rechazada
+}
+
+enum TiendaModo {
+  b2c
+  b2b_only
+}
+
+model ConfigTiendaEcommerce {
+  id                          String     @id @default(cuid())
+  activa                      Boolean    @default(false)
+  subdominio                  String     @unique
+  dominioPropio               String?    @unique @map("dominio_propio")
+  nombre                      String
+  lema                        String?
+  descripcionSeo              String?    @map("descripcion_seo")
+  idiomasDisponibles          Json       @default("[\"es-MX\"]") @map("idiomas_disponibles")
+  monedas                     Json       @default("[\"MXN\"]")
+  paisesEnvio                 Json       @default("[\"MX\"]") @map("paises_envio")
+  politicasHtml               Json       @default("{}") @map("politicas_html")
+  whatsappChatWidget          String?    @map("whatsapp_chat_widget")
+  tagsAnalytics               Json       @default("{}") @map("tags_analytics")
+  modo                        TiendaModo @default(b2c)
+  mostrarInventarioPublico    Boolean    @default(true) @map("mostrar_inventario_publico")
+  bufferInventarioPublico     Int        @default(0) @map("buffer_inventario_publico")
+  guestCheckoutPermitido      Boolean    @default(true) @map("guest_checkout_permitido")
+  requiereAprobacionClienteNuevo Boolean @default(false) @map("requiere_aprobacion_cliente_nuevo")
+  brandingOverride            Json?      @map("branding_override")
+  createdAt                   DateTime   @default(now()) @map("created_at")
+  updatedAt                   DateTime   @updatedAt @map("updated_at")
+
+  @@map("config_tienda_ecommerce")
+}
+
+model CategoriaPublica {
+  id          String  @id @default(cuid())
+  nombre      String
+  slugSeo     String  @map("slug_seo")
+  parentId    String? @map("parent_id")
+  descripcion String?
+  imagenUrl   String? @map("imagen_url")
+  orden       Int     @default(0)
+  metaTitulo  String? @map("meta_titulo")
+  metaDescripcion String? @map("meta_descripcion")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent             CategoriaPublica?  @relation("CategoriaPublicaJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
+  hijos              CategoriaPublica[] @relation("CategoriaPublicaJerarquia")
+  productosPublicados ProductoPublicado[]
+
+  @@unique([slugSeo])
+  @@index([parentId])
+  @@map("categorias_publicas")
+}
+
+model ProductoPublicado {
+  id                  String   @id @default(cuid())
+  productoId          String   @unique @map("producto_id")
+  categoriaPublicaId  String?  @map("categoria_publica_id")
+  tituloPublico       String   @map("titulo_publico")
+  slugSeo             String   @map("slug_seo")
+  descripcionMd       String?  @map("descripcion_md")
+  descripcionCortaMd  String?  @map("descripcion_corta_md")
+  metaTitulo          String?  @map("meta_titulo")
+  metaDescripcion     String?  @map("meta_descripcion")
+  fotosArray          Json     @default("[]") @map("fotos_array")
+  videoUrl            String?  @map("video_url")
+  precioPublicoOverride Decimal? @map("precio_publico_override") @db.Decimal(14, 2)
+  precioPromocion     Decimal? @map("precio_promocion") @db.Decimal(14, 2)
+  promocionVigenteHasta DateTime? @map("promocion_vigente_hasta")
+  atributosPublicos   Json     @default("{}") @map("atributos_publicos")
+  tags                Json     @default("[]")
+  rankingScore        Int      @default(0) @map("ranking_score")
+  destacadoHome       Boolean  @default(false) @map("destacado_home")
+  publicadoAt         DateTime @default(now()) @map("publicado_at")
+  relacionadosIds     Json     @default("[]") @map("relacionados_ids")
+  isPublicado         Boolean  @default(true) @map("is_publicado")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  producto       Producto            @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  categoriaPublica CategoriaPublica? @relation(fields: [categoriaPublicaId], references: [id], onDelete: SetNull)
+  traducciones   ProductoTraduccion[]
+  resenas        ProductoResena[]
+
+  @@unique([slugSeo])
+  @@index([categoriaPublicaId])
+  @@index([destacadoHome])
+  @@index([isPublicado])
+  @@map("productos_publicados")
+}
+
+model ProductoTraduccion {
+  id                  String   @id @default(cuid())
+  productoPublicadoId String   @map("producto_publicado_id")
+  locale              String
+  tituloPublico       String   @map("titulo_publico")
+  descripcionMd       String?  @map("descripcion_md")
+  metaTitulo          String?  @map("meta_titulo")
+  metaDescripcion     String?  @map("meta_descripcion")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  productoPublicado ProductoPublicado @relation(fields: [productoPublicadoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoPublicadoId, locale])
+  @@map("producto_traducciones")
+}
+
+model CarritoEcommerce {
+  id                 String        @id @default(cuid())
+  sessionIdAnonimo   String?       @map("session_id_anonimo")
+  clienteId          String?       @map("cliente_id")
+  emailAnonimo       String?       @map("email_anonimo")
+  canal              CarritoCanal  @default(web)
+  items              Json          @default("[]")
+  subtotal           Decimal       @default(0) @db.Decimal(14, 4)
+  descuentoTotal     Decimal       @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  costoEnvio         Decimal       @default(0) @map("costo_envio") @db.Decimal(14, 4)
+  total              Decimal       @default(0) @db.Decimal(14, 4)
+  moneda             String        @default("MXN")
+  cuponCodigo        String?       @map("cupon_codigo")
+  promocionesAplicadas Json        @default("[]") @map("promociones_aplicadas")
+  direccionEnvio     Json?         @map("direccion_envio")
+  direccionFactura   Json?         @map("direccion_factura")
+  metodoEnvio        PedidoEcommerceMetodoEnvio? @map("metodo_envio")
+  metodoPagoSeleccionado String?   @map("metodo_pago_seleccionado")
+  status             CarritoEstado @default(activo)
+  abandonadoAt       DateTime?     @map("abandonado_at")
+  recordatorio24hAt  DateTime?     @map("recordatorio_24h_at")
+  recordatorio72hAt  DateTime?     @map("recordatorio_72h_at")
+  recoveryCodigo     String?       @unique @map("recovery_codigo")
+  convertidoAPedidoId String?      @map("convertido_a_pedido_id")
+  ip                 String?
+  userAgent          String?       @map("user_agent")
+  referrer           String?
+  utm                Json?
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  cliente Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  @@index([sessionIdAnonimo])
+  @@index([clienteId])
+  @@index([status, abandonadoAt])
+  @@map("carritos_ecommerce")
+}
+
+model PedidoEcommerce {
+  id                 String                    @id @default(cuid())
+  folioPublico       String                    @unique @map("folio_publico")
+  carritoOrigenId    String?                   @map("carrito_origen_id")
+  clienteId          String?                   @map("cliente_id")
+  emailComprador     String                    @map("email_comprador")
+  items              Json                      @default("[]")
+  subtotal           Decimal                   @db.Decimal(14, 4)
+  descuentoTotal     Decimal                   @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  costoEnvio         Decimal                   @default(0) @map("costo_envio") @db.Decimal(14, 4)
+  total              Decimal                   @db.Decimal(14, 4)
+  moneda             String                    @default("MXN")
+  tipoCambio         Decimal                   @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
+  cuponesSnapshot    Json                      @default("[]") @map("cupones_snapshot")
+  direccionEnvio     Json?                     @map("direccion_envio")
+  direccionFactura   Json?                     @map("direccion_factura")
+  requiereFactura    Boolean                   @default(false) @map("requiere_factura")
+  datosFactura       Json?                     @map("datos_factura")
+  statusPago         PedidoEcommerceEstadoPago @default(pendiente) @map("status_pago")
+  paymentIntentId    String?                   @map("payment_intent_id")
+  metodoPago         String?                   @map("metodo_pago")
+  metodoEnvio        PedidoEcommerceMetodoEnvio @map("metodo_envio")
+  sucursalPickupId   String?                   @map("sucursal_pickup_id")
+  paqueteria         EnvioPaqueteria?
+  guiaTracking       String?                   @map("guia_tracking")
+  costoEnvioReal     Decimal?                  @map("costo_envio_real") @db.Decimal(14, 4)
+  statusPedido       PedidoEcommerceEstado     @default(recibido) @map("status_pedido")
+  ventaIdGenerada    String?                   @unique @map("venta_id_generada")
+  facturaCfdiId      String?                   @map("factura_cfdi_id")
+  pagoConfirmadoAt   DateTime?                 @map("pago_confirmado_at")
+  enviadoAt          DateTime?                 @map("enviado_at")
+  entregadoAt        DateTime?                 @map("entregado_at")
+  canceladoAt        DateTime?                 @map("cancelado_at")
+  canceladoMotivo    String?                   @map("cancelado_motivo")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  cliente        Cliente?              @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  sucursalPickup Sucursal?             @relation(fields: [sucursalPickupId], references: [id], onDelete: SetNull)
+  ventaGenerada  Venta?                @relation("PedidoEcommerceVenta", fields: [ventaIdGenerada], references: [id], onDelete: SetNull)
+  eventos        PedidoEcommerceEvento[]
+  envio          EnvioPedido?
+  pickup         PickupPedido?
+  resenas        ProductoResena[]
+
+  @@index([clienteId])
+  @@index([statusPedido, createdAt])
+  @@index([statusPago])
+  @@index([emailComprador])
+  @@map("pedidos_ecommerce")
+}
+
+model PedidoEcommerceEvento {
+  id              String   @id @default(cuid())
+  pedidoId        String   @map("pedido_id")
+  tipo            String
+  descripcion     String
+  visibleCliente  Boolean  @default(true) @map("visible_cliente")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  pedido PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId, createdAt])
+  @@map("pedidos_ecommerce_eventos")
+}
+
+model PedidoEcommerceFolioCounter {
+  id          Int      @id @default(1)
+  ultimoFolio Int      @default(0) @map("ultimo_folio")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("pedido_ecommerce_folio_counter")
+}
+
+model ZonaEnvio {
+  id              String   @id @default(cuid())
+  nombre          String
+  cpsIncluidos    Json     @default("[]") @map("cps_incluidos")
+  estadosIncluidos Json    @default("[]") @map("estados_incluidos")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tarifas TarifaEnvio[]
+
+  @@map("zonas_envio")
+}
+
+model TarifaEnvio {
+  id                   String                 @id @default(cuid())
+  zonaEnvioId          String                 @map("zona_envio_id")
+  paqueteria           EnvioPaqueteria
+  nombrePublico        String                 @map("nombre_publico")
+  tipoCalculo          TarifaEnvioTipoCalculo @default(fija) @map("tipo_calculo")
+  montoFijo            Decimal?               @map("monto_fijo") @db.Decimal(14, 2)
+  escalonPeso          Json?                  @map("escalon_peso")
+  montoMinimoEnvioGratis Decimal?             @map("monto_minimo_envio_gratis") @db.Decimal(14, 2)
+  diasEntregaEstimados Int?                   @map("dias_entrega_estimados")
+  isActive             Boolean                @default(true) @map("is_active")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+
+  zonaEnvio ZonaEnvio @relation(fields: [zonaEnvioId], references: [id], onDelete: Cascade)
+
+  @@index([zonaEnvioId])
+  @@map("tarifas_envio")
+}
+
+model EnvioPedido {
+  id              String          @id @default(cuid())
+  pedidoId        String          @unique @map("pedido_id")
+  paqueteria      EnvioPaqueteria
+  guiaTracking    String?         @map("guia_tracking")
+  etiquetaUrl     String?         @map("etiqueta_url")
+  costoReal       Decimal?        @map("costo_real") @db.Decimal(14, 4)
+  costoCobrado    Decimal?        @map("costo_cobrado") @db.Decimal(14, 4)
+  statusExterno   String?         @map("status_externo")
+  eventosExternos Json            @default("[]") @map("eventos_externos")
+  evidenciaEntregaUrl String?     @map("evidencia_entrega_url")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  pedido PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@map("envios_pedidos")
+}
+
+model ProductoResena {
+  id                  String       @id @default(cuid())
+  productoPublicadoId String       @map("producto_publicado_id")
+  pedidoId            String       @map("pedido_id")
+  clienteId           String?      @map("cliente_id")
+  rating              Int
+  titulo              String?
+  comentario          String?
+  imagenesArray       Json         @default("[]") @map("imagenes_array")
+  videoUrl            String?      @map("video_url")
+  estado              ResenaEstado @default(pendiente)
+  moderacionIaNota    String?      @map("moderacion_ia_nota")
+  verificadaPorCompra Boolean      @default(true) @map("verificada_por_compra")
+  respuestaTienda     String?      @map("respuesta_tienda")
+  respondidaPorId     String?      @map("respondida_por_id")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  productoPublicado ProductoPublicado @relation(fields: [productoPublicadoId], references: [id], onDelete: Cascade)
+  pedido            PedidoEcommerce   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  cliente           Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  respondidaPor     Usuario?          @relation("ResenaRespondidaPor", fields: [respondidaPorId], references: [id], onDelete: SetNull)
+
+  @@unique([pedidoId, productoPublicadoId])
+  @@index([productoPublicadoId, estado])
+  @@map("producto_resenas")
+}
+
+model Wishlist {
+  id           String   @id @default(cuid())
+  clienteId    String   @map("cliente_id")
+  nombre       String   @default("Mi lista")
+  esPublica    Boolean  @default(false) @map("es_publica")
+  slugPublico  String?  @unique @map("slug_publico")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  items   WishlistItem[]
+
+  @@index([clienteId])
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id          String   @id @default(cuid())
+  wishlistId  String   @map("wishlist_id")
+  productoPublicadoId String @map("producto_publicado_id")
+  agregadoAt  DateTime @default(now()) @map("agregado_at")
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, productoPublicadoId])
+  @@map("wishlist_items")
+}
+
+model ConfigPickupSucursal {
+  id                      String   @id @default(cuid())
+  sucursalId              String   @unique @map("sucursal_id")
+  activa                  Boolean  @default(false)
+  horarioPickup           Json     @default("{}") @map("horario_pickup")
+  tiempoPreparacionPromedioMin Int @default(60) @map("tiempo_preparacion_promedio_min")
+  requiereIdRecoger       Boolean  @default(true) @map("requiere_id_recoger")
+  notificacionListoCanal  String   @default("email") @map("notificacion_listo_canal")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@map("config_pickup_sucursal")
+}
+
+model PickupPedido {
+  id              String    @id @default(cuid())
+  pedidoId        String    @unique @map("pedido_id")
+  sucursalId      String    @map("sucursal_id")
+  listoAt         DateTime? @map("listo_at")
+  recogidoAt      DateTime? @map("recogido_at")
+  recogidoPorNombre String? @map("recogido_por_nombre")
+  recogidoPorId   String?   @map("recogido_por_id")
+  responsableUserId String? @map("responsable_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  pedido          PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  sucursal        Sucursal        @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  responsableUser Usuario?        @relation("PickupResponsable", fields: [responsableUserId], references: [id], onDelete: SetNull)
+
+  @@map("pickup_pedidos")
+}
+
+model SeoConfiguracionTienda {
+  id                   String   @id @default(cuid())
+  robotsTxt            String?  @map("robots_txt")
+  sitemapAuto          Boolean  @default(true) @map("sitemap_auto")
+  redirects301         Json     @default("[]") @map("redirects_301")
+  structuredDataTemplate Json?  @map("structured_data_template")
+  googleSearchConsoleVerif String? @map("google_search_console_verif")
+  bingVerif            String?  @map("bing_verif")
+  canonicalDominio     String?  @map("canonical_dominio")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("seo_configuracion_tienda")
 }

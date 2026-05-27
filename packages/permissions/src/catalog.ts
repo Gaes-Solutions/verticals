@@ -106,6 +106,13 @@ export const PERMISSIONS = {
 
   DIOT_GENERAR: "diot.generar",
 
+  ECOMMERCE_CONFIGURAR: "ecommerce.configurar",
+  ECOMMERCE_PUBLICAR_PRODUCTO: "ecommerce.publicar_producto",
+  ECOMMERCE_PEDIDOS_LEER: "ecommerce.pedidos_leer",
+  ECOMMERCE_PEDIDOS_GESTIONAR: "ecommerce.pedidos_gestionar",
+  ECOMMERCE_RESENAS_MODERAR: "ecommerce.resenas_moderar",
+  ECOMMERCE_ENVIOS_GESTIONAR: "ecommerce.envios_gestionar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -404,6 +411,31 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "diot.generar": {
     category: "despacho",
     description: "Generar archivo DIOT TXT formato SAT del periodo",
+  },
+
+  "ecommerce.configurar": {
+    category: "ecommerce",
+    description: "Configurar tienda online (subdominio, branding, SEO, envíos)",
+  },
+  "ecommerce.publicar_producto": {
+    category: "ecommerce",
+    description: "Publicar/despublicar productos y categorías en la tienda",
+  },
+  "ecommerce.pedidos_leer": {
+    category: "ecommerce",
+    description: "Consultar pedidos de la tienda online",
+  },
+  "ecommerce.pedidos_gestionar": {
+    category: "ecommerce",
+    description: "Transicionar estado de pedidos (preparar, enviar, entregar)",
+  },
+  "ecommerce.resenas_moderar": {
+    category: "ecommerce",
+    description: "Moderar y responder reseñas de productos",
+  },
+  "ecommerce.envios_gestionar": {
+    category: "ecommerce",
+    description: "Gestionar zonas, tarifas de envío y guías",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },
