@@ -1,6 +1,6 @@
 # Hito 4 — Digital y marketing
 
-> **Estado:** En curso · **4.1 Ecommerce ✅ CERRADO (2026-05-26, incl. primer frontend Next.js)** · **Sub-hito activo:** 4.2 Marketing
+> **Estado:** En curso · 4.1 Ecommerce ✅ · 4.2 Marketing ✅ CERRADO (2026-05-27) · **Sub-hito activo:** 4.3 Doctoralia + telemedicina
 > **Análisis:** [4.21 Ecommerce](../analisis/04-modelo-datos/4.21-ecommerce.md) · [4.18 Promociones/Marketing](../analisis/04-modelo-datos/4.18-promociones-marketing.md) · [4.17 Portal Doctoralia](../analisis/04-modelo-datos/4.17-portal-doctoralia.md) · [Flujo 7 Paciente portal](../analisis/03-flujos/07-paciente-portal.md) · [Análisis 7 Integraciones](../analisis/07-integraciones.md)
 
 ## Objetivo del Hito 4
@@ -74,6 +74,45 @@ Cierre del Hito 4 = tienda online operativa + campañas WhatsApp/email + Doctora
 - Cotización automática paqueterías (FedEx/Paquete Express) + generación de guías + label ZPL (V1 = tarifas fijas)
 - Reservas inventario al carrito (V1 = buffer + valida al pago)
 - Productos digitales, dominio propio, multi-idioma editor UI, modo mixto b2c+b2b
+
+---
+
+## 4.2 Marketing (Modelo 4.18)
+
+**Decisiones (confirmadas 2026-05-26)**: las 5 piezas completas V1 · worker de envíos in-process (patrón alarmas medicación, V1.5 → BullMQ) · plantillas dual-scope (catálogo global master pre-aprobado Meta + plantillas propias del tenant). Mensajería WhatsApp/SMS = mock adapters; email = `@gaespos/email` (Resend).
+
+### 4.2.a Schema marketing tenant + master + migration
+- [x] `Promocion` (tipo [2x1/3xn/mxn/compra_x_lleva_y/descuento_pct/descuento_monto/precio_especial/regalo/escalonado_volumen/happy_hour], condiciones+acciones JSONB, vigencia, horarios happy hour, canales [pos/ecommerce/b2b/todos], stackeable, prioridad, límites uso total/cliente, requiereCodigo+codigo, status) + `PromocionProducto` (rol incluido/excluido/regalo/comprado/requerido) + `PromocionAplicacion` (trazabilidad por venta, revocada_at)
+- [x] `SegmentoCliente` (tipo [estatico/dinamico_rfm/dinamico_query], definicion JSONB thresholds RFM, count denormalizado) + `SegmentoClienteMiembro` (snapshot métricas) + `ClienteMetricasRfm` (score R/F/M 1-5, segmento_rfm_calculado [champion/leal/en_riesgo/perdido/nuevo/hibernando], refresh nightly)
+- [x] `Campana` (objetivo, canal [whatsapp/email/sms/push/multi], segmentoId, plantillaId, tipoDisparo [inmediato/programado/recurrente/trigger_event], ventana horario, status, stats JSONB, presupuesto_max_creditos) + `CampanaEnvio` (cola: clienteId, canal, status [pendiente/enviado/entregado/abierto/click/convertido/opt_out/bounce], creditos) + `CampanaTrigger` (evento + frecuencia max/cliente/30d)
+- [x] `PlantillaMensaje` **dual-scope**: master DB catálogo global pre-aprobado Meta (transaccional/utility) + tenant `plantillas_mensajes` (promocional, aprobacion_meta_status, handlebars, scope [gaessoft_global/tenant_propia])
+- [x] `ClienteOptOut` (canal + tipo [promocional/todo]; transaccional siempre permitido LFPDPPP)
+- [x] `LoyaltyProgram` (tipo [puntos_por_peso/visita/tiers/mixto], regla_acumulacion JSONB, valor_punto_redimible, caducidad_meses, tiers JSONB modelados V1 off) + `ClienteLoyalty` (puntos_actuales, lifetime, tier) + `LoyaltyMovimiento` (tipo [acumulacion/canje/expiracion/ajuste/reverso], saldo snapshot, caduca_at FIFO)
+- [x] Permisos: PROMOCIONES_GESTIONAR, SEGMENTOS_GESTIONAR, CAMPANAS_GESTIONAR/ENVIAR, LEALTAD_GESTIONAR, PLANTILLAS_GESTIONAR
+- [x] Migration `add_marketing` (tenant) + `add_plantillas_globales` (master)
+
+### 4.2.b Paquete `@gaespos/mensajeria` (WhatsApp + SMS mock adapters)
+- [x] `MessagingProvider` interface (enviarPlantilla, enviarTexto, estadoEnvio) + `MockWhatsappProvider` + `MockSmsProvider` deterministas + `WhatsappCloudClient`/`TwilioClient` stubs. Render handlebars. Plugin Fastify factory por canal.
+
+### 4.2.c Motor de promociones (integra a pricing)
+- [x] Extender motor pricing (`@gaespos/pricing` o capa en venta) con promociones automáticas como capa de descuento con `prioridad`, respetando stackeable/canales/vigencia/horarios. `aplicarPromociones(ticket, contexto)` → PromocionAplicacion. Tipos V1: 2x1, descuento_pct, descuento_monto, mxn, precio_especial, happy_hour.
+- [x] Integración en `crearVenta` (POS + ecommerce): registra PromocionAplicacion, revoca al cancelar venta.
+
+### 4.2.d Segmentación RFM
+- [x] Service `recalcularRfm(client)` nightly: computa R/F/M por cliente desde ventas, asigna segmento. Segmentos predefinidos V1 (champion/leal/en_riesgo/perdido/nuevo/hibernando) + filtros simples. Endpoints CRUD segmentos + listar miembros.
+
+### 4.2.e Campañas + worker envíos in-process + triggers
+- [x] Service campañas: crear, programar, encolar envíos por segmento. `procesarColaEnvios(client, providers)` in-process (como `escanearKardex`): toma CampanaEnvio pendientes respetando ventana horario + opt-outs + presupuesto → envía via mock provider → actualiza status + stats. `evaluarTriggers(client, evento)` (post-venta/post-cita/carrito abandonado 24h) encola campañas trigger.
+- [x] Atribución conversión: al cerrar venta, cruza CampanaEnvio del cliente (click ≤7d directa, envío ≤48h asistida).
+
+### 4.2.f Lealtad (puntos lineales V1)
+- [x] Service: inscripción (con consentimiento LFPDPPP), acumular al cobrar venta (regla puntos×peso), canjear (valida saldo, FIFO caducidad), movimientos audit. Tiers modelados pero off V1.
+
+### 4.2.g Tests integración
+- [x] Promos (2x1, happy hour por horario, stackeable, límite por cliente), RFM (cálculo champion vs perdido), campaña→cola→worker envía via mock→stats, opt-out bloquea promocional pero no transaccional, trigger carrito abandonado, lealtad acumula+canjea+caducidad, atribución conversión.
+
+### 4.2.h Diferidos V1.5+
+- Constructor visual de segmentos (V2), referidos C2C (V2), tiers de lealtad activos (V2), BullMQ real para envíos, WhatsApp/SMS reales (cuando Gaby contrate Meta/Twilio).
 
 ## Performance budgets
 - Catálogo público (ISR): TTFB <200ms

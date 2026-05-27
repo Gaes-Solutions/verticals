@@ -74,6 +74,9 @@ importers:
       '@gaespos/fiscal':
         specifier: workspace:*
         version: link:../../packages/fiscal
+      '@gaespos/mensajeria':
+        specifier: workspace:*
+        version: link:../../packages/mensajeria
       '@gaespos/pagos':
         specifier: workspace:*
         version: link:../../packages/pagos
@@ -221,6 +224,15 @@ importers:
         version: 5.9.3
 
   packages/fiscal:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/mensajeria:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

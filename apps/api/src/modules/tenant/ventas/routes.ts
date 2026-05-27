@@ -62,6 +62,10 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
         canceladaPor: { select: { id: true, nombre: true } },
         lineas: { orderBy: { numero: "asc" } },
         pagos: { orderBy: { createdAt: "asc" } },
+        promocionesAplicadas: {
+          where: { revocadaAt: null },
+          include: { promocion: { select: { nombre: true, tipo: true } } },
+        },
       },
     });
     if (!venta) {

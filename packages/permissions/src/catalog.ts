@@ -113,6 +113,13 @@ export const PERMISSIONS = {
   ECOMMERCE_RESENAS_MODERAR: "ecommerce.resenas_moderar",
   ECOMMERCE_ENVIOS_GESTIONAR: "ecommerce.envios_gestionar",
 
+  PROMOCIONES_GESTIONAR: "promociones.gestionar",
+  SEGMENTOS_GESTIONAR: "segmentos.gestionar",
+  CAMPANAS_GESTIONAR: "campanas.gestionar",
+  CAMPANAS_ENVIAR: "campanas.enviar",
+  PLANTILLAS_GESTIONAR: "plantillas.gestionar",
+  LEALTAD_GESTIONAR: "lealtad.gestionar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -436,6 +443,31 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "ecommerce.envios_gestionar": {
     category: "ecommerce",
     description: "Gestionar zonas, tarifas de envío y guías",
+  },
+
+  "promociones.gestionar": {
+    category: "marketing",
+    description: "Crear y gestionar promociones automáticas",
+  },
+  "segmentos.gestionar": {
+    category: "marketing",
+    description: "Crear y gestionar segmentos de clientes (RFM)",
+  },
+  "campanas.gestionar": {
+    category: "marketing",
+    description: "Crear y configurar campañas de marketing",
+  },
+  "campanas.enviar": {
+    category: "marketing",
+    description: "Disparar/encolar envíos de campañas (consume créditos)",
+  },
+  "plantillas.gestionar": {
+    category: "marketing",
+    description: "Crear plantillas de mensajes del tenant",
+  },
+  "lealtad.gestionar": {
+    category: "marketing",
+    description: "Configurar programa de lealtad y ajustar puntos",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

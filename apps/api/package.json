@@ -29,6 +29,7 @@
     "@gaespos/db": "workspace:*",
     "@gaespos/email": "workspace:*",
     "@gaespos/fiscal": "workspace:*",
+    "@gaespos/mensajeria": "workspace:*",
     "@gaespos/pagos": "workspace:*",
     "@gaespos/permissions": "workspace:*",
     "@gaespos/pricing": "workspace:*",

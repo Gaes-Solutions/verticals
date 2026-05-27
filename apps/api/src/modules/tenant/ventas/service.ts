@@ -6,6 +6,7 @@ import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
 import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
+import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
 import type { VentaCreateInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -359,8 +360,23 @@ export async function crearVenta(
     client,
     ticket.lineas.map((l) => l.productoVarianteId),
   );
-  const lineasCalc = buildLineasCalculo(ticket, input, snapshots);
-  const totales = totalesVenta(ticket, lineasCalc);
+
+  // Capa de promociones automáticas (Hito 4.2): ajusta el ticket antes de
+  // calcular impuestos. Sin promos vigentes, el ticket queda intacto.
+  const varianteAProducto = new Map<string, string>();
+  for (const [varId, snap] of snapshots) varianteAProducto.set(varId, snap.productoId);
+  const promos = await cargarPromocionesAplicables(client, {
+    canal: input.canal === "mayoreo" ? "b2b" : input.canal,
+    sucursalId: sucursal.id,
+    fecha: new Date(),
+    ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+    varianteAProducto,
+  });
+  const promoResult = aplicarPromocionesATicket(ticket, promos, varianteAProducto);
+  const ticketFinal = promoResult.ticket;
+
+  const lineasCalc = buildLineasCalculo(ticketFinal, input, snapshots);
+  const totales = totalesVenta(ticketFinal, lineasCalc);
   const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b } = validarPagos(
     totales.totalVenta,
     input.pagos,
@@ -383,8 +399,8 @@ export async function crearVenta(
   }
 
   try {
-    return await client.$transaction((tx) =>
-      persistirVenta(tx, {
+    return await client.$transaction(async (tx) => {
+      const result = await persistirVenta(tx, {
         sucursalId: sucursal.id,
         sucursalCodigo: sucursal.codigo,
         input,
@@ -392,8 +408,26 @@ export async function crearVenta(
         usuarioId,
         totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b },
         creditoB2b,
-      }),
-    );
+      });
+      if (promoResult.aplicaciones.length > 0) {
+        await tx.promocionAplicacion.createMany({
+          data: promoResult.aplicaciones.map((a) => ({
+            promocionId: a.promocionId,
+            ventaId: result.ventaId,
+            ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+            montoDescuento: a.montoDescuento,
+            productosAfectados: a.productosAfectados,
+          })),
+        });
+        for (const a of promoResult.aplicaciones) {
+          await tx.promocion.update({
+            where: { id: a.promocionId },
+            data: { usosActuales: { increment: 1 } },
+          });
+        }
+      }
+      return result;
+    });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
       throw new VentaError(409, err.message, {
@@ -587,6 +621,23 @@ export async function cancelarVenta(
         motivo: `Cancelación venta ${venta.folio}: ${motivo}`,
         usuarioId,
       });
+    }
+    // Revoca promociones aplicadas y libera el uso contado
+    const aplicaciones = await tx.promocionAplicacion.findMany({
+      where: { ventaId, revocadaAt: null },
+      select: { id: true, promocionId: true },
+    });
+    if (aplicaciones.length > 0) {
+      await tx.promocionAplicacion.updateMany({
+        where: { id: { in: aplicaciones.map((a) => a.id) } },
+        data: { revocadaAt: new Date() },
+      });
+      for (const a of aplicaciones) {
+        await tx.promocion.update({
+          where: { id: a.promocionId },
+          data: { usosActuales: { decrement: 1 } },
+        });
+      }
     }
     await tx.venta.update({
       where: { id: ventaId },

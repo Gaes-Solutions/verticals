@@ -8,6 +8,7 @@ import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import camasRoutes from "./modules/tenant/camas/routes.js";
+import campanasRoutes from "./modules/tenant/campanas/routes.js";
 import carritoRoutes from "./modules/tenant/carrito/routes.js";
 import categoriasRoutes from "./modules/tenant/categorias/routes.js";
 import cfdisRecibidosRoutes from "./modules/tenant/cfdis-recibidos/routes.js";
@@ -25,6 +26,7 @@ import diotRoutes from "./modules/tenant/diot/routes.js";
 import ecommerceConfigRoutes from "./modules/tenant/ecommerce-config/routes.js";
 import hospitalizacionesRoutes from "./modules/tenant/hospitalizaciones/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
+import lealtadRoutes from "./modules/tenant/lealtad/routes.js";
 import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
 import lotesRoutes from "./modules/tenant/lotes/routes.js";
 import marcasRoutes from "./modules/tenant/marcas/routes.js";
@@ -35,10 +37,12 @@ import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
 import pedidosEcommerceRoutes from "./modules/tenant/pedidos-ecommerce/routes.js";
 import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
+import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
 import recetasRoutes from "./modules/tenant/recetas/routes.js";
 import resenasRoutes from "./modules/tenant/resenas/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
+import segmentosRoutes from "./modules/tenant/segmentos/routes.js";
 import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
 import ticketsRoutes from "./modules/tenant/tickets/routes.js";
@@ -54,6 +58,7 @@ import dbPlugin from "./plugins/db.js";
 import emailPlugin, { type EmailProviderFactory } from "./plugins/email.js";
 import errorHandlerPlugin from "./plugins/error-handler.js";
 import fiscalPlugin, { type FiscalProviderFactory } from "./plugins/fiscal.js";
+import mensajeriaPlugin, { type MensajeriaProviderFactory } from "./plugins/mensajeria.js";
 import pagosPlugin, { type PagoProviderFactory } from "./plugins/pagos.js";
 import recargasPlugin, { type RecargaProviderFactory } from "./plugins/recargas.js";
 import securityPlugin from "./plugins/security.js";
@@ -65,6 +70,7 @@ export interface BuildAppOptions {
   aiProviderFactory?: AiProviderFactory;
   pagoProviderFactory?: PagoProviderFactory;
   emailProviderFactory?: EmailProviderFactory;
+  mensajeriaProviderFactory?: MensajeriaProviderFactory;
 }
 
 export async function buildApp(
@@ -106,6 +112,10 @@ export async function buildApp(
   await app.register(
     emailPlugin,
     opts.emailProviderFactory ? { factory: opts.emailProviderFactory } : {},
+  );
+  await app.register(
+    mensajeriaPlugin,
+    opts.mensajeriaProviderFactory ? { factory: opts.mensajeriaProviderFactory } : {},
   );
 
   await app.register(healthRoutes);
@@ -161,6 +171,10 @@ export async function buildApp(
       await tenantApp.register(pedidosEcommerceRoutes, { prefix: "/pedidos-ecommerce" });
       await tenantApp.register(resenasRoutes, { prefix: "/resenas" });
       await tenantApp.register(wishlistsRoutes, { prefix: "/wishlists" });
+      await tenantApp.register(promocionesRoutes, { prefix: "/promociones" });
+      await tenantApp.register(segmentosRoutes, { prefix: "/segmentos" });
+      await tenantApp.register(campanasRoutes, { prefix: "/campanas" });
+      await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
     },
     { prefix: "/t" },
   );

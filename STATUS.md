@@ -7,9 +7,9 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🚧 **Hito 4 Digital y marketing EN CURSO** — 🎉 **4.1 Ecommerce CERRADO** (incl. PRIMER FRONTEND)
-- **Progreso Hito 4**: 4.1 Ecommerce ✅ (schema + adapters pagos/email + backend + 14 tests + tienda Next.js que compila y arranca). Siguiente: 4.2 Marketing (promos + RFM + campañas WhatsApp/email/SMS)
-- **Tarea actual**: arrancar 4.2 Marketing (Modelo 4.18) — motor promos automáticas, segmentación RFM, campañas multicanal (WhatsApp Cloud + email Resend + SMS Twilio mock), lealtad puntos. Reusa clientes/ventas + alimenta recovery de carrito abandonado de 4.1.
-- **Próximo paso concreto**: planificar 4.2 con Análisis 4.18. Confirmar scope V1 (qué canales, motor promos automáticas vs cupones simples, RFM).
+- **Progreso Hito 4**: 4.1 Ecommerce ✅ (commit `815ec1c`) · 🎉 **4.2 Marketing ✅ CERRADO** (promos + RFM + campañas+worker + lealtad, 11 tests, **424 tests apps/api verde**). Siguiente: 4.3 Doctoralia + telemedicina (Modelo 4.17).
+- **Tarea actual**: arrancar 4.3 Portal Doctoralia — perfiles médicos cross-tenant (master DB) + reseñas portables + búsqueda PostGIS+FTS + telemedicina Daily.co (mock) + fees 5%/3%/0%. Planificar con Análisis 4.17 + Flujo 7.
+- **Próximo paso concreto**: commitear checkpoint 4.2 (rama→main ff, como 4.1) y planificar 4.3 con decisiones (alcance perfiles cross-tenant master, mock Daily.co, búsqueda PostGIS V1 vs FTS simple). Decisiones 4.2 cumplidas: 5 piezas, worker in-process (`procesarColaEnvios`), plantillas dual-scope.
 - **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
 - **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
 - **Decisiones Hito 4 (2026-05-26)**: orden Ecommerce→Marketing→Doctoralia→Portal paciente; tienda Next.js real; integraciones mock adapters V1; email Resend. Ver [`docs/hitos/hito-4-digital.md`](docs/hitos/hito-4-digital.md).

@@ -469,6 +469,7 @@ model Producto {
   tags                 ProductoTag[]
   reglasPrecioProducto ReglaPrecioProducto[]
   productoPublicado    ProductoPublicado?
+  promociones          PromocionProducto[]
 
   @@index([categoriaId])
   @@index([marcaId])
@@ -888,6 +889,7 @@ model Venta {
   hospitalizacionAlta Hospitalizacion? @relation("HospitalizacionVentaAlAlta")
   cargosHospitalFacturados CargoHospital[] @relation("CargoHospitalFacturadoEnVenta")
   pedidoEcommerce     PedidoEcommerce? @relation("PedidoEcommerceVenta")
+  promocionesAplicadas PromocionAplicacion[] @relation("VentaPromociones")
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -1235,6 +1237,11 @@ model Cliente {
   pedidosEcommerce PedidoEcommerce[]
   resenas          ProductoResena[]
   wishlists        Wishlist[]
+  segmentosMiembro SegmentoClienteMiembro[]
+  metricasRfm      ClienteMetricasRfm?
+  campanasEnvios   CampanaEnvio[]
+  optOuts          ClienteOptOut[]
+  loyalty          ClienteLoyalty[]
 
   @@unique([rfc])
   @@index([nombre])
@@ -3722,4 +3729,417 @@ model SeoConfiguracionTienda {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("seo_configuracion_tienda")
+}
+
+// ============================================================
+// HITO 4.2 — Marketing (Modelo 4.18)
+// Promociones automáticas, segmentación RFM, campañas multicanal,
+// lealtad por puntos, triggers. Worker de envíos in-process V1.
+// ============================================================
+
+enum PromocionTipo {
+  dos_x_uno
+  tres_x_n
+  mxn
+  compra_x_lleva_y
+  descuento_pct
+  descuento_monto
+  precio_especial
+  regalo_con_compra
+  escalonado_volumen
+  happy_hour
+}
+
+enum PromocionStatus {
+  draft
+  programada
+  activa
+  pausada
+  expirada
+  cancelada
+}
+
+enum PromocionProductoRol {
+  incluido
+  excluido
+  regalo
+  comprado
+  requerido
+}
+
+enum SegmentoTipo {
+  estatico
+  dinamico_rfm
+  dinamico_query
+}
+
+enum SegmentoRfm {
+  champion
+  leal
+  en_riesgo
+  perdido
+  nuevo
+  hibernando
+}
+
+enum CampanaCanal {
+  whatsapp
+  email
+  sms
+  push
+  multi
+}
+
+enum CampanaTipoDisparo {
+  inmediato
+  programado
+  recurrente
+  trigger_event
+}
+
+enum CampanaStatus {
+  draft
+  programada
+  enviando
+  enviada
+  pausada
+  cancelada
+}
+
+enum CampanaEnvioStatus {
+  pendiente
+  enviado
+  entregado
+  abierto
+  click
+  convertido
+  opt_out
+  bounce
+  fallido
+}
+
+enum PlantillaCanal {
+  whatsapp
+  email
+  sms
+  push
+}
+
+enum PlantillaTipo {
+  transaccional
+  promocional
+  utility
+  servicio
+}
+
+enum PlantillaScope {
+  gaessoft_global
+  tenant_propia
+}
+
+enum OptOutTipo {
+  promocional
+  todo
+}
+
+enum LoyaltyTipo {
+  puntos_por_peso
+  puntos_por_visita
+  tiers_volumen
+  mixto
+}
+
+enum LoyaltyMovimientoTipo {
+  acumulacion
+  canje
+  expiracion
+  ajuste_admin
+  reverso
+}
+
+model Promocion {
+  id                String          @id @default(cuid())
+  nombre            String
+  descripcion       String?
+  tipo              PromocionTipo
+  condiciones       Json            @default("{}")
+  acciones          Json            @default("{}")
+  vigenciaInicio    DateTime        @map("vigencia_inicio")
+  vigenciaFin       DateTime?       @map("vigencia_fin")
+  horarios          Json?
+  canales           Json            @default("[\"todos\"]")
+  sucursalesAplicables Json         @default("[]") @map("sucursales_aplicables")
+  stackConOtras     Boolean         @default(false) @map("stack_con_otras")
+  prioridad         Int             @default(100)
+  limiteUsosTotal   Int?            @map("limite_usos_total")
+  limiteUsosCliente Int?            @map("limite_usos_cliente")
+  usosActuales      Int             @default(0) @map("usos_actuales")
+  requiereCodigo    Boolean         @default(false) @map("requiere_codigo")
+  codigo            String?
+  visiblePublico    Boolean         @default(true) @map("visible_publico")
+  bannerUrl         String?         @map("banner_url")
+  status            PromocionStatus @default(draft)
+  tags              Json            @default("[]")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  productos    PromocionProducto[]
+  aplicaciones PromocionAplicacion[]
+
+  @@unique([codigo])
+  @@index([status, vigenciaInicio])
+  @@index([prioridad])
+  @@map("promociones")
+}
+
+model PromocionProducto {
+  id           String              @id @default(cuid())
+  promocionId  String              @map("promocion_id")
+  productoId   String              @map("producto_id")
+  rol          PromocionProductoRol @default(incluido)
+
+  promocion Promocion @relation(fields: [promocionId], references: [id], onDelete: Cascade)
+  producto  Producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([promocionId, productoId, rol])
+  @@index([productoId])
+  @@map("promociones_productos")
+}
+
+model PromocionAplicacion {
+  id                String    @id @default(cuid())
+  promocionId       String    @map("promocion_id")
+  ventaId           String    @map("venta_id")
+  clienteId         String?   @map("cliente_id")
+  montoDescuento    Decimal   @map("monto_descuento") @db.Decimal(14, 4)
+  productosAfectados Json     @default("[]") @map("productos_afectados")
+  revocadaAt        DateTime? @map("revocada_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  promocion Promocion @relation(fields: [promocionId], references: [id], onDelete: Restrict)
+  venta     Venta     @relation("VentaPromociones", fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([promocionId])
+  @@index([ventaId])
+  @@map("promociones_aplicaciones")
+}
+
+model SegmentoCliente {
+  id            String       @id @default(cuid())
+  nombre        String
+  descripcion   String?
+  tipo          SegmentoTipo @default(dinamico_rfm)
+  definicion    Json         @default("{}")
+  countClientes Int          @default(0) @map("count_clientes")
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  miembros SegmentoClienteMiembro[]
+  campanas Campana[]
+
+  @@index([tipo])
+  @@map("segmentos_clientes")
+}
+
+model SegmentoClienteMiembro {
+  id               String   @id @default(cuid())
+  segmentoId       String   @map("segmento_id")
+  clienteId        String   @map("cliente_id")
+  snapshotMetricas Json?    @map("snapshot_metricas")
+  agregadoAt       DateTime @default(now()) @map("agregado_at")
+
+  segmento SegmentoCliente @relation(fields: [segmentoId], references: [id], onDelete: Cascade)
+  cliente  Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentoId, clienteId])
+  @@index([clienteId])
+  @@map("segmentos_clientes_miembros")
+}
+
+model ClienteMetricasRfm {
+  id                    String      @id @default(cuid())
+  clienteId             String      @unique @map("cliente_id")
+  recencyDias           Int?        @map("recency_dias")
+  frequency             Int         @default(0)
+  monetary              Decimal     @default(0) @db.Decimal(14, 2)
+  scoreR                Int?        @map("score_r")
+  scoreF                Int?        @map("score_f")
+  scoreM                Int?        @map("score_m")
+  segmentoRfmCalculado  SegmentoRfm? @map("segmento_rfm_calculado")
+  ultimaCompraAt        DateTime?   @map("ultima_compra_at")
+  refreshedAt           DateTime    @default(now()) @map("refreshed_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([segmentoRfmCalculado])
+  @@map("clientes_metricas_rfm")
+}
+
+model PlantillaMensaje {
+  id                  String         @id @default(cuid())
+  nombre              String
+  canal               PlantillaCanal
+  tipo                PlantillaTipo
+  idioma              String         @default("es-MX")
+  asunto              String?
+  contenidoHandlebars String         @map("contenido_handlebars")
+  variablesDisponibles Json          @default("[]") @map("variables_disponibles")
+  aprobacionMetaStatus String        @default("no_aplica") @map("aprobacion_meta_status")
+  metaTemplateId      String?        @map("meta_template_id")
+  scope               PlantillaScope @default(tenant_propia)
+  isActive            Boolean        @default(true) @map("is_active")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  campanas Campana[]
+
+  @@index([canal, tipo])
+  @@map("plantillas_mensajes")
+}
+
+model Campana {
+  id                    String             @id @default(cuid())
+  nombre                String
+  objetivo              String
+  canal                 CampanaCanal
+  segmentoId            String?            @map("segmento_id")
+  plantillaId           String?            @map("plantilla_id")
+  variablesDinamicas    Json               @default("{}") @map("variables_dinamicas")
+  tipoDisparo           CampanaTipoDisparo @default(inmediato) @map("tipo_disparo")
+  triggerEventConfig    Json?              @map("trigger_event_config")
+  recurrenteCron        String?            @map("recurrente_cron")
+  ventanaHorarioEnvio   Json               @default("{\"desde\":\"09:00\",\"hasta\":\"21:00\"}") @map("ventana_horario_envio")
+  status                CampanaStatus      @default(draft)
+  stats                 Json               @default("{}")
+  presupuestoMaxCreditos Decimal           @default(500) @map("presupuesto_max_creditos") @db.Decimal(14, 2)
+  creditosConsumidos    Decimal            @default(0) @map("creditos_consumidos") @db.Decimal(14, 2)
+  programadaPara        DateTime?          @map("programada_para")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  segmento  SegmentoCliente?  @relation(fields: [segmentoId], references: [id], onDelete: SetNull)
+  plantilla PlantillaMensaje? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
+  envios    CampanaEnvio[]
+  triggers  CampanaTrigger[]
+
+  @@index([status, tipoDisparo])
+  @@map("campanas")
+}
+
+model CampanaEnvio {
+  id            String             @id @default(cuid())
+  campanaId     String             @map("campana_id")
+  clienteId     String?            @map("cliente_id")
+  destino       String
+  canal         CampanaCanal
+  status        CampanaEnvioStatus @default(pendiente)
+  proveedorMsgId String?           @map("proveedor_msg_id")
+  creditos      Decimal            @default(0) @db.Decimal(14, 4)
+  errorMensaje  String?            @map("error_mensaje")
+  enviadoAt     DateTime?          @map("enviado_at")
+  entregadoAt   DateTime?          @map("entregado_at")
+  abiertoAt     DateTime?          @map("abierto_at")
+  clickAt       DateTime?          @map("click_at")
+  convertidoAt  DateTime?          @map("convertido_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  campana Campana  @relation(fields: [campanaId], references: [id], onDelete: Cascade)
+  cliente Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  @@index([campanaId, status])
+  @@index([clienteId, createdAt])
+  @@index([status])
+  @@map("campanas_envios")
+}
+
+model CampanaTrigger {
+  id                       String   @id @default(cuid())
+  evento                   String
+  campanaId                String   @map("campana_id")
+  ventanaEnvio             Json?    @map("ventana_envio")
+  frecuenciaMaxPorCliente30d Int    @default(1) @map("frecuencia_max_por_cliente_30d")
+  isActive                 Boolean  @default(true) @map("is_active")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  campana Campana @relation(fields: [campanaId], references: [id], onDelete: Cascade)
+
+  @@index([evento, isActive])
+  @@map("campanas_triggers")
+}
+
+model ClienteOptOut {
+  id         String     @id @default(cuid())
+  clienteId  String     @map("cliente_id")
+  canal      CampanaCanal
+  tipo       OptOutTipo @default(promocional)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, canal, tipo])
+  @@index([clienteId])
+  @@map("clientes_opt_outs")
+}
+
+model LoyaltyProgram {
+  id                    String      @id @default(cuid())
+  nombre                String
+  tipo                  LoyaltyTipo @default(puntos_por_peso)
+  reglaAcumulacion      Json        @default("{}") @map("regla_acumulacion")
+  valorPuntoRedimible   Decimal     @default(0.1) @map("valor_punto_redimible") @db.Decimal(10, 4)
+  caducidadPuntosMeses  Int         @default(12) @map("caducidad_puntos_meses")
+  tiers                 Json        @default("[]")
+  inscripcionAutomatica Boolean     @default(false) @map("inscripcion_automatica")
+  requiereConsentimiento Boolean    @default(true) @map("requiere_consentimiento")
+  isActive              Boolean     @default(true) @map("is_active")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  inscritos   ClienteLoyalty[]
+  movimientos LoyaltyMovimiento[]
+
+  @@map("loyalty_programs")
+}
+
+model ClienteLoyalty {
+  id                String   @id @default(cuid())
+  loyaltyProgramId  String   @map("loyalty_program_id")
+  clienteId         String   @map("cliente_id")
+  puntosActuales    Int      @default(0) @map("puntos_actuales")
+  lifetimeAcumulado Int      @default(0) @map("lifetime_acumulado")
+  lifetimeCanjeado  Int      @default(0) @map("lifetime_canjeado")
+  tierActual        String?  @map("tier_actual")
+  fechaAlcanzoTier  DateTime? @map("fecha_alcanzo_tier")
+  consentimientoAt  DateTime? @map("consentimiento_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  programa LoyaltyProgram @relation(fields: [loyaltyProgramId], references: [id], onDelete: Cascade)
+  cliente  Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([loyaltyProgramId, clienteId])
+  @@index([clienteId])
+  @@map("clientes_loyalty")
+}
+
+model LoyaltyMovimiento {
+  id               String                @id @default(cuid())
+  loyaltyProgramId String                @map("loyalty_program_id")
+  clienteId        String                @map("cliente_id")
+  tipo             LoyaltyMovimientoTipo
+  puntos           Int
+  saldoResultante  Int                   @map("saldo_resultante")
+  origenVentaId    String?               @map("origen_venta_id")
+  origenCampanaId  String?               @map("origen_campana_id")
+  origenAdminId    String?               @map("origen_admin_id")
+  caducaAt         DateTime?             @map("caduca_at")
+  notas            String?
+  createdAt        DateTime              @default(now()) @map("created_at")
+
+  programa LoyaltyProgram @relation(fields: [loyaltyProgramId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId, createdAt])
+  @@index([caducaAt])
+  @@map("loyalty_movimientos")
 }
