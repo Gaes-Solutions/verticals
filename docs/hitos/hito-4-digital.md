@@ -1,6 +1,6 @@
 # Hito 4 — Digital y marketing
 
-> **Estado:** En curso · 4.1 Ecommerce ✅ · 4.2 Marketing ✅ · 4.3 Doctoralia (núcleo) ✅ CERRADO (2026-05-27) · **Sub-hito activo:** 4.4 Portal paciente
+> **Estado:** 🎉 **HITO 4 COMPLETO** (2026-05-27) · 4.1 Ecommerce ✅ · 4.2 Marketing ✅ · 4.3 Doctoralia ✅ · 4.4 Portal paciente PHR ✅ · 4.5 Demo ✅ · 476 tests verde
 > **Análisis:** [4.21 Ecommerce](../analisis/04-modelo-datos/4.21-ecommerce.md) · [4.18 Promociones/Marketing](../analisis/04-modelo-datos/4.18-promociones-marketing.md) · [4.17 Portal Doctoralia](../analisis/04-modelo-datos/4.17-portal-doctoralia.md) · [Flujo 7 Paciente portal](../analisis/03-flujos/07-paciente-portal.md) · [Análisis 7 Integraciones](../analisis/07-integraciones.md)
 
 ## Objetivo del Hito 4
@@ -186,6 +186,17 @@ Cierre del Hito 4 = tienda online operativa + campañas WhatsApp/email + Doctora
 - Embeddings pgvector búsqueda semántica + resumen/explicación IA al paciente (anonimización pre-LLM)
 - Export HL7 FHIR real, storage 10GB extra, particionado pg_partman
 - Frontend `apps/salud-paciente`
+
+## 4.5 Demo Hito 4 — end-to-end ✅
+
+Script `apps/api/scripts/demo-digital.ts` (`pnpm --filter @gaespos/api demo:digital`) contra API live con adapters mock. 4 actos verificados en verde:
+
+- [x] **Acto 1 — Tienda (4.1)**: provisiona tenant retail + producto/stock → config tienda → publica producto → catálogo público → carrito anónimo ($598) → checkout pago mock (`/checkout/confirmar-mock`) → pedido GP-00000001 → venta generada + stock 100→98.
+- [x] **Acto 2 — Marketing (4.2)**: promo `descuento_pct` 20% aplicada en venta POS ($299→$239.20, IVA recalculado) · lealtad inscribir/acumular 500 pts/canjear 200 → saldo 300 ($20) · campaña WhatsApp segmento RFM → encolar → worker procesa vía mock.
+- [x] **Acto 3 — Doctoralia (4.3)**: médico crea perfil → ubicación → enviar a revisión → admin valida cédula SSa + publica → búsqueda pública "house" en Guadalajara → reseña 5★ verificada auto-publicada.
+- [x] **Acto 4 — Portal paciente PHR (4.4)**: login OTP sin contraseña → clínica registra consent full_phr + publica Encounter → expediente unificado cross-tenant → QR emergencia público (solo opt-in: tipo sangre) → export ARCO + audit log.
+
+**Cierre Hito 4**: 4.1 ✅ · 4.2 ✅ · 4.3 ✅ · 4.4 ✅ · 4.5 ✅. Suite apps/api **476 tests verde**.
 
 ## Performance budgets
 - Catálogo público (ISR): TTFB <200ms
