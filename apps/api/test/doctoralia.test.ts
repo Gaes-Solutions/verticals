@@ -206,10 +206,12 @@ describe("perfil profesional (tenant)", () => {
   });
 
   it("no aparece en búsqueda mientras está en borrador", async () => {
-    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house" });
+    // La búsqueda es cross-tenant (master): afirmamos por slug propio, no por
+    // conteo global (otros profesionales pueden existir en el master DB).
+    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house&pageSize=50" });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { total: number };
-    expect(body.total).toBe(0);
+    const body = res.json() as { items: Array<{ slugSeo: string }> };
+    expect(body.items.every((p) => p.slugSeo !== slugSeo)).toBe(true);
   });
 
   it("perfil público en borrador → 404", async () => {
@@ -265,20 +267,28 @@ describe("validación admin GaesSoft", () => {
 
 describe("búsqueda y perfil público", () => {
   it("encuentra el profesional publicado por texto", async () => {
-    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house" });
-    const body = res.json() as { total: number; items: Array<{ slugSeo: string }> };
-    expect(body.total).toBe(1);
-    expect(body.items[0]?.slugSeo).toBe(slugSeo);
+    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house&pageSize=50" });
+    const body = res.json() as { items: Array<{ slugSeo: string }> };
+    expect(body.items.some((p) => p.slugSeo === slugSeo)).toBe(true);
   });
 
   it("filtra por ciudad y telemedicina", async () => {
     const ok = await app.inject({
       method: "GET",
-      url: "/doctoralia/buscar?ciudad=Guadalajara&aceptaTelemedicina=true",
+      url: "/doctoralia/buscar?ciudad=Guadalajara&aceptaTelemedicina=true&pageSize=50",
     });
-    expect((ok.json() as { total: number }).total).toBe(1);
-    const miss = await app.inject({ method: "GET", url: "/doctoralia/buscar?ciudad=Monterrey" });
-    expect((miss.json() as { total: number }).total).toBe(0);
+    expect(
+      (ok.json() as { items: Array<{ slugSeo: string }> }).items.some((p) => p.slugSeo === slugSeo),
+    ).toBe(true);
+    const miss = await app.inject({
+      method: "GET",
+      url: "/doctoralia/buscar?ciudad=Monterrey&pageSize=50",
+    });
+    expect(
+      (miss.json() as { items: Array<{ slugSeo: string }> }).items.every(
+        (p) => p.slugSeo !== slugSeo,
+      ),
+    ).toBe(true);
   });
 
   it("perfil público accesible por slug", async () => {
@@ -438,7 +448,14 @@ describe("moderación admin de reseñas escaladas", () => {
     });
     expect(res.statusCode).toBe(200);
     expect((res.json() as { status: string }).status).toBe("suspendido");
-    const busca = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house" });
-    expect((busca.json() as { total: number }).total).toBe(0);
+    const busca = await app.inject({
+      method: "GET",
+      url: "/doctoralia/buscar?q=house&pageSize=50",
+    });
+    expect(
+      (busca.json() as { items: Array<{ slugSeo: string }> }).items.every(
+        (p) => p.slugSeo !== slugSeo,
+      ),
+    ).toBe(true);
   });
 });

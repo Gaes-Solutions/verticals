@@ -4143,3 +4143,41 @@ model LoyaltyMovimiento {
   @@index([caducaAt])
   @@map("loyalty_movimientos")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sync engine offline-first (Hito 5, Análisis 8)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Registro idempotente de operaciones empujadas por dispositivos offline.
+ * Misma idempotency_key ⇒ se retorna el resultado almacenado (no se re-aplica).
+ */
+model SyncProcessedOp {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique @map("idempotency_key")
+  entityType     String   @map("entity_type")
+  entityIdLocal  String   @map("entity_id_local")
+  entityIdRemoto String?  @map("entity_id_remoto")
+  status         String
+  resultSnapshot Json?    @map("result_snapshot")
+  deviceId       String?  @map("device_id")
+  processedAt    DateTime @default(now()) @map("processed_at")
+
+  @@index([entityType])
+  @@index([processedAt])
+  @@map("sync_processed_ops")
+}
+
+/**
+ * Lápidas de borrados duros para que el pull entregue tombstones a los
+ * dispositivos (la mayoría de entidades usan soft-delete, esto cubre el resto).
+ */
+model SyncTombstone {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  deletedAt  DateTime @default(now()) @map("deleted_at")
+
+  @@index([entityType, deletedAt])
+  @@map("sync_tombstones")
+}

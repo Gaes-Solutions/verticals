@@ -131,6 +131,8 @@ export const PERMISSIONS = {
   PHR_SOLICITAR_CONSENT: "phr.solicitar_consent",
   PHR_LEER_CONSENTIDO: "phr.leer_consentido",
 
+  SYNC_USAR: "sync.usar",
+
   PRODUCTOS_LEER: "productos.leer",
   PRODUCTOS_CREAR: "productos.crear",
   PRODUCTOS_ACTUALIZAR: "productos.actualizar",
@@ -517,6 +519,11 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "phr.leer_consentido": {
     category: "phr",
     description: "Leer el PHR cross-tenant del paciente cuando hay consentimiento activo",
+  },
+
+  "sync.usar": {
+    category: "sync",
+    description: "Sincronizar operaciones offline del dispositivo (push/pull)",
   },
 
   "productos.leer": { category: "productos", description: "Consultar productos y catálogo" },

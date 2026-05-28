@@ -1,0 +1,30 @@
+import { PERMISSIONS } from "@gaespos/permissions";
+import type { SyncOperation } from "@gaespos/sync";
+import type { FastifyPluginAsync } from "fastify";
+import { syncPullQuerySchema, syncPushSchema } from "./schemas.js";
+import { procesarPush, pull } from "./service.js";
+
+const syncRoutes: FastifyPluginAsync = async (app) => {
+  // Empuja el batch de operaciones encoladas offline. Idempotente por
+  // idempotency_key: reenviar el mismo batch no duplica nada.
+  app.post("/push", async (req) => {
+    req.requirePerm(PERMISSIONS.SYNC_USAR);
+    const body = syncPushSchema.parse(req.body);
+    return procesarPush(
+      req.tenantPrisma,
+      req.principal.userId,
+      body.operations as SyncOperation[],
+      body.deviceId,
+    );
+  });
+
+  // Entrega diffs (upserts + tombstones) desde `since` para refrescar el
+  // SQLite local del dispositivo. Sin `since` ⇒ snapshot completo (primer login).
+  app.get("/pull", async (req) => {
+    req.requirePerm(PERMISSIONS.SYNC_USAR);
+    const q = syncPullQuerySchema.parse(req.query);
+    return pull(req.tenantPrisma, q.since ?? null);
+  });
+};
+
+export default syncRoutes;

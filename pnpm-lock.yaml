@@ -89,6 +89,9 @@ importers:
       '@gaespos/recargas':
         specifier: workspace:*
         version: link:../../packages/recargas
+      '@gaespos/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
@@ -273,6 +276,15 @@ importers:
         version: 5.9.3
 
   packages/recargas:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/sync:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

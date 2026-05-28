@@ -153,6 +153,7 @@ export const PRESET_ROLES_RETAIL: ReadonlyArray<PresetRole> = Object.freeze([
       P.CAMPANAS_ENVIAR,
       P.PLANTILLAS_GESTIONAR,
       P.LEALTAD_GESTIONAR,
+      P.SYNC_USAR,
     ],
   },
   {
@@ -186,6 +187,7 @@ export const PRESET_ROLES_RETAIL: ReadonlyArray<PresetRole> = Object.freeze([
       P.CORTE_CONSULTAR,
       P.CORTE_IMPRIMIR,
       P.CFDI_EMITIR,
+      P.SYNC_USAR,
     ],
   },
   {
@@ -232,6 +234,7 @@ export const PRESET_ROLES_RETAIL: ReadonlyArray<PresetRole> = Object.freeze([
       P.PROMOCIONES_GESTIONAR,
       P.CAMPANAS_GESTIONAR,
       P.LEALTAD_GESTIONAR,
+      P.SYNC_USAR,
     ],
   },
   {

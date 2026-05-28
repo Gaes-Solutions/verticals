@@ -6,11 +6,12 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🎉 **HITO 4 Digital y marketing COMPLETO** (2026-05-27)
-- **Progreso Hito 4**: 4.1 Ecommerce ✅ (`815ec1c`) · 4.2 Marketing ✅ (`694413c`) · 4.3 Doctoralia ✅ (`f38b13e`) · 4.4 Portal paciente PHR ✅ (`0b768e3`) · 🎉 **4.5 Demo Hito 4 ✅** — `demo-digital.ts` 4 actos end-to-end verde contra API live. **Suite apps/api 476 tests verde.**
-- **Tarea actual**: commitear 4.5 (rama→main ff) + cerrar Hito 4 (¿tag `hito-4-digital-v1`?). Siguiente: Hito 5 Multi-plataforma + offline (Tauri desktop + SQLite + sync engine) según Análisis 10.
-- **Decisiones 4.4 (2026-05-27)**: núcleo = PHR lado lectura (difiere booking/anti-no-show/telemedicina) · identidad phone_e164 + OTP real (WhatsApp mock) · cifrado pgcrypto DIFERIDO a hito hardening (V1 protege con auth+consent+audit).
-- **Cómo probar Hito 4 end-to-end**: 1) `FISCAL_PROVIDER=mock RECARGA_PROVIDER=mock pnpm dev:api` · 2) `pnpm --filter @gaespos/api demo:digital` → 4 actos (tienda+checkout, promo+lealtad+campaña, Doctoralia, PHR paciente) en verde.
+- **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🎉 **HITO 4 COMPLETO** (tag `hito-4-digital-v1`) · 🚧 **HITO 5 Multi-plataforma + offline EN CURSO** — núcleo motor de sync ✅
+- **Progreso Hito 5**: 🎉 **Motor de sync (núcleo) ✅** — paquete `@gaespos/sync` (LWW + merge_required, 12 tests) + backend `/t/sync/push` idempotente + `/t/sync/pull` diffs+tombstones + 10 tests integración + demo `demo:offline-sync` verde. **Suite apps/api 486 tests verde.** Difiere empaquetado Tauri firmado + PWA scanner a fase de packaging.
+- **Nota**: las búsquedas Doctoralia (master DB cross-tenant) ahora afirman por slug propio, no por conteo global — robustas a datos de demos en la DB compartida.
+- **Tarea actual**: commitear núcleo sync (rama→main ff). Siguiente decisión: ¿seguir Hito 5 fase packaging (Tauri/PWA, no verificable aquí) o saltar a Hito 6 Negocio SaaS (registro público, billing Stripe, onboarding)?
+- **Decisión Hito 5 (2026-05-28)**: núcleo = motor de sync backend+paquete (100% testeable); empaquetado Tauri firmado/notarizado + PWA scanner DIFERIDOS (no compilables/verificables en este entorno). Estrategia conflictos: idempotency + LWW + merge_required (sin CRDTs, Análisis 8).
+- **Cómo probar el sync**: 1) `FISCAL_PROVIDER=mock RECARGA_PROVIDER=mock pnpm dev:api` · 2) `pnpm --filter @gaespos/api demo:offline-sync` → offline→push→re-push deduped→conflicto merge_required→pull, en verde.
 - **Diferido de 4.4 a fase 2/V1.5**: booking cross-tenant + anti-no-show + telemedicina Daily.co + fee 5%, pet PHR (pet_master/pet_records), wearables Apple/Google Health, cifrado pgcrypto AES-256+KMS, embeddings pgvector + IA al paciente (anonimización pre-LLM), export HL7 FHIR real, storage 10GB, frontend `apps/salud-paciente`.
 - **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
 - **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
@@ -95,6 +96,12 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🚧 Hito 5 Motor de sync offline (núcleo)
+- **Paquete `@gaespos/sync`** (lógica pura, 12 tests): `resolveLww`, `detectFieldConflicts`, `decideUpdate` (apply/skip/conflict merge_required). Sin CRDTs (Análisis 8).
+- **Backend**: modelos tenant `SyncProcessedOp` (idempotency) + `SyncTombstone` (migration `add_sync`) · permiso `SYNC_USAR` · `POST /t/sync/push` (batch idempotente: venta immutable reusa crearVenta + dedup, cliente lww create/update con merge_required) · `GET /t/sync/pull?since=` (diffs productos/variantes/clientes/promos + tombstones).
+- **10 tests** integración `tenant-sync.test.ts` (RBAC, idempotencia sin duplicar, conflicto merge_required no sobrescribe servidor, pull since, tombstones) + demo `demo:offline-sync` verde.
+- Decisión: empaquetado Tauri firmado + PWA scanner diferidos (no verificables en este entorno). Núcleo = motor de sync, 100% testeable.
 
 ### 2026-05-27 — 🎉 Hito 4.5 Demo + **HITO 4 COMPLETO**
 - `apps/api/scripts/demo-digital.ts` (`pnpm --filter @gaespos/api demo:digital`): demo end-to-end de los 4 sub-hitos contra API live con mocks. Verificado en verde.

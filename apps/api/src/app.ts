@@ -54,6 +54,7 @@ import rolesRoutes from "./modules/tenant/roles/routes.js";
 import segmentosRoutes from "./modules/tenant/segmentos/routes.js";
 import seriesRoutes from "./modules/tenant/series/routes.js";
 import sucursalesRoutes from "./modules/tenant/sucursales/routes.js";
+import syncRoutes from "./modules/tenant/sync/routes.js";
 import ticketsRoutes from "./modules/tenant/tickets/routes.js";
 import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import vacunacionesRoutes from "./modules/tenant/vacunaciones/routes.js";
@@ -191,6 +192,7 @@ export async function buildApp(
       await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
       await tenantApp.register(doctoraliaTenantRoutes, { prefix: "/doctoralia" });
       await tenantApp.register(phrTenantRoutes, { prefix: "/phr" });
+      await tenantApp.register(syncRoutes, { prefix: "/sync" });
     },
     { prefix: "/t" },
   );
