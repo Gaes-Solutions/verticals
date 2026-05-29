@@ -2,6 +2,12 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
+import {
+  billingAdminGaesSoftRoutes,
+  billingAdminTenantRoutes,
+  billingPublicRoutes,
+  billingWebhookRoutes,
+} from "./modules/billing/routes.js";
 import doctoraliaTenantRoutes, {
   doctoraliaAdminRoutes,
   doctoraliaPublicRoutes,
@@ -139,6 +145,10 @@ export async function buildApp(
   await app.register(patientAuthRoutes, { prefix: "/auth/patient" });
   await app.register(patientPortalRoutes, { prefix: "/patient-portal" });
   await app.register(patientEmergencyPublicRoutes);
+  await app.register(billingPublicRoutes);
+  await app.register(billingAdminTenantRoutes);
+  await app.register(billingWebhookRoutes);
+  await app.register(billingAdminGaesSoftRoutes);
 
   await app.register(
     async (tenantApp) => {

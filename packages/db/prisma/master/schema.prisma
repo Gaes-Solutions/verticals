@@ -20,39 +20,89 @@ model Plan {
   priceCents  Int      @map("price_cents")
   currency    String   @default("MXN")
   description String?
+  tierOrder   Int      @default(0) @map("tier_order")
+  isPublic    Boolean  @default(true) @map("is_public")
   active      Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  tenants Tenant[]
+  tenants       Tenant[]
+  features      PlanFeature[]
+  prices        PlanPrice[]
+  subscriptions Subscription[]
 
   @@map("plans")
 }
 
 // Tenant = una cuenta SaaS (un negocio cliente)
 model Tenant {
-  id         String       @id @default(cuid())
-  slug       String       @unique
-  name       String
-  schemaName String       @unique @map("schema_name")
-  status     TenantStatus @default(trial)
-  planId     String       @map("plan_id")
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
+  id                       String           @id @default(cuid())
+  slug                     String           @unique
+  name                     String
+  legalName                String?          @map("legal_name")
+  commercialName           String?          @map("commercial_name")
+  rfc                      String?
+  vertical                 TenantVertical?
+  verticalSubtype          String?          @map("vertical_subtype")
+  country                  String           @default("MX")
+  currencyDefault          String           @default("MXN") @map("currency_default")
+  languageDefault          String           @default("es-MX") @map("language_default")
+  timezone                 String           @default("America/Mexico_City")
+  schemaName               String           @unique @map("schema_name")
+  status                   TenantStatus     @default(trial)
+  planId                   String           @map("plan_id")
+  parentTenantId           String?          @map("parent_tenant_id")
+  partnerId                String?          @map("partner_id")
+  partnerAttributedUntil   DateTime?        @map("partner_attributed_until")
+  trialEndsAt              DateTime?        @map("trial_ends_at")
+  onboardingCompletedAt    DateTime?        @map("onboarding_completed_at")
+  healthScore              Int?             @map("health_score")
+  healthScoreUpdatedAt     DateTime?        @map("health_score_updated_at")
+  metadata                 Json?
+  deletedAt                DateTime?        @map("deleted_at")
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
 
-  plan Plan @relation(fields: [planId], references: [id])
+  plan          Plan                  @relation(fields: [planId], references: [id])
+  parentTenant  Tenant?               @relation("TenantPadreHijo", fields: [parentTenantId], references: [id])
+  childTenants  Tenant[]              @relation("TenantPadreHijo")
+  partner       Partner?              @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  paymentMethods PaymentMethod[]
+  couponRedemptions CouponRedemption[]
+  adminUsers    TenantUserAdmin[]
+  settingsMaster TenantSettingsMaster?
 
+  @@unique([rfc, country])
   @@index([status])
+  @@index([parentTenantId])
+  @@index([partnerId])
+  @@index([deletedAt])
   @@map("tenants")
 }
 
 enum TenantStatus {
   trial
   active
+  past_due
   suspended
+  unpaid
   cancelled
+  archived
 
   @@map("tenant_status")
+}
+
+enum TenantVertical {
+  retail_mayoreo
+  abarrotes
+  salud_vet
+  salud_humana
+  despacho_contable
+  otro
+
+  @@map("tenant_vertical")
 }
 
 // Usuarios de GaesSoft (superadmin, soporte, billing). Distinto de los usuarios
@@ -223,6 +273,8 @@ model Partner {
   commissions  Commission[]
   payouts      Payout[]
   invitaciones PartnerInvitacion[]
+  tenants      Tenant[]
+  coupons      Coupon[]
 
   @@index([nivel])
   @@index([estado])
@@ -806,4 +858,335 @@ model PublicProfessionalSearchIndex {
   @@index([tipo])
   @@index([scoreRanking])
   @@map("public_professional_search_index")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Billing del SaaS (Hito 6, Modelo 4.1)
+// Stripe-style billing adaptado a México: CFDI propio + dual provider + cupones
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  paused
+  unpaid
+
+  @@map("subscription_status")
+}
+
+enum SubscriptionInterval {
+  monthly
+  yearly
+
+  @@map("subscription_interval")
+}
+
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  void
+  uncollectible
+
+  @@map("invoice_status")
+}
+
+enum InvoicePaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+
+  @@map("invoice_payment_status")
+}
+
+enum PaymentMethodType {
+  card
+  oxxo
+  spei
+  manual
+
+  @@map("payment_method_type")
+}
+
+enum CouponDiscountType {
+  percent
+  fixed
+
+  @@map("coupon_discount_type")
+}
+
+enum CouponDuration {
+  once
+  repeating
+  forever
+
+  @@map("coupon_duration")
+}
+
+enum AdminTenantRole {
+  owner
+  billing_only
+  viewer
+
+  @@map("admin_tenant_role")
+}
+
+/** Características y límites por plan (gating dinámico sin código duro). */
+model PlanFeature {
+  id         String   @id @default(cuid())
+  planId     String   @map("plan_id")
+  featureKey String   @map("feature_key")
+  value      String
+  valueType  String   @default("string") @map("value_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureKey])
+  @@map("plan_features")
+}
+
+/** Precio por (moneda, intervalo) — multi-currency desde día 1. */
+model PlanPrice {
+  id           String               @id @default(cuid())
+  planId       String               @map("plan_id")
+  currency     String
+  interval     SubscriptionInterval
+  unitAmount   Int                  @map("unit_amount")
+  taxBehavior  String               @default("inclusive") @map("tax_behavior")
+  isActive     Boolean              @default(true) @map("is_active")
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, currency, interval])
+  @@map("plan_prices")
+}
+
+model Subscription {
+  id                       String               @id @default(cuid())
+  tenantId                 String               @map("tenant_id")
+  planId                   String               @map("plan_id")
+  status                   SubscriptionStatus   @default(trialing)
+  currency                 String
+  interval                 SubscriptionInterval @default(monthly)
+  currentPeriodStart       DateTime             @map("current_period_start")
+  currentPeriodEnd         DateTime             @map("current_period_end")
+  trialStart               DateTime?            @map("trial_start")
+  trialEnd                 DateTime?            @map("trial_end")
+  canceledAt               DateTime?            @map("canceled_at")
+  cancelAtPeriodEnd        Boolean              @default(false) @map("cancel_at_period_end")
+  pauseCollectionUntil     DateTime?            @map("pause_collection_until")
+  discountCouponId         String?              @map("discount_coupon_id")
+  externalSubscriptionId   String?              @map("external_subscription_id")
+  externalProvider         String?              @map("external_provider")
+  createdAt                DateTime             @default(now()) @map("created_at")
+  updatedAt                DateTime             @updatedAt @map("updated_at")
+
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan              Plan                @relation(fields: [planId], references: [id])
+  discountCoupon    Coupon?             @relation(fields: [discountCouponId], references: [id])
+  items             SubscriptionItem[]
+  invoices          Invoice[]
+  couponRedemptions CouponRedemption[]
+
+  @@index([tenantId, status])
+  @@index([status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model SubscriptionItem {
+  id              String   @id @default(cuid())
+  subscriptionId  String   @map("subscription_id")
+  type            String
+  quantity        Int      @default(1)
+  unitAmount      Int      @map("unit_amount")
+  externalItemId  String?  @map("external_item_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceItems InvoiceItem[]
+
+  @@index([subscriptionId])
+  @@map("subscription_items")
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  tenantId          String        @map("tenant_id")
+  subscriptionId    String?       @map("subscription_id")
+  invoiceNumber     String        @unique @map("invoice_number")
+  status            InvoiceStatus @default(open)
+  periodStart       DateTime?     @map("period_start")
+  periodEnd         DateTime?     @map("period_end")
+  subtotal          Int
+  tax               Int           @default(0)
+  total             Int
+  currency          String
+  dueDate           DateTime      @map("due_date")
+  paidAt            DateTime?     @map("paid_at")
+  attempts          Int           @default(0)
+  nextRetryAt       DateTime?     @map("next_retry_at")
+  cfdiUuid          String?       @map("cfdi_uuid")
+  cfdiPdfUrl        String?       @map("cfdi_pdf_url")
+  cfdiXmlUrl        String?       @map("cfdi_xml_url")
+  externalInvoiceId String?       @map("external_invoice_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  items        InvoiceItem[]
+  payments     InvoicePayment[]
+
+  @@index([tenantId, status, dueDate])
+  @@index([status, nextRetryAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id                  String   @id @default(cuid())
+  invoiceId           String   @map("invoice_id")
+  description         String
+  quantity            Int      @default(1)
+  unitAmount          Int      @map("unit_amount")
+  amount              Int
+  taxRate             Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  subscriptionItemId  String?  @map("subscription_item_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  invoice           Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  subscriptionItem  SubscriptionItem? @relation(fields: [subscriptionItemId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model InvoicePayment {
+  id                 String               @id @default(cuid())
+  invoiceId          String               @map("invoice_id")
+  amount             Int
+  currency           String
+  paymentMethodId    String?              @map("payment_method_id")
+  status             InvoicePaymentStatus @default(pending)
+  externalChargeId   String?              @map("external_charge_id")
+  failureReason      String?              @map("failure_reason")
+  paidAt             DateTime?            @map("paid_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("invoice_payments")
+}
+
+model PaymentMethod {
+  id                String            @id @default(cuid())
+  tenantId          String            @map("tenant_id")
+  type              PaymentMethodType
+  isDefault         Boolean           @default(false) @map("is_default")
+  externalMethodId  String?           @map("external_method_id")
+  last4             String?
+  brand             String?
+  expMonth          Int?              @map("exp_month")
+  expYear           Int?              @map("exp_year")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments InvoicePayment[]
+
+  @@index([tenantId, isDefault])
+  @@map("payment_methods")
+}
+
+model Coupon {
+  id                  String              @id @default(cuid())
+  code                String              @unique
+  name                String
+  partnerId           String?             @map("partner_id")
+  discountType        CouponDiscountType  @map("discount_type")
+  discountValue       Int                 @map("discount_value")
+  currency            String?
+  duration            CouponDuration      @default(once)
+  durationInMonths    Int?                @map("duration_in_months")
+  maxRedemptions      Int?                @map("max_redemptions")
+  timesRedeemed       Int                 @default(0) @map("times_redeemed")
+  applicablePlanIds   Json                @default("[]") @map("applicable_plan_ids")
+  validFrom           DateTime?           @map("valid_from")
+  validUntil          DateTime?           @map("valid_until")
+  isActive            Boolean             @default(true) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  partner       Partner?           @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  redemptions   CouponRedemption[]
+  subscriptions Subscription[]
+
+  @@index([isActive, validUntil])
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id                  String   @id @default(cuid())
+  couponId            String   @map("coupon_id")
+  tenantId            String   @map("tenant_id")
+  subscriptionId      String?  @map("subscription_id")
+  discountAmountTotal Int      @default(0) @map("discount_amount_total")
+  redeemedAt          DateTime @default(now()) @map("redeemed_at")
+
+  coupon       Coupon        @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([couponId, tenantId])
+  @@map("coupon_redemptions")
+}
+
+/**
+ * Quien administra la cuenta SaaS del tenant (paga, cambia plan, billing).
+ * Distinto del `Usuario` del schema tenant que opera el negocio en el producto.
+ */
+model TenantUserAdmin {
+  id           String          @id @default(cuid())
+  tenantId     String          @map("tenant_id")
+  email        String
+  passwordHash String          @map("password_hash")
+  name         String
+  phone        String?
+  roleAdmin    AdminTenantRole @default(owner) @map("role_admin")
+  isPrimary    Boolean         @default(false) @map("is_primary")
+  mfaEnabled   Boolean         @default(false) @map("mfa_enabled")
+  lastLoginAt  DateTime?       @map("last_login_at")
+  archivedAt   DateTime?       @map("archived_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([email])
+  @@map("tenant_users_admin")
+}
+
+model TenantSettingsMaster {
+  id                       String   @id @default(cuid())
+  tenantId                 String   @unique @map("tenant_id")
+  billingEmail             String   @map("billing_email")
+  billingAddress           Json?    @map("billing_address")
+  taxData                  Json?    @map("tax_data")
+  notificationPreferences  Json?    @map("notification_preferences")
+  autoChargeEnabled        Boolean  @default(true) @map("auto_charge_enabled")
+  dunningPolicy            String   @default("default") @map("dunning_policy")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_settings_master")
 }

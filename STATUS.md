@@ -6,12 +6,11 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hito 1+2+3 cerrados (tag `hito-3-verticales-v1`) · 🎉 **HITO 4 COMPLETO** (tag `hito-4-digital-v1`) · 🚧 **HITO 5 Multi-plataforma + offline EN CURSO** — núcleo motor de sync ✅
-- **Progreso Hito 5**: 🎉 **Motor de sync (núcleo) ✅** — paquete `@gaespos/sync` (LWW + merge_required, 12 tests) + backend `/t/sync/push` idempotente + `/t/sync/pull` diffs+tombstones + 10 tests integración + demo `demo:offline-sync` verde. **Suite apps/api 486 tests verde.** Difiere empaquetado Tauri firmado + PWA scanner a fase de packaging.
-- **Nota**: las búsquedas Doctoralia (master DB cross-tenant) ahora afirman por slug propio, no por conteo global — robustas a datos de demos en la DB compartida.
-- **Tarea actual**: commitear núcleo sync (rama→main ff). Siguiente decisión: ¿seguir Hito 5 fase packaging (Tauri/PWA, no verificable aquí) o saltar a Hito 6 Negocio SaaS (registro público, billing Stripe, onboarding)?
-- **Decisión Hito 5 (2026-05-28)**: núcleo = motor de sync backend+paquete (100% testeable); empaquetado Tauri firmado/notarizado + PWA scanner DIFERIDOS (no compilables/verificables en este entorno). Estrategia conflictos: idempotency + LWW + merge_required (sin CRDTs, Análisis 8).
-- **Cómo probar el sync**: 1) `FISCAL_PROVIDER=mock RECARGA_PROVIDER=mock pnpm dev:api` · 2) `pnpm --filter @gaespos/api demo:offline-sync` → offline→push→re-push deduped→conflicto merge_required→pull, en verde.
+- **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 núcleo sync ✅ (`33708ec`) · 🚧 **HITO 6 Negocio SaaS EN CURSO** — núcleo billing self-serve ✅
+- **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
+- **Tarea actual**: commitear núcleo billing (rama→main ff). Hito 6 fase 2 diferida: admin panel `apps/admin-gaessoft`, CFDI timbrado real Facturama, IA superadmin (health score, onboarding asistido, sentiment).
+- **Decisión Hito 6 (2026-05-28)**: núcleo = billing core self-serve (100% testeable: signup→trial→cobro→upgrade→dunning→CFDI mock); admin panel separado + CFDI real + IA superadmin + tenants padre-hijo despacho activos diferidos.
+- **Cómo probar el billing**: 1) `FISCAL_PROVIDER=mock RECARGA_PROVIDER=mock pnpm dev:api` · 2) `pnpm --filter @gaespos/api demo:saas-onboarding` → cupón→signup→tarjeta→upgrade prorrateado→trial vence→cobra+CFDI→webhook→dunning 3 fallos→SUSPENDED, en verde.
 - **Diferido de 4.4 a fase 2/V1.5**: booking cross-tenant + anti-no-show + telemedicina Daily.co + fee 5%, pet PHR (pet_master/pet_records), wearables Apple/Google Health, cifrado pgcrypto AES-256+KMS, embeddings pgvector + IA al paciente (anonimización pre-LLM), export HL7 FHIR real, storage 10GB, frontend `apps/salud-paciente`.
 - **Cómo probar la tienda (PRIMER FRONTEND)**: 1) `RECARGA_PROVIDER=mock FISCAL_PROVIDER=mock pnpm dev:api` · 2) sembrar tienda demo (ver abajo) · 3) `cd apps/web-tienda && cp .env.example .env.local && pnpm dev` → abrir http://localhost:3001 → catálogo → producto → carrito → checkout (pago mock) → seguimiento. Backend probado con 413 tests; frontend compila (build verde) y arranca.
 - **Tenant tienda demo**: slug `tienda-demo`, dueño `tienda@demo.mx`/`Tienda!2026`, 3 productos publicados con stock (creados via curl en sesión 2026-05-26; re-sembrar si se limpió la DB).
@@ -96,6 +95,18 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🎉 Hito 6 Negocio SaaS (núcleo billing self-serve)
+- **Schema billing master** (migration `add_billing`): `Tenant` expandido (rfc, vertical enum, currencyDefault, trialEndsAt, parentTenantId, partnerId, etc.) + `TenantStatus` extendido (past_due/unpaid/archived); nuevos `Subscription`, `SubscriptionItem`, `Invoice`, `InvoiceItem`, `InvoicePayment`, `PaymentMethod`, `Coupon`, `CouponRedemption`, `PlanFeature`, `PlanPrice` (multi-currency × intervalo), `TenantUserAdmin` separado, `TenantSettingsMaster`.
+- **Seed 5 planes** (free + starter/pro/business/enterprise públicos) con `PlanPrice` MXN+USD monthly+yearly + `PlanFeature` (gating: pos_basico, mayoreo_b2b, cfdi, ecommerce_*, whatsapp_*, salud_*, límites usuarios/sucursales/productos/ventas_mes).
+- **Paquete `@gaespos/billing`** puro (14 tests): `calcularProrrateo` Stripe-style, `aplicarCupon` percent/fixed, `siguienteDunning` calendario 1/3/7d → suspend, `siguientePeriodo`, `formatInvoiceNumber`.
+- **Auth admin_tenant**: JWT kind `admin_tenant` + `authenticateAdminTenant` + `AdminTenantPrincipal` (roleAdmin owner|billing_only|viewer).
+- **Endpoints**: `POST /auth/signup` (público, crea tenant+admin+trial 14d+subscription) + `POST /auth/admin-tenant/login`; `GET /billing/me`, `GET /billing/invoices`, `POST /billing/payment-methods`, `POST /billing/subscription/coupon`, `POST /billing/subscription/change-plan` (upgrade prorrateado, downgrade 400 V1); `POST /billing/webhook` (mock confirma); `POST /admin/billing/run-trial-conversions` + `run-dunning` + `mock-set-failures` (admin GaesSoft).
+- **Workers in-process**: `correrTrialConversions` (vencidos→cobra default PM→active/past_due), `correrDunningCiclo` (open vencidas→intento→success/retry/suspend tras 3 fallos).
+- **CFDI uuid stub**: `cfdi-mock-{uuid}` al pagar invoice; timbrado real Facturama diferido a hardening.
+- **12 tests** integración + demo `demo:saas-onboarding` (8 pasos verde end-to-end: cupón→signup→tarjeta→upgrade $400→trial vence→cobro+CFDI→webhook $700→dunning 3 fallos→SUSPENDED).
+- **Suite apps/api: 498 tests verde** (486 → +12).
+- **Diferido a Hito 6 fase 2/V1.5**: admin panel `apps/admin-gaessoft` con IA superadmin (health score, onboarding asistido, sentiment tickets), CFDI Facturama real, tenants padre-hijo despacho activos, USD cobro real, dominios custom + SSL.
 
 ### 2026-05-28 — 🚧 Hito 5 Motor de sync offline (núcleo)
 - **Paquete `@gaespos/sync`** (lógica pura, 12 tests): `resolveLww`, `detectFieldConflicts`, `decideUpdate` (apply/skip/conflict merge_required). Sin CRDTs (Análisis 8).

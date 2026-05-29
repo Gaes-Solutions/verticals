@@ -65,6 +65,9 @@ importers:
       '@gaespos/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@gaespos/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@gaespos/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -172,6 +175,15 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.40.0
         version: 0.40.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/billing:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
