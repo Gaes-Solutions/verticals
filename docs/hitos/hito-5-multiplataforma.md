@@ -1,6 +1,6 @@
 # Hito 5 — Multi-plataforma + offline
 
-> **Estado:** 🚧 EN CURSO · **Núcleo motor de sync** (5.a/5.b/5.c) ✅ · empaquetado Tauri/PWA diferido
+> **Estado:** 🚧 EN CURSO · Núcleo motor de sync (5.a/5.b/5.c) ✅ · **Fase packaging** (5.2.a–d) ✅ cerebro cliente + scaffolds · build nativo firmado pendiente (entorno con Rust/certs)
 > **Análisis:** [Análisis 8 Offline-first y sync](../analisis/08-offline-sync.md) · [Análisis 9 Arquitectura](../analisis/09-arquitectura.md)
 
 ## Objetivo del Hito 5
@@ -31,14 +31,36 @@ El POS retail/abarrotes funciona **sin internet** (sin red ≠ sin negocio — c
 - [x] **10 tests** integración (`tenant-sync.test.ts`): RBAC 403 sin SYNC_USAR; push venta aplica; re-push deduped sin duplicar; venta inválida → failed reintentable; cliente create; update LWW con base; **conflicto merge_required sin sobrescribir servidor**; pull snapshot; pull `since` solo cambios; tombstones.
 - [x] Demo `demo-offline-sync.ts` (`pnpm --filter @gaespos/api demo:offline-sync`): offline encola 2 ventas + cliente → reconexión push (3 aplicadas) → re-push (3 deduped, 0 duplicados) → conflicto merge_required → pull diffs. Verde contra API live.
 
-## 5.d Diferidos a fase de packaging / V1.5
-- Empaquetado Tauri desktop firmado/notarizado (Windows MSI / macOS DMG / Linux DEB) — `apps/pos-desktop`
-- Cliente SQLite local + sync queue worker (push FIFO con backoff + pull cada 30s) + network monitor (3 pings = offline)
-- UI conflict resolver para `merge_required` (`sync_conflicts` local)
-- PWA móvil con ZXing scanner cámara
+## Fase packaging (5.2.a–d) — cerebro cliente + scaffolds
+
+**Decisión (2026-05-28)**: el motor de sync del servidor ya está en main; esta fase construye el **cliente offline** (100% testeable) + scaffolds de las apps nativas (build firmado se hace en una máquina con Rust + certificados, no aquí).
+
+### 5.2.a `@gaespos/sync-client` ✅ (15 tests)
+- [x] `LocalStorage` interface (SQLite Tauri / IndexedDB PWA / `InMemoryStorage` tests) + `SyncApiClient` + `NetworkProbe`
+- [x] `SyncClient`: `tickPush` (FIFO, marca synced/conflict/failed, backoff exponencial con cap+jitter al fallar red), `tickPull` (upserts + tombstones al cache, avanza lastSyncAt), `tickNetwork` (3 pings fallidos → offline, evento; éxito → online), `forceSync`, `resolveConflict` (retry/abandon), `getState`, `start/stop` con timers
+- [x] `OperationBuilder` (buildVentaOp/buildClienteCreateOp/buildClienteUpdateOp con idempotency keys)
+- [x] Tests: NetworkMonitor (offline/online + excepción=fallo), PushWorker (drena, offline no pushea, error→backoff, conflict→UI, resolve retry/abandon), PullWorker (upserts+tombstones, offline, lastSyncAt), forceSync, start/stop timers (fake timers), getState, backoff creciente con cap
+
+### 5.2.b Backend additions ✅
+- [x] `GET /t/sync/heartbeat` (ping barato para NetworkMonitor; requiere SYNC_USAR) — 11 tests sync
+- [x] force-resync = `pull` sin `since` (ya soportado por el endpoint existente)
+
+### 5.2.c Scaffold `apps/pos-desktop` (Tauri) ✅
+- [x] `tauri.conf.json` (bundle msi/nsis/dmg/deb/appimage, CSP, plugin-sql preload), `Cargo.toml`, `main.rs` (carga web-pos + tauri-plugin-sql), `migrations/001_sync_local.sql` (sync_queue + sync_cache + sync_meta espejo del LocalStorage), README con build + firma por OS
+- [x] ⚠️ NO compilable aquí (Rust + WebView + certificados). Pendientes documentados en README (SqliteStorage, wire SyncApiClient, iconos, CI matrix + firma)
+
+### 5.2.d Scaffold `apps/pos-pwa` (Next.js + ZXing) ✅
+- [x] Next.js 15 PWA: `manifest.json` instalable + `sw.js` (app shell cache-first, API nunca cacheada) + `ServiceWorkerRegister`
+- [x] `BarcodeScanner` (`@zxing/browser`, cámara trasera, debounce anti-doble-venta, manejo permiso denegado) + `/scan` page + home
+- [x] **Build verde** (typecheck + `next build` 5 páginas). Cámara real no verificable headless (documentado)
+
+## Diferidos a V1.5 (post-packaging)
+- Build nativo firmado/notarizado en CI (GitHub Actions `tauri-action` matrix 3 OS)
+- `SqliteStorage` (Tauri) + `IndexedDbStorage` (PWA) implementando `LocalStorage`
+- UI banner offline + panel "conflictos por resolver" en web-pos/PWA
 - Multi-caja sucursal V1 (cada caja SQLite independiente) + reconciliación inventario al reconectar
 - Más entityTypes sincronizables (apartados, CxC, cortes X/Z como evento atómico, movimientos inventario append)
-- Políticas inventario offline (Soft retail / Strict salud) + "forzar resync"
+- Políticas inventario offline (Soft retail / Strict salud)
 
 ## Performance budgets
 - Sync push batch 100 ops: <1s P95

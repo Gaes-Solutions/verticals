@@ -103,6 +103,16 @@ describe("RBAC sync", () => {
     ]);
     expect(res.statusCode).toBe(403);
   });
+
+  it("heartbeat responde ok con SYNC_USAR", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/sync/heartbeat",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { ok: boolean }).ok).toBe(true);
+  });
 });
 
 describe("push venta inmutable + idempotencia", () => {

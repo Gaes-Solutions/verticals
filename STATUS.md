@@ -6,7 +6,8 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 núcleo sync ✅ (`33708ec`) · 🚧 **HITO 6 Negocio SaaS EN CURSO** — núcleo billing self-serve ✅
+- **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 sync (núcleo `33708ec` + **fase packaging cliente ✅**) · 🎉 **HITO 6** (tag `hito-6-saas-v1`) billing self-serve
+- **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
 - **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
 - **Tarea actual**: commitear núcleo billing (rama→main ff). Hito 6 fase 2 diferida: admin panel `apps/admin-gaessoft`, CFDI timbrado real Facturama, IA superadmin (health score, onboarding asistido, sentiment).
 - **Decisión Hito 6 (2026-05-28)**: núcleo = billing core self-serve (100% testeable: signup→trial→cobro→upgrade→dunning→CFDI mock); admin panel separado + CFDI real + IA superadmin + tenants padre-hijo despacho activos diferidos.
@@ -95,6 +96,13 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🚧 Hito 5 fase packaging (cerebro cliente offline + scaffolds)
+- **`@gaespos/sync-client`** (15 tests): `SyncClient` con tickPush (FIFO + backoff exponencial cap+jitter), tickPull (upserts+tombstones→cache, lastSyncAt), tickNetwork (3 pings→offline), forceSync, resolveConflict (retry/abandon), getState, start/stop timers. `LocalStorage`/`SyncApiClient`/`NetworkProbe` interfaces + `InMemoryStorage` + `OperationBuilder`.
+- **Backend**: `GET /t/sync/heartbeat` (ping NetworkMonitor) — 11 tests sync.
+- **Scaffold `apps/pos-desktop`** (Tauri 2): tauri.conf.json (bundle msi/nsis/dmg/deb/appimage + plugin-sql), Cargo.toml, main.rs, migrations/001_sync_local.sql (espejo del LocalStorage), README build+firma por OS. NO compilable aquí (Rust/WebView/certs).
+- **Scaffold `apps/pos-pwa`** (Next.js 15): manifest instalable + sw.js (app shell cache-first, API no cacheada) + BarcodeScanner @zxing/browser (cámara trasera, debounce) + /scan. Build verde (5 páginas). Cámara real no verificable headless.
+- Diferido a V1.5: build nativo firmado en CI (tauri-action 3 OS), SqliteStorage/IndexedDbStorage reales, UI banner offline + panel conflictos, multi-caja sucursal.
 
 ### 2026-05-28 — 🎉 Hito 6 Negocio SaaS (núcleo billing self-serve)
 - **Schema billing master** (migration `add_billing`): `Tenant` expandido (rfc, vertical enum, currencyDefault, trialEndsAt, parentTenantId, partnerId, etc.) + `TenantStatus` extendido (past_due/unpaid/archived); nuevos `Subscription`, `SubscriptionItem`, `Invoice`, `InvoiceItem`, `InvoicePayment`, `PaymentMethod`, `Coupon`, `CouponRedemption`, `PlanFeature`, `PlanPrice` (multi-currency × intervalo), `TenantUserAdmin` separado, `TenantSettingsMaster`.

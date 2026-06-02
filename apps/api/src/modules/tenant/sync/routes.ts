@@ -25,6 +25,13 @@ const syncRoutes: FastifyPluginAsync = async (app) => {
     const q = syncPullQuerySchema.parse(req.query);
     return pull(req.tenantPrisma, q.since ?? null);
   });
+
+  // Ping barato para el NetworkMonitor del cliente: confirma red + sesión viva
+  // sin tocar datos. El cliente cuenta 3 fallos consecutivos para ir offline.
+  app.get("/heartbeat", async (req) => {
+    req.requirePerm(PERMISSIONS.SYNC_USAR);
+    return { ok: true, serverTime: new Date().toISOString() };
+  });
 };
 
 export default syncRoutes;

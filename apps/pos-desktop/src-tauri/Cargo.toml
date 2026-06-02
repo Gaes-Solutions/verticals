@@ -1,0 +1,19 @@
+[package]
+name = "gaespos-pos-desktop"
+version = "0.1.0"
+description = "GaesSoft POS desktop shell"
+authors = ["Gaes Solutions"]
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+tauri-plugin-sql = { version = "2.0", features = ["sqlite"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
