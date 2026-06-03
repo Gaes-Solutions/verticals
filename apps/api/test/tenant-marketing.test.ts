@@ -277,6 +277,8 @@ describe("campañas + worker in-process", () => {
         canal: "whatsapp",
         segmentoId,
         plantillaId: pl.json().id,
+        // ventana abierta para que el worker sea determinista a cualquier hora
+        ventanaHorarioEnvio: { desde: "00:00", hasta: "23:59" },
       },
     });
     expect(camp.statusCode).toBe(201);

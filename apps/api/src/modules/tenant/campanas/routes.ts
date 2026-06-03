@@ -18,6 +18,12 @@ const crearCampanaSchema = z.object({
     .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
     .transform((v) => String(v))
     .optional(),
+  ventanaHorarioEnvio: z
+    .object({
+      desde: z.string().regex(/^\d{2}:\d{2}$/),
+      hasta: z.string().regex(/^\d{2}:\d{2}$/),
+    })
+    .optional(),
 });
 
 const crearPlantillaSchema = z.object({
@@ -86,6 +92,7 @@ const campanasRoutes: FastifyPluginAsync = async (app) => {
         ...(body.presupuestoMaxCreditos
           ? { presupuestoMaxCreditos: body.presupuestoMaxCreditos }
           : {}),
+        ...(body.ventanaHorarioEnvio ? { ventanaHorarioEnvio: body.ventanaHorarioEnvio } : {}),
         status: "draft",
       },
     });
