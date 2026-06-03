@@ -75,3 +75,18 @@ export interface CatalogoResponse {
   page: number;
   pageSize: number;
 }
+
+export interface CategoriaPublica {
+  id: string;
+  nombre: string;
+  slugSeo: string;
+}
+
+/** Categorías públicas de la tienda (para los filtros del catálogo). */
+export async function getCategorias(): Promise<CategoriaPublica[]> {
+  try {
+    return await api<CategoriaPublica[]>("/ecommerce/categorias", { revalidate: 300 });
+  } catch {
+    return [];
+  }
+}
