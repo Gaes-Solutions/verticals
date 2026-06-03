@@ -6,7 +6,8 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 sync (núcleo `33708ec` + **fase packaging cliente ✅**) · 🎉 **HITO 6** (tag `hito-6-saas-v1`) billing self-serve
+- **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 sync (núcleo + packaging) · 🎉 **HITO 6** (tag `hito-6-saas-v1`) · 🎉 **web-pos: POS de cajero TOCABLE ✅**
+- **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket en vivo → cobro multi-pago → folio. Conecta a la API real (`/auth/tenant/login`, `/t/productos`, `/t/ventas`). Verificado end-to-end con smoke test curl (login→sucursal→caja auto-apertura→buscar→vender→folio) + proxy Vite OK + build verde (207kB). **PARA PROBAR YA**: levanta API mock → setup del `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
 - **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
 - **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
 - **Tarea actual**: commitear núcleo billing (rama→main ff). Hito 6 fase 2 diferida: admin panel `apps/admin-gaessoft`, CFDI timbrado real Facturama, IA superadmin (health score, onboarding asistido, sentiment).
@@ -96,6 +97,13 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🎉 web-pos: POS de cajero tocable (primer frontend del producto)
+- **apps/web-pos** SPA Vite 6 + React 19 + Tailwind. Login cajero (`/auth/tenant/login`), `resolverSession` (sucursal default + auto-apertura caja monto 0, fallback sin caja), búsqueda producto debounce (`/t/productos?q=`) + Enter barcode (`/t/productos/buscar/:codigo`), ticket en vivo (+/− cantidad), `CobroModal` multi-pago con cambio, `POST /t/ventas` canal pos, comprobante folio+total.
+- **Verificación**: smoke test curl del flujo completo (admin→tenant→cajero login→sucursales/cajas→producto+stock→buscar→vender→folio SUC-PRINCIPAL-000001); proxy Vite `/api`→:3000 OK; index sirve #root; typecheck + build verde (207kB).
+- Descubierto en smoke: `categorias` usa `slug` (no `codigo`); cobro con cajaId requiere apertura (resuelto con auto-apertura); vender sin cajaId cae a nivel sucursal.
+- Guía paso-a-paso en `apps/web-pos/README.md` (4 pasos: API mock → setup curl → dev → vender en navegador).
+- Pendiente: corte X/Z UI, cliente+CFDI en ticket, impresión, empaquetar en pos-desktop.
 
 ### 2026-05-28 — 🚧 Hito 5 fase packaging (cerebro cliente offline + scaffolds)
 - **`@gaespos/sync-client`** (15 tests): `SyncClient` con tickPush (FIFO + backoff exponencial cap+jitter), tickPull (upserts+tombstones→cache, lastSyncAt), tickNetwork (3 pings→offline), forceSync, resolveConflict (retry/abandon), getState, start/stop timers. `LocalStorage`/`SyncApiClient`/`NetworkProbe` interfaces + `InMemoryStorage` + `OperationBuilder`.
