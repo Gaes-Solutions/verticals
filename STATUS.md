@@ -7,7 +7,7 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 sync (núcleo + packaging) · 🎉 **HITO 6** (tag `hito-6-saas-v1`) · 🎉 **web-pos: POS de cajero TOCABLE ✅**
-- **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort** + **corte de caja X/Z** (conteo denominaciones → diferencia). Conecta a la API real. Verificado con smoke test curl (corte X/Z diferencia OK, cliente alta/búsqueda, inventario, venta). Build verde (218kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
+- **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → **descuento global** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort**; **corte de caja X/Z** + **devoluciones** (busca folio → devuelve parcial/total, repone stock) desde el header. Conecta a la API real. Verificado con smoke tests curl (venta+descuento, devolución parcial+stock, corte X/Z diferencia, cliente). Build verde (225kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
 - **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
 - **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
 - **Tarea actual**: commitear núcleo billing (rama→main ff). Hito 6 fase 2 diferida: admin panel `apps/admin-gaessoft`, CFDI timbrado real Facturama, IA superadmin (health score, onboarding asistido, sentiment).
@@ -97,6 +97,12 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🛠️ web-pos: descuento global + devoluciones
+- **Descuento global** en el ticket (% + motivo) → recalcula total y manda `descuentoGlobalPct`/`descuentoGlobalMotivo` en POST /t/ventas.
+- **Devoluciones** (`DevolucionModal`, botón header): busca venta por folio → GET detalle líneas → cantidad a devolver por línea + motivo + método reembolso → POST /t/ventas/:id/devolver (repone stock). Parcial o total.
+- `VentaDetalle.lineas` ampliado con `id`.
+- Smoke verde: venta descuento 10% (200→180), búsqueda folio, devolución parcial (folio DV-…), stock 20−2+1=19. Build verde (225kB).
 
 ### 2026-05-28 — 🛠️ web-pos pulido: corte X/Z + impresión + cliente + CFDI
 - **Corte de caja X/Z** (`CorteModal`): GET apertura-actual → conteo denominaciones (billetes+monedas) → POST /t/cortes → muestra efectivo contado + diferencia vs esperado. X lectura, Z cierre (logout). Verificado curl: corte X y Z con diferencia calculada.

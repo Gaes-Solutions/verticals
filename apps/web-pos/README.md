@@ -21,9 +21,14 @@ conectada a la API GaesSoft.
   - **Facturar (CFDI)** — best-effort: timbra si el negocio tiene datos fiscales
     configurados, si no muestra un aviso claro (no bloquea la venta)
   - Nueva venta
+- **Descuento global** en el ticket: % + motivo → recalcula total y se manda en
+  la venta (`descuentoGlobalPct`/`descuentoGlobalMotivo`)
 - **Corte de caja X/Z** (botón en el header): conteo de denominaciones
   (billetes + monedas) → `POST /t/cortes` → muestra diferencia vs lo esperado.
   X = lectura (caja sigue abierta), Z = cierre (termina el turno)
+- **Devoluciones** (botón en el header): busca venta por folio → selecciona
+  cuánto devolver por línea → motivo + método de reembolso → `POST
+  /t/ventas/:id/devolver` (repone stock). Parcial o total.
 - Token en el navegador (localStorage), restaura sesión al recargar
 
 ## Probarlo en 4 pasos
@@ -78,7 +83,7 @@ Verás el folio y el total. ¡Vendiste!
 
 ## Pendiente (siguiente iteración)
 
-- Descuentos por línea / globales, devoluciones, apartados desde el POS
+- Descuento por línea (hoy solo global), apartados desde el POS
 - Datos fiscales del receptor en CFDI (uso/régimen/CP) — hoy emite con uso G03 default
 - Atajos de teclado completos, modo pantalla táctil
 - Búsqueda de cliente sin acentos (backend Postgres sin `unaccent` hoy)

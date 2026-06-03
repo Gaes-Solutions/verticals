@@ -62,15 +62,47 @@ export interface VentaResponse {
   total: string;
 }
 
+export interface VentaLineaDetalle {
+  id: string;
+  numero: number;
+  descripcion: string;
+  cantidad: string;
+  total: string;
+}
+
 export interface VentaDetalle {
   id: string;
   folio: string;
+  estado?: string;
   total: string;
   subtotal: string;
   impuestos: string;
   cambio?: string | null;
-  lineas: Array<{ numero: number; descripcion: string; cantidad: string; total: string }>;
+  lineas: VentaLineaDetalle[];
   pagos: Array<{ metodo: string; monto: string }>;
+}
+
+export interface VentaListItem {
+  id: string;
+  folio: string;
+  total: string;
+  estado: string;
+  createdAt: string;
+}
+
+export type MotivoDevolucion =
+  | "defectuoso"
+  | "cambio_opinion"
+  | "talla_color"
+  | "error_cobro"
+  | "garantia"
+  | "otro";
+
+export type MetodoReembolso = "efectivo" | "tarjeta_misma" | "transferencia" | "vale";
+
+export interface DevolucionResultado {
+  devolucionId: string;
+  folio?: string | null;
 }
 
 export interface Cliente {

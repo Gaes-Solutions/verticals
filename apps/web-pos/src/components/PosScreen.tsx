@@ -12,6 +12,7 @@ import type {
 import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
+import { DevolucionModal } from "./DevolucionModal.js";
 import { Recibo } from "./Recibo.js";
 
 function money(n: number): string {
@@ -30,9 +31,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [aviso, setAviso] = useState<string | null>(null);
   const [modalCliente, setModalCliente] = useState(false);
   const [modalCorte, setModalCorte] = useState(false);
+  const [modalDevolucion, setModalDevolucion] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const total = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
+  const [descuentoPct, setDescuentoPct] = useState(0);
+  const [descuentoMotivo, setDescuentoMotivo] = useState("");
+
+  const subtotalTicket = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
+  const descuentoMonto = subtotalTicket * (descuentoPct / 100);
+  const total = subtotalTicket - descuentoMonto;
   const numItems = ticket.reduce((s, l) => s + l.cantidad, 0);
 
   useEffect(() => {
@@ -127,6 +134,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           sucursalId: session.sucursal.id,
           ...(session.caja ? { cajaId: session.caja.id } : {}),
           ...(cliente ? { clienteId: cliente.id } : {}),
+          ...(descuentoPct > 0
+            ? {
+                descuentoGlobalPct: String(descuentoPct),
+                descuentoGlobalMotivo: descuentoMotivo || "Descuento en caja",
+              }
+            : {}),
           canal: "pos",
           lineas: ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) })),
           pagos: [{ metodo: pago.metodo, monto: pago.monto.toFixed(2) }],
@@ -136,6 +149,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       setUltimaVenta(detalle);
       setTicket([]);
       setCliente(null);
+      setDescuentoPct(0);
+      setDescuentoMotivo("");
       setCobrando(false);
     } catch (err) {
       setAviso(
@@ -162,6 +177,13 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-teal-100">{session.cajeroNombre}</span>
+          <button
+            type="button"
+            onClick={() => setModalDevolucion(true)}
+            className="rounded bg-brand-dark px-3 py-1"
+          >
+            Devolución
+          </button>
           {session.caja && (
             <button
               type="button"
@@ -288,7 +310,43 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 </span>
               </button>
 
+              <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-sm text-slate-500">Descuento</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={descuentoPct || ""}
+                  onChange={(e) =>
+                    setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                  }
+                  className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
+                  placeholder="0"
+                />
+                <span className="text-sm text-slate-500">%</span>
+                {descuentoPct > 0 && (
+                  <input
+                    value={descuentoMotivo}
+                    onChange={(e) => setDescuentoMotivo(e.target.value)}
+                    placeholder="Motivo"
+                    className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                  />
+                )}
+              </div>
+
               <div className="border-t border-slate-200 pt-3">
+                {descuentoPct > 0 && (
+                  <div className="mb-1 flex items-center justify-between text-sm text-slate-500">
+                    <span>Subtotal</span>
+                    <span>{money(subtotalTicket)}</span>
+                  </div>
+                )}
+                {descuentoPct > 0 && (
+                  <div className="mb-2 flex items-center justify-between text-sm text-emerald-600">
+                    <span>Descuento ({descuentoPct}%)</span>
+                    <span>−{money(descuentoMonto)}</span>
+                  </div>
+                )}
                 <div className="mb-3 flex items-center justify-between text-2xl font-bold text-slate-900">
                   <span>Total</span>
                   <span>{money(total)}</span>
@@ -336,6 +394,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           }}
         />
       )}
+
+      {modalDevolucion && <DevolucionModal onClose={() => setModalDevolucion(false)} />}
 
       {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
