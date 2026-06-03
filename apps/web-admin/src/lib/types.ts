@@ -1,0 +1,86 @@
+export interface LoginResponse {
+  accessToken: string;
+  user: { id: string; nombre: string; permissions: string[]; isOwner: boolean };
+  tenant: { slug: string };
+}
+
+export interface Categoria {
+  id: string;
+  nombre: string;
+  slug: string;
+}
+
+export interface Variante {
+  id: string;
+  sku: string;
+  nombreVariante?: string | null;
+  precioBase: string;
+}
+
+export interface Producto {
+  id: string;
+  skuPadre: string;
+  nombre: string;
+  aplicaIva?: boolean;
+  isActive?: boolean;
+  categoriaId?: string | null;
+  variantes: Variante[];
+}
+
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface InventarioItem {
+  id: string;
+  varianteId: string;
+  sucursalId: string;
+  stockActual: string;
+  stockMinimo: string;
+  variante: { id: string; sku: string; producto: { id: string; nombre: string; skuPadre: string } };
+  sucursal: { id: string; codigo: string; nombre: string };
+}
+
+export interface VentaListItem {
+  id: string;
+  folio: string;
+  total: string;
+  estado: string;
+  canal: string;
+  createdAt: string;
+  usuario?: { nombre: string } | null;
+}
+
+export interface VentaDetalle {
+  id: string;
+  folio: string;
+  estado: string;
+  total: string;
+  subtotal: string;
+  impuestos: string;
+  createdAt: string;
+  lineas: Array<{
+    id: string;
+    numero: number;
+    descripcion: string;
+    cantidad: string;
+    total: string;
+  }>;
+  pagos: Array<{ metodo: string; monto: string }>;
+}
+
+export interface Sucursal {
+  id: string;
+  codigo: string;
+  nombre: string;
+  isDefault?: boolean;
+}
+
+export interface ConfigTienda {
+  activa?: boolean;
+  subdominio?: string | null;
+  nombre?: string | null;
+}
