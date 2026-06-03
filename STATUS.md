@@ -7,7 +7,7 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hitos 1-6 (tags `hito-3-verticales-v1`, `hito-4-digital-v1`, `hito-6-saas-v1`) · 🎉 **VERTICAL RETAIL COMPLETO punta a punta**: web-admin (dueño) + web-pos (cajero) + web-tienda (cliente)
-- **🖥️ web-admin (2026-05-28)**: back-office del negocio (SPA Vite+React+Tailwind, login dueño/gerente). 5 secciones: **Resumen** (ventas hoy + alertas bajo stock), **Productos** (CRUD: alta/editar/archivar), **Inventario** (ver + ajustar entrada/salida), **Ventas** (listado filtros + detalle), **Tienda online** (config activar/subdominio + publicar productos). Conecta a la API real. Smoke test verde (alta→editar→ajuste 30→config→publicar→dashboard). Build verde (220kB). **PROBAR**: `pnpm --filter @gaespos/web-admin dev` → http://localhost:5174 (guía en `apps/web-admin/README.md`).
+- **🖥️ web-admin (2026-05-28)**: back-office del negocio (SPA Vite+React+Tailwind, login dueño/gerente). 6 secciones: **Resumen** (ventas hoy + alertas bajo stock), **Reportes** (periodo 7/30/90d: gráfica barras por día SVG, ticket promedio, IVA, top productos, por canal), **Productos** (CRUD), **Inventario** (ver + ajustar), **Ventas** (filtros + detalle), **Tienda online** (config + publicar). Backend: módulo `tenant/reportes` (GET /t/reportes/resumen?dias=N, agregación Prisma, 5 tests). Conecta a la API real. Build verde (web-admin 224kB). **PROBAR**: `pnpm --filter @gaespos/web-admin dev` → http://localhost:5174 (guía en `apps/web-admin/README.md`).
 - **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → **descuento global** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort**; **corte de caja X/Z** + **devoluciones** (busca folio → devuelve parcial/total, repone stock) desde el header. Conecta a la API real. Verificado con smoke tests curl (venta+descuento, devolución parcial+stock, corte X/Z diferencia, cliente). Build verde (225kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
 - **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
 - **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
@@ -98,6 +98,12 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 📈 web-admin: reportes con gráficas
+- **Backend**: nuevo módulo `tenant/reportes` (no existía). `GET /t/reportes/resumen?dias=N` (REPORTES_VENTAS): totales periodo (ventas/#tickets/ticket promedio/IVA), serie por día sembrada sin huecos (agrupación en JS hora local), por canal, top 10 productos (VentaLinea groupBy productoId + resolver nombres). 5 tests integración verde.
+- **Frontend**: `ReportesPage` en web-admin — selector 7/30/90 días, tarjetas de totales, **gráfica de barras por día en SVG nativo (cero dependencias)** con tooltip, tabla top productos, barras por canal. Nav "📈 Reportes".
+- Fix: fechaYmd en hora local (consistente con rango sembrado) para evitar desajuste UTC en la serie.
+- typecheck + build verde (web-admin 224kB).
 
 ### 2026-05-28 — 🎉 web-admin: back-office del negocio (cierra vertical retail)
 - **apps/web-admin** SPA Vite 6 + React 19 + Tailwind. Login dueño/gerente (`/auth/tenant/login`), layout con sidebar de navegación.

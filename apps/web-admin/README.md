@@ -10,6 +10,8 @@ compra (web-tienda)**. SPA Vite + React + Tailwind conectada a la API GaesSoft.
 - **Login** del dueño/gerente (`/auth/tenant/login`)
 - **Resumen (dashboard)**: ventas de hoy ($ + # tickets) y alertas de productos
   bajo stock
+- **Reportes**: ventas del periodo (7/30/90 días) con gráfica de barras por día,
+  ticket promedio, IVA, top productos y desglose por canal
 - **Productos**: tabla con búsqueda, alta (SKU, nombre, precio, categoría, IVA),
   edición y archivado
 - **Inventario**: stock por producto/sucursal (resalta bajo mínimo) + ajuste de
@@ -45,7 +47,7 @@ tenant). El cajero lo venderá en la `web-pos`.
 
 ## Pendiente (siguiente iteración)
 
-- Reportes con gráficas (ventas por día/semana, top productos)
 - Gestión de usuarios y roles del negocio
 - Clientes, cortes de caja, pedidos ecommerce desde el panel
 - Editor de producto con variantes, fotos, precios escalonados
+- Reportes: comparativa vs periodo anterior, exportar a Excel/PDF

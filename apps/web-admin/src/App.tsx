@@ -4,6 +4,7 @@ import { loadToken, setToken } from "./lib/api.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
+import { ReportesPage } from "./pages/ReportesPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
 import { VentasPage } from "./pages/VentasPage.js";
 
@@ -12,10 +13,11 @@ export interface AdminSession {
   tenantSlug: string;
 }
 
-type Seccion = "dashboard" | "productos" | "inventario" | "ventas" | "tienda";
+type Seccion = "dashboard" | "reportes" | "productos" | "inventario" | "ventas" | "tienda";
 
 const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "dashboard", label: "Resumen", icon: "📊" },
+  { key: "reportes", label: "Reportes", icon: "📈" },
   { key: "productos", label: "Productos", icon: "📦" },
   { key: "inventario", label: "Inventario", icon: "🏷️" },
   { key: "ventas", label: "Ventas", icon: "🧾" },
@@ -81,6 +83,7 @@ export function App() {
 
       <main className="flex-1 overflow-y-auto bg-slate-100 p-6">
         {seccion === "dashboard" && <DashboardPage />}
+        {seccion === "reportes" && <ReportesPage />}
         {seccion === "productos" && <ProductosPage />}
         {seccion === "inventario" && <InventarioPage />}
         {seccion === "ventas" && <VentasPage />}

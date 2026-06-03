@@ -84,3 +84,16 @@ export interface ConfigTienda {
   subdominio?: string | null;
   nombre?: string | null;
 }
+
+export interface ResumenVentas {
+  desde: string;
+  hasta: string;
+  dias: number;
+  totalPeriodo: number;
+  numTickets: number;
+  ticketPromedio: number;
+  ivaPeriodo: number;
+  porDia: Array<{ fecha: string; total: number; tickets: number }>;
+  porCanal: Array<{ canal: string; total: number; tickets: number }>;
+  topProductos: Array<{ productoId: string; nombre: string; cantidad: number; monto: number }>;
+}

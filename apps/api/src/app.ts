@@ -55,6 +55,7 @@ import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
 import recetasRoutes from "./modules/tenant/recetas/routes.js";
+import reportesRoutes from "./modules/tenant/reportes/routes.js";
 import resenasRoutes from "./modules/tenant/resenas/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
 import segmentosRoutes from "./modules/tenant/segmentos/routes.js";
@@ -177,6 +178,7 @@ export async function buildApp(
       await tenantApp.register(pedidosRoutes, { prefix: "/pedidos" });
       await tenantApp.register(devolucionesRoutes);
       await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
+      await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(pacientesRoutes, { prefix: "/pacientes" });
       await tenantApp.register(medicosRoutes, { prefix: "/medicos" });
       await tenantApp.register(agendaRoutes, { prefix: "/agenda" });
