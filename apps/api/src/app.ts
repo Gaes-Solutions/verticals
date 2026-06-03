@@ -8,6 +8,7 @@ import {
   billingPublicRoutes,
   billingWebhookRoutes,
 } from "./modules/billing/routes.js";
+import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
 import doctoraliaTenantRoutes, {
   doctoraliaAdminRoutes,
   doctoraliaPublicRoutes,
@@ -150,6 +151,8 @@ export async function buildApp(
   await app.register(billingAdminTenantRoutes);
   await app.register(billingWebhookRoutes);
   await app.register(billingAdminGaesSoftRoutes);
+  await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
+  await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
 
   await app.register(
     async (tenantApp) => {

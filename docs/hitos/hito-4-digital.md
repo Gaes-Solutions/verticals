@@ -65,7 +65,8 @@ Cierre del Hito 4 = tienda online operativa + campañas WhatsApp/email + Doctora
 - [x] Scaffold Next.js 15 (App Router) + TanStack Query + Tailwind + shadcn/ui, multi-tenant runtime (resuelve subdominio), ISR catálogo 5min
 - [x] Páginas V1: home/catálogo (grid), producto (galería+reseñas), carrito (localStorage), checkout (dirección+pago mock), confirmación+seguimiento público. Carrito en localStorage + persiste en DB al checkout.
 - [x] **Catálogo navegable** (2026-05-28): búsqueda (`q`) + filtros por categoría (chips) + sección destacados en home. Smoke verde (q/categoría/destacado filtran).
-- [ ] Diferido (requiere auth cliente B2C nuevo): cuenta cliente (pedidos+wishlist UI) + login/registro cliente
+- [x] **Cuenta de cliente B2C** (2026-05-28): passwordHash en Cliente + auth `/auth/cliente/{registro,login}` (JWT kind cliente) + `/cliente-portal/{me,pedidos}` (pedidos por clienteId o email guest) + frontend (cookie httpOnly, /cuenta/login, /cuenta/registro, /cuenta con mis pedidos). 8 tests backend + smoke verde.
+- [ ] Diferido V1.5: wishlist UI en la cuenta, asociar clienteId al carrito en checkout logueado
 
 ### 4.1.e Tests integración + e2e
 - [x] Backend: config tienda, publicar producto, carrito anónimo→cliente, checkout mock pago→pedido→venta+stock+CFDI, tracking público por folio+email, reseña solo si pedido entregado, wishlist, click&collect, RBAC (14 tests verde)

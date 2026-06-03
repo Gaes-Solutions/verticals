@@ -1202,6 +1202,7 @@ model Cliente {
   nombre               String
   apellidos            String?
   emailPrincipal       String?     @map("email_principal")
+  passwordHash         String?     @map("password_hash")
   telefonoPrincipal    String?     @map("telefono_principal")
   fechaNacimiento      DateTime?   @map("fecha_nacimiento") @db.Date
   genero               String?

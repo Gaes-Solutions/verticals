@@ -26,6 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/seguimiento" className="hover:text-marca">
                 Rastrear pedido
               </Link>
+              <Link href="/cuenta" className="hover:text-marca">
+                Mi cuenta
+              </Link>
             </nav>
           </div>
         </header>

@@ -6,7 +6,8 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hitos 1-6 (tags `hito-3-verticales-v1`, `hito-4-digital-v1`, `hito-6-saas-v1`) · 🎉 **VERTICAL RETAIL COMPLETO punta a punta**: web-admin (dueño) + web-pos (cajero) + web-tienda (cliente, catálogo navegable con búsqueda/filtros)
+- **Fase**: 🎉 Hitos 1-6 (tags `hito-3-verticales-v1`, `hito-4-digital-v1`, `hito-6-saas-v1`) · 🎉 **VERTICAL RETAIL COMPLETO punta a punta**: web-admin (dueño) + web-pos (cajero) + web-tienda (cliente: catálogo navegable + **cuenta de cliente B2C** con login/registro/mis pedidos)
+- **👤 cuenta cliente B2C (2026-05-28)**: passwordHash en Cliente + auth `/auth/cliente/{registro,login}` (JWT kind `cliente`, resuelve tenant del token) + `/cliente-portal/{me,pedidos}` (pedidos por clienteId O email guest). Frontend web-tienda: cookie httpOnly + páginas /cuenta/{login,registro} + /cuenta (mis pedidos) + link header. 8 tests backend + smoke E2E verde. Diferido: wishlist UI, asociar clienteId al carrito en checkout logueado.
 - **🖥️ web-admin (2026-05-28)**: back-office del negocio (SPA Vite+React+Tailwind, login dueño/gerente). 6 secciones: **Resumen** (ventas hoy + alertas bajo stock), **Reportes** (periodo 7/30/90d: gráfica barras por día SVG, ticket promedio, IVA, top productos, por canal), **Productos** (CRUD), **Inventario** (ver + ajustar), **Ventas** (filtros + detalle), **Tienda online** (config + publicar). Backend: módulo `tenant/reportes` (GET /t/reportes/resumen?dias=N, agregación Prisma, 5 tests). Conecta a la API real. Build verde (web-admin 224kB). **PROBAR**: `pnpm --filter @gaespos/web-admin dev` → http://localhost:5174 (guía en `apps/web-admin/README.md`).
 - **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → **descuento global** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort**; **corte de caja X/Z** + **devoluciones** (busca folio → devuelve parcial/total, repone stock) desde el header. Conecta a la API real. Verificado con smoke tests curl (venta+descuento, devolución parcial+stock, corte X/Z diferencia, cliente). Build verde (225kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
 - **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
@@ -98,6 +99,12 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 👤 Cuenta de cliente B2C (cierra la tienda al 100%)
+- **Backend**: migración `add_cliente_auth` (passwordHash en Cliente). auth plugin kind `cliente` + `authenticateCliente`. Módulo `cliente-portal`: `/auth/cliente/registro` + `/login` (JWT con sub=clienteId + tenantSlug; resuelve tenant schema con getTenantClient), `/cliente-portal/me` + `/pedidos` (where clienteId OR emailComprador=email → incluye compras guest previas). 8 tests.
+- **Frontend web-tienda**: route handlers Next con **cookie httpOnly** (`/api/cuenta/[accion]` registro/login, `/api/cuenta/logout`). Páginas /cuenta/login, /cuenta/registro (AuthForm client), /cuenta (server: redirect si no hay sesión, mis pedidos + logout). Link "Mi cuenta" en header.
+- Smoke E2E verde: registro→login→/me→/pedidos, 401 sin token, 401 password mala. typecheck + build verde.
+- Decisión: el cliente B2C vive en el tenant schema; login requiere tenantSlug (la tienda es de un tenant). Pedidos guest aparecen al registrarse con el mismo correo.
 
 ### 2026-05-28 — 🛒 web-tienda: catálogo navegable (búsqueda + filtros)
 - **Búsqueda** (`Buscador` client → searchParam `q`), **filtros por categoría** (chips, GET /ecommerce/categorias vía BFF), **sección Destacados** en home (?destacado=true sin filtros).

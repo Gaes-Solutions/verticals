@@ -34,11 +34,19 @@ type AdminTenantTokenPayload = {
   kind: "admin_tenant";
 };
 
+type ClienteTokenPayload = {
+  sub: string;
+  email: string;
+  tenantSlug: string;
+  kind: "cliente";
+};
+
 type TokenPayload =
   | AdminTokenPayload
   | TenantTokenPayload
   | PatientTokenPayload
-  | AdminTenantTokenPayload;
+  | AdminTenantTokenPayload
+  | ClienteTokenPayload;
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -47,6 +55,7 @@ declare module "fastify" {
     authenticateTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticatePatient: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateAdminTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateCliente: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -126,6 +135,17 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "admin_tenant") {
       return rejectUnauthorized(reply, "Se requiere sesión de admin del tenant");
+    }
+  });
+
+  app.decorate("authenticateCliente", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "cliente") {
+      return rejectUnauthorized(reply, "Se requiere sesión de cliente");
     }
   });
 };
