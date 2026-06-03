@@ -12,9 +12,18 @@ conectada a la API GaesSoft.
 - **Búsqueda** de producto con debounce (`/t/productos?q=`) + Enter para match
   exacto por código de barras (`/t/productos/buscar/:codigo`)
 - **Ticket** en vivo: agregar, +/− cantidad, quitar línea, total
+- **Cliente**: busca existentes (`/t/clientes?q=`) o alta rápida (nombre + RFC),
+  o vende a público en general
 - **Cobro** multi-método (efectivo con cambio sugerido, débito, crédito,
   transferencia) → `POST /t/ventas` canal `pos`
-- **Comprobante**: folio + total, botón "Nueva venta"
+- **Comprobante**: folio + total, con:
+  - **Imprimir** ticket de 58mm (`window.print()`, listo para térmica o PDF)
+  - **Facturar (CFDI)** — best-effort: timbra si el negocio tiene datos fiscales
+    configurados, si no muestra un aviso claro (no bloquea la venta)
+  - Nueva venta
+- **Corte de caja X/Z** (botón en el header): conteo de denominaciones
+  (billetes + monedas) → `POST /t/cortes` → muestra diferencia vs lo esperado.
+  X = lectura (caja sigue abierta), Z = cierre (termina el turno)
 - Token en el navegador (localStorage), restaura sesión al recargar
 
 ## Probarlo en 4 pasos
@@ -69,7 +78,8 @@ Verás el folio y el total. ¡Vendiste!
 
 ## Pendiente (siguiente iteración)
 
-- Pantalla de apertura/corte de caja X/Z (hoy abre caja con monto 0 automático)
-- Cliente + CFDI en el ticket, descuentos por línea, devoluciones
-- Atajos de teclado completos, modo pantalla táctil, impresión de ticket
+- Descuentos por línea / globales, devoluciones, apartados desde el POS
+- Datos fiscales del receptor en CFDI (uso/régimen/CP) — hoy emite con uso G03 default
+- Atajos de teclado completos, modo pantalla táctil
+- Búsqueda de cliente sin acentos (backend Postgres sin `unaccent` hoy)
 - Empaquetar dentro de `apps/pos-desktop` (Tauri) para usar offline con `@gaespos/sync-client`

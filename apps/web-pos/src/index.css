@@ -13,3 +13,28 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   background: #f1f5f9;
 }
+
+/* Recibo imprimible: oculto en pantalla, único visible al imprimir (58mm) */
+.recibo-print {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .recibo-print,
+  .recibo-print * {
+    visibility: visible;
+  }
+  .recibo-print {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 58mm;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    color: #000;
+  }
+}

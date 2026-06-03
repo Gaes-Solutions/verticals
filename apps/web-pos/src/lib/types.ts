@@ -72,3 +72,39 @@ export interface VentaDetalle {
   lineas: Array<{ numero: number; descripcion: string; cantidad: string; total: string }>;
   pagos: Array<{ metodo: string; monto: string }>;
 }
+
+export interface Cliente {
+  id: string;
+  nombre: string;
+  apellidos?: string | null;
+  rfc?: string | null;
+  telefonoPrincipal?: string | null;
+}
+
+export interface ClienteList {
+  items: Cliente[];
+  total: number;
+}
+
+export interface AperturaActual {
+  id: string;
+  cajaId: string;
+  montoInicial: string;
+}
+
+export interface Denominaciones {
+  billetes: Record<string, number>;
+  monedas: Record<string, number>;
+}
+
+export interface CorteResultado {
+  corteId: string;
+  tipo: "X" | "Z";
+  diferencia: string;
+}
+
+export interface CfdiResultado {
+  id: string;
+  uuid?: string | null;
+  estado?: string;
+}

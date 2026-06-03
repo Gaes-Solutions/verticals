@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Session } from "../App.js";
 import { ApiError, api } from "../lib/api.js";
 import type {
+  Cliente,
   Producto,
   ProductoList,
   TicketLinea,
   VentaDetalle,
   VentaResponse,
 } from "../lib/types.js";
+import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
+import { CorteModal } from "./CorteModal.js";
+import { Recibo } from "./Recibo.js";
 
 function money(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -18,11 +22,14 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [ticket, setTicket] = useState<TicketLinea[]>([]);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [cobrando, setCobrando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaDetalle | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [modalCliente, setModalCliente] = useState(false);
+  const [modalCorte, setModalCorte] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const total = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
@@ -119,6 +126,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         body: {
           sucursalId: session.sucursal.id,
           ...(session.caja ? { cajaId: session.caja.id } : {}),
+          ...(cliente ? { clienteId: cliente.id } : {}),
           canal: "pos",
           lineas: ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) })),
           pagos: [{ metodo: pago.metodo, monto: pago.monto.toFixed(2) }],
@@ -127,6 +135,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       const detalle = await api<VentaDetalle>(`/t/ventas/${venta.ventaId}`);
       setUltimaVenta(detalle);
       setTicket([]);
+      setCliente(null);
       setCobrando(false);
     } catch (err) {
       setAviso(
@@ -153,6 +162,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-teal-100">{session.cajeroNombre}</span>
+          {session.caja && (
+            <button
+              type="button"
+              onClick={() => setModalCorte(true)}
+              className="rounded bg-brand-dark px-3 py-1"
+            >
+              Corte
+            </button>
+          )}
           <button type="button" onClick={onLogout} className="rounded bg-brand-dark px-3 py-1">
             Salir
           </button>
@@ -202,7 +220,11 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         {/* Derecha: ticket */}
         <div className="flex w-1/2 flex-col p-4">
           {ultimaVenta ? (
-            <TicketResultado venta={ultimaVenta} onNueva={() => setUltimaVenta(null)} />
+            <TicketResultado
+              session={session}
+              venta={ultimaVenta}
+              onNueva={() => setUltimaVenta(null)}
+            />
           ) : (
             <>
               <h2 className="mb-2 text-lg font-bold text-slate-800">
@@ -255,6 +277,17 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
               {aviso && <p className="mb-2 text-sm text-red-600">{aviso}</p>}
 
+              <button
+                type="button"
+                onClick={() => setModalCliente(true)}
+                className="mb-2 flex w-full items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-sm hover:border-brand"
+              >
+                <span className="text-slate-500">Cliente</span>
+                <span className="font-medium text-slate-800">
+                  {cliente ? `${cliente.nombre} ${cliente.apellidos ?? ""}` : "Público en general"}
+                </span>
+              </button>
+
               <div className="border-t border-slate-200 pt-3">
                 <div className="mb-3 flex items-center justify-between text-2xl font-bold text-slate-900">
                   <span>Total</span>
@@ -282,11 +315,62 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           onConfirm={confirmarCobro}
         />
       )}
+
+      {modalCliente && (
+        <ClienteModal
+          onClose={() => setModalCliente(false)}
+          onSelect={(c) => {
+            setCliente(c);
+            setModalCliente(false);
+          }}
+        />
+      )}
+
+      {modalCorte && (
+        <CorteModal
+          session={session}
+          onClose={() => setModalCorte(false)}
+          onCierreZ={() => {
+            setModalCorte(false);
+            onLogout();
+          }}
+        />
+      )}
+
+      {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
   );
 }
 
-function TicketResultado({ venta, onNueva }: { venta: VentaDetalle; onNueva: () => void }) {
+function TicketResultado({
+  session,
+  venta,
+  onNueva,
+}: { session: Session; venta: VentaDetalle; onNueva: () => void }) {
+  const [facturando, setFacturando] = useState(false);
+  const [cfdiMsg, setCfdiMsg] = useState<string | null>(null);
+
+  async function facturar() {
+    setFacturando(true);
+    setCfdiMsg(null);
+    try {
+      await api(`/t/ventas/${venta.id}/cfdi/emitir`, {
+        body: { formaPago: "01", usoCfdi: "G03" },
+      });
+      setCfdiMsg("✓ CFDI emitido y enviado");
+    } catch (err) {
+      setCfdiMsg(
+        err instanceof ApiError && err.status === 409
+          ? "Configura los datos fiscales (CFDI) del negocio para facturar"
+          : err instanceof ApiError
+            ? err.message
+            : "No se pudo facturar",
+      );
+    } finally {
+      setFacturando(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <div className="mb-2 text-5xl">✓</div>
@@ -295,13 +379,33 @@ function TicketResultado({ venta, onNueva }: { venta: VentaDetalle; onNueva: () 
       <p className="mb-6 text-3xl font-bold text-brand">
         ${Number.parseFloat(venta.total).toFixed(2)}
       </p>
-      <button
-        type="button"
-        onClick={onNueva}
-        className="rounded-lg bg-brand px-8 py-3 font-semibold text-white hover:bg-brand-dark"
-      >
-        Nueva venta
-      </button>
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="rounded-lg border border-brand px-5 py-3 font-semibold text-brand hover:bg-teal-50"
+        >
+          🖨️ Imprimir
+        </button>
+        <button
+          type="button"
+          onClick={facturar}
+          disabled={facturando}
+          className="rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {facturando ? "Facturando…" : "Facturar (CFDI)"}
+        </button>
+        <button
+          type="button"
+          onClick={onNueva}
+          className="rounded-lg bg-brand px-6 py-3 font-semibold text-white hover:bg-brand-dark"
+        >
+          Nueva venta
+        </button>
+      </div>
+      {cfdiMsg && <p className="mt-4 text-sm text-slate-600">{cfdiMsg}</p>}
+      <p className="mt-1 text-xs text-slate-400">Sesión de {session.cajeroNombre}</p>
     </div>
   );
 }

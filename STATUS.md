@@ -7,7 +7,7 @@
 ## 🎯 Estado actual
 
 - **Fase**: 🎉 Hito 1+2+3 (tag `hito-3-verticales-v1`) · 🎉 **HITO 4** (tag `hito-4-digital-v1`) · 🚧 Hito 5 sync (núcleo + packaging) · 🎉 **HITO 6** (tag `hito-6-saas-v1`) · 🎉 **web-pos: POS de cajero TOCABLE ✅**
-- **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket en vivo → cobro multi-pago → folio. Conecta a la API real (`/auth/tenant/login`, `/t/productos`, `/t/ventas`). Verificado end-to-end con smoke test curl (login→sucursal→caja auto-apertura→buscar→vender→folio) + proxy Vite OK + build verde (207kB). **PARA PROBAR YA**: levanta API mock → setup del `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
+- **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort** + **corte de caja X/Z** (conteo denominaciones → diferencia). Conecta a la API real. Verificado con smoke test curl (corte X/Z diferencia OK, cliente alta/búsqueda, inventario, venta). Build verde (218kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
 - **Progreso Hito 5 packaging (2026-05-28)**: 🎉 **`@gaespos/sync-client` ✅** (cerebro offline: SyncClient push/pull/network workers + InMemoryStorage + OperationBuilder, 15 tests) + `GET /t/sync/heartbeat` + scaffolds `apps/pos-desktop` (Tauri conf/Cargo/main.rs/migrations) y `apps/pos-pwa` (Next.js PWA + ZXing scanner, build verde). Build nativo firmado + SqliteStorage/IndexedDbStorage diferidos a máquina con Rust/certs.
 - **Progreso Hito 6**: 🎉 **Billing core (núcleo) ✅** — schema billing master (Subscription/Invoice/Coupon/PlanFeature/PlanPrice/TenantUserAdmin/etc.) + 5 planes seed MXN+USD + paquete `@gaespos/billing` (prorrateo Stripe-style + cupones + dunning 1/3/7d, 14 tests) + `/auth/signup` público + `/billing/*` endpoints + workers trial-conversion + dunning + CFDI uuid stub + 12 tests integración + demo `demo:saas-onboarding` verde. **Suite apps/api 498 tests verde.**
 - **Tarea actual**: commitear núcleo billing (rama→main ff). Hito 6 fase 2 diferida: admin panel `apps/admin-gaessoft`, CFDI timbrado real Facturama, IA superadmin (health score, onboarding asistido, sentiment).
@@ -97,6 +97,14 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-05-28 — 🛠️ web-pos pulido: corte X/Z + impresión + cliente + CFDI
+- **Corte de caja X/Z** (`CorteModal`): GET apertura-actual → conteo denominaciones (billetes+monedas) → POST /t/cortes → muestra efectivo contado + diferencia vs esperado. X lectura, Z cierre (logout). Verificado curl: corte X y Z con diferencia calculada.
+- **Impresión de ticket** (`Recibo` + CSS @media print): recibo 58mm imprimible (negocio, folio, líneas, subtotal/IVA/total, pagos, cambio) vía window.print() — listo para térmica o PDF.
+- **Cliente en la venta** (`ClienteModal`): busca (`/t/clientes?q=`) o alta rápida (nombre+RFC+tel), o público en general; adjunta clienteId a la venta.
+- **Facturar CFDI best-effort**: botón en comprobante → POST /t/ventas/:id/cfdi/emitir (uso G03/forma 01); si 409 sin config muestra aviso claro sin romper.
+- typecheck + build verde (218kB). Smoke test de las piezas nuevas verde.
+- Pendiente: descuentos/devoluciones POS, receptor CFDI completo, búsqueda cliente sin acentos, empaquetar en pos-desktop.
 
 ### 2026-05-28 — 🎉 web-pos: POS de cajero tocable (primer frontend del producto)
 - **apps/web-pos** SPA Vite 6 + React 19 + Tailwind. Login cajero (`/auth/tenant/login`), `resolverSession` (sucursal default + auto-apertura caja monto 0, fallback sin caja), búsqueda producto debounce (`/t/productos?q=`) + Enter barcode (`/t/productos/buscar/:codigo`), ticket en vivo (+/− cantidad), `CobroModal` multi-pago con cambio, `POST /t/ventas` canal pos, comprobante folio+total.
