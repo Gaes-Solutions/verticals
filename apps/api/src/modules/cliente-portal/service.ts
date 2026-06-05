@@ -125,3 +125,92 @@ export async function getPedidosCliente(
     },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist (lista de deseos) del cliente
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WishlistItemDto {
+  itemId: string;
+  productoPublicadoId: string;
+  tituloPublico: string;
+  slugSeo: string;
+  precio: string;
+  foto: string | null;
+}
+
+async function getOrCreateWishlist(prisma: TenantPrismaClient, clienteId: string): Promise<string> {
+  const existente = await prisma.wishlist.findFirst({ where: { clienteId } });
+  if (existente) return existente.id;
+  const nueva = await prisma.wishlist.create({ data: { clienteId } });
+  return nueva.id;
+}
+
+export async function getMiWishlist(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+): Promise<WishlistItemDto[]> {
+  const wishlistId = await getOrCreateWishlist(prisma, clienteId);
+  const items = await prisma.wishlistItem.findMany({
+    where: { wishlistId },
+    orderBy: { id: "desc" },
+  });
+  if (items.length === 0) return [];
+
+  const productos = await prisma.productoPublicado.findMany({
+    where: { id: { in: items.map((i) => i.productoPublicadoId) } },
+    select: {
+      id: true,
+      tituloPublico: true,
+      slugSeo: true,
+      precioPublicoOverride: true,
+      fotosArray: true,
+      producto: { select: { variantes: { select: { precioBase: true }, take: 1 } } },
+    },
+  });
+  const byId = new Map(productos.map((p) => [p.id, p]));
+
+  return items
+    .map((i): WishlistItemDto | null => {
+      const p = byId.get(i.productoPublicadoId);
+      if (!p) return null;
+      const fotos = Array.isArray(p.fotosArray) ? (p.fotosArray as string[]) : [];
+      const precio = p.precioPublicoOverride ?? p.producto.variantes[0]?.precioBase ?? "0";
+      return {
+        itemId: i.id,
+        productoPublicadoId: p.id,
+        tituloPublico: p.tituloPublico,
+        slugSeo: p.slugSeo,
+        precio: precio.toString(),
+        foto: fotos[0] ?? null,
+      };
+    })
+    .filter((x): x is WishlistItemDto => x !== null);
+}
+
+export async function agregarAWishlist(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  productoPublicadoId: string,
+): Promise<{ itemId: string }> {
+  const wishlistId = await getOrCreateWishlist(prisma, clienteId);
+  const existente = await prisma.wishlistItem.findFirst({
+    where: { wishlistId, productoPublicadoId },
+  });
+  if (existente) return { itemId: existente.id };
+  const item = await prisma.wishlistItem.create({ data: { wishlistId, productoPublicadoId } });
+  return { itemId: item.id };
+}
+
+export async function quitarDeWishlist(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  itemId: string,
+): Promise<void> {
+  const wishlistId = await getOrCreateWishlist(prisma, clienteId);
+  const item = await prisma.wishlistItem.findUnique({ where: { id: itemId } });
+  if (!item || item.wishlistId !== wishlistId) {
+    throw new ClientePortalError(404, "Item no encontrado en tu lista");
+  }
+  await prisma.wishlistItem.delete({ where: { id: itemId } });
+}

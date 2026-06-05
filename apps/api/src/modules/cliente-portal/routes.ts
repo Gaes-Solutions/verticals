@@ -3,9 +3,12 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   ClientePortalError,
+  agregarAWishlist,
   getClienteMe,
+  getMiWishlist,
   getPedidosCliente,
   loginCliente,
+  quitarDeWishlist,
   registrarCliente,
 } from "./service.js";
 
@@ -105,5 +108,33 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   app.get("/pedidos", async (req) => {
     const { clienteId, email, tenantSlug } = clienteCtx(req);
     return getPedidosCliente(getTenantClient(tenantSlug), clienteId, email);
+  });
+
+  app.get("/wishlist", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    return getMiWishlist(getTenantClient(tenantSlug), clienteId);
+  });
+
+  app.post("/wishlist/items", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const body = z.object({ productoPublicadoId: z.string().min(1) }).parse(req.body);
+    const r = await agregarAWishlist(
+      getTenantClient(tenantSlug),
+      clienteId,
+      body.productoPublicadoId,
+    );
+    return reply.code(201).send(r);
+  });
+
+  app.delete("/wishlist/items/:itemId", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { itemId } = z.object({ itemId: z.string().min(1) }).parse(req.params);
+    try {
+      await quitarDeWishlist(getTenantClient(tenantSlug), clienteId, itemId);
+      return reply.code(204).send();
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
   });
 };

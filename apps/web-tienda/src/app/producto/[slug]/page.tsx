@@ -1,4 +1,5 @@
 import { AgregarAlCarrito } from "@/components/agregar-al-carrito";
+import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { api } from "@/lib/api";
 import Link from "next/link";
 
@@ -52,11 +53,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           <p className="mt-3 text-3xl font-bold text-marca">${Number(precio).toFixed(2)}</p>
           {prod.descripcionMd && <p className="mt-4 text-gray-600">{prod.descripcionMd}</p>}
           {variante && (
-            <AgregarAlCarrito
-              varianteId={variante.id}
-              titulo={prod.tituloPublico}
-              precio={precio}
-            />
+            <div className="flex items-end gap-3">
+              <AgregarAlCarrito
+                varianteId={variante.id}
+                titulo={prod.tituloPublico}
+                precio={precio}
+              />
+              <GuardarWishlist productoPublicadoId={prod.id} />
+            </div>
           )}
         </div>
       </div>

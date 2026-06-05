@@ -41,6 +41,15 @@ export interface PedidoCliente {
   createdAt: string;
 }
 
+export interface WishlistItem {
+  itemId: string;
+  productoPublicadoId: string;
+  tituloPublico: string;
+  slugSeo: string;
+  precio: string;
+  foto: string | null;
+}
+
 /** Proxy al backend para registro/login; el route handler setea la cookie. */
 export async function authClienteBackend(
   accion: "registro" | "login",

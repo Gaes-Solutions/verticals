@@ -112,3 +112,89 @@ describe("portal de cuenta del cliente", () => {
     expect(c?.passwordHash).not.toBe(PASSWORD); // hasheada, no plana
   });
 });
+
+describe("wishlist del cliente", () => {
+  let productoPublicadoId: string;
+
+  it("setup: publica un producto", async () => {
+    const prisma = getTenantClient(TENANT_SLUG);
+    const cat = await prisma.categoria.create({ data: { nombre: "Cat", slug: "cat-wl" } });
+    const producto = await prisma.producto.create({
+      data: {
+        skuPadre: "WL-001",
+        nombre: "Producto Wishlist",
+        categoriaId: cat.id,
+        variantes: { create: [{ sku: "WL-001-V", precioBase: "99.00" }] },
+      },
+    });
+    const pub = await prisma.productoPublicado.create({
+      data: {
+        productoId: producto.id,
+        tituloPublico: "Producto Wishlist",
+        slugSeo: "producto-wishlist",
+        descripcionMd: "x",
+      },
+    });
+    productoPublicadoId = pub.id;
+    expect(productoPublicadoId).toBeTruthy();
+  });
+
+  it("wishlist vacía al inicio", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/wishlist",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as unknown[]).length).toBe(0);
+  });
+
+  it("agrega un producto a la wishlist", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/wishlist/items",
+      headers: { authorization: `Bearer ${clienteToken}` },
+      payload: { productoPublicadoId },
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("agregar el mismo producto es idempotente (no duplica)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/cliente-portal/wishlist/items",
+      headers: { authorization: `Bearer ${clienteToken}` },
+      payload: { productoPublicadoId },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/wishlist",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    const items = res.json() as Array<{ itemId: string; tituloPublico: string; precio: string }>;
+    expect(items.length).toBe(1);
+    expect(items[0]?.tituloPublico).toBe("Producto Wishlist");
+    expect(Number(items[0]?.precio)).toBeCloseTo(99, 0);
+  });
+
+  it("quita el producto de la wishlist", async () => {
+    const lista = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/wishlist",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    const itemId = (lista.json() as Array<{ itemId: string }>)[0]?.itemId;
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/cliente-portal/wishlist/items/${itemId}`,
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(del.statusCode).toBe(204);
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/wishlist",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect((res.json() as unknown[]).length).toBe(0);
+  });
+});

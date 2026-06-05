@@ -15,7 +15,16 @@ export default function CheckoutPage() {
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => setItems(leerCarrito()), []);
+  useEffect(() => {
+    setItems(leerCarrito());
+    // prefill con la sesión del cliente si está logueado
+    fetch("/api/cuenta/me").then(async (res) => {
+      if (!res.ok) return;
+      const me = (await res.json()) as { nombre: string; email: string | null };
+      setEmail((prev) => prev || (me.email ?? ""));
+      setNombre((prev) => prev || me.nombre);
+    });
+  }, []);
   const total = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
 
   async function pagar(e: React.FormEvent) {
