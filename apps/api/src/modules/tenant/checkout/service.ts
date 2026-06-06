@@ -1,3 +1,4 @@
+import type { EmailProvider } from "@gaespos/email";
 import type { PaymentProvider } from "@gaespos/pagos";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
@@ -179,6 +180,7 @@ export async function procesarWebhookPago(
     status: "confirmado" | "fallido" | "reembolsado";
     montoCentavos: number;
   },
+  emailProvider?: EmailProvider,
 ): Promise<ConfirmarPagoResult> {
   const pedido = await client.pedidoEcommerce.findFirst({
     where: { paymentIntentId: evento.intentId },
@@ -253,6 +255,22 @@ export async function procesarWebhookPago(
       where: { id: pedido.carritoOrigenId },
       data: { status: "convertido", convertidoAPedidoId: pedido.id },
     });
+  }
+
+  // Confirmación al comprador, best-effort: un fallo de email nunca rompe el pago
+  if (emailProvider) {
+    try {
+      await emailProvider.enviarPlantilla({
+        para: pedido.emailComprador,
+        plantilla: "pedido_confirmado",
+        datos: {
+          folioPublico: pedido.folioPublico,
+          total: new Decimal(pedido.total.toString()).toFixed(2),
+        },
+      });
+    } catch {
+      // se reintenta vía panel admin / no bloquea
+    }
   }
 
   return {

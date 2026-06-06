@@ -1,3 +1,4 @@
+import { MockEmailProvider } from "@gaespos/email";
 import { MockPaymentProvider } from "@gaespos/pagos";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ const OWNER = { email: "owner-ecom@test.local", password: "ChangeMe!2026" };
 
 let app: FastifyInstance;
 let pagoMock: MockPaymentProvider;
+let emailMock: MockEmailProvider;
 let ownerToken: string;
 let sucursalId: string;
 let varianteId: string;
@@ -22,7 +24,11 @@ function auth(t: string) {
 
 beforeAll(async () => {
   pagoMock = new MockPaymentProvider();
-  app = await buildTestApp({}, { pagoProviderFactory: () => pagoMock });
+  emailMock = new MockEmailProvider();
+  app = await buildTestApp(
+    {},
+    { pagoProviderFactory: () => pagoMock, emailProviderFactory: () => emailMock },
+  );
   await createTestTenant(TENANT_SLUG, "Tienda Demo");
   await createTenantUser(TENANT_SLUG, {
     email: OWNER.email,
@@ -322,6 +328,14 @@ describe("checkout: pago mock → pedido → venta + stock", () => {
     expect(Number(lista[0]?.stockActual)).toBe(98);
   });
 
+  it("pago confirmado → email pedido_confirmado al comprador", () => {
+    const email = emailMock.enviados.find(
+      (e) => e.para === "comprador@test.mx" && e.asunto.includes("confirmado"),
+    );
+    expect(email).toBeDefined();
+    expect(email?.asunto).toContain(pedidoFolio);
+  });
+
   it("webhook idempotente: segundo llamado no re-genera venta", async () => {
     const { payload, signature } = pagoMock.simularWebhook(intentId);
     const res = await app.inject({
@@ -384,6 +398,13 @@ describe("gestión pedido + reseña", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().statusPedido).toBe("enviado");
     expect(res.json().guiaTracking).toBe("FX123456");
+  });
+
+  it("estado enviado → email con guía al comprador", () => {
+    const email = emailMock.enviados.find((e) => e.asunto.includes("va en camino"));
+    expect(email).toBeDefined();
+    expect(email?.html).toContain("FX123456");
+    expect(email?.para).toBe("comprador@test.mx");
   });
 
   it("no se puede reseñar pedido no entregado → 409", async () => {

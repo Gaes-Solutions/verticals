@@ -1,5 +1,6 @@
+import type { EmailProvider } from "@gaespos/email";
 import { PERMISSIONS } from "@gaespos/permissions";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -48,6 +49,51 @@ const ESTADO_TIMESTAMP: Record<string, string> = {
   recogido: "entregadoAt",
   cancelado: "canceladoAt",
 };
+
+/** Aviso al comprador en estados clave. Best-effort: nunca rompe la transición. */
+async function notificarTransicion(
+  req: FastifyRequest,
+  email: EmailProvider,
+  pedido: {
+    folioPublico: string;
+    emailComprador: string;
+    guiaTracking: string | null;
+    paqueteria: string | null;
+    sucursalPickupId: string | null;
+  },
+  nuevoEstado: string,
+): Promise<void> {
+  try {
+    if (nuevoEstado === "enviado") {
+      await email.enviarPlantilla({
+        para: pedido.emailComprador,
+        plantilla: "pedido_enviado",
+        datos: {
+          folioPublico: pedido.folioPublico,
+          guiaTracking: pedido.guiaTracking ?? "",
+          paqueteria: pedido.paqueteria ?? "",
+          trackingUrl: "",
+        },
+      });
+    } else if (nuevoEstado === "listo_pickup" && pedido.sucursalPickupId) {
+      const sucursal = await req.tenantPrisma.sucursal.findUnique({
+        where: { id: pedido.sucursalPickupId },
+        select: { nombre: true },
+      });
+      await email.enviarPlantilla({
+        para: pedido.emailComprador,
+        plantilla: "pedido_listo_pickup",
+        datos: {
+          folioPublico: pedido.folioPublico,
+          sucursal: sucursal?.nombre ?? "la sucursal",
+          horario: "horario de la tienda",
+        },
+      });
+    }
+  } catch {
+    // best-effort
+  }
+}
 
 const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
@@ -126,6 +172,7 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
         },
       },
     });
+    await notificarTransicion(req, app.emailProviderFactory(), updated, body.nuevoEstado);
     return updated;
   });
 

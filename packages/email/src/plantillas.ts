@@ -19,7 +19,9 @@ export function renderPlantilla(
     case "pedido_enviado":
       return {
         asunto: `Tu pedido ${v("folioPublico")} va en camino`,
-        html: `<h1>Pedido enviado</h1><p>Guía: <strong>${v("guiaTracking")}</strong> (${v("paqueteria")}).</p><p>Sigue tu envío en ${v("trackingUrl")}.</p>`,
+        html: `<h1>Pedido enviado</h1><p>Guía: <strong>${v("guiaTracking")}</strong> (${v("paqueteria")}).</p>${
+          v("trackingUrl") ? `<p><a href="${v("trackingUrl")}">Rastrear mi pedido</a></p>` : ""
+        }`,
         texto: `Pedido ${v("folioPublico")} enviado. Guía ${v("guiaTracking")}.`,
       };
     case "pedido_listo_pickup":

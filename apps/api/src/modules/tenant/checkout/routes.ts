@@ -59,7 +59,12 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         .send({ statusCode: 400, error: "Bad Request", message: "Webhook inválido" });
     }
     try {
-      const result = await procesarWebhookPago(req.tenantPrisma, req.principal.userId, evento);
+      const result = await procesarWebhookPago(
+        req.tenantPrisma,
+        req.principal.userId,
+        evento,
+        app.emailProviderFactory(),
+      );
       return reply.code(200).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;
@@ -85,7 +90,12 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
     const { payload, signature } = mock.simularWebhook(intentId);
     const evento = provider.parseWebhook(payload, signature);
     try {
-      const result = await procesarWebhookPago(req.tenantPrisma, req.principal.userId, evento);
+      const result = await procesarWebhookPago(
+        req.tenantPrisma,
+        req.principal.userId,
+        evento,
+        app.emailProviderFactory(),
+      );
       return reply.code(200).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;
