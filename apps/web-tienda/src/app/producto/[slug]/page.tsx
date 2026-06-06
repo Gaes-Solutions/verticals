@@ -1,16 +1,84 @@
 import { AgregarAlCarrito } from "@/components/agregar-al-carrito";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { api } from "@/lib/api";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 interface ProductoDetalle {
   id: string;
   tituloPublico: string;
   descripcionMd: string | null;
+  descripcionCortaMd: string | null;
+  metaTitulo: string | null;
+  metaDescripcion: string | null;
   fotosArray: string[];
   precioPublicoOverride: string | null;
   producto: { variantes: Array<{ id: string; precioBase: string; nombreVariante: string | null }> };
   resenas: Array<{ id: string; rating: number; titulo: string | null; comentario: string | null }>;
+}
+
+function precioDe(prod: ProductoDetalle): string {
+  return prod.precioPublicoOverride ?? prod.producto.variantes[0]?.precioBase ?? "0";
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const prod = await api<ProductoDetalle>(`/tienda/catalogo/${slug}`);
+    const titulo = prod.metaTitulo ?? prod.tituloPublico;
+    const descripcion =
+      prod.metaDescripcion ?? prod.descripcionCortaMd ?? prod.descripcionMd ?? prod.tituloPublico;
+    return {
+      title: titulo,
+      description: descripcion,
+      openGraph: {
+        title: titulo,
+        description: descripcion,
+        type: "website",
+        ...(prod.fotosArray[0] ? { images: [{ url: prod.fotosArray[0] }] } : {}),
+      },
+    };
+  } catch {
+    return { title: "Producto no encontrado" };
+  }
+}
+
+/** JSON-LD schema.org/Product para rich results en Google. */
+function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
+  const ratings = prod.resenas.map((r) => r.rating);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: prod.tituloPublico,
+    ...(prod.descripcionMd ? { description: prod.descripcionMd } : {}),
+    ...(prod.fotosArray.length > 0 ? { image: prod.fotosArray } : {}),
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "MXN",
+      price: Number(precioDe(prod)).toFixed(2),
+      availability: "https://schema.org/InStock",
+    },
+    ...(ratings.length > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
+            reviewCount: ratings.length,
+          },
+        }
+      : {}),
+  };
+  return (
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD requerido para SEO, contenido propio serializado
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
 }
 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -29,10 +97,11 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
     );
   }
   const variante = prod.producto.variantes[0];
-  const precio = prod.precioPublicoOverride ?? variante?.precioBase ?? "0";
+  const precio = precioDe(prod);
 
   return (
     <div>
+      <ProductoJsonLd prod={prod} />
       <Link href="/" className="text-sm text-marca">
         ← Catálogo
       </Link>
