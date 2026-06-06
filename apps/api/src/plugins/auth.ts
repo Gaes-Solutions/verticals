@@ -41,12 +41,22 @@ type ClienteTokenPayload = {
   kind: "cliente";
 };
 
+type ClienteB2bTokenPayload = {
+  sub: string; // usuarioB2bId
+  clienteB2bId: string;
+  email: string;
+  rol: "admin" | "comprador";
+  tenantSlug: string;
+  kind: "cliente_b2b";
+};
+
 type TokenPayload =
   | AdminTokenPayload
   | TenantTokenPayload
   | PatientTokenPayload
   | AdminTenantTokenPayload
-  | ClienteTokenPayload;
+  | ClienteTokenPayload
+  | ClienteB2bTokenPayload;
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -56,6 +66,7 @@ declare module "fastify" {
     authenticatePatient: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateAdminTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateCliente: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateClienteB2b: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -146,6 +157,17 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente");
+    }
+  });
+
+  app.decorate("authenticateClienteB2b", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "cliente_b2b") {
+      return rejectUnauthorized(reply, "Se requiere sesión de cliente mayorista");
     }
   });
 };

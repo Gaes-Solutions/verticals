@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
+import { b2bAuthRoutes, b2bPortalRoutes } from "./modules/b2b-portal/routes.js";
 import {
   billingAdminGaesSoftRoutes,
   billingAdminTenantRoutes,
@@ -154,6 +155,8 @@ export async function buildApp(
   await app.register(billingAdminGaesSoftRoutes);
   await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
+  await app.register(b2bAuthRoutes, { prefix: "/auth/cliente-b2b" });
+  await app.register(b2bPortalRoutes, { prefix: "/b2b-portal" });
 
   await app.register(
     async (tenantApp) => {

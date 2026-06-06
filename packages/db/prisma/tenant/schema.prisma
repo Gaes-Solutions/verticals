@@ -1423,6 +1423,7 @@ model ClienteB2b {
   creditos            ClienteB2bCredito[]
   listasPrecio        ClienteB2bListaPrecio[]
   vendedoresAsignados ClienteB2bVendedorAsignado[]
+  usuariosPortal      ClienteB2bUsuario[]
   ventas              Venta[]
   apartados           Apartado[]
   cuentasCobrar       CuentaCobrar[]
@@ -1541,6 +1542,31 @@ model ClienteB2bVendedorAsignado {
   @@id([clienteB2bId, usuarioId, tipo])
   @@index([usuarioId])
   @@map("cliente_b2b_vendedores_asignados")
+}
+
+enum ClienteB2bUsuarioRol {
+  admin // gestiona usuarios de su empresa + todo lo de comprador
+  comprador // catálogo, pedidos, cotizaciones, estado de cuenta
+}
+
+/// Usuario del portal B2B (login del cliente mayorista). El tenant los da de
+/// alta (invitación) — no hay self-signup B2B.
+model ClienteB2bUsuario {
+  id           String               @id @default(cuid())
+  clienteB2bId String               @map("cliente_b2b_id")
+  nombre       String
+  email        String               @unique
+  passwordHash String               @map("password_hash")
+  rol          ClienteB2bUsuarioRol @default(comprador)
+  isActive     Boolean              @default(true) @map("is_active")
+  lastLoginAt  DateTime?            @map("last_login_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  clienteB2b ClienteB2b @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+
+  @@index([clienteB2bId])
+  @@map("cliente_b2b_usuarios")
 }
 
 // ============================================================
