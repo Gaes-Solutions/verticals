@@ -4,6 +4,20 @@ import { type CarritoLineaLocal, leerCarrito, sessionId, vaciar } from "@/lib/ca
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+interface OpcionEnvio {
+  tarifaId: string;
+  nombrePublico: string;
+  costo: string;
+  gratis: boolean;
+  diasEntregaEstimados: number | null;
+}
+
+interface OpcionPickup {
+  sucursalId: string;
+  nombre: string;
+  tiempoPreparacionPromedioMin: number;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
@@ -12,6 +26,12 @@ export default function CheckoutPage() {
   const [ciudad, setCiudad] = useState("");
   const [estado, setEstado] = useState("");
   const [cp, setCp] = useState("");
+  const [modoEntrega, setModoEntrega] = useState<"envio" | "pickup">("envio");
+  const [opcionesEnvio, setOpcionesEnvio] = useState<OpcionEnvio[]>([]);
+  const [pickups, setPickups] = useState<OpcionPickup[]>([]);
+  const [tarifaId, setTarifaId] = useState("");
+  const [sucursalId, setSucursalId] = useState("");
+  const [cotizando, setCotizando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,10 +45,48 @@ export default function CheckoutPage() {
       setNombre((prev) => prev || me.nombre);
     });
   }, []);
-  const total = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
+
+  const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
+
+  // sucursales con pickup disponibles (no dependen de la dirección)
+  useEffect(() => {
+    if (subtotal === 0) return;
+    fetch(`/api/envios?subtotal=${subtotal}`).then(async (res) => {
+      const cot = (await res.json()) as { pickup: OpcionPickup[] };
+      setPickups(cot.pickup);
+    });
+  }, [subtotal]);
+
+  // cotiza paquetería cuando hay CP completo + estado
+  useEffect(() => {
+    if (cp.length !== 5 || estado.trim().length < 3 || subtotal === 0) {
+      setOpcionesEnvio([]);
+      setTarifaId("");
+      return;
+    }
+    setCotizando(true);
+    const t = setTimeout(() => {
+      fetch(`/api/envios?cp=${cp}&estado=${encodeURIComponent(estado.trim())}&subtotal=${subtotal}`)
+        .then(async (res) => {
+          const cot = (await res.json()) as { opcionesEnvio: OpcionEnvio[] };
+          setOpcionesEnvio(cot.opcionesEnvio);
+          setTarifaId(cot.opcionesEnvio[0]?.tarifaId ?? "");
+        })
+        .finally(() => setCotizando(false));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [cp, estado, subtotal]);
+
+  const envioSeleccionado = opcionesEnvio.find((o) => o.tarifaId === tarifaId);
+  const costoEnvio = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
+  const total = subtotal + costoEnvio;
 
   async function pagar(e: React.FormEvent) {
     e.preventDefault();
+    if (modoEntrega === "pickup" && !sucursalId) {
+      setError("Elige la sucursal donde recogerás tu pedido");
+      return;
+    }
     setProcesando(true);
     setError(null);
     try {
@@ -39,7 +97,13 @@ export default function CheckoutPage() {
           sessionIdAnonimo: sessionId(),
           emailComprador: email,
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
-          direccionEnvio: { nombre, calle: "—", ciudad, estado, cp },
+          metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
+          ...(modoEntrega === "pickup"
+            ? { sucursalPickupId: sucursalId }
+            : {
+                ...(tarifaId ? { tarifaEnvioId: tarifaId } : {}),
+                direccionEnvio: { nombre, calle: "—", ciudad, estado, cp },
+              }),
         }),
       });
       const data = await res.json();
@@ -64,12 +128,69 @@ export default function CheckoutPage() {
       <form onSubmit={pagar} className="space-y-4 rounded-lg border bg-white p-6">
         <Campo label="Email" value={email} onChange={setEmail} type="email" required />
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
-        <div className="grid grid-cols-2 gap-3">
-          <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
-          <Campo label="Estado" value={estado} onChange={setEstado} required />
+
+        <div className="flex gap-2">
+          <BotonEntrega
+            activo={modoEntrega === "envio"}
+            onClick={() => setModoEntrega("envio")}
+            label="🚚 Envío a domicilio"
+          />
+          {pickups.length > 0 && (
+            <BotonEntrega
+              activo={modoEntrega === "pickup"}
+              onClick={() => setModoEntrega("pickup")}
+              label="🏬 Recoger en tienda"
+            />
+          )}
         </div>
-        <Campo label="Código postal" value={cp} onChange={setCp} required />
+
+        {modoEntrega === "envio" ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
+              <Campo label="Estado" value={estado} onChange={setEstado} required />
+            </div>
+            <Campo label="Código postal" value={cp} onChange={setCp} required />
+            <OpcionesEnvio
+              opciones={opcionesEnvio}
+              tarifaId={tarifaId}
+              onSelect={setTarifaId}
+              cotizando={cotizando}
+              direccionLista={cp.length === 5 && estado.trim().length >= 3}
+            />
+          </>
+        ) : (
+          <div className="space-y-2">
+            {pickups.map((p) => (
+              <label
+                key={p.sucursalId}
+                className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
+              >
+                <input
+                  type="radio"
+                  name="pickup"
+                  checked={sucursalId === p.sucursalId}
+                  onChange={() => setSucursalId(p.sucursalId)}
+                />
+                <span className="flex-1 font-medium">{p.nombre}</span>
+                <span className="text-gray-500">
+                  listo en ~{p.tiempoPreparacionPromedioMin} min
+                </span>
+                <span className="font-semibold text-green-600">Gratis</span>
+              </label>
+            ))}
+          </div>
+        )}
+
         <div className="border-t pt-4">
+          <div className="mb-1 flex justify-between text-sm text-gray-600">
+            <span>Subtotal</span>
+            <span>${subtotal.toFixed(2)}</span>
+          </div>
+          <div className="mb-2 flex justify-between text-sm text-gray-600">
+            <span>Envío</span>
+            <span>{costoEnvio === 0 ? "Gratis" : `$${costoEnvio.toFixed(2)}`}</span>
+          </div>
           <div className="mb-4 flex justify-between text-lg font-bold">
             <span>Total a pagar</span>
             <span className="text-marca">${total.toFixed(2)}</span>
@@ -88,6 +209,81 @@ export default function CheckoutPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+function OpcionesEnvio({
+  opciones,
+  tarifaId,
+  onSelect,
+  cotizando,
+  direccionLista,
+}: {
+  opciones: OpcionEnvio[];
+  tarifaId: string;
+  onSelect: (id: string) => void;
+  cotizando: boolean;
+  direccionLista: boolean;
+}) {
+  if (!direccionLista) {
+    return <p className="text-xs text-gray-400">Completa estado y CP para cotizar el envío.</p>;
+  }
+  if (cotizando) {
+    return <p className="text-xs text-gray-400">Cotizando envío…</p>;
+  }
+  if (opciones.length === 0) {
+    return (
+      <p className="text-xs text-gray-500">
+        Sin tarifas para tu zona — la tienda coordinará el envío contigo (sin costo adicional al
+        pagar).
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {opciones.map((o) => (
+        <label
+          key={o.tarifaId}
+          className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
+        >
+          <input
+            type="radio"
+            name="envio"
+            checked={tarifaId === o.tarifaId}
+            onChange={() => onSelect(o.tarifaId)}
+          />
+          <span className="flex-1 font-medium">{o.nombrePublico}</span>
+          {o.diasEntregaEstimados && (
+            <span className="text-gray-500">{o.diasEntregaEstimados} días</span>
+          )}
+          <span className={o.gratis ? "font-semibold text-green-600" : "font-semibold"}>
+            {o.gratis ? "Gratis" : `$${Number(o.costo).toFixed(2)}`}
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function BotonEntrega({
+  activo,
+  onClick,
+  label,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+        activo ? "border-marca bg-marca/5 text-marca" : "border-gray-200 text-gray-600"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

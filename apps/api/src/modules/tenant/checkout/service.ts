@@ -1,6 +1,7 @@
 import type { PaymentProvider } from "@gaespos/pagos";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
 import { crearVenta } from "../ventas/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -40,7 +41,7 @@ export interface IniciarCheckoutInput {
   metodoEnvio: "paqueteria" | "click_collect" | "envio_local";
   sucursalPickupId?: string;
   direccionEnvio?: Record<string, unknown>;
-  costoEnvio: string;
+  tarifaEnvioId?: string | undefined;
   requiereFactura: boolean;
   datosFactura?: Record<string, unknown>;
 }
@@ -73,7 +74,24 @@ export async function iniciarCheckout(
   }
 
   const subtotal = new Decimal(carrito.total.toString());
-  const costoEnvio = new Decimal(input.costoEnvio);
+  let costoEnvio = new Decimal(0);
+  let paqueteria: string | undefined;
+  if (input.metodoEnvio !== "click_collect" && input.tarifaEnvioId) {
+    const dir = input.direccionEnvio as { cp?: string; estado?: string } | undefined;
+    try {
+      const opcion = await validarOpcionEnvio(client, {
+        tarifaId: input.tarifaEnvioId,
+        cp: dir?.cp,
+        estado: dir?.estado,
+        subtotal: subtotal.toNumber(),
+      });
+      costoEnvio = new Decimal(opcion.costo);
+      paqueteria = opcion.paqueteria;
+    } catch (err) {
+      if (err instanceof EnviosError) throw new CheckoutError(err.statusCode, err.message);
+      throw err;
+    }
+  }
   const total = subtotal.plus(costoEnvio);
 
   const folioPublico = await nextFolioPublico(client);
@@ -92,6 +110,16 @@ export async function iniciarCheckout(
       ...(input.datosFactura ? { datosFactura: input.datosFactura as object } : {}),
       metodoPago: input.metodoPago,
       metodoEnvio: input.metodoEnvio,
+      ...(paqueteria
+        ? {
+            paqueteria: paqueteria as
+              | "fedex"
+              | "estafeta"
+              | "paquete_express"
+              | "huipix"
+              | "propio",
+          }
+        : {}),
       ...(input.sucursalPickupId ? { sucursalPickupId: input.sucursalPickupId } : {}),
       ...(input.direccionEnvio ? { direccionEnvio: input.direccionEnvio as object } : {}),
       statusPago: "pendiente",

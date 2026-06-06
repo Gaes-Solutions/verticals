@@ -20,10 +20,9 @@ export const iniciarCheckoutSchema = z.object({
   metodoEnvio: z.enum(["paqueteria", "click_collect", "envio_local"]),
   sucursalPickupId: z.string().optional(),
   direccionEnvio: direccionSchema.optional(),
-  costoEnvio: z
-    .union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)])
-    .transform((v) => String(v))
-    .default("0"),
+  // El costo de envío se calcula server-side a partir de la tarifa elegida;
+  // sin tarifa (tenant sin envíos configurados) el costo es 0.
+  tarifaEnvioId: z.string().optional(),
   requiereFactura: z.boolean().default(false),
   datosFactura: z
     .object({

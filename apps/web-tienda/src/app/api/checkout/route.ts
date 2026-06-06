@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
       sessionIdAnonimo: string;
       emailComprador: string;
       items: Array<{ varianteId: string; cantidad: number }>;
-      direccionEnvio: Record<string, unknown>;
+      metodoEnvio: "paqueteria" | "click_collect";
+      tarifaEnvioId?: string;
+      sucursalPickupId?: string;
+      direccionEnvio?: Record<string, unknown>;
     };
 
     const carrito = await api<{ id: string }>("/tienda", {
@@ -27,9 +30,10 @@ export async function POST(req: NextRequest) {
           emailComprador: body.emailComprador,
           metodoPago: "tarjeta",
           proveedorPago: "mock",
-          metodoEnvio: "paqueteria",
-          direccionEnvio: body.direccionEnvio,
-          costoEnvio: "0",
+          metodoEnvio: body.metodoEnvio,
+          ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
+          ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
+          ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
         },
       },
     );

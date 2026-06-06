@@ -40,6 +40,7 @@ import cxcRoutes from "./modules/tenant/cxc/routes.js";
 import devolucionesRoutes from "./modules/tenant/devoluciones/routes.js";
 import diotRoutes from "./modules/tenant/diot/routes.js";
 import ecommerceConfigRoutes from "./modules/tenant/ecommerce-config/routes.js";
+import enviosRoutes from "./modules/tenant/envios/routes.js";
 import hospitalizacionesRoutes from "./modules/tenant/hospitalizaciones/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
 import lealtadRoutes from "./modules/tenant/lealtad/routes.js";
@@ -197,6 +198,7 @@ export async function buildApp(
       await tenantApp.register(diotRoutes, { prefix: "/diot" });
       await tenantApp.register(ecommerceConfigRoutes, { prefix: "/ecommerce" });
       await tenantApp.register(carritoRoutes, { prefix: "/tienda" });
+      await tenantApp.register(enviosRoutes, { prefix: "/envios" });
       await tenantApp.register(checkoutRoutes, { prefix: "/checkout" });
       await tenantApp.register(pedidosEcommerceRoutes, { prefix: "/pedidos-ecommerce" });
       await tenantApp.register(resenasRoutes, { prefix: "/resenas" });

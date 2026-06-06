@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
+import { EnviosPage } from "./pages/EnviosPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
+import { PedidosPage } from "./pages/PedidosPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
@@ -13,7 +15,15 @@ export interface AdminSession {
   tenantSlug: string;
 }
 
-type Seccion = "dashboard" | "reportes" | "productos" | "inventario" | "ventas" | "tienda";
+type Seccion =
+  | "dashboard"
+  | "reportes"
+  | "productos"
+  | "inventario"
+  | "ventas"
+  | "pedidos"
+  | "envios"
+  | "tienda";
 
 const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "dashboard", label: "Resumen", icon: "📊" },
@@ -21,6 +31,8 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "productos", label: "Productos", icon: "📦" },
   { key: "inventario", label: "Inventario", icon: "🏷️" },
   { key: "ventas", label: "Ventas", icon: "🧾" },
+  { key: "pedidos", label: "Pedidos online", icon: "📬" },
+  { key: "envios", label: "Envíos", icon: "🚚" },
   { key: "tienda", label: "Tienda online", icon: "🛒" },
 ];
 
@@ -87,6 +99,8 @@ export function App() {
         {seccion === "productos" && <ProductosPage />}
         {seccion === "inventario" && <InventarioPage />}
         {seccion === "ventas" && <VentasPage />}
+        {seccion === "pedidos" && <PedidosPage />}
+        {seccion === "envios" && <EnviosPage />}
         {seccion === "tienda" && <TiendaPage />}
       </main>
     </div>

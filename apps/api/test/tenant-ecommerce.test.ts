@@ -13,6 +13,8 @@ let sucursalId: string;
 let varianteId: string;
 let productoPublicadoId: string;
 let carritoId: string;
+let zonaEnvioId: string;
+let tarifaEnvioId: string;
 
 function auth(t: string) {
   return { authorization: `Bearer ${t}` };
@@ -154,6 +156,113 @@ describe("catálogo público + carrito", () => {
   });
 });
 
+describe("envíos: zonas + tarifas + cotizador + pickup", () => {
+  it("crea zona de envío por estado", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/envios/zonas",
+      headers: auth(ownerToken),
+      payload: { nombre: "Occidente", estadosIncluidos: ["Jalisco"] },
+    });
+    expect(res.statusCode).toBe(201);
+    zonaEnvioId = res.json().id;
+  });
+
+  it("crea tarifa fija $99 con envío gratis desde $1000", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/envios/tarifas",
+      headers: auth(ownerToken),
+      payload: {
+        zonaEnvioId,
+        paqueteria: "estafeta",
+        nombrePublico: "Estafeta Estándar",
+        tipoCalculo: "fija",
+        montoFijo: 99,
+        montoMinimoEnvioGratis: 1000,
+        diasEntregaEstimados: 3,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    tarifaEnvioId = res.json().id;
+  });
+
+  it("cotiza por estado → tarifa $99", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/envios/cotizar?estado=Jalisco&subtotal=598",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const cot = res.json() as { opcionesEnvio: Array<{ costo: string; gratis: boolean }> };
+    expect(cot.opcionesEnvio).toHaveLength(1);
+    expect(cot.opcionesEnvio[0]?.costo).toBe("99.00");
+    expect(cot.opcionesEnvio[0]?.gratis).toBe(false);
+  });
+
+  it("subtotal arriba del umbral → envío gratis", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/envios/cotizar?estado=Jalisco&subtotal=1500",
+      headers: auth(ownerToken),
+    });
+    const cot = res.json() as { opcionesEnvio: Array<{ costo: string; gratis: boolean }> };
+    expect(cot.opcionesEnvio[0]?.costo).toBe("0.00");
+    expect(cot.opcionesEnvio[0]?.gratis).toBe(true);
+  });
+
+  it("estado fuera de zona → sin opciones de paquetería", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/envios/cotizar?estado=Yucatan&subtotal=598",
+      headers: auth(ownerToken),
+    });
+    expect(res.json().opcionesEnvio).toHaveLength(0);
+  });
+
+  it("activa pickup en sucursal y aparece en la cotización", async () => {
+    const up = await app.inject({
+      method: "PUT",
+      url: `/t/envios/pickup/${sucursalId}`,
+      headers: auth(ownerToken),
+      payload: { activa: true, tiempoPreparacionPromedioMin: 45 },
+    });
+    expect(up.statusCode).toBe(200);
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/envios/cotizar?estado=Jalisco&subtotal=598",
+      headers: auth(ownerToken),
+    });
+    const cot = res.json() as { pickup: Array<{ sucursalId: string }> };
+    expect(cot.pickup).toHaveLength(1);
+    expect(cot.pickup[0]?.sucursalId).toBe(sucursalId);
+  });
+
+  it("checkout rechaza tarifa que no aplica a la dirección (422)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/checkout/iniciar",
+      headers: auth(ownerToken),
+      payload: {
+        carritoId,
+        emailComprador: "comprador@test.mx",
+        metodoPago: "tarjeta",
+        proveedorPago: "mock",
+        metodoEnvio: "paqueteria",
+        tarifaEnvioId,
+        direccionEnvio: {
+          nombre: "Ana",
+          calle: "Calle 60",
+          ciudad: "Mérida",
+          estado: "Yucatan",
+          cp: "97000",
+        },
+      },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+});
+
 describe("checkout: pago mock → pedido → venta + stock", () => {
   let intentId: string;
   let pedidoFolio: string;
@@ -176,13 +285,13 @@ describe("checkout: pago mock → pedido → venta + stock", () => {
           estado: "Jalisco",
           cp: "44100",
         },
-        costoEnvio: "99",
+        tarifaEnvioId,
       },
     });
     expect(res.statusCode).toBe(201);
     const r = res.json() as { folioPublico: string; intentId: string; total: string };
     expect(r.folioPublico).toMatch(/^GP-\d{8}$/);
-    expect(Number(r.total)).toBeCloseTo(697, 0); // 598 + 99 envío
+    expect(Number(r.total)).toBeCloseTo(697, 0); // 598 + 99 envío (tarifa validada server-side)
     intentId = r.intentId;
     pedidoFolio = r.folioPublico;
   });

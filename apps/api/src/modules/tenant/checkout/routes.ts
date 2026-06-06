@@ -7,6 +7,7 @@ function errLabel(s: number): string {
   if (s >= 500) return "Internal";
   if (s === 404) return "Not Found";
   if (s === 409) return "Conflict";
+  if (s === 422) return "Unprocessable Entity";
   return "Bad Request";
 }
 
@@ -35,7 +36,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         metodoEnvio: body.metodoEnvio,
         ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
         ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
-        costoEnvio: body.costoEnvio,
+        ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
         requiereFactura: body.requiereFactura,
         ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
       });
