@@ -33,8 +33,10 @@ export function renderPlantilla(
     case "carrito_recovery":
       return {
         asunto: "¿Olvidaste algo en tu carrito?",
-        html: `<h1>Tu carrito te espera</h1><p>Completa tu compra y usa el código <strong>${v("recoveryCodigo")}</strong> para un descuento.</p><p><a href="${v("urlCarrito")}">Volver al carrito</a></p>`,
-        texto: `Completa tu compra con el código ${v("recoveryCodigo")}.`,
+        html: `<h1>Tu carrito te espera</h1><p>Dejaste productos en tu carrito. Recupéralos y completa tu compra cuando quieras.</p>${
+          v("urlCarrito") ? `<p><a href="${v("urlCarrito")}">Volver a mi carrito</a></p>` : ""
+        }`,
+        texto: `Dejaste productos en tu carrito. Código de recuperación: ${v("recoveryCodigo")}.`,
       };
     case "resena_solicitud":
       return {

@@ -18,8 +18,14 @@ export async function POST(req: NextRequest) {
       direccionEnvio?: Record<string, unknown>;
     };
 
+    // emailAnonimo permite recuperar el carrito por correo si el pago no se completa
     const carrito = await api<{ id: string }>("/tienda", {
-      body: { sessionIdAnonimo: body.sessionIdAnonimo, canal: "web", items: body.items },
+      body: {
+        sessionIdAnonimo: body.sessionIdAnonimo,
+        canal: "web",
+        items: body.items,
+        emailAnonimo: body.emailComprador,
+      },
     });
 
     const checkout = await api<{ folioPublico: string; intentId: string; total: string }>(

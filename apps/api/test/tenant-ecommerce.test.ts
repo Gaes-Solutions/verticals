@@ -442,6 +442,103 @@ describe("gestión pedido + reseña", () => {
   });
 });
 
+describe("carrito abandonado + recovery", () => {
+  let recoveryCodigo: string;
+
+  it("crea carrito con email y lo marca abandonado al correr el ciclo", async () => {
+    const crear = await app.inject({
+      method: "POST",
+      url: "/t/tienda",
+      headers: auth(ownerToken),
+      payload: {
+        sessionIdAnonimo: "sess-abandono-1",
+        canal: "web",
+        emailAnonimo: "olvidadizo@test.mx",
+        items: [{ varianteId, cantidad: 1 }],
+      },
+    });
+    expect(crear.statusCode).toBe(201);
+    const carritoAbandonadoId = crear.json().id as string;
+
+    // umbrales en 0 para no esperar horas reales (configurables por tenant)
+    const correr = await app.inject({
+      method: "POST",
+      url: "/t/tienda/recovery/correr",
+      headers: auth(ownerToken),
+      payload: {
+        minutosInactividad: 0,
+        horasPrimerRecordatorio: 0,
+        urlBaseTienda: "https://tienda.test",
+      },
+    });
+    expect(correr.statusCode).toBe(200);
+    expect(correr.json().marcados).toBeGreaterThanOrEqual(1);
+    expect(correr.json().recordatorios24h).toBeGreaterThanOrEqual(1);
+
+    const carrito = await app.inject({
+      method: "GET",
+      url: `/t/tienda/${carritoAbandonadoId}`,
+      headers: auth(ownerToken),
+    });
+    expect(carrito.json().status).toBe("abandonado");
+    recoveryCodigo = carrito.json().recoveryCodigo;
+    expect(recoveryCodigo).toMatch(/^rec_/);
+
+    const email = emailMock.enviados.find((e) => e.para === "olvidadizo@test.mx");
+    expect(email).toBeDefined();
+    expect(email?.html).toContain(`https://tienda.test/recovery/${recoveryCodigo}`);
+  });
+
+  it("re-correr el ciclo no duplica el primer recordatorio", async () => {
+    const antes = emailMock.enviados.filter((e) => e.para === "olvidadizo@test.mx").length;
+    await app.inject({
+      method: "POST",
+      url: "/t/tienda/recovery/correr",
+      headers: auth(ownerToken),
+      payload: { minutosInactividad: 0, horasPrimerRecordatorio: 0, horasSegundoRecordatorio: 999 },
+    });
+    const despues = emailMock.enviados.filter((e) => e.para === "olvidadizo@test.mx").length;
+    expect(despues).toBe(antes);
+  });
+
+  it("segundo recordatorio sale tras el umbral (y solo una vez)", async () => {
+    const correr = await app.inject({
+      method: "POST",
+      url: "/t/tienda/recovery/correr",
+      headers: auth(ownerToken),
+      payload: { minutosInactividad: 0, horasSegundoRecordatorio: 0 },
+    });
+    expect(correr.json().recordatorios72h).toBeGreaterThanOrEqual(1);
+    const otra = await app.inject({
+      method: "POST",
+      url: "/t/tienda/recovery/correr",
+      headers: auth(ownerToken),
+      payload: { minutosInactividad: 0, horasSegundoRecordatorio: 0 },
+    });
+    expect(otra.json().recordatorios72h).toBe(0);
+  });
+
+  it("GET recovery/:codigo devuelve los items para restaurar", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/t/tienda/recovery/${recoveryCodigo}`,
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json().items as Array<{ varianteId: string }>;
+    expect(items[0]?.varianteId).toBe(varianteId);
+  });
+
+  it("código inexistente → 404", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/tienda/recovery/rec_no-existe-123",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe("wishlist", () => {
   it("crea wishlist y agrega item", async () => {
     const cliente = await app.inject({

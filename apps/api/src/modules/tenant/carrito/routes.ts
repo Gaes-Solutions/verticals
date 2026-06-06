@@ -1,4 +1,7 @@
+import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { z } from "zod";
+import { correrRecoveryCarritos } from "./recovery-service.js";
 import {
   type CatalogoQuery,
   carritoIdParamSchema,
@@ -6,6 +9,13 @@ import {
   catalogoQuerySchema,
 } from "./schemas.js";
 import { CarritoError, calcularCarrito } from "./service.js";
+
+const recoveryCorrerSchema = z.object({
+  minutosInactividad: z.number().int().nonnegative().optional(),
+  horasPrimerRecordatorio: z.number().nonnegative().optional(),
+  horasSegundoRecordatorio: z.number().nonnegative().optional(),
+  urlBaseTienda: z.string().url().optional(),
+});
 
 function handleErr(reply: FastifyReply, err: unknown): boolean {
   if (err instanceof CarritoError) {
@@ -115,6 +125,29 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Carrito no encontrado" });
+    }
+    return carrito;
+  });
+
+  // --- Recuperación de carritos abandonados ---
+  // Ciclo (worker/cron o manual): marca abandonados + manda recordatorios
+  app.post("/recovery/correr", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const body = recoveryCorrerSchema.parse(req.body ?? {});
+    return correrRecoveryCarritos(req.tenantPrisma, app.emailProviderFactory(), body);
+  });
+
+  // El comprador abre el link del email: devuelve los items para restaurar
+  app.get("/recovery/:codigo", async (req, reply) => {
+    const { codigo } = z.object({ codigo: z.string().min(8) }).parse(req.params);
+    const carrito = await req.tenantPrisma.carritoEcommerce.findFirst({
+      where: { recoveryCodigo: codigo, status: "abandonado" },
+      select: { id: true, items: true, subtotal: true },
+    });
+    if (!carrito) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Carrito no disponible" });
     }
     return carrito;
   });
