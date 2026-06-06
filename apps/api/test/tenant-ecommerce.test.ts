@@ -1,5 +1,5 @@
 import { MockEmailProvider } from "@gaespos/email";
-import { MockPaymentProvider } from "@gaespos/pagos";
+import { MockPaymentProvider, StripeClient } from "@gaespos/pagos";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -27,7 +27,12 @@ beforeAll(async () => {
   emailMock = new MockEmailProvider();
   app = await buildTestApp(
     {},
-    { pagoProviderFactory: () => pagoMock, emailProviderFactory: () => emailMock },
+    {
+      // stripe sin keys reproduce el comportamiento del factory default (lanza)
+      pagoProviderFactory: (proveedor) =>
+        proveedor === "stripe" ? new StripeClient({ apiKey: "", webhookSecret: "" }) : pagoMock,
+      emailProviderFactory: () => emailMock,
+    },
   );
   await createTestTenant(TENANT_SLUG, "Tienda Demo");
   await createTenantUser(TENANT_SLUG, {
@@ -242,6 +247,30 @@ describe("envíos: zonas + tarifas + cotizador + pickup", () => {
     const cot = res.json() as { pickup: Array<{ sucursalId: string }> };
     expect(cot.pickup).toHaveLength(1);
     expect(cot.pickup[0]?.sucursalId).toBe(sucursalId);
+  });
+
+  it("proveedor de pago sin configurar → 503 con mensaje claro", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/checkout/iniciar",
+      headers: auth(ownerToken),
+      payload: {
+        carritoId,
+        emailComprador: "comprador@test.mx",
+        metodoPago: "tarjeta",
+        proveedorPago: "stripe",
+        metodoEnvio: "paqueteria",
+        direccionEnvio: {
+          nombre: "Ana",
+          calle: "Reforma",
+          ciudad: "GDL",
+          estado: "Jalisco",
+          cp: "44100",
+        },
+      },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().message).toContain("Stripe");
   });
 
   it("checkout rechaza tarifa que no aplica a la dirección (422)", async () => {

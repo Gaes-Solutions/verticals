@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { PagoError, type PaymentProvider } from "@gaespos/pagos";
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import { iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
 import { CheckoutError, iniciarCheckout, procesarWebhookPago } from "./service.js";
@@ -21,13 +22,37 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
     });
     return true;
   }
+  if (err instanceof PagoError) {
+    const status = err.code === "PROVIDER_UNAVAILABLE" ? 503 : 400;
+    reply.code(status).send({
+      statusCode: status,
+      error: status === 503 ? "Service Unavailable" : "Bad Request",
+      message: err.message,
+    });
+    return true;
+  }
   return false;
+}
+
+/** El constructor del provider valida API keys: sin configurar lanza PagoError. */
+function resolverProvider(
+  app: FastifyInstance,
+  proveedor: "stripe" | "conekta" | "mock",
+  reply: FastifyReply,
+): PaymentProvider | null {
+  try {
+    return app.pagoProviderFactory(proveedor);
+  } catch (err) {
+    if (handleErr(reply, err)) return null;
+    throw err;
+  }
 }
 
 const checkoutRoutes: FastifyPluginAsync = async (app) => {
   app.post("/iniciar", async (req, reply) => {
     const body = iniciarCheckoutSchema.parse(req.body);
-    const provider = app.pagoProviderFactory(body.proveedorPago);
+    const provider = resolverProvider(app, body.proveedorPago, reply);
+    if (!provider) return;
     try {
       const result = await iniciarCheckout(req.tenantPrisma, provider, {
         carritoId: body.carritoId,
@@ -49,7 +74,8 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/webhook", async (req, reply) => {
     const body = webhookSchema.parse(req.body);
-    const provider = app.pagoProviderFactory(body.proveedorPago);
+    const provider = resolverProvider(app, body.proveedorPago, reply);
+    if (!provider) return;
     let evento: ReturnType<typeof provider.parseWebhook>;
     try {
       evento = provider.parseWebhook(body.payload, body.signature);
