@@ -4,13 +4,23 @@ import { z } from "zod";
 import {
   ClientePortalError,
   agregarAWishlist,
+  crearResenaCliente,
   getClienteMe,
+  getComprasResenables,
   getMiWishlist,
   getPedidosCliente,
   loginCliente,
   quitarDeWishlist,
   registrarCliente,
 } from "./service.js";
+
+const crearResenaSchema = z.object({
+  pedidoId: z.string().min(1),
+  productoPublicadoId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  titulo: z.string().max(120).optional(),
+  comentario: z.string().max(2000).optional(),
+});
 
 const registroSchema = z.object({
   tenantSlug: z.string().min(3).max(40),
@@ -132,6 +142,23 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
     try {
       await quitarDeWishlist(getTenantClient(tenantSlug), clienteId, itemId);
       return reply.code(204).send();
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.get("/resenables", async (req) => {
+    const { clienteId, email, tenantSlug } = clienteCtx(req);
+    return getComprasResenables(getTenantClient(tenantSlug), clienteId, email);
+  });
+
+  app.post("/resenas", async (req, reply) => {
+    const { clienteId, email, tenantSlug } = clienteCtx(req);
+    const body = crearResenaSchema.parse(req.body);
+    try {
+      const r = await crearResenaCliente(getTenantClient(tenantSlug), clienteId, email, body);
+      return reply.code(201).send(r);
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;

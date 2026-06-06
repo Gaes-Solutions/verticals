@@ -7,6 +7,7 @@ import { InventarioPage } from "./pages/InventarioPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
+import { ResenasPage } from "./pages/ResenasPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
 import { VentasPage } from "./pages/VentasPage.js";
 
@@ -23,6 +24,7 @@ type Seccion =
   | "ventas"
   | "pedidos"
   | "envios"
+  | "resenas"
   | "tienda";
 
 const NAV: { key: Seccion; label: string; icon: string }[] = [
@@ -33,6 +35,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "ventas", label: "Ventas", icon: "🧾" },
   { key: "pedidos", label: "Pedidos online", icon: "📬" },
   { key: "envios", label: "Envíos", icon: "🚚" },
+  { key: "resenas", label: "Reseñas", icon: "⭐" },
   { key: "tienda", label: "Tienda online", icon: "🛒" },
 ];
 
@@ -101,6 +104,7 @@ export function App() {
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}
         {seccion === "envios" && <EnviosPage />}
+        {seccion === "resenas" && <ResenasPage />}
         {seccion === "tienda" && <TiendaPage />}
       </main>
     </div>

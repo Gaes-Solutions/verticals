@@ -84,6 +84,23 @@ const resenasRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.get("/", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_RESENAS_MODERAR);
+    const q = z
+      .object({ estado: z.enum(["pendiente", "aprobada", "rechazada"]).optional() })
+      .parse(req.query);
+    return req.tenantPrisma.productoResena.findMany({
+      where: q.estado ? { estado: q.estado } : {},
+      include: {
+        productoPublicado: { select: { tituloPublico: true, slugSeo: true } },
+        cliente: { select: { nombre: true } },
+        pedido: { select: { folioPublico: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+  });
+
   app.post("/:id/moderar", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_RESENAS_MODERAR);
     const { id } = idParam.parse(req.params);

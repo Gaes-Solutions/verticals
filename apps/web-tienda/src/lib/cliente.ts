@@ -50,6 +50,15 @@ export interface WishlistItem {
   foto: string | null;
 }
 
+export interface CompraResenable {
+  pedidoId: string;
+  folioPublico: string;
+  productoPublicadoId: string;
+  tituloPublico: string;
+  slugSeo: string;
+  yaResenado: boolean;
+}
+
 /** Proxy al backend para registro/login; el route handler setea la cookie. */
 export async function authClienteBackend(
   accion: "registro" | "login",

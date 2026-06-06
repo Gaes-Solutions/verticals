@@ -214,3 +214,138 @@ export async function quitarDeWishlist(
   }
   await prisma.wishlistItem.delete({ where: { id: itemId } });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reseñas post-compra del cliente
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ESTADOS_RESENABLES = ["entregado", "recogido"] as const;
+
+export interface CompraResenable {
+  pedidoId: string;
+  folioPublico: string;
+  productoPublicadoId: string;
+  tituloPublico: string;
+  slugSeo: string;
+  yaResenado: boolean;
+}
+
+interface ItemSnapshot {
+  varianteId: string;
+}
+
+/** Resuelve los productos publicados de los items snapshot de un pedido. */
+async function productosPublicadosDePedido(
+  prisma: TenantPrismaClient,
+  items: ItemSnapshot[],
+): Promise<Array<{ id: string; tituloPublico: string; slugSeo: string }>> {
+  const varianteIds = [...new Set(items.map((i) => i.varianteId))];
+  if (varianteIds.length === 0) return [];
+  const variantes = await prisma.productoVariante.findMany({
+    where: { id: { in: varianteIds } },
+    select: { productoId: true },
+  });
+  const productoIds = [...new Set(variantes.map((v) => v.productoId))];
+  return prisma.productoPublicado.findMany({
+    where: { productoId: { in: productoIds }, isPublicado: true },
+    select: { id: true, tituloPublico: true, slugSeo: true },
+  });
+}
+
+/** Compras entregadas/recogidas del cliente con sus productos por reseñar. */
+export async function getComprasResenables(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  email: string,
+): Promise<CompraResenable[]> {
+  const pedidos = await prisma.pedidoEcommerce.findMany({
+    where: {
+      OR: [{ clienteId }, { emailComprador: email }],
+      statusPedido: { in: [...ESTADOS_RESENABLES] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { id: true, folioPublico: true, items: true },
+  });
+  const resenas = await prisma.productoResena.findMany({
+    where: { pedidoId: { in: pedidos.map((p) => p.id) } },
+    select: { pedidoId: true, productoPublicadoId: true },
+  });
+  const resenadas = new Set(resenas.map((r) => `${r.pedidoId}:${r.productoPublicadoId}`));
+
+  const resultado: CompraResenable[] = [];
+  for (const pedido of pedidos) {
+    const publicados = await productosPublicadosDePedido(
+      prisma,
+      pedido.items as unknown as ItemSnapshot[],
+    );
+    for (const pub of publicados) {
+      resultado.push({
+        pedidoId: pedido.id,
+        folioPublico: pedido.folioPublico,
+        productoPublicadoId: pub.id,
+        tituloPublico: pub.tituloPublico,
+        slugSeo: pub.slugSeo,
+        yaResenado: resenadas.has(`${pedido.id}:${pub.id}`),
+      });
+    }
+  }
+  return resultado;
+}
+
+export interface CrearResenaClienteInput {
+  pedidoId: string;
+  productoPublicadoId: string;
+  rating: number;
+  titulo?: string | undefined;
+  comentario?: string | undefined;
+}
+
+/**
+ * Reseña verificada por compra: el pedido debe ser del cliente (id o email),
+ * estar entregado/recogido y el producto pertenecer al pedido.
+ */
+export async function crearResenaCliente(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  email: string,
+  input: CrearResenaClienteInput,
+): Promise<{ resenaId: string; estado: string }> {
+  const pedido = await prisma.pedidoEcommerce.findUnique({
+    where: { id: input.pedidoId },
+    select: { id: true, clienteId: true, emailComprador: true, statusPedido: true, items: true },
+  });
+  if (!pedido || (pedido.clienteId !== clienteId && pedido.emailComprador !== email)) {
+    throw new ClientePortalError(404, "Pedido no encontrado");
+  }
+  if (!ESTADOS_RESENABLES.includes(pedido.statusPedido as (typeof ESTADOS_RESENABLES)[number])) {
+    throw new ClientePortalError(409, "Solo puedes reseñar pedidos entregados o recogidos");
+  }
+  const publicados = await productosPublicadosDePedido(
+    prisma,
+    pedido.items as unknown as ItemSnapshot[],
+  );
+  if (!publicados.some((p) => p.id === input.productoPublicadoId)) {
+    throw new ClientePortalError(422, "El producto no pertenece a este pedido");
+  }
+  const existente = await prisma.productoResena.findFirst({
+    where: { pedidoId: input.pedidoId, productoPublicadoId: input.productoPublicadoId },
+  });
+  if (existente) {
+    throw new ClientePortalError(409, "Ya reseñaste este producto de este pedido");
+  }
+  const resena = await prisma.productoResena.create({
+    data: {
+      productoPublicadoId: input.productoPublicadoId,
+      pedidoId: input.pedidoId,
+      clienteId,
+      rating: input.rating,
+      ...(input.titulo ? { titulo: input.titulo } : {}),
+      ...(input.comentario ? { comentario: input.comentario } : {}),
+      // con comentario pasa a moderación; sin comentario (solo estrellas) se aprueba
+      estado: input.comentario ? "pendiente" : "aprobada",
+      verificadaPorCompra: true,
+    },
+  });
+  return { resenaId: resena.id, estado: resena.estado };
+}

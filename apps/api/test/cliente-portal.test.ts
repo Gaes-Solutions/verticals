@@ -198,3 +198,103 @@ describe("wishlist del cliente", () => {
     expect((res.json() as unknown[]).length).toBe(0);
   });
 });
+
+describe("reseñas del cliente (verificadas por compra)", () => {
+  let pedidoEntregadoId: string;
+  let pubId: string;
+
+  it("setup: pedido entregado con el producto publicado", async () => {
+    const prisma = getTenantClient(TENANT_SLUG);
+    const variante = await prisma.productoVariante.findFirstOrThrow({
+      where: { sku: "WL-001-V" },
+    });
+    const pub = await prisma.productoPublicado.findUniqueOrThrow({
+      where: { slugSeo: "producto-wishlist" },
+    });
+    pubId = pub.id;
+    const pedido = await prisma.pedidoEcommerce.create({
+      data: {
+        folioPublico: `GP-RES${Date.now().toString().slice(-5)}`,
+        clienteId,
+        emailComprador: EMAIL,
+        items: [
+          {
+            varianteId: variante.id,
+            cantidad: "1",
+            nombre: "Producto Wishlist",
+            precioUnitario: "99",
+            subtotal: "99",
+          },
+        ],
+        subtotal: "99",
+        total: "99",
+        moneda: "MXN",
+        metodoEnvio: "paqueteria",
+        statusPedido: "entregado",
+        statusPago: "pago_confirmado",
+      },
+    });
+    pedidoEntregadoId = pedido.id;
+    expect(pedidoEntregadoId).toBeTruthy();
+  });
+
+  it("GET /resenables lista el producto del pedido entregado", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/resenables",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{ productoPublicadoId: string; yaResenado: boolean }>;
+    const item = items.find((i) => i.productoPublicadoId === pubId);
+    expect(item).toBeDefined();
+    expect(item?.yaResenado).toBe(false);
+  });
+
+  it("POST /resenas crea reseña con comentario → pendiente de moderación", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/resenas",
+      headers: { authorization: `Bearer ${clienteToken}` },
+      payload: {
+        pedidoId: pedidoEntregadoId,
+        productoPublicadoId: pubId,
+        rating: 5,
+        titulo: "Excelente",
+        comentario: "Muy buen producto, llegó rápido",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().estado).toBe("pendiente");
+  });
+
+  it("reseña duplicada del mismo producto/pedido → 409", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/resenas",
+      headers: { authorization: `Bearer ${clienteToken}` },
+      payload: { pedidoId: pedidoEntregadoId, productoPublicadoId: pubId, rating: 4 },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("resenables ahora marca yaResenado", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/resenables",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    const items = res.json() as Array<{ productoPublicadoId: string; yaResenado: boolean }>;
+    expect(items.find((i) => i.productoPublicadoId === pubId)?.yaResenado).toBe(true);
+  });
+
+  it("pedido ajeno → 404", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/resenas",
+      headers: { authorization: `Bearer ${clienteToken}` },
+      payload: { pedidoId: "ped-de-otro", productoPublicadoId: pubId, rating: 5 },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

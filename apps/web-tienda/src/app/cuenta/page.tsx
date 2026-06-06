@@ -1,7 +1,9 @@
 import { LogoutBoton } from "@/components/logout-boton";
+import { ResenasCuenta } from "@/components/resenas-cuenta";
 import { WishlistCuenta } from "@/components/wishlist-cuenta";
 import {
   type ClienteMe,
+  type CompraResenable,
   type PedidoCliente,
   type WishlistItem,
   clienteApi,
@@ -27,11 +29,13 @@ export default async function CuentaPage() {
   let me: ClienteMe;
   let pedidos: PedidoCliente[];
   let wishlist: WishlistItem[];
+  let resenables: CompraResenable[];
   try {
-    [me, pedidos, wishlist] = await Promise.all([
+    [me, pedidos, wishlist, resenables] = await Promise.all([
       clienteApi<ClienteMe>("/cliente-portal/me"),
       clienteApi<PedidoCliente[]>("/cliente-portal/pedidos"),
       clienteApi<WishlistItem[]>("/cliente-portal/wishlist"),
+      clienteApi<CompraResenable[]>("/cliente-portal/resenables"),
     ]);
   } catch {
     // token expirado o inválido → re-login
@@ -93,6 +97,9 @@ export default async function CuentaPage() {
           </table>
         </div>
       )}
+
+      <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>
+      <ResenasCuenta inicial={resenables} />
 
       <h2 className="mt-10 mb-4 text-lg font-bold">Mi lista de deseos</h2>
       <WishlistCuenta inicial={wishlist} />
