@@ -6,7 +6,7 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hitos 1-6 (tags `hito-3-verticales-v1`, `hito-4-digital-v1`, `hito-6-saas-v1`) · 🏷️ **TAG `retail-v1` (2026-06-05)**: VERTICAL RETAIL COMPLETO punta a punta — web-admin (dueño) + web-pos (cajero) + web-tienda (cliente) con envíos+click&collect, gestión de pedidos, emails transaccionales Resend, carrito abandonado+recovery, Stripe/Conekta reales, reseñas post-compra con moderación y SEO completo. Suite 538 verde.
+- **Fase**: 🎉 Hitos 1-6 · 🏷️ tag `retail-v1` (vertical Retail completo) · 🏢 **VERTICAL B2B MAYOREO punta a punta (2026-06-06)**: web-b2b (portal autoservicio del cliente mayorista) sobre backend B2B que ya existía (clientes-b2b, cotizaciones, pedidos, CxC, listas de precios). Suite 554 verde.
 - **👤 cuenta cliente B2C (2026-05-28, wishlist 2026-06-05)**: passwordHash en Cliente + auth `/auth/cliente/{registro,login}` (JWT kind `cliente`, resuelve tenant del token) + `/cliente-portal/{me,pedidos,wishlist}` (pedidos por clienteId O email guest). Frontend web-tienda: cookie httpOnly + páginas /cuenta/{login,registro} + /cuenta (mis pedidos + **mi lista de deseos** con quitar) + botón **♡ Guardar** en producto (401→login) + **prefill email/nombre en checkout** si hay sesión. 13 tests backend + smoke E2E verde. Ya NO hay diferidos de la cuenta cliente.
 - **🖥️ web-admin (2026-05-28)**: back-office del negocio (SPA Vite+React+Tailwind, login dueño/gerente). 6 secciones: **Resumen** (ventas hoy + alertas bajo stock), **Reportes** (periodo 7/30/90d: gráfica barras por día SVG, ticket promedio, IVA, top productos, por canal), **Productos** (CRUD), **Inventario** (ver + ajustar), **Ventas** (filtros + detalle), **Tienda online** (config + publicar). Backend: módulo `tenant/reportes` (GET /t/reportes/resumen?dias=N, agregación Prisma, 5 tests). Conecta a la API real. Build verde (web-admin 224kB). **PROBAR**: `pnpm --filter @gaespos/web-admin dev` → http://localhost:5174 (guía en `apps/web-admin/README.md`).
 - **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → **descuento global** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort**; **corte de caja X/Z** + **devoluciones** (busca folio → devuelve parcial/total, repone stock) desde el header. Conecta a la API real. Verificado con smoke tests curl (venta+descuento, devolución parcial+stock, corte X/Z diferencia, cliente). Build verde (225kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
@@ -99,6 +99,28 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-06-06 — 🏢 Portal B2B Mayorista (web-b2b) punta a punta
+Vertical mayoreo completada: el backend B2B ya existía (clientes-b2b CRUD,
+cotizaciones quote→pedido→venta, CxC + línea de crédito, listas de precios +
+motor cascada, 56 tests). Faltaba el portal del cliente. Un commit por bloque:
+- **B1 Usuarios + auth** (`69d1c20`): modelo `ClienteB2bUsuario` (rol admin|comprador,
+  migración `add_cliente_b2b_usuarios`), alta por el tenant en
+  `POST /t/clientes-b2b/:id/usuarios` (sin self-signup), JWT kind `cliente_b2b`
+  + `authenticateClienteB2b` + `POST /auth/cliente-b2b/login`.
+- **B2 Backend portal** (mismo commit): módulo `b2b-portal` (fuera de /t, resuelve
+  tenant del token): `/me` (empresa+crédito), `/catalogo` con precios del cliente
+  (lista por prioridad→principal→base), cotizaciones ver+aceptar/rechazar (firma
+  real con ownership), pedidos lista/detalle/crear autoservicio (lista resuelta,
+  vendedor principal asignado, gate de aprobación interna, OC obligatoria si
+  aplica), `/estado-cuenta` y `/direcciones`. 16 tests.
+- **B3 web-b2b SPA** (azul, puerto 5175): Login → Dashboard (crédito + pendientes)
+  → Catálogo "mis precios" + carrito local → Mi pedido (OC/dirección/notas) →
+  Mis pedidos (estado + rastreo) → Cotizaciones (aceptar/rechazar) → Estado de
+  cuenta. typecheck + build verde.
+- Smoke E2E vs API viva (`tienda-demo`): alta usuario → login portal → /me con
+  crédito $30k → catálogo → pedido PD-… → estado de cuenta. **Pendiente NO-código**:
+  el tenant da de alta a los usuarios del portal (no hay self-signup B2B por diseño).
 
 ### 2026-06-05 — 🛒 Tienda online completa: los 8 bloques que faltaban para producción
 Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
