@@ -41,6 +41,7 @@ Este archivo se carga automáticamente en cada sesión que abra Claude Code en e
 - **Trunk-based**: main siempre deployable, feature branches cortas
 - **PRs review obligatorio**, incluso solo de Gaby al inicio (mantener disciplina)
 - **SIEMPRE responsive** — todo frontend debe verse y funcionar bien en celular (≥360px), tablet y desktop. Validar SIEMPRE el contenido en móvil antes de cerrar una pantalla: sin scroll horizontal accidental, sidebars colapsables (drawer/hamburguesa en móvil), tablas en `overflow-x-auto`, grids con breakpoints (`grid-cols-1 sm: md: lg:`), targets táctiles ≥40px. Mobile-first con Tailwind: base = móvil, `sm:`/`md:`/`lg:` agrandan. Un layout que solo se ve bien en desktop NO está terminado.
+- **ESTÁNDAR VISUAL obligatorio** — antes de crear UI, leer [`docs/design-system.md`](docs/design-system.md) y reusar los tokens (`packages/ui/tailwind-preset.cjs`) y las clases de componentes `gx-*` (`packages/ui/components.css`). NO inventar colores a mano (solo acento `brand`/`marca`, estados `ok/danger/warn/info`, neutros `slate`); NO reescribir botones/inputs/tablas/modales que ya existen como `gx-*`. Cada app comparte TODO menos su color de acento.
 
 ## Performance budgets (no negociables)
 - Búsqueda producto POS: <100ms P95
@@ -57,6 +58,7 @@ Este archivo se carga automáticamente en cada sesión que abra Claude Code en e
 2. `STATUS.md` — checkpoint vivo: hito actual, tarea, próximo paso
 3. `docs/hitos/hito-N-*.md` — scope y checklist del hito en curso
 4. `docs/decisiones-pendientes.md` — bloqueos esperando decisión
+5. `docs/design-system.md` — estándar visual (SIEMPRE antes de tocar UI)
 
 **Al terminar tarea o sesión:**
 1. Actualizar `STATUS.md` con progreso real

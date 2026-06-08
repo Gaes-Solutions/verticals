@@ -1,13 +1,8 @@
+import gaesPreset from "@gaespos/ui/tailwind-preset";
 import type { Config } from "tailwindcss";
 
+// `marca` (teal) viene del preset compartido. Ver docs/design-system.md.
 export default {
+  presets: [gaesPreset],
   content: ["./src/**/*.{ts,tsx}"],
-  theme: {
-    extend: {
-      colors: {
-        marca: { DEFAULT: "#0f766e", dark: "#115e59" },
-      },
-    },
-  },
-  plugins: [],
 } satisfies Config;

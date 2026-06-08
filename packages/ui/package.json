@@ -1,0 +1,12 @@
+{
+  "name": "@gaespos/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tokens y estándar visual compartido (preset Tailwind + clases de componentes) para todas las apps GaesSoft.",
+  "exports": {
+    "./tailwind-preset": "./tailwind-preset.cjs",
+    "./components.css": "./components.css"
+  },
+  "files": ["tailwind-preset.cjs", "components.css"]
+}

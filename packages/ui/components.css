@@ -1,0 +1,78 @@
+/**
+ * Clases de componentes del estándar GaesSoft. Cada app importa este archivo
+ * en su CSS de entrada (después de las directivas @tailwind). Las clases usan
+ * @apply, así que se generan con el Tailwind de cada app y respetan su acento
+ * `brand`. Prefijo `gx-` para no chocar con utilidades.
+ *
+ * Ver docs/design-system.md.
+ */
+@layer components {
+  /* Botones */
+  .gx-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .gx-btn-primary {
+    @apply gx-btn bg-brand text-white hover:bg-brand-dark;
+  }
+  .gx-btn-secondary {
+    @apply gx-btn border border-brand text-brand hover:bg-brand-light;
+  }
+  .gx-btn-ghost {
+    @apply gx-btn text-slate-600 hover:bg-slate-100;
+  }
+  .gx-btn-danger {
+    @apply gx-btn border border-danger/40 text-danger hover:bg-danger-light;
+  }
+
+  /* Formularios */
+  .gx-input {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none;
+  }
+  .gx-label {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+
+  /* Contenedores */
+  .gx-card {
+    @apply rounded-xl bg-white p-5 shadow-card;
+  }
+
+  /* Tabla: SIEMPRE con scroll horizontal en móvil */
+  .gx-table-wrap {
+    @apply overflow-x-auto rounded-xl bg-white shadow-card;
+  }
+  .gx-table {
+    @apply w-full min-w-[640px] text-sm;
+  }
+  .gx-th {
+    @apply bg-slate-50 px-4 py-2 text-left font-medium text-slate-500;
+  }
+  .gx-td {
+    @apply border-t border-slate-100 px-4 py-2;
+  }
+
+  /* Badges de estado */
+  .gx-badge {
+    @apply inline-block rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .gx-badge-ok {
+    @apply gx-badge bg-ok-light text-ok;
+  }
+  .gx-badge-warn {
+    @apply gx-badge bg-warn-light text-warn;
+  }
+  .gx-badge-danger {
+    @apply gx-badge bg-danger-light text-danger;
+  }
+  .gx-badge-info {
+    @apply gx-badge bg-info-light text-info;
+  }
+
+  /* Modal */
+  .gx-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4;
+  }
+  .gx-modal-panel {
+    @apply max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6;
+  }
+}
