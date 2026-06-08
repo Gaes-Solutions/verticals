@@ -82,7 +82,7 @@ export function ReportesPage() {
               {data.topProductos.length === 0 ? (
                 <p className="text-sm text-slate-400">Sin ventas en el periodo.</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead className="text-left text-slate-500">
                     <tr>
                       <th className="pb-2">Producto</th>

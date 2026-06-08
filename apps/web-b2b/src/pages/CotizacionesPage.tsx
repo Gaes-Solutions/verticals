@@ -54,8 +54,8 @@ export function CotizacionesPage() {
     <div className="max-w-4xl">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Cotizaciones</h1>
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">Folio</th>
@@ -115,7 +115,7 @@ export function CotizacionesPage() {
                 ✕
               </button>
             </div>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <tbody>
                 {detalle.lineas.map((l) => (
                   <tr key={l.id} className="border-t border-slate-100">

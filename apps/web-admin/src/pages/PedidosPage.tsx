@@ -99,8 +99,8 @@ export function PedidosPage() {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">Folio</th>

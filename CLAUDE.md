@@ -40,6 +40,7 @@ Este archivo se carga automáticamente en cada sesión que abra Claude Code en e
 - **Conventional commits** + commitlint
 - **Trunk-based**: main siempre deployable, feature branches cortas
 - **PRs review obligatorio**, incluso solo de Gaby al inicio (mantener disciplina)
+- **SIEMPRE responsive** — todo frontend debe verse y funcionar bien en celular (≥360px), tablet y desktop. Validar SIEMPRE el contenido en móvil antes de cerrar una pantalla: sin scroll horizontal accidental, sidebars colapsables (drawer/hamburguesa en móvil), tablas en `overflow-x-auto`, grids con breakpoints (`grid-cols-1 sm: md: lg:`), targets táctiles ≥40px. Mobile-first con Tailwind: base = móvil, `sm:`/`md:`/`lg:` agrandan. Un layout que solo se ve bien en desktop NO está terminado.
 
 ## Performance budgets (no negociables)
 - Búsqueda producto POS: <100ms P95

@@ -167,16 +167,16 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between bg-brand px-4 py-3 text-white">
+      <header className="flex flex-wrap items-center justify-between gap-2 bg-brand px-4 py-3 text-white">
         <div>
           <span className="font-bold">GaesSoft POS</span>
-          <span className="ml-3 text-sm text-teal-100">
+          <span className="ml-2 block text-xs text-teal-100 sm:ml-3 sm:inline sm:text-sm">
             {session.sucursal.nombre}
             {session.caja ? ` · ${session.caja.codigo}` : " · sin caja"}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-teal-100">{session.cajeroNombre}</span>
+        <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
+          <span className="hidden text-teal-100 sm:inline">{session.cajeroNombre}</span>
           <button
             type="button"
             onClick={() => setModalDevolucion(true)}
@@ -199,9 +199,9 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Izquierda: búsqueda + resultados */}
-        <div className="flex w-1/2 flex-col border-r border-slate-200 p-4">
+        <div className="flex min-h-[40vh] w-full flex-col border-b border-slate-200 p-4 md:min-h-0 md:w-1/2 md:border-b-0 md:border-r">
           <input
             ref={searchRef}
             value={query}
@@ -240,7 +240,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
 
         {/* Derecha: ticket */}
-        <div className="flex w-1/2 flex-col p-4">
+        <div className="flex w-full flex-col p-4 md:w-1/2">
           {ultimaVenta ? (
             <TicketResultado
               session={session}

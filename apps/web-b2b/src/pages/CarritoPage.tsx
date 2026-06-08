@@ -68,8 +68,8 @@ export function CarritoPage({ onPedidoCreado }: { onPedidoCreado: () => void }) 
   return (
     <div className="max-w-3xl">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Mi pedido</h1>
-      <div className="mb-4 overflow-hidden rounded-xl bg-white shadow-sm">
-        <table className="w-full text-sm">
+      <div className="mb-4 overflow-x-auto rounded-xl bg-white shadow-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">Producto</th>
