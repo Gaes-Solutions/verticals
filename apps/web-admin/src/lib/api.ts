@@ -48,6 +48,12 @@ export async function api<T = unknown>(
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
+    // token expirado/ inválido en una llamada autenticada → cerrar sesión y
+    // volver al login en vez de dejar la app en blanco.
+    if (res.status === 401 && opts.auth !== false && loadToken()) {
+      setToken(null);
+      window.location.reload();
+    }
     const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
     throw new ApiError(res.status, message);
   }

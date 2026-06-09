@@ -3,8 +3,27 @@ import type { AdminSession } from "../App.js";
 import { ApiError, api, setToken } from "../lib/api.js";
 import type { LoginResponse } from "../lib/types.js";
 
+const SLUG_KEY = "gaespos_admin_slug";
+
+/**
+ * En producción cada negocio entra por su subdominio (negocio.gaessoft.mx) y el
+ * slug sale de ahí: el login solo pide correo + contraseña. En localhost / IP /
+ * dominio base no hay subdominio, así que se muestra el campo (prellenado con el
+ * último negocio usado).
+ */
+function tenantDeSubdominio(): string | null {
+  const host = window.location.hostname;
+  if (host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
+  const parts = host.split(".");
+  if (parts.length < 3) return null;
+  const sub = parts[0];
+  if (!sub || ["www", "admin", "app"].includes(sub)) return null;
+  return sub;
+}
+
 export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
-  const [tenantSlug, setTenantSlug] = useState("");
+  const slugFijo = tenantDeSubdominio();
+  const [tenantSlug, setTenantSlug] = useState(slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +39,7 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
         body: { tenantSlug, email, password },
       });
       setToken(res.accessToken);
+      localStorage.setItem(SLUG_KEY, res.tenant.slug); // recordar para la próxima
       onLogin({ nombre: res.user.nombre, tenantSlug: res.tenant.slug });
     } catch (err) {
       setToken(null);
@@ -41,17 +61,23 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
         <h1 className="mb-1 text-2xl font-bold text-brand">GaesSoft Admin</h1>
         <p className="mb-6 text-sm text-slate-500">Panel de tu negocio</p>
 
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Negocio (slug)</span>
-          <input
-            value={tenantSlug}
-            onChange={(e) => setTenantSlug(e.target.value)}
-            autoCapitalize="none"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
-            placeholder="mi-negocio"
-            required
-          />
-        </label>
+        {slugFijo ? (
+          <p className="mb-4 rounded-lg bg-brand/5 px-3 py-2 text-sm text-slate-600">
+            Negocio: <span className="font-semibold text-brand">{slugFijo}</span>
+          </p>
+        ) : (
+          <label className="mb-3 block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Negocio (slug)</span>
+            <input
+              value={tenantSlug}
+              onChange={(e) => setTenantSlug(e.target.value)}
+              autoCapitalize="none"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              placeholder="mi-negocio"
+              required
+            />
+          </label>
+        )}
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-medium text-slate-700">Correo</span>
           <input
