@@ -102,7 +102,7 @@ const ordenesCompraRoutes: FastifyPluginAsync = async (app) => {
     const { id } = ocIdParamSchema.parse(req.params);
     const body = ocRecibirSchema.parse(req.body);
     try {
-      const result = await recibirOc(req.tenantPrisma, id, body);
+      const result = await recibirOc(req.tenantPrisma, id, req.principal.userId, body);
       return reply.code(200).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;

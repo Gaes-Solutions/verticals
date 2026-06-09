@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { loadToken, setToken } from "./lib/api.js";
+import { ComprasPage } from "./pages/ComprasPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
@@ -28,6 +29,7 @@ type Seccion =
   | "envios"
   | "resenas"
   | "importador"
+  | "compras"
   | "usuarios"
   | "tienda";
 
@@ -37,6 +39,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "productos", label: "Productos", icon: "📦" },
   { key: "inventario", label: "Inventario", icon: "🏷️" },
   { key: "importador", label: "Carga masiva", icon: "⬆️" },
+  { key: "compras", label: "Compras (OC)", icon: "🧾" },
   { key: "ventas", label: "Ventas", icon: "🧾" },
   { key: "pedidos", label: "Pedidos online", icon: "📬" },
   { key: "envios", label: "Envíos", icon: "🚚" },
@@ -141,6 +144,7 @@ export function App() {
         {seccion === "productos" && <ProductosPage />}
         {seccion === "inventario" && <InventarioPage />}
         {seccion === "importador" && <ImportadorPage />}
+        {seccion === "compras" && <ComprasPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}

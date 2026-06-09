@@ -95,9 +95,75 @@ export async function autorizarOc(
   });
 }
 
+/**
+ * Mete al inventario lo recibido de una línea con producto: suma stock en la
+ * sucursal de la OC (movimiento tipo `compra`) y actualiza el costo de la
+ * variante default — último (= precio de compra) y promedio ponderado contra
+ * el stock total previo de la variante.
+ */
+async function recibirEnInventario(
+  tx: Tx,
+  productoId: string,
+  sucursalId: string,
+  cantidad: Decimal,
+  costoUnitario: Decimal,
+  usuarioId: string,
+): Promise<void> {
+  const variante = await tx.productoVariante.findFirst({
+    where: { productoId, isDefault: true },
+    select: { id: true, costoPromedio: true },
+  });
+  if (!variante) return; // producto sin variante default → no afecta stock
+
+  await tx.inventarioSucursal.upsert({
+    where: { varianteId_sucursalId: { varianteId: variante.id, sucursalId } },
+    create: {
+      varianteId: variante.id,
+      sucursalId,
+      stockActual: cantidad.toString(),
+      stockReservado: "0",
+      stockMinimo: "0",
+    },
+    update: { stockActual: { increment: cantidad.toString() } },
+  });
+
+  await tx.inventarioMovimiento.create({
+    data: {
+      varianteId: variante.id,
+      sucursalId,
+      tipo: "compra",
+      cantidad: cantidad.toString(),
+      costoUnitario: costoUnitario.toString(),
+      motivo: "Recepción de orden de compra",
+      usuarioId,
+    },
+  });
+
+  // promedio ponderado contra el stock total previo de la variante
+  const agg = await tx.inventarioSucursal.aggregate({
+    where: { varianteId: variante.id },
+    _sum: { stockActual: true },
+  });
+  const stockTotalNuevo = new Decimal(agg._sum.stockActual?.toString() ?? cantidad.toString());
+  const stockPrevio = stockTotalNuevo.minus(cantidad);
+  const promedioPrevio = new Decimal(variante.costoPromedio.toString());
+  const nuevoPromedio = stockPrevio.gt(0)
+    ? stockPrevio
+        .mul(promedioPrevio)
+        .plus(cantidad.mul(costoUnitario))
+        .div(stockPrevio.plus(cantidad))
+    : costoUnitario;
+
+  await tx.productoVariante.update({
+    where: { id: variante.id },
+    data: { costoUltimo: costoUnitario.toString(), costoPromedio: nuevoPromedio.toFixed(4) },
+  });
+}
+
 export async function recibirOc(
   client: TenantClient,
   id: string,
+  usuarioId: string,
   input: OcRecibirInput,
 ): Promise<{ estado: "recibida_parcial" | "recibida_total" }> {
   return client.$transaction(async (tx) => {
@@ -131,6 +197,17 @@ export async function recibirOc(
         where: { id: linea.id },
         data: { cantidadRecibida: totalRecibida.toString() },
       });
+      // suma al inventario + actualiza costo (solo líneas ligadas a un producto)
+      if (linea.productoId && ahora.gt(0)) {
+        await recibirEnInventario(
+          tx,
+          linea.productoId,
+          oc.sucursalId,
+          ahora,
+          new Decimal(linea.precioUnitario.toString()),
+          usuarioId,
+        );
+      }
     }
     const lineasActualizadas = await tx.ordenCompraLinea.findMany({
       where: { ordenCompraId: id },
