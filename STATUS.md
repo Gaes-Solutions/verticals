@@ -100,6 +100,15 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 
 ## 📜 Bitácora de sesiones
 
+### 2026-06-09 — 🧰 Admin power features + Claude in Chrome + gating de permisos
+Sesión larga con `claude --chrome` conectado (verificación visual real en el navegador). Commits:
+- **👥 Usuarios y roles** (`edde347`): pantalla web-admin (alta de cajeros, asignar roles, reset password, activar/desactivar; editor de roles con permisos granulares por categoría). Endpoint `/t/roles/catalogo-permisos` **filtrado por vertical** del tenant (retail no ve clínica/Doctoralia). Paridad Eleventa.
+- **⬆️ Carga masiva ampliada** (`7e7943d`): + Costo + Stock inicial; **columnas configurables/obligatorias por el dueño** (singleton ConfigImportacionProductos, GET/PUT import-config, validación server-side).
+- **🔑 Login UX en las 4 apps** (`00b531d`,`5696869`): slug por subdominio en prod (oculto), recuerda negocio en localhost, auto-logout al 401 (antes se quedaba en blanco).
+- **🧾 Órdenes de compra** (`88a0412`): UI web-admin (alta proveedor inline + líneas, autorizar/recibir parcial-total/cancelar). **FIX backend**: recibir ahora SÍ entra stock al inventario (movimiento `compra`) y actualiza costo (último + promedio ponderado). 6 tests.
+- **🔒 Gating por permisos en POS** (`5b291e2`): la UI oculta lo que el rol no puede (crear cliente / devolución / corte) — antes mostraba botones que reventaban con 403. Regla agregada a CLAUDE.md. (Detectado por Gaby probando como cajero.)
+- También: fix permisos cajero preset (sucursales.leer/cajas.leer para el POS). Suite **571 verde**.
+
 ### 2026-06-06 — ⬆️ Carga masiva (Excel/CSV) de productos, precios e inventario
 Hueco grande para reemplazar Eleventa: antes todo era uno-por-uno. Patrón Shopify
 (subir → preview validado → confirmar → reporte fila-por-fila):
