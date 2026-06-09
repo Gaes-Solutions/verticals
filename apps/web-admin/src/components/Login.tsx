@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import type { AdminSession } from "../App.js";
-import { ApiError, api, setToken } from "../lib/api.js";
+import { ApiError, api, setPermisos, setToken, setUserId } from "../lib/api.js";
 import type { LoginResponse } from "../lib/types.js";
 
 const SLUG_KEY = "gaespos_admin_slug";
@@ -39,6 +39,8 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
         body: { tenantSlug, email, password },
       });
       setToken(res.accessToken);
+      setPermisos(res.user.permissions);
+      setUserId(res.user.id);
       localStorage.setItem(SLUG_KEY, res.tenant.slug); // recordar para la próxima
       onLogin({ nombre: res.user.nombre, tenantSlug: res.tenant.slug });
     } catch (err) {

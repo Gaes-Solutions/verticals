@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient, masterPrisma } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
+import { etiquetasDe, flujoDe, labelDe } from "../tenant/pedidos-ecommerce/estados.js";
 
 export class ClientePortalError extends Error {
   constructor(
@@ -111,19 +112,97 @@ export async function getPedidosCliente(
   clienteId: string,
   email: string,
 ): Promise<unknown[]> {
-  return prisma.pedidoEcommerce.findMany({
-    where: { OR: [{ clienteId }, { emailComprador: email }] },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      folioPublico: true,
-      total: true,
-      statusPedido: true,
-      statusPago: true,
-      createdAt: true,
-    },
-  });
+  const [pedidos, etiquetas] = await Promise.all([
+    prisma.pedidoEcommerce.findMany({
+      where: { OR: [{ clienteId }, { emailComprador: email }] },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        folioPublico: true,
+        total: true,
+        statusPedido: true,
+        statusPago: true,
+        metodoEnvio: true,
+        createdAt: true,
+      },
+    }),
+    etiquetasDe(prisma),
+  ]);
+  return pedidos.map((p) => ({ ...p, statusLabel: labelDe(etiquetas, p.statusPedido) }));
+}
+
+/**
+ * Detalle de un pedido del cliente con timeline estilo Mercado Libre: hitos del
+ * flujo (según método de entrega) marcados como completados con su fecha, más
+ * el historial de eventos visibles al cliente.
+ */
+export async function getPedidoClienteDetalle(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  email: string,
+  folio: string,
+): Promise<unknown> {
+  const [pedido, etiquetas] = await Promise.all([
+    prisma.pedidoEcommerce.findUnique({
+      where: { folioPublico: folio },
+      include: {
+        eventos: { where: { visibleCliente: true }, orderBy: { createdAt: "asc" } },
+      },
+    }),
+    etiquetasDe(prisma),
+  ]);
+  if (!pedido || (pedido.clienteId !== clienteId && pedido.emailComprador !== email)) {
+    throw new ClientePortalError(404, "Pedido no encontrado");
+  }
+
+  const cancelado = pedido.statusPedido === "cancelado";
+  const flujo = flujoDe(pedido.metodoEnvio);
+  // Fecha alcanzada de cada hito: primer evento estado_<hito> visible.
+  const fechaPorEstado = new Map<string, Date>();
+  for (const ev of pedido.eventos) {
+    const m = /^estado_(.+)$/.exec(ev.tipo) ?? /^(pedido_recibido|pago_confirmado)$/.exec(ev.tipo);
+    const estado =
+      ev.tipo === "pedido_recibido"
+        ? "recibido"
+        : ev.tipo === "pago_confirmado"
+          ? "pago_confirmado"
+          : m
+            ? m[1]
+            : null;
+    if (estado && !fechaPorEstado.has(estado)) fechaPorEstado.set(estado, ev.createdAt);
+  }
+  const idxActual = flujo.indexOf(pedido.statusPedido as (typeof flujo)[number]);
+  const hitos = flujo.map((estado, i) => ({
+    estado,
+    label: labelDe(etiquetas, estado),
+    completado: !cancelado && idxActual >= 0 && i <= idxActual,
+    actual: estado === pedido.statusPedido,
+    fecha: fechaPorEstado.get(estado) ?? null,
+  }));
+
+  return {
+    folioPublico: pedido.folioPublico,
+    statusPedido: pedido.statusPedido,
+    statusLabel: labelDe(etiquetas, pedido.statusPedido),
+    metodoEnvio: pedido.metodoEnvio,
+    cancelado,
+    canceladoMotivo: pedido.canceladoMotivo,
+    total: pedido.total,
+    subtotal: pedido.subtotal,
+    costoEnvio: pedido.costoEnvio,
+    items: pedido.items,
+    direccionEnvio: pedido.direccionEnvio,
+    guiaTracking: pedido.guiaTracking,
+    paqueteria: pedido.paqueteria,
+    createdAt: pedido.createdAt,
+    hitos,
+    eventos: pedido.eventos.map((e) => ({
+      tipo: e.tipo,
+      descripcion: e.descripcion,
+      fecha: e.createdAt,
+    })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, getUserId, puede } from "../lib/api.js";
+
+interface UsuarioRef {
+  id: string;
+  nombre: string;
+}
 
 interface PedidoRow {
   id: string;
   folioPublico: string;
   emailComprador: string;
   cliente: { nombre: string } | null;
+  asignadoA: UsuarioRef | null;
   metodoEnvio: string;
   statusPedido: string;
+  statusLabel: string;
   statusPago: string;
   total: string;
   createdAt: string;
@@ -25,17 +32,11 @@ interface PedidoDetalle extends PedidoRow {
   ventaGenerada: { folio: string } | null;
 }
 
-const ESTADOS: Record<string, string> = {
-  recibido: "Recibido",
-  pago_confirmado: "Pago confirmado",
-  preparando: "Preparando",
-  listo_pickup: "Listo para recoger",
-  enviado: "Enviado",
-  en_camino: "En camino",
-  entregado: "Entregado",
-  recogido: "Recogido",
-  cancelado: "Cancelado",
-};
+interface ConfigEstados {
+  etiquetas: Record<string, string>;
+  defaults: Record<string, string>;
+  estados: string[];
+}
 
 const PAQUETERIAS = ["estafeta", "fedex", "paquete_express", "huipix", "propio"] as const;
 
@@ -61,7 +62,15 @@ export function PedidosPage() {
   const [pedidos, setPedidos] = useState<PedidoRow[]>([]);
   const [filtro, setFiltro] = useState("");
   const [detalle, setDetalle] = useState<PedidoDetalle | null>(null);
+  const [config, setConfig] = useState<ConfigEstados | null>(null);
+  const [usuarios, setUsuarios] = useState<UsuarioRef[]>([]);
+  const [editorAbierto, setEditorAbierto] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const puedeGestionar = puede("ecommerce.pedidos_gestionar");
+  const puedeConfigurar = puede("ecommerce.configurar");
+
+  const etiqueta = useCallback((estado: string) => config?.etiquetas[estado] ?? estado, [config]);
 
   const cargar = useCallback(() => {
     const qs = filtro ? `?statusPedido=${filtro}` : "";
@@ -71,6 +80,17 @@ export function PedidosPage() {
   }, [filtro]);
 
   useEffect(() => cargar(), [cargar]);
+
+  useEffect(() => {
+    api<ConfigEstados>("/t/pedidos-ecommerce/config")
+      .then(setConfig)
+      .catch(() => {});
+    if (puedeGestionar) {
+      api<UsuarioRef[]>("/t/usuarios")
+        .then((u) => setUsuarios(u.filter(Boolean)))
+        .catch(() => {});
+    }
+  }, [puedeGestionar]);
 
   async function abrir(id: string) {
     setError(null);
@@ -83,24 +103,35 @@ export function PedidosPage() {
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Pedidos online</h1>
-        <select
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">Todos los estados</option>
-          {Object.entries(ESTADOS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {puedeConfigurar && config && (
+            <button
+              type="button"
+              onClick={() => setEditorAbierto(true)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-slate-600 text-sm hover:bg-slate-50"
+            >
+              ⚙ Personalizar estados
+            </button>
+          )}
+          <select
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="">Todos los estados</option>
+            {(config?.estados ?? []).map((k) => (
+              <option key={k} value={k}>
+                {etiqueta(k)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">Folio</th>
@@ -108,6 +139,7 @@ export function PedidosPage() {
               <th className="px-4 py-2">Comprador</th>
               <th className="px-4 py-2">Entrega</th>
               <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2">Asignado</th>
               <th className="px-4 py-2 text-right">Total</th>
               <th className="px-4 py-2" />
             </tr>
@@ -127,8 +159,11 @@ export function PedidosPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${badgeColor(p.statusPedido)}`}
                   >
-                    {ESTADOS[p.statusPedido] ?? p.statusPedido}
+                    {p.statusLabel ?? etiqueta(p.statusPedido)}
                   </span>
+                </td>
+                <td className="px-4 py-2 text-slate-500">
+                  {p.asignadoA?.nombre ?? <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-2 text-right font-semibold">
                   ${Number(p.total).toFixed(2)}
@@ -146,8 +181,8 @@ export function PedidosPage() {
             ))}
             {pedidos.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                  Sin pedidos {filtro ? `en estado "${ESTADOS[filtro]}"` : "todavía"}.
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  Sin pedidos {filtro ? `en estado "${etiqueta(filtro)}"` : "todavía"}.
                 </td>
               </tr>
             )}
@@ -160,9 +195,24 @@ export function PedidosPage() {
       {detalle && (
         <DetalleModal
           pedido={detalle}
+          etiqueta={etiqueta}
+          usuarios={usuarios}
+          puedeGestionar={puedeGestionar}
           onClose={() => setDetalle(null)}
           onChanged={() => {
             setDetalle(null);
+            cargar();
+          }}
+        />
+      )}
+
+      {editorAbierto && config && (
+        <EditorEstadosModal
+          config={config}
+          onClose={() => setEditorAbierto(false)}
+          onSaved={(etiquetas) => {
+            setConfig({ ...config, etiquetas });
+            setEditorAbierto(false);
             cargar();
           }}
         />
@@ -173,41 +223,20 @@ export function PedidosPage() {
 
 function DetalleModal({
   pedido,
+  etiqueta,
+  usuarios,
+  puedeGestionar,
   onClose,
   onChanged,
 }: {
   pedido: PedidoDetalle;
+  etiqueta: (estado: string) => string;
+  usuarios: UsuarioRef[];
+  puedeGestionar: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const opciones = estadosSiguientes(pedido);
-  const [nuevoEstado, setNuevoEstado] = useState(opciones[0] ?? "");
-  const [guia, setGuia] = useState(pedido.guiaTracking ?? "");
-  const [paqueteria, setPaqueteria] = useState(pedido.paqueteria ?? "estafeta");
-  const [motivo, setMotivo] = useState("");
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const esFinal = ["cancelado", "recogido"].includes(pedido.statusPedido);
-  const pideGuia = ["enviado", "en_camino"].includes(nuevoEstado);
-
-  async function transicionar() {
-    setGuardando(true);
-    setError(null);
-    try {
-      await api(`/t/pedidos-ecommerce/${pedido.id}/transicionar`, {
-        body: {
-          nuevoEstado,
-          ...(pideGuia && guia ? { guiaTracking: guia, paqueteria } : {}),
-          ...(nuevoEstado === "cancelado" && motivo ? { motivo } : {}),
-        },
-      });
-      onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al actualizar");
-      setGuardando(false);
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -253,6 +282,8 @@ function DetalleModal({
           </p>
         )}
 
+        {puedeGestionar && <AsignarSeccion pedido={pedido} usuarios={usuarios} />}
+
         <div className="mb-4">
           <h3 className="mb-2 text-sm font-bold text-slate-700">Historial</h3>
           <ol className="space-y-1 text-sm text-slate-600">
@@ -269,65 +300,241 @@ function DetalleModal({
 
         {esFinal ? (
           <p className="text-sm text-slate-500">
-            Pedido en estado final ({ESTADOS[pedido.statusPedido]}).
+            Pedido en estado final ({etiqueta(pedido.statusPedido)}).
             {pedido.canceladoMotivo && ` Motivo: ${pedido.canceladoMotivo}`}
           </p>
+        ) : !puedeGestionar ? (
+          <p className="text-sm text-slate-400">No tienes permiso para avanzar pedidos.</p>
         ) : (
-          <div className="rounded-lg border border-slate-200 p-3">
-            <h3 className="mb-2 text-sm font-bold text-slate-700">Avanzar pedido</h3>
-            <div className="mb-2 flex gap-2">
-              <select
-                value={nuevoEstado}
-                onChange={(e) => setNuevoEstado(e.target.value)}
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              >
-                {opciones.map((o) => (
-                  <option key={o} value={o}>
-                    {ESTADOS[o] ?? o}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {pideGuia && (
-              <div className="mb-2 flex gap-2">
-                <select
-                  value={paqueteria}
-                  onChange={(e) => setPaqueteria(e.target.value)}
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-sm"
-                >
-                  {PAQUETERIAS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={guia}
-                  onChange={(e) => setGuia(e.target.value)}
-                  placeholder="Guía de rastreo"
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-            )}
-            {nuevoEstado === "cancelado" && (
-              <input
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                placeholder="Motivo de cancelación"
-                className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
-            )}
-            {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-            <button
-              type="button"
-              onClick={transicionar}
-              disabled={guardando}
-              className="w-full rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
-            >
-              {guardando ? "Guardando…" : `Marcar como ${ESTADOS[nuevoEstado] ?? nuevoEstado}`}
-            </button>
-          </div>
+          <AvanzarSeccion pedido={pedido} etiqueta={etiqueta} onChanged={onChanged} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function AsignarSeccion({
+  pedido,
+  usuarios,
+}: {
+  pedido: PedidoDetalle;
+  usuarios: UsuarioRef[];
+}) {
+  const [asignado, setAsignado] = useState<UsuarioRef | null>(pedido.asignadoA);
+  const [error, setError] = useState<string | null>(null);
+  const miId = getUserId();
+
+  async function asignar(usuarioId: string | null) {
+    setError(null);
+    try {
+      const r = await api<{ asignadoA: UsuarioRef | null }>(
+        `/t/pedidos-ecommerce/${pedido.id}/asignar`,
+        { method: "PATCH", body: { usuarioId } },
+      );
+      setAsignado(r.asignadoA);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al asignar");
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-slate-200 p-3">
+      <h3 className="mb-2 font-bold text-slate-700 text-sm">Quién lo surte</h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={asignado?.id ?? ""}
+          onChange={(e) => asignar(e.target.value || null)}
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        >
+          <option value="">Sin asignar</option>
+          {usuarios.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.nombre}
+            </option>
+          ))}
+        </select>
+        {miId && asignado?.id !== miId && (
+          <button
+            type="button"
+            onClick={() => asignar(miId)}
+            className="rounded-lg bg-slate-100 px-3 py-2 font-medium text-slate-700 text-sm hover:bg-slate-200"
+          >
+            Asignarme
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+    </div>
+  );
+}
+
+function AvanzarSeccion({
+  pedido,
+  etiqueta,
+  onChanged,
+}: {
+  pedido: PedidoDetalle;
+  etiqueta: (estado: string) => string;
+  onChanged: () => void;
+}) {
+  const opciones = estadosSiguientes(pedido);
+  const [nuevoEstado, setNuevoEstado] = useState(opciones[0] ?? "");
+  const [guia, setGuia] = useState(pedido.guiaTracking ?? "");
+  const [paqueteria, setPaqueteria] = useState(pedido.paqueteria ?? "estafeta");
+  const [motivo, setMotivo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pideGuia = ["enviado", "en_camino"].includes(nuevoEstado);
+
+  async function transicionar() {
+    setGuardando(true);
+    setError(null);
+    try {
+      await api(`/t/pedidos-ecommerce/${pedido.id}/transicionar`, {
+        body: {
+          nuevoEstado,
+          ...(pideGuia && guia ? { guiaTracking: guia, paqueteria } : {}),
+          ...(nuevoEstado === "cancelado" && motivo ? { motivo } : {}),
+        },
+      });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al actualizar");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <h3 className="mb-2 text-sm font-bold text-slate-700">Avanzar pedido</h3>
+      <div className="mb-2 flex gap-2">
+        <select
+          value={nuevoEstado}
+          onChange={(e) => setNuevoEstado(e.target.value)}
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        >
+          {opciones.map((o) => (
+            <option key={o} value={o}>
+              {etiqueta(o)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {pideGuia && (
+        <div className="mb-2 flex gap-2">
+          <select
+            value={paqueteria}
+            onChange={(e) => setPaqueteria(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-2 text-sm"
+          >
+            {PAQUETERIAS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <input
+            value={guia}
+            onChange={(e) => setGuia(e.target.value)}
+            placeholder="Guía de rastreo"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+      )}
+      {nuevoEstado === "cancelado" && (
+        <input
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          placeholder="Motivo de cancelación"
+          className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      )}
+      {error && <p className="mb-2 text-red-600 text-sm">{error}</p>}
+      <button
+        type="button"
+        onClick={transicionar}
+        disabled={guardando}
+        className="w-full rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+      >
+        {guardando ? "Guardando…" : `Marcar como ${etiqueta(nuevoEstado)}`}
+      </button>
+    </div>
+  );
+}
+
+function EditorEstadosModal({
+  config,
+  onClose,
+  onSaved,
+}: {
+  config: ConfigEstados;
+  onClose: () => void;
+  onSaved: (etiquetas: Record<string, string>) => void;
+}) {
+  const [valores, setValores] = useState<Record<string, string>>(() => ({ ...config.etiquetas }));
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function guardar() {
+    setGuardando(true);
+    setError(null);
+    try {
+      const r = await api<{ etiquetas: Record<string, string> }>("/t/pedidos-ecommerce/config", {
+        method: "PUT",
+        body: { etiquetasEstado: valores },
+      });
+      onSaved(r.etiquetas);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al guardar");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
+        <div className="mb-2 flex items-start justify-between">
+          <h2 className="font-bold text-lg text-slate-800">Personalizar estados</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 text-slate-500 text-sm">
+          Ponle a cada estado el nombre que usa tu negocio (ej. "Surtido", "En proceso"). El cliente
+          y tu equipo verán estos nombres.
+        </p>
+        <div className="space-y-3">
+          {config.estados.map((estado) => (
+            <label key={estado} className="block">
+              <span className="mb-1 block text-slate-500 text-xs">{config.defaults[estado]}</span>
+              <input
+                value={valores[estado] ?? ""}
+                onChange={(e) => setValores((v) => ({ ...v, [estado]: e.target.value }))}
+                placeholder={config.defaults[estado]}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+              />
+            </label>
+          ))}
+        </div>
+        {error && <p className="mt-3 text-red-600 text-sm">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 text-sm hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando}
+            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -30,6 +30,32 @@ export function loadToken(): string | null {
   return accessToken;
 }
 
+// Permisos del usuario en sesión: la UI oculta lo que no puede hacer.
+const PERMISOS_KEY = "gaespos_admin_permisos";
+
+export function setPermisos(permisos: string[]): void {
+  localStorage.setItem(PERMISOS_KEY, JSON.stringify(permisos));
+}
+
+export function puede(permiso: string): boolean {
+  try {
+    const lista = JSON.parse(localStorage.getItem(PERMISOS_KEY) ?? "[]") as string[];
+    return lista.includes("*") || lista.includes(permiso);
+  } catch {
+    return false;
+  }
+}
+
+const UID_KEY = "gaespos_admin_uid";
+
+export function setUserId(id: string): void {
+  localStorage.setItem(UID_KEY, id);
+}
+
+export function getUserId(): string | null {
+  return localStorage.getItem(UID_KEY);
+}
+
 export async function api<T = unknown>(
   path: string,
   opts: { method?: string; body?: unknown; auth?: boolean } = {},

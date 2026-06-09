@@ -1,8 +1,10 @@
 import type { EmailProvider } from "@gaespos/email";
 import type { PaymentProvider } from "@gaespos/pagos";
+import { PERMISSIONS } from "@gaespos/permissions";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
+import { notificarCliente, notificarUsuariosConPermiso } from "../notificaciones/service.js";
 import { crearVenta } from "../ventas/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -255,6 +257,29 @@ export async function procesarWebhookPago(
       where: { id: pedido.carritoOrigenId },
       data: { status: "convertido", convertidoAPedidoId: pedido.id },
     });
+  }
+
+  // Campana: avisa a los empleados que pueden gestionar pedidos que entró uno nuevo,
+  // y al cliente (si tiene cuenta) que su pago se confirmó. Best-effort.
+  try {
+    await notificarUsuariosConPermiso(client, PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR, {
+      tipo: "pedido_nuevo",
+      titulo: `Nuevo pedido ${pedido.folioPublico}`,
+      cuerpo: `Pago confirmado por $${new Decimal(pedido.total.toString()).toFixed(2)}. Listo para surtir.`,
+      link: "/pedidos",
+      metadata: { pedidoId: pedido.id, folio: pedido.folioPublico },
+    });
+    if (pedido.clienteId) {
+      await notificarCliente(client, pedido.clienteId, {
+        tipo: "pedido_estado",
+        titulo: `Pedido ${pedido.folioPublico}: Pago confirmado`,
+        cuerpo: "Recibimos tu pago. Estamos preparando tu pedido.",
+        link: `/cuenta/pedidos/${pedido.folioPublico}`,
+        metadata: { folioPublico: pedido.folioPublico, estado: "pago_confirmado" },
+      });
+    }
+  } catch {
+    // best-effort
   }
 
   // Confirmación al comprador, best-effort: un fallo de email nunca rompe el pago

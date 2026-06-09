@@ -1,4 +1,5 @@
 import { LogoutBoton } from "@/components/logout-boton";
+import { NotificacionesCliente } from "@/components/notificaciones-cliente";
 import { ResenasCuenta } from "@/components/resenas-cuenta";
 import { WishlistCuenta } from "@/components/wishlist-cuenta";
 import {
@@ -11,17 +12,6 @@ import {
 } from "@/lib/cliente";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
-const STATUS_LABEL: Record<string, string> = {
-  recibido: "Recibido",
-  pago_confirmado: "Pago confirmado",
-  preparando: "Preparando",
-  enviado: "Enviado",
-  en_camino: "En camino",
-  entregado: "Entregado",
-  recogido: "Recogido",
-  cancelado: "Cancelado",
-};
 
 export default async function CuentaPage() {
   if (!(await getClienteToken())) redirect("/cuenta/login");
@@ -49,7 +39,10 @@ export default async function CuentaPage() {
           <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
           <p className="text-sm text-gray-500">{me.email}</p>
         </div>
-        <LogoutBoton />
+        <div className="flex items-center gap-2">
+          <NotificacionesCliente />
+          <LogoutBoton />
+        </div>
       </div>
 
       <h2 className="mb-4 text-lg font-bold">Mis pedidos</h2>
@@ -79,16 +72,16 @@ export default async function CuentaPage() {
                   <td className="px-4 py-2 text-gray-500">
                     {new Date(p.createdAt).toLocaleDateString("es-MX")}
                   </td>
-                  <td className="px-4 py-2">{STATUS_LABEL[p.statusPedido] ?? p.statusPedido}</td>
+                  <td className="px-4 py-2">{p.statusLabel ?? p.statusPedido}</td>
                   <td className="px-4 py-2 text-right font-semibold">
                     ${Number(p.total).toFixed(2)}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Link
-                      href={`/seguimiento?folio=${p.folioPublico}`}
+                      href={`/cuenta/pedidos/${p.folioPublico}`}
                       className="text-marca hover:underline"
                     >
-                      Seguir
+                      Ver detalle
                     </Link>
                   </td>
                 </tr>

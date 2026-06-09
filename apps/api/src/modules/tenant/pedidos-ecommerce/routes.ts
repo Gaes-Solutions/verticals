@@ -2,22 +2,21 @@ import type { EmailProvider } from "@gaespos/email";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { notificarCliente, notificarUsuario } from "../notificaciones/service.js";
+import {
+  DEFAULT_ETIQUETAS,
+  ESTADOS_PEDIDO,
+  FLUJO_ENVIO,
+  FLUJO_PICKUP,
+  etiquetasDe,
+  labelDe,
+  mergeEtiquetas,
+} from "./estados.js";
 
 const idParam = z.object({ id: z.string().min(1) });
 const listQuery = z.object({
-  statusPedido: z
-    .enum([
-      "recibido",
-      "pago_confirmado",
-      "preparando",
-      "listo_pickup",
-      "enviado",
-      "en_camino",
-      "entregado",
-      "recogido",
-      "cancelado",
-    ])
-    .optional(),
+  statusPedido: z.enum(ESTADOS_PEDIDO).optional(),
+  asignadoAId: z.string().optional(),
   page: z
     .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1))
     .default(1),
@@ -39,6 +38,11 @@ const transicionSchema = z.object({
   guiaTracking: z.string().optional(),
   paqueteria: z.enum(["fedex", "estafeta", "paquete_express", "huipix", "propio"]).optional(),
   motivo: z.string().optional(),
+});
+
+const asignarSchema = z.object({ usuarioId: z.string().min(1).nullable() });
+const configSchema = z.object({
+  etiquetasEstado: z.record(z.string(), z.string().max(40)),
 });
 
 const trackingQuery = z.object({ email: z.string().email() });
@@ -101,38 +105,132 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
     const q = listQuery.parse(req.query);
     const where: Record<string, unknown> = {};
     if (q.statusPedido) where.statusPedido = q.statusPedido;
-    const [total, items] = await Promise.all([
+    if (q.asignadoAId) where.asignadoAId = q.asignadoAId;
+    const [total, items, etiquetas] = await Promise.all([
       req.tenantPrisma.pedidoEcommerce.count({ where }),
       req.tenantPrisma.pedidoEcommerce.findMany({
         where,
-        include: { cliente: { select: { id: true, nombre: true } } },
+        include: {
+          cliente: { select: { id: true, nombre: true } },
+          asignadoA: { select: { id: true, nombre: true } },
+        },
         orderBy: { createdAt: "desc" },
         skip: (q.page - 1) * q.pageSize,
         take: q.pageSize,
       }),
+      etiquetasDe(req.tenantPrisma),
     ]);
-    return { items, total, page: q.page, pageSize: q.pageSize };
+    return {
+      items: items.map((p) => ({ ...p, statusLabel: labelDe(etiquetas, p.statusPedido) })),
+      total,
+      page: q.page,
+      pageSize: q.pageSize,
+    };
+  });
+
+  // Config de etiquetas de estado (personalizable por tenant).
+  app.get("/config", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
+    const etiquetas = await etiquetasDe(req.tenantPrisma);
+    return {
+      etiquetas,
+      defaults: DEFAULT_ETIQUETAS,
+      estados: ESTADOS_PEDIDO,
+      flujoPickup: FLUJO_PICKUP,
+      flujoEnvio: FLUJO_ENVIO,
+    };
+  });
+
+  app.put("/config", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const body = configSchema.parse(req.body);
+    const etiquetasEstado = mergeEtiquetas(body.etiquetasEstado);
+    await req.tenantPrisma.configEcommerce.upsert({
+      where: { id: 1 },
+      create: { id: 1, etiquetasEstado },
+      update: { etiquetasEstado },
+    });
+    return { etiquetas: etiquetasEstado };
   });
 
   app.get("/:id", async (req, reply) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
     const { id } = idParam.parse(req.params);
-    const pedido = await req.tenantPrisma.pedidoEcommerce.findUnique({
-      where: { id },
-      include: {
-        eventos: { orderBy: { createdAt: "asc" } },
-        ventaGenerada: { select: { id: true, folio: true, total: true } },
-        cliente: { select: { id: true, nombre: true } },
-        envio: true,
-        pickup: true,
-      },
-    });
+    const [pedido, etiquetas] = await Promise.all([
+      req.tenantPrisma.pedidoEcommerce.findUnique({
+        where: { id },
+        include: {
+          eventos: { orderBy: { createdAt: "asc" } },
+          ventaGenerada: { select: { id: true, folio: true, total: true } },
+          cliente: { select: { id: true, nombre: true } },
+          asignadoA: { select: { id: true, nombre: true } },
+          envio: true,
+          pickup: true,
+        },
+      }),
+      etiquetasDe(req.tenantPrisma),
+    ]);
     if (!pedido) {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Pedido no encontrado" });
     }
-    return pedido;
+    return { ...pedido, statusLabel: labelDe(etiquetas, pedido.statusPedido) };
+  });
+
+  // Asignar (o desasignar) el pedido a un empleado que lo surte.
+  app.patch("/:id/asignar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    const { id } = idParam.parse(req.params);
+    const { usuarioId } = asignarSchema.parse(req.body);
+    const pedido = await req.tenantPrisma.pedidoEcommerce.findUnique({ where: { id } });
+    if (!pedido) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Pedido no encontrado" });
+    }
+    let nombre: string | null = null;
+    if (usuarioId) {
+      const u = await req.tenantPrisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { nombre: true, isActive: true },
+      });
+      if (!u || !u.isActive) {
+        return reply
+          .code(422)
+          .send({ statusCode: 422, error: "Unprocessable", message: "Empleado inválido" });
+      }
+      nombre = u.nombre;
+    }
+    const updated = await req.tenantPrisma.pedidoEcommerce.update({
+      where: { id },
+      data: {
+        asignadoAId: usuarioId,
+        asignadoAt: usuarioId ? new Date() : null,
+        eventos: {
+          create: {
+            tipo: usuarioId ? "asignado" : "desasignado",
+            descripcion: usuarioId ? `Asignado a ${nombre}` : "Asignación retirada",
+            visibleCliente: false,
+          },
+        },
+      },
+      include: { asignadoA: { select: { id: true, nombre: true } } },
+    });
+    if (usuarioId && usuarioId !== req.principal.userId) {
+      try {
+        await notificarUsuario(req.tenantPrisma, usuarioId, {
+          tipo: "pedido_asignado",
+          titulo: `Te asignaron el pedido ${pedido.folioPublico}`,
+          cuerpo: "Tienes un pedido online para surtir.",
+          link: "/pedidos",
+          metadata: { pedidoId: id, folio: pedido.folioPublico },
+        });
+      } catch {
+        // best-effort
+      }
+    }
+    return updated;
   });
 
   app.post("/:id/transicionar", async (req, reply) => {
@@ -153,6 +251,8 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const tsField = ESTADO_TIMESTAMP[body.nuevoEstado];
+    const etiquetas = await etiquetasDe(req.tenantPrisma);
+    const label = labelDe(etiquetas, body.nuevoEstado);
     const updated = await req.tenantPrisma.pedidoEcommerce.update({
       where: { id },
       data: {
@@ -166,24 +266,44 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
         eventos: {
           create: {
             tipo: `estado_${body.nuevoEstado}`,
-            descripcion: body.motivo ?? `Pedido ${body.nuevoEstado}`,
+            descripcion: body.motivo ?? label,
             visibleCliente: true,
           },
         },
       },
     });
     await notificarTransicion(req, app.emailProviderFactory(), updated, body.nuevoEstado);
-    return updated;
+    // Campana del cliente (si tiene cuenta): además del email.
+    if (updated.clienteId) {
+      try {
+        await notificarCliente(req.tenantPrisma, updated.clienteId, {
+          tipo: "pedido_estado",
+          titulo: `Pedido ${updated.folioPublico}: ${label}`,
+          cuerpo:
+            body.nuevoEstado === "cancelado"
+              ? `Tu pedido fue cancelado.${body.motivo ? ` Motivo: ${body.motivo}` : ""}`
+              : `El estado de tu pedido cambió a "${label}".`,
+          link: `/cuenta/pedidos/${updated.folioPublico}`,
+          metadata: { folioPublico: updated.folioPublico, estado: body.nuevoEstado },
+        });
+      } catch {
+        // best-effort
+      }
+    }
+    return { ...updated, statusLabel: label };
   });
 
   // Tracking público (BFF pasa token de servicio; comprador valida con email)
   app.get("/seguimiento/:folio", async (req, reply) => {
     const folio = (req.params as { folio: string }).folio;
     const { email } = trackingQuery.parse(req.query);
-    const pedido = await req.tenantPrisma.pedidoEcommerce.findUnique({
-      where: { folioPublico: folio },
-      include: { eventos: { where: { visibleCliente: true }, orderBy: { createdAt: "asc" } } },
-    });
+    const [pedido, etiquetas] = await Promise.all([
+      req.tenantPrisma.pedidoEcommerce.findUnique({
+        where: { folioPublico: folio },
+        include: { eventos: { where: { visibleCliente: true }, orderBy: { createdAt: "asc" } } },
+      }),
+      etiquetasDe(req.tenantPrisma),
+    ]);
     if (!pedido || pedido.emailComprador.toLowerCase() !== email.toLowerCase()) {
       return reply
         .code(404)
@@ -192,9 +312,12 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
     return {
       folioPublico: pedido.folioPublico,
       statusPedido: pedido.statusPedido,
+      statusLabel: labelDe(etiquetas, pedido.statusPedido),
+      metodoEnvio: pedido.metodoEnvio,
       total: pedido.total,
       guiaTracking: pedido.guiaTracking,
       paqueteria: pedido.paqueteria,
+      etiquetas,
       eventos: pedido.eventos.map((e) => ({
         tipo: e.tipo,
         descripcion: e.descripcion,

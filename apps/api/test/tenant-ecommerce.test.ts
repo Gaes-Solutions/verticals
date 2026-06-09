@@ -471,6 +471,116 @@ describe("gestión pedido + reseña", () => {
   });
 });
 
+describe("pulido pedidos: etiquetas configurables + asignación + campana", () => {
+  let pedidoId: string;
+
+  beforeAll(async () => {
+    const list = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce",
+      headers: auth(ownerToken),
+    });
+    pedidoId = (list.json() as { items: Array<{ id: string }> }).items[0]!.id;
+  });
+
+  it("config devuelve etiquetas default", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce/config",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { etiquetas: Record<string, string>; estados: string[] };
+    expect(r.etiquetas.preparando).toBe("Preparando");
+    expect(r.estados).toContain("entregado");
+  });
+
+  it("renombra estados con el vocabulario del negocio (preparando→Surtido)", async () => {
+    const put = await app.inject({
+      method: "PUT",
+      url: "/t/pedidos-ecommerce/config",
+      headers: auth(ownerToken),
+      payload: { etiquetasEstado: { preparando: "Surtido", en_camino: "En proceso" } },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().etiquetas.preparando).toBe("Surtido");
+
+    // la lista ahora refleja la etiqueta personalizada
+    const list = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce/config",
+      headers: auth(ownerToken),
+    });
+    expect(list.json().etiquetas.en_camino).toBe("En proceso");
+  });
+
+  it("la lista de pedidos trae statusLabel resuelto", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce",
+      headers: auth(ownerToken),
+    });
+    const items = res.json().items as Array<{ statusLabel: string }>;
+    expect(items[0]?.statusLabel).toBeTruthy();
+  });
+
+  it("asigna el pedido a un empleado (registra evento interno)", async () => {
+    const me = await loginTenantUser(app, TENANT_SLUG, OWNER.email, OWNER.password);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/t/pedidos-ecommerce/${pedidoId}/asignar`,
+      headers: auth(ownerToken),
+      payload: { usuarioId: me.userId },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().asignadoA?.id).toBe(me.userId);
+
+    const det = await app.inject({
+      method: "GET",
+      url: `/t/pedidos-ecommerce/${pedidoId}`,
+      headers: auth(ownerToken),
+    });
+    const eventos = det.json().eventos as Array<{ tipo: string }>;
+    expect(eventos.some((e) => e.tipo === "asignado")).toBe(true);
+  });
+
+  it("desasigna (usuarioId null)", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/t/pedidos-ecommerce/${pedidoId}/asignar`,
+      headers: auth(ownerToken),
+      payload: { usuarioId: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().asignadoA).toBeNull();
+  });
+
+  it("el empleado recibió campana de nuevo pedido (pago confirmado)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/notificaciones",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { items: Array<{ tipo: string }>; noLeidas: number };
+    expect(r.items.some((n) => n.tipo === "pedido_nuevo")).toBe(true);
+  });
+
+  it("marcar todas baja el conteo a 0", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/t/notificaciones/leer-todas",
+      headers: auth(ownerToken),
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/notificaciones",
+      headers: auth(ownerToken),
+    });
+    expect(res.json().noLeidas).toBe(0);
+  });
+});
+
 describe("carrito abandonado + recovery", () => {
   let recoveryCodigo: string;
 

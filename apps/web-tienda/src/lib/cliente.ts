@@ -37,7 +37,46 @@ export interface PedidoCliente {
   folioPublico: string;
   total: string;
   statusPedido: string;
+  statusLabel: string;
   statusPago: string;
+  metodoEnvio: string;
+  createdAt: string;
+}
+
+export interface HitoPedido {
+  estado: string;
+  label: string;
+  completado: boolean;
+  actual: boolean;
+  fecha: string | null;
+}
+
+export interface PedidoDetalleCliente {
+  folioPublico: string;
+  statusPedido: string;
+  statusLabel: string;
+  metodoEnvio: string;
+  cancelado: boolean;
+  canceladoMotivo: string | null;
+  total: string;
+  subtotal: string;
+  costoEnvio: string;
+  items: Array<{ nombre: string; cantidad: number; precioUnitario: string; subtotal: string }>;
+  direccionEnvio: Record<string, string> | null;
+  guiaTracking: string | null;
+  paqueteria: string | null;
+  createdAt: string;
+  hitos: HitoPedido[];
+  eventos: Array<{ tipo: string; descripcion: string; fecha: string }>;
+}
+
+export interface NotificacionCliente {
+  id: string;
+  tipo: string;
+  titulo: string;
+  cuerpo: string;
+  link: string | null;
+  leida: boolean;
   createdAt: string;
 }
 

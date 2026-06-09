@@ -2,12 +2,18 @@ import { getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
+  listarNotificacionesCliente,
+  marcarLeida,
+  marcarTodasLeidas,
+} from "../tenant/notificaciones/service.js";
+import {
   ClientePortalError,
   agregarAWishlist,
   crearResenaCliente,
   getClienteMe,
   getComprasResenables,
   getMiWishlist,
+  getPedidoClienteDetalle,
   getPedidosCliente,
   loginCliente,
   quitarDeWishlist,
@@ -118,6 +124,42 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   app.get("/pedidos", async (req) => {
     const { clienteId, email, tenantSlug } = clienteCtx(req);
     return getPedidosCliente(getTenantClient(tenantSlug), clienteId, email);
+  });
+
+  app.get("/pedidos/:folio", async (req, reply) => {
+    const { clienteId, email, tenantSlug } = clienteCtx(req);
+    const { folio } = z.object({ folio: z.string().min(1) }).parse(req.params);
+    try {
+      return await getPedidoClienteDetalle(getTenantClient(tenantSlug), clienteId, email, folio);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.get("/notificaciones", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const q = z
+      .object({
+        soloNoLeidas: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
+      })
+      .parse(req.query);
+    return listarNotificacionesCliente(getTenantClient(tenantSlug), clienteId, {
+      ...(q.soloNoLeidas !== undefined ? { soloNoLeidas: q.soloNoLeidas } : {}),
+    });
+  });
+
+  app.post("/notificaciones/:id/leer", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    const ok = await marcarLeida(getTenantClient(tenantSlug), { clienteId }, id);
+    return { ok };
+  });
+
+  app.post("/notificaciones/leer-todas", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const marcadas = await marcarTodasLeidas(getTenantClient(tenantSlug), { clienteId });
+    return { marcadas };
   });
 
   app.get("/wishlist", async (req) => {

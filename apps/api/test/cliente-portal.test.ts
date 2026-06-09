@@ -298,3 +298,150 @@ describe("reseñas del cliente (verificadas por compra)", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("detalle de pedido con timeline (estilo ML)", () => {
+  let folio: string;
+
+  it("setup: pedido del cliente con historial de eventos", async () => {
+    const prisma = getTenantClient(TENANT_SLUG);
+    folio = `GP-TL${Date.now().toString().slice(-5)}`;
+    await prisma.pedidoEcommerce.create({
+      data: {
+        folioPublico: folio,
+        clienteId,
+        emailComprador: EMAIL,
+        subtotal: "200",
+        total: "200",
+        moneda: "MXN",
+        metodoEnvio: "paqueteria",
+        statusPedido: "enviado",
+        statusPago: "pago_confirmado",
+        guiaTracking: "FX999",
+        paqueteria: "fedex",
+        items: [{ nombre: "Producto X", cantidad: 1, precioUnitario: "200", subtotal: "200" }],
+        eventos: {
+          create: [
+            { tipo: "pedido_recibido", descripcion: "Pedido recibido", visibleCliente: true },
+            { tipo: "pago_confirmado", descripcion: "Pago confirmado", visibleCliente: true },
+            { tipo: "estado_preparando", descripcion: "Preparando", visibleCliente: true },
+            { tipo: "estado_enviado", descripcion: "Enviado", visibleCliente: true },
+          ],
+        },
+      },
+    });
+  });
+
+  it("lista de pedidos incluye statusLabel", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/pedidos",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    const pedidos = res.json() as Array<{ folioPublico: string; statusLabel?: string }>;
+    const mio = pedidos.find((p) => p.folioPublico === folio);
+    expect(mio?.statusLabel).toBe("Enviado");
+  });
+
+  it("detalle devuelve hitos del flujo con completados marcados", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/cliente-portal/pedidos/${folio}`,
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const d = res.json() as {
+      statusLabel: string;
+      guiaTracking: string;
+      hitos: Array<{ estado: string; completado: boolean; actual: boolean; fecha: string | null }>;
+    };
+    expect(d.statusLabel).toBe("Enviado");
+    expect(d.guiaTracking).toBe("FX999");
+    // flujo envío: recibido, pago_confirmado, preparando, enviado, en_camino, entregado
+    const recibido = d.hitos.find((h) => h.estado === "recibido");
+    const enviado = d.hitos.find((h) => h.estado === "enviado");
+    const entregado = d.hitos.find((h) => h.estado === "entregado");
+    expect(recibido?.completado).toBe(true);
+    expect(enviado?.completado).toBe(true);
+    expect(enviado?.actual).toBe(true);
+    expect(entregado?.completado).toBe(false);
+    expect(recibido?.fecha).toBeTruthy();
+  });
+
+  it("detalle de pedido ajeno → 404", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/pedidos/GP-NOEXISTE",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("campana de notificaciones del cliente", () => {
+  let notiId: string;
+
+  it("setup: el cliente tiene una notificación sin leer", async () => {
+    const prisma = getTenantClient(TENANT_SLUG);
+    const n = await prisma.notificacion.create({
+      data: {
+        destinatarioTipo: "cliente",
+        clienteId,
+        tipo: "pedido_estado",
+        titulo: "Tu pedido cambió de estado",
+        cuerpo: "Va en camino",
+      },
+    });
+    notiId = n.id;
+  });
+
+  it("GET lista con conteo de no leídas", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/notificaciones",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { items: Array<{ id: string }>; noLeidas: number };
+    expect(r.noLeidas).toBeGreaterThanOrEqual(1);
+    expect(r.items.some((i) => i.id === notiId)).toBe(true);
+  });
+
+  it("marcar una como leída baja el conteo", async () => {
+    const leer = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/notificaciones/${notiId}/leer`,
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(leer.statusCode).toBe(200);
+    expect(leer.json().ok).toBe(true);
+    const res = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/notificaciones?soloNoLeidas=true",
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    const r = res.json() as { items: Array<{ id: string }> };
+    expect(r.items.some((i) => i.id === notiId)).toBe(false);
+  });
+
+  it("no puede marcar notificación ajena (otro cliente)", async () => {
+    const prisma = getTenantClient(TENANT_SLUG);
+    const otro = await prisma.cliente.create({
+      data: { nombre: "Otro", emailPrincipal: "otro@cliente.mx", tipo: "frecuente" },
+    });
+    const ajena = await prisma.notificacion.create({
+      data: {
+        destinatarioTipo: "cliente",
+        clienteId: otro.id,
+        tipo: "x",
+        titulo: "Ajena",
+        cuerpo: "no es tuya",
+      },
+    });
+    const leer = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/notificaciones/${ajena.id}/leer`,
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(leer.json().ok).toBe(false);
+  });
+});

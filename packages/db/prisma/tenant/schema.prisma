@@ -67,43 +67,43 @@ model Sucursal {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  cajas                Caja[]
-  usuarioSucursales    UsuarioSucursal[]
-  usuariosLastLogin    Usuario[]              @relation("UsuarioLastLoginSucursal")
-  inventarioSucursal   InventarioSucursal[]
-  movimientos          InventarioMovimiento[]
-  movimientosOrigen    InventarioMovimiento[] @relation("MovimientoSucursalOrigen")
-  lotes                ProductoLote[]
-  series               ProductoSerie[]
-  ventas               Venta[]
-  ventaFolioCounter    VentaFolioCounter?
-  apartados            Apartado[]
-  apartadoFolioCounter ApartadoFolioCounter?
-  cuentasCobrar        CuentaCobrar[]
-  cxcFolioCounter      CxcFolioCounter?
-  devoluciones         Devolucion[]
-  devolucionFolioCounter DevolucionFolioCounter?
-  cotizaciones         Cotizacion[]
-  cotizacionFolioCounter CotizacionFolioCounter?
-  pedidos              Pedido[]
-  pedidoFolioCounter   PedidoFolioCounter?
-  recargas             Recarga[]
-  recargaFolioCounter  RecargaFolioCounter?
-  citas                Cita[]
-  citaFolioCounter     CitaFolioCounter?
-  consultas            Consulta[]
-  recetas              Receta[]
-  recetaFolioCounter   RecetaFolioCounter?
-  agendas              Agenda[]
-  agendaBloqueos       AgendaBloqueo[]
-  camas                Cama[]
-  hospitalizaciones    Hospitalizacion[]
+  cajas                       Caja[]
+  usuarioSucursales           UsuarioSucursal[]
+  usuariosLastLogin           Usuario[]                    @relation("UsuarioLastLoginSucursal")
+  inventarioSucursal          InventarioSucursal[]
+  movimientos                 InventarioMovimiento[]
+  movimientosOrigen           InventarioMovimiento[]       @relation("MovimientoSucursalOrigen")
+  lotes                       ProductoLote[]
+  series                      ProductoSerie[]
+  ventas                      Venta[]
+  ventaFolioCounter           VentaFolioCounter?
+  apartados                   Apartado[]
+  apartadoFolioCounter        ApartadoFolioCounter?
+  cuentasCobrar               CuentaCobrar[]
+  cxcFolioCounter             CxcFolioCounter?
+  devoluciones                Devolucion[]
+  devolucionFolioCounter      DevolucionFolioCounter?
+  cotizaciones                Cotizacion[]
+  cotizacionFolioCounter      CotizacionFolioCounter?
+  pedidos                     Pedido[]
+  pedidoFolioCounter          PedidoFolioCounter?
+  recargas                    Recarga[]
+  recargaFolioCounter         RecargaFolioCounter?
+  citas                       Cita[]
+  citaFolioCounter            CitaFolioCounter?
+  consultas                   Consulta[]
+  recetas                     Receta[]
+  recetaFolioCounter          RecetaFolioCounter?
+  agendas                     Agenda[]
+  agendaBloqueos              AgendaBloqueo[]
+  camas                       Cama[]
+  hospitalizaciones           Hospitalizacion[]
   hospitalizacionFolioCounter HospitalizacionFolioCounter?
-  ordenesCompra         OrdenCompra[]
-  ordenCompraFolioCounter OrdenCompraFolioCounter?
-  pedidosEcommercePickup PedidoEcommerce[]
-  configPickup          ConfigPickupSucursal?
-  pickupPedidos         PickupPedido[]
+  ordenesCompra               OrdenCompra[]
+  ordenCompraFolioCounter     OrdenCompraFolioCounter?
+  pedidosEcommercePickup      PedidoEcommerce[]
+  configPickup                ConfigPickupSucursal?
+  pickupPedidos               PickupPedido[]
 
   @@index([isActive])
   @@map("sucursales")
@@ -156,64 +156,66 @@ model Usuario {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  lastLoginSucursal     Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
-  sucursales            UsuarioSucursal[]
-  roles                 UsuarioRol[]                 @relation("UsuarioRol_Usuario")
-  rolesAsignados        UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
-  vistasGuardadas       UsuarioVistaGuardada[]
-  movimientos           InventarioMovimiento[]
-  ventasCreadas         Venta[]                      @relation("VentaUsuarioCreador")
-  ventasCanceladas      Venta[]                      @relation("VentaUsuarioCancelador")
-  aperturasAbiertas     CajaApertura[]               @relation("CajaAperturaUsuario")
-  aperturasCerradas     CajaApertura[]               @relation("CajaAperturaCerradaPor")
-  cajaMovimientos       CajaMovimiento[]
-  cortes                Corte[]
-  cfdisEmitidos         Cfdi[]                       @relation("CfdiEmitidoPor")
-  cfdisCancelados       Cfdi[]                       @relation("CfdiCanceladoPor")
-  clientesAsignados     Cliente[]                    @relation("ClienteVendedorAsignado")
-  clientesB2bAsignados  ClienteB2bVendedorAsignado[]
-  fiadoMovimientos      FiadoMovimiento[]
-  creditosB2bAprobados  ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
-  apartadosCreados      Apartado[]                   @relation("ApartadoUsuarioCreador")
-  apartadosCancelados   Apartado[]                   @relation("ApartadoUsuarioCancelador")
-  apartadoAbonos        ApartadoAbono[]
-  cuentasCobrarVendedor CuentaCobrar[]               @relation("CuentaCobrarVendedor")
-  cxcPagos              CxcPago[]
-  devolucionesProcesadas Devolucion[]                @relation("DevolucionProcesadaPor")
-  devolucionesAprobadas  Devolucion[]                @relation("DevolucionAprobadaPor")
-  devolucionesCanceladas Devolucion[]                @relation("DevolucionCanceladaPor")
-  cotizacionesVendedor   Cotizacion[]                @relation("CotizacionVendedor")
-  pedidosVendedor        Pedido[]                    @relation("PedidoVendedor")
-  pedidosAprobados       Pedido[]                    @relation("PedidoAprobadoPor")
-  pedidosCancelados      Pedido[]                    @relation("PedidoCanceladoPor")
-  recargasProcesadas     Recarga[]                   @relation("RecargaProcesadaPor")
-  recargasReembolsadas   Recarga[]                   @relation("RecargaReembolsadaPor")
-  medicoPerfil           Medico?
-  pacientesAsignados     Paciente[]                  @relation("PacienteMedicoAsignado")
-  agendas                Agenda[]                    @relation("AgendaMedico")
-  agendaBloqueos         AgendaBloqueo[]             @relation("AgendaBloqueoMedico")
-  citasMedico            Cita[]                      @relation("CitaMedico")
-  citasCheckin           Cita[]                      @relation("CitaCheckinPor")
-  citasCanceladas        Cita[]                      @relation("CitaCanceladaPor")
-  consultasMedico        Consulta[]                  @relation("ConsultaMedico")
-  consultasEnfermera     Consulta[]                  @relation("ConsultaEnfermeraAsistente")
-  consultasFirmadas      Consulta[]                  @relation("ConsultaFirmadaPor")
-  recetasMedico          Receta[]                    @relation("RecetaMedico")
-  recetasCanceladas      Receta[]                    @relation("RecetaCanceladaPor")
-  mascotasAsignadas      Mascota[]                   @relation("MascotaMedicoAsignado")
-  vacunacionesAplicador  Vacunacion[]                @relation("VacunacionAplicador")
-  hospitalizacionesMedico Hospitalizacion[]          @relation("HospitalizacionMedico")
-  hospitalizacionesAltaPor Hospitalizacion[]         @relation("HospitalizacionAltaPor")
-  medicacionesPrescritas MedicacionProgramada[]      @relation("MedicacionProgramadaPrescritaPor")
-  kardexAplicaciones     KardexAplicacion[]          @relation("KardexEnfermeraAplicador")
-  signosHospitalCapturados SignoVitalHospital[]      @relation("SignoVitalHospitalCapturadoPor")
-  cargosHospitalCapturados CargoHospital[]           @relation("CargoHospitalCapturadoPor")
-  cfdisRecibidosUpload  CfdiRecibido[]               @relation("CfdiRecibidoUploadedPor")
+  lastLoginSucursal             Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
+  sucursales                    UsuarioSucursal[]
+  roles                         UsuarioRol[]                 @relation("UsuarioRol_Usuario")
+  rolesAsignados                UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
+  vistasGuardadas               UsuarioVistaGuardada[]
+  movimientos                   InventarioMovimiento[]
+  ventasCreadas                 Venta[]                      @relation("VentaUsuarioCreador")
+  ventasCanceladas              Venta[]                      @relation("VentaUsuarioCancelador")
+  aperturasAbiertas             CajaApertura[]               @relation("CajaAperturaUsuario")
+  aperturasCerradas             CajaApertura[]               @relation("CajaAperturaCerradaPor")
+  cajaMovimientos               CajaMovimiento[]
+  cortes                        Corte[]
+  cfdisEmitidos                 Cfdi[]                       @relation("CfdiEmitidoPor")
+  cfdisCancelados               Cfdi[]                       @relation("CfdiCanceladoPor")
+  clientesAsignados             Cliente[]                    @relation("ClienteVendedorAsignado")
+  clientesB2bAsignados          ClienteB2bVendedorAsignado[]
+  fiadoMovimientos              FiadoMovimiento[]
+  creditosB2bAprobados          ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
+  apartadosCreados              Apartado[]                   @relation("ApartadoUsuarioCreador")
+  apartadosCancelados           Apartado[]                   @relation("ApartadoUsuarioCancelador")
+  apartadoAbonos                ApartadoAbono[]
+  cuentasCobrarVendedor         CuentaCobrar[]               @relation("CuentaCobrarVendedor")
+  cxcPagos                      CxcPago[]
+  devolucionesProcesadas        Devolucion[]                 @relation("DevolucionProcesadaPor")
+  devolucionesAprobadas         Devolucion[]                 @relation("DevolucionAprobadaPor")
+  devolucionesCanceladas        Devolucion[]                 @relation("DevolucionCanceladaPor")
+  cotizacionesVendedor          Cotizacion[]                 @relation("CotizacionVendedor")
+  pedidosVendedor               Pedido[]                     @relation("PedidoVendedor")
+  pedidosAprobados              Pedido[]                     @relation("PedidoAprobadoPor")
+  pedidosCancelados             Pedido[]                     @relation("PedidoCanceladoPor")
+  recargasProcesadas            Recarga[]                    @relation("RecargaProcesadaPor")
+  recargasReembolsadas          Recarga[]                    @relation("RecargaReembolsadaPor")
+  medicoPerfil                  Medico?
+  pacientesAsignados            Paciente[]                   @relation("PacienteMedicoAsignado")
+  agendas                       Agenda[]                     @relation("AgendaMedico")
+  agendaBloqueos                AgendaBloqueo[]              @relation("AgendaBloqueoMedico")
+  citasMedico                   Cita[]                       @relation("CitaMedico")
+  citasCheckin                  Cita[]                       @relation("CitaCheckinPor")
+  citasCanceladas               Cita[]                       @relation("CitaCanceladaPor")
+  consultasMedico               Consulta[]                   @relation("ConsultaMedico")
+  consultasEnfermera            Consulta[]                   @relation("ConsultaEnfermeraAsistente")
+  consultasFirmadas             Consulta[]                   @relation("ConsultaFirmadaPor")
+  recetasMedico                 Receta[]                     @relation("RecetaMedico")
+  recetasCanceladas             Receta[]                     @relation("RecetaCanceladaPor")
+  mascotasAsignadas             Mascota[]                    @relation("MascotaMedicoAsignado")
+  vacunacionesAplicador         Vacunacion[]                 @relation("VacunacionAplicador")
+  hospitalizacionesMedico       Hospitalizacion[]            @relation("HospitalizacionMedico")
+  hospitalizacionesAltaPor      Hospitalizacion[]            @relation("HospitalizacionAltaPor")
+  medicacionesPrescritas        MedicacionProgramada[]       @relation("MedicacionProgramadaPrescritaPor")
+  kardexAplicaciones            KardexAplicacion[]           @relation("KardexEnfermeraAplicador")
+  signosHospitalCapturados      SignoVitalHospital[]         @relation("SignoVitalHospitalCapturadoPor")
+  cargosHospitalCapturados      CargoHospital[]              @relation("CargoHospitalCapturadoPor")
+  cfdisRecibidosUpload          CfdiRecibido[]               @relation("CfdiRecibidoUploadedPor")
   cfdiCategorizacionesAsignadas CfdiRecibidoCategorizacion[] @relation("CfdiCategorizacionAsignadoPor")
-  ordenesCompraCreadas  OrdenCompra[]                @relation("OrdenCompraCreadoPor")
-  ordenesCompraAutorizadas OrdenCompra[]             @relation("OrdenCompraAutorizadoPor")
-  resenasRespondidas    ProductoResena[]             @relation("ResenaRespondidaPor")
-  pickupsResponsable    PickupPedido[]               @relation("PickupResponsable")
+  ordenesCompraCreadas          OrdenCompra[]                @relation("OrdenCompraCreadoPor")
+  ordenesCompraAutorizadas      OrdenCompra[]                @relation("OrdenCompraAutorizadoPor")
+  resenasRespondidas            ProductoResena[]             @relation("ResenaRespondidaPor")
+  pickupsResponsable            PickupPedido[]               @relation("PickupResponsable")
+  pedidosEcommerceAsignados     PedidoEcommerce[]            @relation("PedidoEcommerceAsignado")
+  notificaciones                Notificacion[]               @relation("NotificacionUsuario")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -871,25 +873,25 @@ model Venta {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  sucursal     Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  caja         Caja?             @relation(fields: [cajaId], references: [id], onDelete: SetNull)
-  usuario      Usuario           @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
-  canceladaPor Usuario?          @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
-  cliente      Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  clienteB2b   ClienteB2b?       @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
-  apartado     Apartado?         @relation(fields: [apartadoId], references: [id], onDelete: SetNull)
-  lineas       VentaLinea[]
-  pagos        VentaPago[]
-  cfdis        Cfdi[]
-  fiadoCargos  FiadoMovimiento[]
-  cuentaCobrar CuentaCobrar?
-  devoluciones Devolucion[]
-  pedido       Pedido?
-  recargas     Recarga[]
-  hospitalizacionAlta Hospitalizacion? @relation("HospitalizacionVentaAlAlta")
-  cargosHospitalFacturados CargoHospital[] @relation("CargoHospitalFacturadoEnVenta")
-  pedidoEcommerce     PedidoEcommerce? @relation("PedidoEcommerceVenta")
-  promocionesAplicadas PromocionAplicacion[] @relation("VentaPromociones")
+  sucursal                 Sucursal              @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja                     Caja?                 @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario                  Usuario               @relation("VentaUsuarioCreador", fields: [usuarioId], references: [id], onDelete: Restrict)
+  canceladaPor             Usuario?              @relation("VentaUsuarioCancelador", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  cliente                  Cliente?              @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteB2b               ClienteB2b?           @relation(fields: [clienteB2bId], references: [id], onDelete: SetNull)
+  apartado                 Apartado?             @relation(fields: [apartadoId], references: [id], onDelete: SetNull)
+  lineas                   VentaLinea[]
+  pagos                    VentaPago[]
+  cfdis                    Cfdi[]
+  fiadoCargos              FiadoMovimiento[]
+  cuentaCobrar             CuentaCobrar?
+  devoluciones             Devolucion[]
+  pedido                   Pedido?
+  recargas                 Recarga[]
+  hospitalizacionAlta      Hospitalizacion?      @relation("HospitalizacionVentaAlAlta")
+  cargosHospitalFacturados CargoHospital[]       @relation("CargoHospitalFacturadoEnVenta")
+  pedidoEcommerce          PedidoEcommerce?      @relation("PedidoEcommerceVenta")
+  promocionesAplicadas     PromocionAplicacion[] @relation("VentaPromociones")
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -920,8 +922,8 @@ model VentaLinea {
   descuentosAplicados Json    @default("[]") @map("descuentos_aplicados")
   snapshotProducto    Json    @map("snapshot_producto")
 
-  venta             Venta              @relation(fields: [ventaId], references: [id], onDelete: Cascade)
-  devolucionLineas  DevolucionLinea[]
+  venta            Venta             @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  devolucionLineas DevolucionLinea[]
 
   @@unique([ventaId, numero])
   @@index([productoId])
@@ -1223,26 +1225,27 @@ model Cliente {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
-  grupo            ClienteGrupo?      @relation(fields: [clienteGrupoId], references: [id], onDelete: SetNull)
-  vendedorAsignado Usuario?           @relation("ClienteVendedorAsignado", fields: [vendedorAsignadoId], references: [id], onDelete: SetNull)
-  direcciones      ClienteDireccion[]
-  telefonos        ClienteTelefono[]
-  etiquetas        ClienteEtiqueta[]
-  fiado            Fiado?
-  ventas           Venta[]
-  apartados        Apartado[]
-  cuentasCobrar    CuentaCobrar[]
-  pacientesTutor   Paciente[]        @relation("PacienteTutor")
-  mascotasTutor    Mascota[]         @relation("MascotaTutor")
+  grupo             ClienteGrupo?            @relation(fields: [clienteGrupoId], references: [id], onDelete: SetNull)
+  vendedorAsignado  Usuario?                 @relation("ClienteVendedorAsignado", fields: [vendedorAsignadoId], references: [id], onDelete: SetNull)
+  direcciones       ClienteDireccion[]
+  telefonos         ClienteTelefono[]
+  etiquetas         ClienteEtiqueta[]
+  fiado             Fiado?
+  ventas            Venta[]
+  apartados         Apartado[]
+  cuentasCobrar     CuentaCobrar[]
+  pacientesTutor    Paciente[]               @relation("PacienteTutor")
+  mascotasTutor     Mascota[]                @relation("MascotaTutor")
   carritosEcommerce CarritoEcommerce[]
-  pedidosEcommerce PedidoEcommerce[]
-  resenas          ProductoResena[]
-  wishlists        Wishlist[]
-  segmentosMiembro SegmentoClienteMiembro[]
-  metricasRfm      ClienteMetricasRfm?
-  campanasEnvios   CampanaEnvio[]
-  optOuts          ClienteOptOut[]
-  loyalty          ClienteLoyalty[]
+  pedidosEcommerce  PedidoEcommerce[]
+  resenas           ProductoResena[]
+  wishlists         Wishlist[]
+  segmentosMiembro  SegmentoClienteMiembro[]
+  metricasRfm       ClienteMetricasRfm?
+  campanasEnvios    CampanaEnvio[]
+  optOuts           ClienteOptOut[]
+  loyalty           ClienteLoyalty[]
+  notificaciones    Notificacion[]           @relation("NotificacionCliente")
 
   @@unique([rfc])
   @@index([nombre])
@@ -1928,8 +1931,8 @@ model Cotizacion {
   id                String                @id @default(cuid())
   folio             String
   sucursalId        String                @map("sucursal_id")
-  clienteB2bId     String                @map("cliente_b2b_id")
-  vendedorId       String                @map("vendedor_id")
+  clienteB2bId      String                @map("cliente_b2b_id")
+  vendedorId        String                @map("vendedor_id")
   estado            CotizacionEstado      @default(borrador)
   moneda            String                @default("MXN")
   listaPrecioCodigo String?               @map("lista_precio_codigo")
@@ -2004,38 +2007,38 @@ model CotizacionFolioCounter {
 }
 
 model Pedido {
-  id                   String                @id @default(cuid())
+  id                   String                 @id @default(cuid())
   folio                String
-  sucursalId           String                @map("sucursal_id")
-  clienteB2bId         String                @map("cliente_b2b_id")
-  vendedorId           String                @map("vendedor_id")
-  cotizacionId         String?               @unique @map("cotizacion_id")
-  estado               PedidoEstado          @default(creado)
+  sucursalId           String                 @map("sucursal_id")
+  clienteB2bId         String                 @map("cliente_b2b_id")
+  vendedorId           String                 @map("vendedor_id")
+  cotizacionId         String?                @unique @map("cotizacion_id")
+  estado               PedidoEstado           @default(creado)
   estadoAprobacion     PedidoEstadoAprobacion @default(no_requiere) @map("estado_aprobacion")
-  aprobadoPorId        String?               @map("aprobado_por_id")
-  aprobadoAt           DateTime?             @map("aprobado_at")
-  rechazadoMotivo      String?               @map("rechazado_motivo")
-  moneda               String                @default("MXN")
-  subtotal             Decimal               @default(0) @db.Decimal(14, 4)
-  descuentoTotal       Decimal               @default(0) @map("descuento_total") @db.Decimal(14, 4)
-  ivaTotal             Decimal               @default(0) @map("iva_total") @db.Decimal(14, 4)
-  iepsTotal            Decimal               @default(0) @map("ieps_total") @db.Decimal(14, 4)
-  total                Decimal               @default(0) @db.Decimal(14, 4)
-  ordenCompraCliente   String?               @map("orden_compra_cliente")
-  direccionEnvioId     String?               @map("direccion_envio_id")
+  aprobadoPorId        String?                @map("aprobado_por_id")
+  aprobadoAt           DateTime?              @map("aprobado_at")
+  rechazadoMotivo      String?                @map("rechazado_motivo")
+  moneda               String                 @default("MXN")
+  subtotal             Decimal                @default(0) @db.Decimal(14, 4)
+  descuentoTotal       Decimal                @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  ivaTotal             Decimal                @default(0) @map("iva_total") @db.Decimal(14, 4)
+  iepsTotal            Decimal                @default(0) @map("ieps_total") @db.Decimal(14, 4)
+  total                Decimal                @default(0) @db.Decimal(14, 4)
+  ordenCompraCliente   String?                @map("orden_compra_cliente")
+  direccionEnvioId     String?                @map("direccion_envio_id")
   paqueteria           String?
-  trackingExterno      String?               @map("tracking_externo")
-  trackingUrl          String?               @map("tracking_url")
-  fechaEntregaEstimada DateTime?             @map("fecha_entrega_estimada")
+  trackingExterno      String?                @map("tracking_externo")
+  trackingUrl          String?                @map("tracking_url")
+  fechaEntregaEstimada DateTime?              @map("fecha_entrega_estimada")
   notas                String?
-  ventaId              String?               @unique @map("venta_id")
-  enviadoAt            DateTime?             @map("enviado_at")
-  entregadoAt          DateTime?             @map("entregado_at")
-  canceladoAt          DateTime?             @map("cancelado_at")
-  canceladoPorId       String?               @map("cancelado_por_id")
-  canceladoMotivo      String?               @map("cancelado_motivo")
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
+  ventaId              String?                @unique @map("venta_id")
+  enviadoAt            DateTime?              @map("enviado_at")
+  entregadoAt          DateTime?              @map("entregado_at")
+  canceladoAt          DateTime?              @map("cancelado_at")
+  canceladoPorId       String?                @map("cancelado_por_id")
+  canceladoMotivo      String?                @map("cancelado_motivo")
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
 
   sucursal       Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
   clienteB2b     ClienteB2b           @relation(fields: [clienteB2bId], references: [id], onDelete: Restrict)
@@ -2129,20 +2132,20 @@ enum RecargaEstado {
 }
 
 model RecargaProveedorConfig {
-  id                   String                 @id @default(cuid())
-  proveedorCodigo      RecargaProveedorCodigo @unique @map("proveedor_codigo")
-  apiUrl               String?                @map("api_url")
-  apiKeyEncrypted      String?                @map("api_key_encrypted")
-  webhookSecretEncrypted String?              @map("webhook_secret_encrypted")
-  isPrimario           Boolean                @default(false) @map("is_primario")
-  isActive             Boolean                @default(true) @map("is_active")
-  saldoPrefondeado     Decimal                @default(0) @map("saldo_prefondeado") @db.Decimal(14, 4)
-  saldoAlertaMinimo    Decimal                @default(500) @map("saldo_alerta_minimo") @db.Decimal(14, 4)
-  comisionProveedorPct Decimal?               @map("comision_proveedor_pct") @db.Decimal(5, 2)
-  lastRechargeAt       DateTime?              @map("last_recharge_at")
-  totalConsumidoLifetime Decimal              @default(0) @map("total_consumido_lifetime") @db.Decimal(14, 4)
-  createdAt            DateTime               @default(now()) @map("created_at")
-  updatedAt            DateTime               @updatedAt @map("updated_at")
+  id                     String                 @id @default(cuid())
+  proveedorCodigo        RecargaProveedorCodigo @unique @map("proveedor_codigo")
+  apiUrl                 String?                @map("api_url")
+  apiKeyEncrypted        String?                @map("api_key_encrypted")
+  webhookSecretEncrypted String?                @map("webhook_secret_encrypted")
+  isPrimario             Boolean                @default(false) @map("is_primario")
+  isActive               Boolean                @default(true) @map("is_active")
+  saldoPrefondeado       Decimal                @default(0) @map("saldo_prefondeado") @db.Decimal(14, 4)
+  saldoAlertaMinimo      Decimal                @default(500) @map("saldo_alerta_minimo") @db.Decimal(14, 4)
+  comisionProveedorPct   Decimal?               @map("comision_proveedor_pct") @db.Decimal(5, 2)
+  lastRechargeAt         DateTime?              @map("last_recharge_at")
+  totalConsumidoLifetime Decimal                @default(0) @map("total_consumido_lifetime") @db.Decimal(14, 4)
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
 
   recargas Recarga[]
 
@@ -2152,44 +2155,44 @@ model RecargaProveedorConfig {
 }
 
 model Recarga {
-  id                    String                 @id @default(cuid())
-  folio                 String
-  sucursalId            String                 @map("sucursal_id")
-  cajaAperturaId        String?                @map("caja_apertura_id")
-  usuarioId             String                 @map("usuario_id")
-  ventaId               String?                @map("venta_id")
-  tipo                  RecargaTipo            @default(tiempo_aire)
-  companiaCodigo        RecargaCompaniaCodigo  @map("compania_codigo")
-  proveedorConfigId     String                 @map("proveedor_config_id")
-  proveedorCodigo       RecargaProveedorCodigo @map("proveedor_codigo")
-  numeroTelefonico      String                 @map("numero_telefonico")
-  referenciaCapturada   String?                @map("referencia_capturada")
-  montoSolicitado       Decimal                @map("monto_solicitado") @db.Decimal(14, 4)
-  montoCobradoCliente   Decimal                @map("monto_cobrado_cliente") @db.Decimal(14, 4)
-  comisionTenant        Decimal                @default(0) @map("comision_tenant") @db.Decimal(14, 4)
-  comisionProveedor     Decimal                @default(0) @map("comision_proveedor") @db.Decimal(14, 4)
-  costoRealTenant       Decimal                @map("costo_real_tenant") @db.Decimal(14, 4)
-  folioProveedor        String?                @map("folio_proveedor")
-  respuestaProveedor    Json?                  @map("respuesta_proveedor")
-  estado                RecargaEstado          @default(pendiente)
-  motivoFalla           String?                @map("motivo_falla")
-  intentosTotales       Int                    @default(0) @map("intentos_totales")
-  reembolsadaAt         DateTime?              @map("reembolsada_at")
-  reembolsadaPorId      String?                @map("reembolsada_por_id")
-  reembolsoMotivo       String?                @map("reembolso_motivo")
-  disputadaAt           DateTime?              @map("disputada_at")
-  disputaMotivo         String?                @map("disputa_motivo")
-  procesadoAt           DateTime?              @map("procesado_at")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
+  id                  String                 @id @default(cuid())
+  folio               String
+  sucursalId          String                 @map("sucursal_id")
+  cajaAperturaId      String?                @map("caja_apertura_id")
+  usuarioId           String                 @map("usuario_id")
+  ventaId             String?                @map("venta_id")
+  tipo                RecargaTipo            @default(tiempo_aire)
+  companiaCodigo      RecargaCompaniaCodigo  @map("compania_codigo")
+  proveedorConfigId   String                 @map("proveedor_config_id")
+  proveedorCodigo     RecargaProveedorCodigo @map("proveedor_codigo")
+  numeroTelefonico    String                 @map("numero_telefonico")
+  referenciaCapturada String?                @map("referencia_capturada")
+  montoSolicitado     Decimal                @map("monto_solicitado") @db.Decimal(14, 4)
+  montoCobradoCliente Decimal                @map("monto_cobrado_cliente") @db.Decimal(14, 4)
+  comisionTenant      Decimal                @default(0) @map("comision_tenant") @db.Decimal(14, 4)
+  comisionProveedor   Decimal                @default(0) @map("comision_proveedor") @db.Decimal(14, 4)
+  costoRealTenant     Decimal                @map("costo_real_tenant") @db.Decimal(14, 4)
+  folioProveedor      String?                @map("folio_proveedor")
+  respuestaProveedor  Json?                  @map("respuesta_proveedor")
+  estado              RecargaEstado          @default(pendiente)
+  motivoFalla         String?                @map("motivo_falla")
+  intentosTotales     Int                    @default(0) @map("intentos_totales")
+  reembolsadaAt       DateTime?              @map("reembolsada_at")
+  reembolsadaPorId    String?                @map("reembolsada_por_id")
+  reembolsoMotivo     String?                @map("reembolso_motivo")
+  disputadaAt         DateTime?              @map("disputada_at")
+  disputaMotivo       String?                @map("disputa_motivo")
+  procesadoAt         DateTime?              @map("procesado_at")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
 
-  sucursal       Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  cajaApertura   CajaApertura?          @relation(fields: [cajaAperturaId], references: [id], onDelete: SetNull)
-  usuario        Usuario                @relation("RecargaProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
-  reembolsadaPor Usuario?               @relation("RecargaReembolsadaPor", fields: [reembolsadaPorId], references: [id], onDelete: SetNull)
-  venta          Venta?                 @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  sucursal        Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  cajaApertura    CajaApertura?          @relation(fields: [cajaAperturaId], references: [id], onDelete: SetNull)
+  usuario         Usuario                @relation("RecargaProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
+  reembolsadaPor  Usuario?               @relation("RecargaReembolsadaPor", fields: [reembolsadaPorId], references: [id], onDelete: SetNull)
+  venta           Venta?                 @relation(fields: [ventaId], references: [id], onDelete: SetNull)
   proveedorConfig RecargaProveedorConfig @relation(fields: [proveedorConfigId], references: [id], onDelete: Restrict)
-  reintentos     RecargaReintento[]
+  reintentos      RecargaReintento[]
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -2339,15 +2342,15 @@ model Paciente {
   createdAt                DateTime                     @default(now()) @map("created_at")
   updatedAt                DateTime                     @updatedAt @map("updated_at")
 
-  tutor          Cliente?       @relation("PacienteTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
-  medicoAsignado Usuario?       @relation("PacienteMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
-  citas          Cita[]
-  consultas      Consulta[]
-  recetas        Receta[]
-  signosVitales  ConsultaSignoVital[]
-  vacunaciones   Vacunacion[]
+  tutor             Cliente?             @relation("PacienteTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
+  medicoAsignado    Usuario?             @relation("PacienteMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
+  citas             Cita[]
+  consultas         Consulta[]
+  recetas           Receta[]
+  signosVitales     ConsultaSignoVital[]
+  vacunaciones      Vacunacion[]
   hospitalizaciones Hospitalizacion[]
-  signosHospital SignoVitalHospital[] @relation("SignoVitalHospitalPaciente")
+  signosHospital    SignoVitalHospital[] @relation("SignoVitalHospitalPaciente")
 
   @@unique([numeroExpediente])
   @@index([nombre, apellidoPaterno])
@@ -2359,25 +2362,25 @@ model Paciente {
 }
 
 model Medico {
-  id                   String   @id @default(cuid())
-  usuarioId            String   @unique @map("usuario_id")
-  cedulaProfesional    String?  @map("cedula_profesional")
-  especialidades       Json     @default("[]")
-  subespecialidades    Json     @default("[]")
-  anosExperiencia      Int?     @map("anos_experiencia")
-  idiomasAtencion      Json     @default("[\"es-MX\"]") @map("idiomas_atencion")
-  bio                  String?
-  fotoPerfilUrl        String?  @map("foto_perfil_url")
-  consultorios         Json     @default("[]")
-  precioConsultaPrimera Decimal? @map("precio_consulta_primera") @db.Decimal(14, 2)
+  id                        String   @id @default(cuid())
+  usuarioId                 String   @unique @map("usuario_id")
+  cedulaProfesional         String?  @map("cedula_profesional")
+  especialidades            Json     @default("[]")
+  subespecialidades         Json     @default("[]")
+  anosExperiencia           Int?     @map("anos_experiencia")
+  idiomasAtencion           Json     @default("[\"es-MX\"]") @map("idiomas_atencion")
+  bio                       String?
+  fotoPerfilUrl             String?  @map("foto_perfil_url")
+  consultorios              Json     @default("[]")
+  precioConsultaPrimera     Decimal? @map("precio_consulta_primera") @db.Decimal(14, 2)
   precioConsultaSeguimiento Decimal? @map("precio_consulta_seguimiento") @db.Decimal(14, 2)
-  aceptaSeguros        Json     @default("[]") @map("acepta_seguros")
-  firmaElectronicaUrl  String?  @map("firma_electronica_url")
-  aceptaTelemedicina   Boolean  @default(false) @map("acepta_telemedicina")
-  isPerfilPublicoDoctoralia Boolean @default(false) @map("is_perfil_publico_doctoralia")
-  isActive             Boolean  @default(true) @map("is_active")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  aceptaSeguros             Json     @default("[]") @map("acepta_seguros")
+  firmaElectronicaUrl       String?  @map("firma_electronica_url")
+  aceptaTelemedicina        Boolean  @default(false) @map("acepta_telemedicina")
+  isPerfilPublicoDoctoralia Boolean  @default(false) @map("is_perfil_publico_doctoralia")
+  isActive                  Boolean  @default(true) @map("is_active")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -2386,18 +2389,18 @@ model Medico {
 }
 
 model Agenda {
-  id                  String   @id @default(cuid())
-  medicoUsuarioId     String   @map("medico_usuario_id")
-  sucursalId          String   @map("sucursal_id")
-  diaSemana           Int?     @map("dia_semana")
+  id                  String    @id @default(cuid())
+  medicoUsuarioId     String    @map("medico_usuario_id")
+  sucursalId          String    @map("sucursal_id")
+  diaSemana           Int?      @map("dia_semana")
   fechaEspecifica     DateTime? @map("fecha_especifica") @db.Date
-  horaInicio          String   @map("hora_inicio")
-  horaFin             String   @map("hora_fin")
-  duracionSlotMinutos Int      @default(30) @map("duracion_slot_minutos")
-  tiposSlots          Json     @default("[\"consulta\"]") @map("tipos_slots")
-  isActive            Boolean  @default(true) @map("is_active")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  horaInicio          String    @map("hora_inicio")
+  horaFin             String    @map("hora_fin")
+  duracionSlotMinutos Int       @default(30) @map("duracion_slot_minutos")
+  tiposSlots          Json      @default("[\"consulta\"]") @map("tipos_slots")
+  isActive            Boolean   @default(true) @map("is_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   medico   Usuario  @relation("AgendaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Cascade)
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
@@ -2428,14 +2431,14 @@ model AgendaBloqueo {
 }
 
 model MotivoCitaCatalogo {
-  id                    String   @id @default(cuid())
-  nombre                String
-  vertical              String   @default("humana")
-  duracionDefaultMinutos Int     @default(30) @map("duracion_default_minutos")
-  costoReferencia       Decimal? @map("costo_referencia") @db.Decimal(14, 2)
-  requiereAnticipo      Boolean  @default(false) @map("requiere_anticipo")
-  isActive              Boolean  @default(true) @map("is_active")
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                     String   @id @default(cuid())
+  nombre                 String
+  vertical               String   @default("humana")
+  duracionDefaultMinutos Int      @default(30) @map("duracion_default_minutos")
+  costoReferencia        Decimal? @map("costo_referencia") @db.Decimal(14, 2)
+  requiereAnticipo       Boolean  @default(false) @map("requiere_anticipo")
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at")
 
   citas Cita[]
 
@@ -2445,34 +2448,34 @@ model MotivoCitaCatalogo {
 }
 
 model Cita {
-  id                      String     @id @default(cuid())
-  folio                   String
-  pacienteId              String?    @map("paciente_id")
-  mascotaId               String?    @map("mascota_id")
-  medicoUsuarioId         String     @map("medico_usuario_id")
-  sucursalId              String     @map("sucursal_id")
-  motivoCitaId            String?    @map("motivo_cita_id")
-  motivoTexto             String?    @map("motivo_texto")
-  consultorioRoom         String?    @map("consultorio_room")
-  recursosClinicosAsignados Json     @default("[]") @map("recursos_clinicos_asignados")
-  fechaProgramada         DateTime   @map("fecha_programada")
-  duracionEstimadaMinutos Int        @default(30) @map("duracion_estimada_minutos")
-  estado                  CitaEstado @default(programada)
-  pesoCheckinKg           Decimal?   @map("peso_checkin_kg") @db.Decimal(6, 2)
-  temperaturaCheckinC     Decimal?   @map("temperatura_checkin_c") @db.Decimal(4, 1)
-  preQuestionsResponses   Json?      @map("pre_questions_responses")
-  notasRecepcion          String?    @map("notas_recepcion")
-  fechaCheckinAt          DateTime?  @map("fecha_checkin_at")
-  checkinPorId            String?    @map("checkin_por_id")
-  fechaInicioConsulta     DateTime?  @map("fecha_inicio_consulta")
-  fechaFinConsulta        DateTime?  @map("fecha_fin_consulta")
-  tiempoEsperaMinutos     Int?       @map("tiempo_espera_minutos")
-  duracionConsultaMinutos Int?       @map("duracion_consulta_minutos")
-  canceladoAt             DateTime?  @map("cancelado_at")
-  canceladoPorId          String?    @map("cancelado_por_id")
-  canceladoMotivo         String?    @map("cancelado_motivo")
-  createdAt               DateTime   @default(now()) @map("created_at")
-  updatedAt               DateTime   @updatedAt @map("updated_at")
+  id                        String     @id @default(cuid())
+  folio                     String
+  pacienteId                String?    @map("paciente_id")
+  mascotaId                 String?    @map("mascota_id")
+  medicoUsuarioId           String     @map("medico_usuario_id")
+  sucursalId                String     @map("sucursal_id")
+  motivoCitaId              String?    @map("motivo_cita_id")
+  motivoTexto               String?    @map("motivo_texto")
+  consultorioRoom           String?    @map("consultorio_room")
+  recursosClinicosAsignados Json       @default("[]") @map("recursos_clinicos_asignados")
+  fechaProgramada           DateTime   @map("fecha_programada")
+  duracionEstimadaMinutos   Int        @default(30) @map("duracion_estimada_minutos")
+  estado                    CitaEstado @default(programada)
+  pesoCheckinKg             Decimal?   @map("peso_checkin_kg") @db.Decimal(6, 2)
+  temperaturaCheckinC       Decimal?   @map("temperatura_checkin_c") @db.Decimal(4, 1)
+  preQuestionsResponses     Json?      @map("pre_questions_responses")
+  notasRecepcion            String?    @map("notas_recepcion")
+  fechaCheckinAt            DateTime?  @map("fecha_checkin_at")
+  checkinPorId              String?    @map("checkin_por_id")
+  fechaInicioConsulta       DateTime?  @map("fecha_inicio_consulta")
+  fechaFinConsulta          DateTime?  @map("fecha_fin_consulta")
+  tiempoEsperaMinutos       Int?       @map("tiempo_espera_minutos")
+  duracionConsultaMinutos   Int?       @map("duracion_consulta_minutos")
+  canceladoAt               DateTime?  @map("cancelado_at")
+  canceladoPorId            String?    @map("cancelado_por_id")
+  canceladoMotivo           String?    @map("cancelado_motivo")
+  createdAt                 DateTime   @default(now()) @map("created_at")
+  updatedAt                 DateTime   @updatedAt @map("updated_at")
 
   paciente     Paciente?           @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
   mascota      Mascota?            @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
@@ -2502,19 +2505,19 @@ model CitaFolioCounter {
 }
 
 model DiagnosticoCatalogo {
-  id                String   @id @default(cuid())
-  codigoCie10       String   @map("codigo_cie10")
-  codigoCie11       String?  @map("codigo_cie11")
-  nombreEs          String   @map("nombre_es")
-  nombreEn          String?  @map("nombre_en")
-  aplicaHumano      Boolean  @default(true) @map("aplica_humano")
-  aplicaVet         Boolean  @default(false) @map("aplica_vet")
-  categoria         String?
-  isPrecargadoGlobal Boolean @default(false) @map("is_precargado_global")
-  isActive          Boolean  @default(true) @map("is_active")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  codigoCie10        String   @map("codigo_cie10")
+  codigoCie11        String?  @map("codigo_cie11")
+  nombreEs           String   @map("nombre_es")
+  nombreEn           String?  @map("nombre_en")
+  aplicaHumano       Boolean  @default(true) @map("aplica_humano")
+  aplicaVet          Boolean  @default(false) @map("aplica_vet")
+  categoria          String?
+  isPrecargadoGlobal Boolean  @default(false) @map("is_precargado_global")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  consultasPrincipal Consulta[] @relation("ConsultaDiagnosticoPrincipal")
+  consultasPrincipal       Consulta[]        @relation("ConsultaDiagnosticoPrincipal")
   hospitalizacionesIngreso Hospitalizacion[]
 
   @@unique([codigoCie10])
@@ -2525,29 +2528,29 @@ model DiagnosticoCatalogo {
 }
 
 model MedicamentoCatalogo {
-  id                          String                          @id @default(cuid())
-  nombreComercial             String                          @map("nombre_comercial")
-  principioActivo             String                          @map("principio_activo")
-  concentracion               String?
-  presentacion                String?
-  viaAdministracion           String?                         @map("via_administracion")
-  categoria                   String?
-  clasificacionCofepris       MedicamentoClasificacionCofepris @default(OTC) @map("clasificacion_cofepris")
-  requiereRecetarioOficial    Boolean                         @default(false) @map("requiere_recetario_oficial")
-  esControladoVet             Boolean                         @default(false) @map("es_controlado_vet")
-  dosisRecomendadaPediatrica  Json?                           @map("dosis_recomendada_pediatrica")
-  dosisRecomendadaAdulto      Json?                           @map("dosis_recomendada_adulto")
-  dosisRecomendadaVet         Json?                           @map("dosis_recomendada_vet")
-  interaccionesConocidas      Json                            @default("[]") @map("interacciones_conocidas")
-  alergiasRelacionadas        Json                            @default("[]") @map("alergias_relacionadas")
-  efectosAdversos             Json                            @default("[]") @map("efectos_adversos")
-  precioReferenciaMercado     Decimal?                        @map("precio_referencia_mercado") @db.Decimal(14, 2)
-  isPrecargadoGlobal          Boolean                         @default(false) @map("is_precargado_global")
-  isActive                    Boolean                         @default(true) @map("is_active")
-  createdAt                   DateTime                        @default(now()) @map("created_at")
-  updatedAt                   DateTime                        @updatedAt @map("updated_at")
+  id                         String                           @id @default(cuid())
+  nombreComercial            String                           @map("nombre_comercial")
+  principioActivo            String                           @map("principio_activo")
+  concentracion              String?
+  presentacion               String?
+  viaAdministracion          String?                          @map("via_administracion")
+  categoria                  String?
+  clasificacionCofepris      MedicamentoClasificacionCofepris @default(OTC) @map("clasificacion_cofepris")
+  requiereRecetarioOficial   Boolean                          @default(false) @map("requiere_recetario_oficial")
+  esControladoVet            Boolean                          @default(false) @map("es_controlado_vet")
+  dosisRecomendadaPediatrica Json?                            @map("dosis_recomendada_pediatrica")
+  dosisRecomendadaAdulto     Json?                            @map("dosis_recomendada_adulto")
+  dosisRecomendadaVet        Json?                            @map("dosis_recomendada_vet")
+  interaccionesConocidas     Json                             @default("[]") @map("interacciones_conocidas")
+  alergiasRelacionadas       Json                             @default("[]") @map("alergias_relacionadas")
+  efectosAdversos            Json                             @default("[]") @map("efectos_adversos")
+  precioReferenciaMercado    Decimal?                         @map("precio_referencia_mercado") @db.Decimal(14, 2)
+  isPrecargadoGlobal         Boolean                          @default(false) @map("is_precargado_global")
+  isActive                   Boolean                          @default(true) @map("is_active")
+  createdAt                  DateTime                         @default(now()) @map("created_at")
+  updatedAt                  DateTime                         @updatedAt @map("updated_at")
 
-  recetaItems RecetaItem[]
+  recetaItems             RecetaItem[]
   medicacionesProgramadas MedicacionProgramada[]
 
   @@index([nombreComercial])
@@ -2557,53 +2560,53 @@ model MedicamentoCatalogo {
 }
 
 model Consulta {
-  id                          String              @id @default(cuid())
-  citaId                      String?             @unique @map("cita_id")
-  pacienteId                  String?             @map("paciente_id")
-  mascotaId                   String?             @map("mascota_id")
-  medicoUsuarioId             String              @map("medico_usuario_id")
-  enfermeraAsistenteId        String?             @map("enfermera_asistente_id")
-  sucursalId                  String              @map("sucursal_id")
-  fechaConsulta               DateTime            @map("fecha_consulta")
-  duracionMinutos             Int?                @map("duracion_minutos")
-  tipo                        ConsultaTipo        @default(seguimiento)
-  motivoConsulta              String?             @map("motivo_consulta")
-  sintomas                    Json                @default("[]")
-  tiempoEvolucion             String?             @map("tiempo_evolucion")
-  tratamientosPrevios         String?             @map("tratamientos_previos")
-  signosVitales               Json?               @map("signos_vitales")
-  exploracionAparatos         Json?               @map("exploracion_aparatos")
-  diagnosticoPrincipalId      String?             @map("diagnostico_principal_id")
-  diagnosticoPrincipalTexto   String?             @map("diagnostico_principal_texto")
-  diagnosticosDiferenciales   Json                @default("[]") @map("diagnosticos_diferenciales")
-  pronostico                  ConsultaPronostico  @default(desconocido)
-  planTratamiento             String?             @map("plan_tratamiento")
-  siguienteControlDias        Int?                @map("siguiente_control_dias")
-  notasClinicasInternas       String?             @map("notas_clinicas_internas")
-  resumenParaTutor            String?             @map("resumen_para_tutor")
-  estado                      ConsultaEstado      @default(borrador)
-  firmadaAt                   DateTime?           @map("firmada_at")
-  firmadaPorMedicoUsuarioId   String?             @map("firmada_por_medico_usuario_id")
-  firmaElectronicaAplicadaUrl String?             @map("firma_electronica_aplicada_url")
-  consultaOriginalId          String?             @map("consulta_original_id")
-  enmiendaMotivo              String?             @map("enmienda_motivo")
-  canceladaAt                 DateTime?           @map("cancelada_at")
-  canceladaMotivo             String?             @map("cancelada_motivo")
-  createdAt                   DateTime            @default(now()) @map("created_at")
-  updatedAt                   DateTime            @updatedAt @map("updated_at")
+  id                          String             @id @default(cuid())
+  citaId                      String?            @unique @map("cita_id")
+  pacienteId                  String?            @map("paciente_id")
+  mascotaId                   String?            @map("mascota_id")
+  medicoUsuarioId             String             @map("medico_usuario_id")
+  enfermeraAsistenteId        String?            @map("enfermera_asistente_id")
+  sucursalId                  String             @map("sucursal_id")
+  fechaConsulta               DateTime           @map("fecha_consulta")
+  duracionMinutos             Int?               @map("duracion_minutos")
+  tipo                        ConsultaTipo       @default(seguimiento)
+  motivoConsulta              String?            @map("motivo_consulta")
+  sintomas                    Json               @default("[]")
+  tiempoEvolucion             String?            @map("tiempo_evolucion")
+  tratamientosPrevios         String?            @map("tratamientos_previos")
+  signosVitales               Json?              @map("signos_vitales")
+  exploracionAparatos         Json?              @map("exploracion_aparatos")
+  diagnosticoPrincipalId      String?            @map("diagnostico_principal_id")
+  diagnosticoPrincipalTexto   String?            @map("diagnostico_principal_texto")
+  diagnosticosDiferenciales   Json               @default("[]") @map("diagnosticos_diferenciales")
+  pronostico                  ConsultaPronostico @default(desconocido)
+  planTratamiento             String?            @map("plan_tratamiento")
+  siguienteControlDias        Int?               @map("siguiente_control_dias")
+  notasClinicasInternas       String?            @map("notas_clinicas_internas")
+  resumenParaTutor            String?            @map("resumen_para_tutor")
+  estado                      ConsultaEstado     @default(borrador)
+  firmadaAt                   DateTime?          @map("firmada_at")
+  firmadaPorMedicoUsuarioId   String?            @map("firmada_por_medico_usuario_id")
+  firmaElectronicaAplicadaUrl String?            @map("firma_electronica_aplicada_url")
+  consultaOriginalId          String?            @map("consulta_original_id")
+  enmiendaMotivo              String?            @map("enmienda_motivo")
+  canceladaAt                 DateTime?          @map("cancelada_at")
+  canceladaMotivo             String?            @map("cancelada_motivo")
+  createdAt                   DateTime           @default(now()) @map("created_at")
+  updatedAt                   DateTime           @updatedAt @map("updated_at")
 
-  cita                  Cita?                @relation(fields: [citaId], references: [id], onDelete: SetNull)
-  paciente              Paciente?            @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
-  mascota               Mascota?             @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
-  medico                Usuario              @relation("ConsultaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
-  enfermeraAsistente    Usuario?             @relation("ConsultaEnfermeraAsistente", fields: [enfermeraAsistenteId], references: [id], onDelete: SetNull)
-  sucursal              Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  diagnosticoPrincipal  DiagnosticoCatalogo? @relation("ConsultaDiagnosticoPrincipal", fields: [diagnosticoPrincipalId], references: [id], onDelete: SetNull)
-  firmadaPor            Usuario?             @relation("ConsultaFirmadaPor", fields: [firmadaPorMedicoUsuarioId], references: [id], onDelete: SetNull)
-  consultaOriginal      Consulta?            @relation("ConsultaEnmiendas", fields: [consultaOriginalId], references: [id], onDelete: SetNull)
-  enmiendas             Consulta[]           @relation("ConsultaEnmiendas")
+  cita                   Cita?                @relation(fields: [citaId], references: [id], onDelete: SetNull)
+  paciente               Paciente?            @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota                Mascota?             @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medico                 Usuario              @relation("ConsultaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
+  enfermeraAsistente     Usuario?             @relation("ConsultaEnfermeraAsistente", fields: [enfermeraAsistenteId], references: [id], onDelete: SetNull)
+  sucursal               Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  diagnosticoPrincipal   DiagnosticoCatalogo? @relation("ConsultaDiagnosticoPrincipal", fields: [diagnosticoPrincipalId], references: [id], onDelete: SetNull)
+  firmadaPor             Usuario?             @relation("ConsultaFirmadaPor", fields: [firmadaPorMedicoUsuarioId], references: [id], onDelete: SetNull)
+  consultaOriginal       Consulta?            @relation("ConsultaEnmiendas", fields: [consultaOriginalId], references: [id], onDelete: SetNull)
+  enmiendas              Consulta[]           @relation("ConsultaEnmiendas")
   signosVitalesHistorial ConsultaSignoVital[]
-  recetas               Receta[]
+  recetas                Receta[]
 
   @@index([pacienteId, fechaConsulta])
   @@index([mascotaId, fechaConsulta])
@@ -2613,23 +2616,23 @@ model Consulta {
 }
 
 model ConsultaSignoVital {
-  id                     String   @id @default(cuid())
-  consultaId             String   @map("consulta_id")
-  pacienteId             String?  @map("paciente_id")
-  mascotaId              String?  @map("mascota_id")
-  momento                DateTime
-  pesoKg                 Decimal? @map("peso_kg") @db.Decimal(6, 2)
-  temperaturaC           Decimal? @map("temperatura_c") @db.Decimal(4, 1)
-  frecuenciaCardiaca     Int?     @map("frecuencia_cardiaca")
-  frecuenciaRespiratoria Int?     @map("frecuencia_respiratoria")
-  presionSistolica       Int?     @map("presion_sistolica")
-  presionDiastolica      Int?     @map("presion_diastolica")
-  saturacionO2           Decimal? @map("saturacion_o2") @db.Decimal(5, 2)
-  glucosaMgDl            Decimal? @map("glucosa_mg_dl") @db.Decimal(6, 2)
+  id                      String   @id @default(cuid())
+  consultaId              String   @map("consulta_id")
+  pacienteId              String?  @map("paciente_id")
+  mascotaId               String?  @map("mascota_id")
+  momento                 DateTime
+  pesoKg                  Decimal? @map("peso_kg") @db.Decimal(6, 2)
+  temperaturaC            Decimal? @map("temperatura_c") @db.Decimal(4, 1)
+  frecuenciaCardiaca      Int?     @map("frecuencia_cardiaca")
+  frecuenciaRespiratoria  Int?     @map("frecuencia_respiratoria")
+  presionSistolica        Int?     @map("presion_sistolica")
+  presionDiastolica       Int?     @map("presion_diastolica")
+  saturacionO2            Decimal? @map("saturacion_o2") @db.Decimal(5, 2)
+  glucosaMgDl             Decimal? @map("glucosa_mg_dl") @db.Decimal(6, 2)
   tiempoLlenadoCapilarSeg Decimal? @map("tiempo_llenado_capilar_seg") @db.Decimal(4, 1)
-  mucosasColor           String?  @map("mucosas_color")
-  notas                  String?
-  createdAt              DateTime @default(now()) @map("created_at")
+  mucosasColor            String?  @map("mucosas_color")
+  notas                   String?
+  createdAt               DateTime @default(now()) @map("created_at")
 
   consulta Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   paciente Paciente? @relation(fields: [pacienteId], references: [id], onDelete: Cascade)
@@ -2641,38 +2644,38 @@ model ConsultaSignoVital {
 }
 
 model Receta {
-  id                       String       @id @default(cuid())
-  folio                    String
-  sucursalId               String       @map("sucursal_id")
-  consultaId               String?      @map("consulta_id")
-  pacienteId               String?      @map("paciente_id")
-  mascotaId                String?      @map("mascota_id")
-  medicoUsuarioId          String       @map("medico_usuario_id")
-  fechaEmision             DateTime     @default(now()) @map("fecha_emision")
-  vigenciaDias             Int          @default(30) @map("vigencia_dias")
-  fechaExpiracion          DateTime     @map("fecha_expiracion")
-  qrValidacionToken        String       @unique @map("qr_validacion_token")
-  firmaElectronicaUrl      String?      @map("firma_electronica_url")
-  estado                   RecetaEstado @default(emitida)
-  enviadaWhatsappAt        DateTime?    @map("enviada_whatsapp_at")
-  enviadaEmailAt           DateTime?    @map("enviada_email_at")
-  pdfUrl                   String?      @map("pdf_url")
-  esGrupoControlado        Boolean      @default(false) @map("es_grupo_controlado")
-  numeroRecetarioOficial   String?      @map("numero_recetario_oficial")
-  instruccionesGeneralesTutor String?   @map("instrucciones_generales_tutor")
-  canceladaAt              DateTime?    @map("cancelada_at")
-  canceladaPorId           String?      @map("cancelada_por_id")
-  canceladaMotivo          String?      @map("cancelada_motivo")
-  createdAt                DateTime     @default(now()) @map("created_at")
-  updatedAt                DateTime     @updatedAt @map("updated_at")
+  id                          String       @id @default(cuid())
+  folio                       String
+  sucursalId                  String       @map("sucursal_id")
+  consultaId                  String?      @map("consulta_id")
+  pacienteId                  String?      @map("paciente_id")
+  mascotaId                   String?      @map("mascota_id")
+  medicoUsuarioId             String       @map("medico_usuario_id")
+  fechaEmision                DateTime     @default(now()) @map("fecha_emision")
+  vigenciaDias                Int          @default(30) @map("vigencia_dias")
+  fechaExpiracion             DateTime     @map("fecha_expiracion")
+  qrValidacionToken           String       @unique @map("qr_validacion_token")
+  firmaElectronicaUrl         String?      @map("firma_electronica_url")
+  estado                      RecetaEstado @default(emitida)
+  enviadaWhatsappAt           DateTime?    @map("enviada_whatsapp_at")
+  enviadaEmailAt              DateTime?    @map("enviada_email_at")
+  pdfUrl                      String?      @map("pdf_url")
+  esGrupoControlado           Boolean      @default(false) @map("es_grupo_controlado")
+  numeroRecetarioOficial      String?      @map("numero_recetario_oficial")
+  instruccionesGeneralesTutor String?      @map("instrucciones_generales_tutor")
+  canceladaAt                 DateTime?    @map("cancelada_at")
+  canceladaPorId              String?      @map("cancelada_por_id")
+  canceladaMotivo             String?      @map("cancelada_motivo")
+  createdAt                   DateTime     @default(now()) @map("created_at")
+  updatedAt                   DateTime     @updatedAt @map("updated_at")
 
-  sucursal    Sucursal     @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  consulta    Consulta?    @relation(fields: [consultaId], references: [id], onDelete: SetNull)
-  paciente    Paciente?    @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
-  mascota     Mascota?     @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
-  medico      Usuario      @relation("RecetaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
-  canceladaPor Usuario?    @relation("RecetaCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
-  items       RecetaItem[]
+  sucursal                Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  consulta                Consulta?              @relation(fields: [consultaId], references: [id], onDelete: SetNull)
+  paciente                Paciente?              @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota                 Mascota?               @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medico                  Usuario                @relation("RecetaMedico", fields: [medicoUsuarioId], references: [id], onDelete: Restrict)
+  canceladaPor            Usuario?               @relation("RecetaCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: SetNull)
+  items                   RecetaItem[]
   medicacionesProgramadas MedicacionProgramada[] @relation("MedicacionProgramadaReceta")
 
   @@unique([sucursalId, folio])
@@ -2684,22 +2687,22 @@ model Receta {
 }
 
 model RecetaItem {
-  id                       String   @id @default(cuid())
-  recetaId                 String   @map("receta_id")
-  numero                   Int
-  medicamentoCatalogoId    String?  @map("medicamento_catalogo_id")
-  nombreSnapshot           String   @map("nombre_snapshot")
-  concentracionSnapshot    String?  @map("concentracion_snapshot")
-  presentacionSnapshot     String?  @map("presentacion_snapshot")
-  dosisUnidad              String   @map("dosis_unidad")
-  dosisCantidad            Decimal  @map("dosis_cantidad") @db.Decimal(10, 3)
-  dosisVia                 String   @map("dosis_via")
-  frecuenciaHoras          Decimal  @map("frecuencia_horas") @db.Decimal(6, 2)
-  duracionDias             Int      @map("duracion_dias")
-  totalUnidadesDispensar   Decimal? @map("total_unidades_dispensar") @db.Decimal(10, 3)
-  instruccionesAdministracion String? @map("instrucciones_administracion")
-  alertasAplicadas         Json     @default("[]") @map("alertas_aplicadas")
-  createdAt                DateTime @default(now()) @map("created_at")
+  id                          String   @id @default(cuid())
+  recetaId                    String   @map("receta_id")
+  numero                      Int
+  medicamentoCatalogoId       String?  @map("medicamento_catalogo_id")
+  nombreSnapshot              String   @map("nombre_snapshot")
+  concentracionSnapshot       String?  @map("concentracion_snapshot")
+  presentacionSnapshot        String?  @map("presentacion_snapshot")
+  dosisUnidad                 String   @map("dosis_unidad")
+  dosisCantidad               Decimal  @map("dosis_cantidad") @db.Decimal(10, 3)
+  dosisVia                    String   @map("dosis_via")
+  frecuenciaHoras             Decimal  @map("frecuencia_horas") @db.Decimal(6, 2)
+  duracionDias                Int      @map("duracion_dias")
+  totalUnidadesDispensar      Decimal? @map("total_unidades_dispensar") @db.Decimal(10, 3)
+  instruccionesAdministracion String?  @map("instrucciones_administracion")
+  alertasAplicadas            Json     @default("[]") @map("alertas_aplicadas")
+  createdAt                   DateTime @default(now()) @map("created_at")
 
   receta      Receta               @relation(fields: [recetaId], references: [id], onDelete: Cascade)
   medicamento MedicamentoCatalogo? @relation(fields: [medicamentoCatalogoId], references: [id], onDelete: SetNull)
@@ -2753,44 +2756,44 @@ enum CartillaTipo {
 }
 
 model Mascota {
-  id                       String          @id @default(cuid())
-  numeroExpediente         String          @map("numero_expediente")
-  nombre                   String
-  especie                  MascotaEspecie
-  raza                     String?
-  sexo                     MascotaSexo     @default(desconocido)
-  esEsterilizado           Boolean         @default(false) @map("es_esterilizado")
-  fechaNacimiento          DateTime?       @map("fecha_nacimiento")
+  id                        String         @id @default(cuid())
+  numeroExpediente          String         @map("numero_expediente")
+  nombre                    String
+  especie                   MascotaEspecie
+  raza                      String?
+  sexo                      MascotaSexo    @default(desconocido)
+  esEsterilizado            Boolean        @default(false) @map("es_esterilizado")
+  fechaNacimiento           DateTime?      @map("fecha_nacimiento")
   fechaNacimientoAproximada Boolean        @default(false) @map("fecha_nacimiento_aproximada")
-  color                    String?
-  microchip                String?
-  pesoActualKg             Decimal?        @map("peso_actual_kg") @db.Decimal(6, 2)
-  fotoUrl                  String?         @map("foto_url")
-  tutorClienteId           String?         @map("tutor_cliente_id")
-  medicoAsignadoId         String?         @map("medico_asignado_id")
-  alergias                 Json            @default("[]")
-  antecedentesPatologicos  Json            @default("[]") @map("antecedentes_patologicos")
-  medicamentosCronicos     Json            @default("[]") @map("medicamentos_cronicos")
-  etiquetas                Json            @default("[]")
-  notasInternas            String?         @map("notas_internas")
-  alertasPersonalizadas    Json            @default("[]") @map("alertas_personalizadas")
-  fechaPrimeraVisita       DateTime?       @map("fecha_primera_visita")
-  fechaDefuncion           DateTime?       @map("fecha_defuncion")
-  causaDefuncion           String?         @map("causa_defuncion")
-  isActive                 Boolean         @default(true) @map("is_active")
-  archivedAt               DateTime?       @map("archived_at")
-  createdAt                DateTime        @default(now()) @map("created_at")
-  updatedAt                DateTime        @updatedAt @map("updated_at")
+  color                     String?
+  microchip                 String?
+  pesoActualKg              Decimal?       @map("peso_actual_kg") @db.Decimal(6, 2)
+  fotoUrl                   String?        @map("foto_url")
+  tutorClienteId            String?        @map("tutor_cliente_id")
+  medicoAsignadoId          String?        @map("medico_asignado_id")
+  alergias                  Json           @default("[]")
+  antecedentesPatologicos   Json           @default("[]") @map("antecedentes_patologicos")
+  medicamentosCronicos      Json           @default("[]") @map("medicamentos_cronicos")
+  etiquetas                 Json           @default("[]")
+  notasInternas             String?        @map("notas_internas")
+  alertasPersonalizadas     Json           @default("[]") @map("alertas_personalizadas")
+  fechaPrimeraVisita        DateTime?      @map("fecha_primera_visita")
+  fechaDefuncion            DateTime?      @map("fecha_defuncion")
+  causaDefuncion            String?        @map("causa_defuncion")
+  isActive                  Boolean        @default(true) @map("is_active")
+  archivedAt                DateTime?      @map("archived_at")
+  createdAt                 DateTime       @default(now()) @map("created_at")
+  updatedAt                 DateTime       @updatedAt @map("updated_at")
 
-  tutor          Cliente?             @relation("MascotaTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
-  medicoAsignado Usuario?             @relation("MascotaMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
-  citas          Cita[]
-  consultas      Consulta[]
-  recetas        Receta[]
-  signosVitales  ConsultaSignoVital[]
-  vacunaciones   Vacunacion[]
+  tutor             Cliente?             @relation("MascotaTutor", fields: [tutorClienteId], references: [id], onDelete: SetNull)
+  medicoAsignado    Usuario?             @relation("MascotaMedicoAsignado", fields: [medicoAsignadoId], references: [id], onDelete: SetNull)
+  citas             Cita[]
+  consultas         Consulta[]
+  recetas           Receta[]
+  signosVitales     ConsultaSignoVital[]
+  vacunaciones      Vacunacion[]
   hospitalizaciones Hospitalizacion[]
-  signosHospital SignoVitalHospital[] @relation("SignoVitalHospitalMascota")
+  signosHospital    SignoVitalHospital[] @relation("SignoVitalHospitalMascota")
 
   @@unique([numeroExpediente])
   @@index([nombre])
@@ -2803,23 +2806,23 @@ model Mascota {
 }
 
 model VacunaCatalogo {
-  id                          String   @id @default(cuid())
-  nombreComercial             String   @map("nombre_comercial")
-  principioActivo             String?  @map("principio_activo")
-  tipo                        String?
-  aplicaHumano                Boolean  @default(false) @map("aplica_humano")
-  aplicaVet                   Boolean  @default(false) @map("aplica_vet")
-  especiesAplicables          Json     @default("[]") @map("especies_aplicables")
-  esquemaDefaultHumano        Json?    @map("esquema_default_humano")
-  esquemaDefaultVet           Json?    @map("esquema_default_vet")
-  viaAplicacion               String?  @map("via_aplicacion")
-  intervaloRefuerzosDias      Int?     @map("intervalo_refuerzos_dias")
-  isObligatoriaCartillaNacional Boolean @default(false) @map("is_obligatoria_cartilla_nacional")
-  precioReferencia            Decimal? @map("precio_referencia") @db.Decimal(14, 2)
-  isPrecargadoGlobal          Boolean  @default(false) @map("is_precargado_global")
-  isActive                    Boolean  @default(true) @map("is_active")
-  createdAt                   DateTime @default(now()) @map("created_at")
-  updatedAt                   DateTime @updatedAt @map("updated_at")
+  id                            String   @id @default(cuid())
+  nombreComercial               String   @map("nombre_comercial")
+  principioActivo               String?  @map("principio_activo")
+  tipo                          String?
+  aplicaHumano                  Boolean  @default(false) @map("aplica_humano")
+  aplicaVet                     Boolean  @default(false) @map("aplica_vet")
+  especiesAplicables            Json     @default("[]") @map("especies_aplicables")
+  esquemaDefaultHumano          Json?    @map("esquema_default_humano")
+  esquemaDefaultVet             Json?    @map("esquema_default_vet")
+  viaAplicacion                 String?  @map("via_aplicacion")
+  intervaloRefuerzosDias        Int?     @map("intervalo_refuerzos_dias")
+  isObligatoriaCartillaNacional Boolean  @default(false) @map("is_obligatoria_cartilla_nacional")
+  precioReferencia              Decimal? @map("precio_referencia") @db.Decimal(14, 2)
+  isPrecargadoGlobal            Boolean  @default(false) @map("is_precargado_global")
+  isActive                      Boolean  @default(true) @map("is_active")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
 
   vacunaciones Vacunacion[]
 
@@ -2830,22 +2833,22 @@ model VacunaCatalogo {
 }
 
 model Vacunacion {
-  id                          String    @id @default(cuid())
-  pacienteId                  String?   @map("paciente_id")
-  mascotaId                   String?   @map("mascota_id")
-  vacunaCatalogoId            String    @map("vacuna_catalogo_id")
-  medicoAplicadorId           String    @map("medico_aplicador_id")
-  fechaAplicacion             DateTime  @map("fecha_aplicacion")
-  numeroLote                  String    @map("numero_lote")
-  caducidadLote               DateTime  @map("caducidad_lote")
-  marcaSnapshot               String?   @map("marca_snapshot")
-  viaAdministracion           String?   @map("via_administracion")
-  dosisAplicada               String?   @map("dosis_aplicada")
-  reaccionAdversaObservada    String?   @map("reaccion_adversa_observada")
-  proximaAplicacionFecha      DateTime? @map("proxima_aplicacion_fecha")
-  notas                       String?
-  createdAt                   DateTime  @default(now()) @map("created_at")
-  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  id                       String    @id @default(cuid())
+  pacienteId               String?   @map("paciente_id")
+  mascotaId                String?   @map("mascota_id")
+  vacunaCatalogoId         String    @map("vacuna_catalogo_id")
+  medicoAplicadorId        String    @map("medico_aplicador_id")
+  fechaAplicacion          DateTime  @map("fecha_aplicacion")
+  numeroLote               String    @map("numero_lote")
+  caducidadLote            DateTime  @map("caducidad_lote")
+  marcaSnapshot            String?   @map("marca_snapshot")
+  viaAdministracion        String?   @map("via_administracion")
+  dosisAplicada            String?   @map("dosis_aplicada")
+  reaccionAdversaObservada String?   @map("reaccion_adversa_observada")
+  proximaAplicacionFecha   DateTime? @map("proxima_aplicacion_fecha")
+  notas                    String?
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
   vacuna          VacunaCatalogo @relation(fields: [vacunaCatalogoId], references: [id], onDelete: Restrict)
   medicoAplicador Usuario        @relation("VacunacionAplicador", fields: [medicoAplicadorId], references: [id], onDelete: Restrict)
@@ -2927,7 +2930,7 @@ model Cama {
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
-  sucursal         Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  sucursal          Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
   hospitalizaciones Hospitalizacion[]
 
   @@unique([sucursalId, codigo])
@@ -2959,17 +2962,17 @@ model Hospitalizacion {
   createdAt               DateTime              @default(now()) @map("created_at")
   updatedAt               DateTime              @updatedAt @map("updated_at")
 
-  sucursal               Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  cama                   Cama                   @relation(fields: [camaId], references: [id], onDelete: Restrict)
-  paciente               Paciente?              @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
-  mascota                Mascota?               @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
-  medicoResponsable      Usuario                @relation("HospitalizacionMedico", fields: [medicoResponsableId], references: [id], onDelete: Restrict)
-  diagnosticoIngreso     DiagnosticoCatalogo?   @relation(fields: [diagnosticoIngresoId], references: [id], onDelete: SetNull)
-  altaPor                Usuario?               @relation("HospitalizacionAltaPor", fields: [altaPorId], references: [id], onDelete: SetNull)
-  ventaAlAlta            Venta?                 @relation("HospitalizacionVentaAlAlta", fields: [ventaAlAltaId], references: [id], onDelete: SetNull)
+  sucursal                Sucursal               @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  cama                    Cama                   @relation(fields: [camaId], references: [id], onDelete: Restrict)
+  paciente                Paciente?              @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  mascota                 Mascota?               @relation(fields: [mascotaId], references: [id], onDelete: Restrict)
+  medicoResponsable       Usuario                @relation("HospitalizacionMedico", fields: [medicoResponsableId], references: [id], onDelete: Restrict)
+  diagnosticoIngreso      DiagnosticoCatalogo?   @relation(fields: [diagnosticoIngresoId], references: [id], onDelete: SetNull)
+  altaPor                 Usuario?               @relation("HospitalizacionAltaPor", fields: [altaPorId], references: [id], onDelete: SetNull)
+  ventaAlAlta             Venta?                 @relation("HospitalizacionVentaAlAlta", fields: [ventaAlAltaId], references: [id], onDelete: SetNull)
   medicacionesProgramadas MedicacionProgramada[]
-  signosVitales          SignoVitalHospital[]
-  cargos                 CargoHospital[]
+  signosVitales           SignoVitalHospital[]
+  cargos                  CargoHospital[]
 
   @@unique([sucursalId, folio])
   @@index([estado, fechaIngreso])
@@ -2991,23 +2994,23 @@ model HospitalizacionFolioCounter {
 }
 
 model MedicacionProgramada {
-  id                      String                     @id @default(cuid())
-  hospitalizacionId       String                     @map("hospitalizacion_id")
-  medicamentoCatalogoId   String                     @map("medicamento_catalogo_id")
-  medicamentoNombreSnapshot String                   @map("medicamento_nombre_snapshot")
-  dosis                   String
-  via                     String
-  frecuenciaHoras         Int                        @map("frecuencia_horas")
-  horaInicio              DateTime                   @map("hora_inicio")
-  duracionDias            Int                        @map("duracion_dias")
-  indicacionMedica        String                     @map("indicacion_medica")
-  recetaId                String?                    @map("receta_id")
-  estado                  MedicacionProgramadaEstado @default(activa)
-  suspendidaAt            DateTime?                  @map("suspendida_at")
-  motivoSuspension        String?                    @map("motivo_suspension")
-  prescritaPorId          String                     @map("prescrita_por_id")
-  createdAt               DateTime                   @default(now()) @map("created_at")
-  updatedAt               DateTime                   @updatedAt @map("updated_at")
+  id                        String                     @id @default(cuid())
+  hospitalizacionId         String                     @map("hospitalizacion_id")
+  medicamentoCatalogoId     String                     @map("medicamento_catalogo_id")
+  medicamentoNombreSnapshot String                     @map("medicamento_nombre_snapshot")
+  dosis                     String
+  via                       String
+  frecuenciaHoras           Int                        @map("frecuencia_horas")
+  horaInicio                DateTime                   @map("hora_inicio")
+  duracionDias              Int                        @map("duracion_dias")
+  indicacionMedica          String                     @map("indicacion_medica")
+  recetaId                  String?                    @map("receta_id")
+  estado                    MedicacionProgramadaEstado @default(activa)
+  suspendidaAt              DateTime?                  @map("suspendida_at")
+  motivoSuspension          String?                    @map("motivo_suspension")
+  prescritaPorId            String                     @map("prescrita_por_id")
+  createdAt                 DateTime                   @default(now()) @map("created_at")
+  updatedAt                 DateTime                   @updatedAt @map("updated_at")
 
   hospitalizacion Hospitalizacion     @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
   medicamento     MedicamentoCatalogo @relation(fields: [medicamentoCatalogoId], references: [id], onDelete: Restrict)
@@ -3044,25 +3047,25 @@ model KardexAplicacion {
 }
 
 model SignoVitalHospital {
-  id                String   @id @default(cuid())
-  hospitalizacionId String   @map("hospitalizacion_id")
-  pacienteId        String?  @map("paciente_id")
-  mascotaId         String?  @map("mascota_id")
-  capturadoPorId    String   @map("capturado_por_id")
-  hora              DateTime
-  temperaturaC      Decimal? @map("temperatura_c") @db.Decimal(4, 2)
-  frecuenciaCardiaca Int?    @map("frecuencia_cardiaca")
-  frecuenciaRespiratoria Int? @map("frecuencia_respiratoria")
-  saturacionO2      Int?     @map("saturacion_o2")
-  presionSistolica  Int?     @map("presion_sistolica")
-  presionDiastolica Int?     @map("presion_diastolica")
-  glucosa           Decimal? @db.Decimal(6, 2)
-  dolorEscala       Int?     @map("dolor_escala")
+  id                      String   @id @default(cuid())
+  hospitalizacionId       String   @map("hospitalizacion_id")
+  pacienteId              String?  @map("paciente_id")
+  mascotaId               String?  @map("mascota_id")
+  capturadoPorId          String   @map("capturado_por_id")
+  hora                    DateTime
+  temperaturaC            Decimal? @map("temperatura_c") @db.Decimal(4, 2)
+  frecuenciaCardiaca      Int?     @map("frecuencia_cardiaca")
+  frecuenciaRespiratoria  Int?     @map("frecuencia_respiratoria")
+  saturacionO2            Int?     @map("saturacion_o2")
+  presionSistolica        Int?     @map("presion_sistolica")
+  presionDiastolica       Int?     @map("presion_diastolica")
+  glucosa                 Decimal? @db.Decimal(6, 2)
+  dolorEscala             Int?     @map("dolor_escala")
   tiempoLlenadoCapilarSeg Decimal? @map("tiempo_llenado_capilar_seg") @db.Decimal(4, 2)
-  mucosasColor      String?  @map("mucosas_color")
-  observaciones     String?
-  alertasMarcadas   Json     @default("[]") @map("alertas_marcadas")
-  createdAt         DateTime @default(now()) @map("created_at")
+  mucosasColor            String?  @map("mucosas_color")
+  observaciones           String?
+  alertasMarcadas         Json     @default("[]") @map("alertas_marcadas")
+  createdAt               DateTime @default(now()) @map("created_at")
 
   hospitalizacion Hospitalizacion @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
   paciente        Paciente?       @relation("SignoVitalHospitalPaciente", fields: [pacienteId], references: [id], onDelete: SetNull)
@@ -3074,23 +3077,23 @@ model SignoVitalHospital {
 }
 
 model CargoHospital {
-  id                  String            @id @default(cuid())
-  hospitalizacionId   String            @map("hospitalizacion_id")
-  tipo                CargoHospitalTipo
-  descripcion         String
-  cantidad            Decimal           @default(1) @db.Decimal(14, 3)
-  precioUnitario      Decimal           @map("precio_unitario") @db.Decimal(14, 4)
-  monto               Decimal           @db.Decimal(14, 4)
-  productoId          String?           @map("producto_id")
-  facturadoEnVentaId  String?           @map("facturado_en_venta_id")
-  facturadoAt         DateTime?         @map("facturado_at")
-  capturadoPorId      String            @map("capturado_por_id")
-  observaciones       String?
-  createdAt           DateTime          @default(now()) @map("created_at")
+  id                 String            @id @default(cuid())
+  hospitalizacionId  String            @map("hospitalizacion_id")
+  tipo               CargoHospitalTipo
+  descripcion        String
+  cantidad           Decimal           @default(1) @db.Decimal(14, 3)
+  precioUnitario     Decimal           @map("precio_unitario") @db.Decimal(14, 4)
+  monto              Decimal           @db.Decimal(14, 4)
+  productoId         String?           @map("producto_id")
+  facturadoEnVentaId String?           @map("facturado_en_venta_id")
+  facturadoAt        DateTime?         @map("facturado_at")
+  capturadoPorId     String            @map("capturado_por_id")
+  observaciones      String?
+  createdAt          DateTime          @default(now()) @map("created_at")
 
-  hospitalizacion Hospitalizacion @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
-  facturadoEnVenta Venta?         @relation("CargoHospitalFacturadoEnVenta", fields: [facturadoEnVentaId], references: [id], onDelete: SetNull)
-  capturadoPor    Usuario         @relation("CargoHospitalCapturadoPor", fields: [capturadoPorId], references: [id], onDelete: Restrict)
+  hospitalizacion  Hospitalizacion @relation(fields: [hospitalizacionId], references: [id], onDelete: Cascade)
+  facturadoEnVenta Venta?          @relation("CargoHospitalFacturadoEnVenta", fields: [facturadoEnVentaId], references: [id], onDelete: SetNull)
+  capturadoPor     Usuario         @relation("CargoHospitalCapturadoPor", fields: [capturadoPorId], references: [id], onDelete: Restrict)
 
   @@index([hospitalizacionId, tipo])
   @@index([facturadoEnVentaId])
@@ -3152,46 +3155,46 @@ enum CfdiMetodoPagoEnum {
 }
 
 model CfdiRecibido {
-  id                  String                       @id @default(cuid())
-  uuidSat             String                       @unique @map("uuid_sat")
-  tipoComprobante     CfdiRecibidoTipoComprobante  @map("tipo_comprobante")
-  serie               String?
-  folio               String?
-  emisorRfc           String                       @map("emisor_rfc")
-  emisorRazonSocial   String                       @map("emisor_razon_social")
-  receptorRfc         String                       @map("receptor_rfc")
-  receptorRazonSocial String?                      @map("receptor_razon_social")
-  fechaEmision        DateTime                     @map("fecha_emision")
-  fechaTimbrado       DateTime?                    @map("fecha_timbrado")
-  subtotal            Decimal                      @db.Decimal(14, 4)
-  descuento           Decimal                      @default(0) @db.Decimal(14, 4)
-  ivaTrasladado       Decimal                      @default(0) @map("iva_trasladado") @db.Decimal(14, 4)
-  ivaRetenido         Decimal                      @default(0) @map("iva_retenido") @db.Decimal(14, 4)
-  isrRetenido         Decimal                      @default(0) @map("isr_retenido") @db.Decimal(14, 4)
-  iepsTrasladado      Decimal                      @default(0) @map("ieps_trasladado") @db.Decimal(14, 4)
-  total               Decimal                      @db.Decimal(14, 4)
-  moneda              String                       @default("MXN")
-  tipoCambio          Decimal                      @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
-  metodoPago          CfdiMetodoPagoEnum?          @map("metodo_pago")
-  formaPago           String?                      @map("forma_pago")
-  usoCfdi             String?                      @map("uso_cfdi")
-  versionSat          String                       @default("4.0") @map("version_sat")
-  xmlRaw              String                       @map("xml_raw")
-  pdfUrl              String?                      @map("pdf_url")
-  estado              CfdiRecibidoEstado           @default(vigente)
-  canceladoAt         DateTime?                    @map("cancelado_at")
-  origen              CfdiRecibidoOrigen           @default(upload_manual)
-  uploadedByUsuarioId String?                      @map("uploaded_by_usuario_id")
-  procesado           Boolean                      @default(false)
-  procesadoAt         DateTime?                    @map("procesado_at")
-  errorProcesamiento  String?                      @map("error_procesamiento")
-  ordenCompraId       String?                      @map("orden_compra_id")
+  id                   String                      @id @default(cuid())
+  uuidSat              String                      @unique @map("uuid_sat")
+  tipoComprobante      CfdiRecibidoTipoComprobante @map("tipo_comprobante")
+  serie                String?
+  folio                String?
+  emisorRfc            String                      @map("emisor_rfc")
+  emisorRazonSocial    String                      @map("emisor_razon_social")
+  receptorRfc          String                      @map("receptor_rfc")
+  receptorRazonSocial  String?                     @map("receptor_razon_social")
+  fechaEmision         DateTime                    @map("fecha_emision")
+  fechaTimbrado        DateTime?                   @map("fecha_timbrado")
+  subtotal             Decimal                     @db.Decimal(14, 4)
+  descuento            Decimal                     @default(0) @db.Decimal(14, 4)
+  ivaTrasladado        Decimal                     @default(0) @map("iva_trasladado") @db.Decimal(14, 4)
+  ivaRetenido          Decimal                     @default(0) @map("iva_retenido") @db.Decimal(14, 4)
+  isrRetenido          Decimal                     @default(0) @map("isr_retenido") @db.Decimal(14, 4)
+  iepsTrasladado       Decimal                     @default(0) @map("ieps_trasladado") @db.Decimal(14, 4)
+  total                Decimal                     @db.Decimal(14, 4)
+  moneda               String                      @default("MXN")
+  tipoCambio           Decimal                     @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
+  metodoPago           CfdiMetodoPagoEnum?         @map("metodo_pago")
+  formaPago            String?                     @map("forma_pago")
+  usoCfdi              String?                     @map("uso_cfdi")
+  versionSat           String                      @default("4.0") @map("version_sat")
+  xmlRaw               String                      @map("xml_raw")
+  pdfUrl               String?                     @map("pdf_url")
+  estado               CfdiRecibidoEstado          @default(vigente)
+  canceladoAt          DateTime?                   @map("cancelado_at")
+  origen               CfdiRecibidoOrigen          @default(upload_manual)
+  uploadedByUsuarioId  String?                     @map("uploaded_by_usuario_id")
+  procesado            Boolean                     @default(false)
+  procesadoAt          DateTime?                   @map("procesado_at")
+  errorProcesamiento   String?                     @map("error_procesamiento")
+  ordenCompraId        String?                     @map("orden_compra_id")
   movimientoBancarioId String?                     @map("movimiento_bancario_id")
-  createdAt           DateTime                     @default(now()) @map("created_at")
-  updatedAt           DateTime                     @updatedAt @map("updated_at")
+  createdAt            DateTime                    @default(now()) @map("created_at")
+  updatedAt            DateTime                    @updatedAt @map("updated_at")
 
-  uploadedPor    Usuario?                       @relation("CfdiRecibidoUploadedPor", fields: [uploadedByUsuarioId], references: [id], onDelete: SetNull)
-  ordenCompra    OrdenCompra?                   @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
+  uploadedPor    Usuario?                    @relation("CfdiRecibidoUploadedPor", fields: [uploadedByUsuarioId], references: [id], onDelete: SetNull)
+  ordenCompra    OrdenCompra?                @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
   categorizacion CfdiRecibidoCategorizacion?
 
   @@index([emisorRfc, fechaEmision])
@@ -3203,24 +3206,24 @@ model CfdiRecibido {
 }
 
 model CategoriaContable {
-  id                 String                @id @default(cuid())
-  codigoContable     String                @unique @map("codigo_contable")
-  nombre             String
-  tipo               CategoriaContableTipo
-  esDeducibleSat     Boolean               @default(false) @map("es_deducible_sat")
-  ivaAcreditable     Boolean               @default(false) @map("iva_acreditable")
-  isrRetenibleDefault Decimal?             @map("isr_retenible_default") @db.Decimal(5, 2)
-  parentId           String?               @map("parent_id")
-  colorUi            String?               @map("color_ui")
-  descripcion        String?
-  claveProdServSatRegex String?            @map("clave_prod_serv_sat_regex")
-  isPrecargadoGlobal Boolean               @default(false) @map("is_precargado_global")
-  isActive           Boolean               @default(true) @map("is_active")
-  createdAt          DateTime              @default(now()) @map("created_at")
-  updatedAt          DateTime              @updatedAt @map("updated_at")
+  id                    String                @id @default(cuid())
+  codigoContable        String                @unique @map("codigo_contable")
+  nombre                String
+  tipo                  CategoriaContableTipo
+  esDeducibleSat        Boolean               @default(false) @map("es_deducible_sat")
+  ivaAcreditable        Boolean               @default(false) @map("iva_acreditable")
+  isrRetenibleDefault   Decimal?              @map("isr_retenible_default") @db.Decimal(5, 2)
+  parentId              String?               @map("parent_id")
+  colorUi               String?               @map("color_ui")
+  descripcion           String?
+  claveProdServSatRegex String?               @map("clave_prod_serv_sat_regex")
+  isPrecargadoGlobal    Boolean               @default(false) @map("is_precargado_global")
+  isActive              Boolean               @default(true) @map("is_active")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  parent          CategoriaContable?           @relation("CategoriaContableJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
-  hijos           CategoriaContable[]          @relation("CategoriaContableJerarquia")
+  parent           CategoriaContable?           @relation("CategoriaContableJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
+  hijos            CategoriaContable[]          @relation("CategoriaContableJerarquia")
   categorizaciones CfdiRecibidoCategorizacion[]
 
   @@index([tipo])
@@ -3229,53 +3232,53 @@ model CategoriaContable {
 }
 
 model CfdiRecibidoCategorizacion {
-  id                    String          @id @default(cuid())
-  cfdiRecibidoId        String          @unique @map("cfdi_recibido_id")
-  categoriaContableId   String          @map("categoria_contable_id")
-  categorizadoPor       CategorizadoPor @map("categorizado_por")
-  iaModelo              String?         @map("ia_modelo")
-  iaConfianza           Decimal?        @map("ia_confianza") @db.Decimal(4, 3)
-  iaJustificacion       String?         @map("ia_justificacion")
-  reglaAplicada         String?         @map("regla_aplicada")
-  asignadoPorUsuarioId  String?         @map("asignado_por_usuario_id")
-  override              Boolean         @default(false)
-  asignadoAt            DateTime        @default(now()) @map("asignado_at")
+  id                   String          @id @default(cuid())
+  cfdiRecibidoId       String          @unique @map("cfdi_recibido_id")
+  categoriaContableId  String          @map("categoria_contable_id")
+  categorizadoPor      CategorizadoPor @map("categorizado_por")
+  iaModelo             String?         @map("ia_modelo")
+  iaConfianza          Decimal?        @map("ia_confianza") @db.Decimal(4, 3)
+  iaJustificacion      String?         @map("ia_justificacion")
+  reglaAplicada        String?         @map("regla_aplicada")
+  asignadoPorUsuarioId String?         @map("asignado_por_usuario_id")
+  override             Boolean         @default(false)
+  asignadoAt           DateTime        @default(now()) @map("asignado_at")
 
-  cfdiRecibido     CfdiRecibido      @relation(fields: [cfdiRecibidoId], references: [id], onDelete: Cascade)
-  categoria        CategoriaContable @relation(fields: [categoriaContableId], references: [id], onDelete: Restrict)
-  asignadoPor      Usuario?          @relation("CfdiCategorizacionAsignadoPor", fields: [asignadoPorUsuarioId], references: [id], onDelete: SetNull)
+  cfdiRecibido CfdiRecibido      @relation(fields: [cfdiRecibidoId], references: [id], onDelete: Cascade)
+  categoria    CategoriaContable @relation(fields: [categoriaContableId], references: [id], onDelete: Restrict)
+  asignadoPor  Usuario?          @relation("CfdiCategorizacionAsignadoPor", fields: [asignadoPorUsuarioId], references: [id], onDelete: SetNull)
 
   @@index([categoriaContableId])
   @@map("cfdi_recibido_categorizaciones")
 }
 
 model OrdenCompra {
-  id                  String            @id @default(cuid())
-  folio               String
-  sucursalId          String            @map("sucursal_id")
-  proveedorRfc        String            @map("proveedor_rfc")
-  proveedorRazonSocial String           @map("proveedor_razon_social")
-  proveedorEmail      String?           @map("proveedor_email")
-  estado              OrdenCompraEstado @default(borrador)
-  fechaCreacion       DateTime          @default(now()) @map("fecha_creacion")
-  fechaEsperada       DateTime?         @map("fecha_esperada")
-  fechaRecepcion      DateTime?         @map("fecha_recepcion")
-  observaciones       String?
-  subtotal            Decimal           @default(0) @db.Decimal(14, 4)
-  ivaTotal            Decimal           @default(0) @map("iva_total") @db.Decimal(14, 4)
-  total               Decimal           @default(0) @db.Decimal(14, 4)
-  creadoPorUsuarioId  String            @map("creado_por_usuario_id")
-  autorizadoPorId     String?           @map("autorizado_por_id")
-  autorizadoAt        DateTime?         @map("autorizado_at")
-  canceladaMotivo     String?           @map("cancelada_motivo")
-  canceladaAt         DateTime?         @map("cancelada_at")
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
+  id                   String            @id @default(cuid())
+  folio                String
+  sucursalId           String            @map("sucursal_id")
+  proveedorRfc         String            @map("proveedor_rfc")
+  proveedorRazonSocial String            @map("proveedor_razon_social")
+  proveedorEmail       String?           @map("proveedor_email")
+  estado               OrdenCompraEstado @default(borrador)
+  fechaCreacion        DateTime          @default(now()) @map("fecha_creacion")
+  fechaEsperada        DateTime?         @map("fecha_esperada")
+  fechaRecepcion       DateTime?         @map("fecha_recepcion")
+  observaciones        String?
+  subtotal             Decimal           @default(0) @db.Decimal(14, 4)
+  ivaTotal             Decimal           @default(0) @map("iva_total") @db.Decimal(14, 4)
+  total                Decimal           @default(0) @db.Decimal(14, 4)
+  creadoPorUsuarioId   String            @map("creado_por_usuario_id")
+  autorizadoPorId      String?           @map("autorizado_por_id")
+  autorizadoAt         DateTime?         @map("autorizado_at")
+  canceladaMotivo      String?           @map("cancelada_motivo")
+  canceladaAt          DateTime?         @map("cancelada_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  sucursal       Sucursal           @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  creadoPor      Usuario            @relation("OrdenCompraCreadoPor", fields: [creadoPorUsuarioId], references: [id], onDelete: Restrict)
-  autorizadoPor  Usuario?           @relation("OrdenCompraAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: SetNull)
-  lineas         OrdenCompraLinea[]
+  sucursal        Sucursal           @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  creadoPor       Usuario            @relation("OrdenCompraCreadoPor", fields: [creadoPorUsuarioId], references: [id], onDelete: Restrict)
+  autorizadoPor   Usuario?           @relation("OrdenCompraAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: SetNull)
+  lineas          OrdenCompraLinea[]
   cfdisVinculados CfdiRecibido[]
 
   @@unique([sucursalId, folio])
@@ -3285,17 +3288,17 @@ model OrdenCompra {
 }
 
 model OrdenCompraLinea {
-  id              String   @id @default(cuid())
-  ordenCompraId   String   @map("orden_compra_id")
-  numero          Int
-  productoId      String?  @map("producto_id")
-  descripcion     String
-  cantidad        Decimal  @db.Decimal(14, 3)
-  precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(14, 4)
-  monto           Decimal  @db.Decimal(14, 4)
-  cantidadRecibida Decimal @default(0) @map("cantidad_recibida") @db.Decimal(14, 3)
-  ivaPct          Decimal  @default(16) @map("iva_pct") @db.Decimal(5, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String   @id @default(cuid())
+  ordenCompraId    String   @map("orden_compra_id")
+  numero           Int
+  productoId       String?  @map("producto_id")
+  descripcion      String
+  cantidad         Decimal  @db.Decimal(14, 3)
+  precioUnitario   Decimal  @map("precio_unitario") @db.Decimal(14, 4)
+  monto            Decimal  @db.Decimal(14, 4)
+  cantidadRecibida Decimal  @default(0) @map("cantidad_recibida") @db.Decimal(14, 3)
+  ivaPct           Decimal  @default(16) @map("iva_pct") @db.Decimal(5, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
 
   ordenCompra OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
 
@@ -3383,47 +3386,47 @@ enum TiendaModo {
 }
 
 model ConfigTiendaEcommerce {
-  id                          String     @id @default(cuid())
-  activa                      Boolean    @default(false)
-  subdominio                  String     @unique
-  dominioPropio               String?    @unique @map("dominio_propio")
-  nombre                      String
-  lema                        String?
-  descripcionSeo              String?    @map("descripcion_seo")
-  idiomasDisponibles          Json       @default("[\"es-MX\"]") @map("idiomas_disponibles")
-  monedas                     Json       @default("[\"MXN\"]")
-  paisesEnvio                 Json       @default("[\"MX\"]") @map("paises_envio")
-  politicasHtml               Json       @default("{}") @map("politicas_html")
-  whatsappChatWidget          String?    @map("whatsapp_chat_widget")
-  tagsAnalytics               Json       @default("{}") @map("tags_analytics")
-  modo                        TiendaModo @default(b2c)
-  mostrarInventarioPublico    Boolean    @default(true) @map("mostrar_inventario_publico")
-  bufferInventarioPublico     Int        @default(0) @map("buffer_inventario_publico")
-  guestCheckoutPermitido      Boolean    @default(true) @map("guest_checkout_permitido")
-  requiereAprobacionClienteNuevo Boolean @default(false) @map("requiere_aprobacion_cliente_nuevo")
-  brandingOverride            Json?      @map("branding_override")
-  createdAt                   DateTime   @default(now()) @map("created_at")
-  updatedAt                   DateTime   @updatedAt @map("updated_at")
+  id                             String     @id @default(cuid())
+  activa                         Boolean    @default(false)
+  subdominio                     String     @unique
+  dominioPropio                  String?    @unique @map("dominio_propio")
+  nombre                         String
+  lema                           String?
+  descripcionSeo                 String?    @map("descripcion_seo")
+  idiomasDisponibles             Json       @default("[\"es-MX\"]") @map("idiomas_disponibles")
+  monedas                        Json       @default("[\"MXN\"]")
+  paisesEnvio                    Json       @default("[\"MX\"]") @map("paises_envio")
+  politicasHtml                  Json       @default("{}") @map("politicas_html")
+  whatsappChatWidget             String?    @map("whatsapp_chat_widget")
+  tagsAnalytics                  Json       @default("{}") @map("tags_analytics")
+  modo                           TiendaModo @default(b2c)
+  mostrarInventarioPublico       Boolean    @default(true) @map("mostrar_inventario_publico")
+  bufferInventarioPublico        Int        @default(0) @map("buffer_inventario_publico")
+  guestCheckoutPermitido         Boolean    @default(true) @map("guest_checkout_permitido")
+  requiereAprobacionClienteNuevo Boolean    @default(false) @map("requiere_aprobacion_cliente_nuevo")
+  brandingOverride               Json?      @map("branding_override")
+  createdAt                      DateTime   @default(now()) @map("created_at")
+  updatedAt                      DateTime   @updatedAt @map("updated_at")
 
   @@map("config_tienda_ecommerce")
 }
 
 model CategoriaPublica {
-  id          String  @id @default(cuid())
-  nombre      String
-  slugSeo     String  @map("slug_seo")
-  parentId    String? @map("parent_id")
-  descripcion String?
-  imagenUrl   String? @map("imagen_url")
-  orden       Int     @default(0)
-  metaTitulo  String? @map("meta_titulo")
-  metaDescripcion String? @map("meta_descripcion")
-  isActive    Boolean @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(cuid())
+  nombre          String
+  slugSeo         String   @map("slug_seo")
+  parentId        String?  @map("parent_id")
+  descripcion     String?
+  imagenUrl       String?  @map("imagen_url")
+  orden           Int      @default(0)
+  metaTitulo      String?  @map("meta_titulo")
+  metaDescripcion String?  @map("meta_descripcion")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-  parent             CategoriaPublica?  @relation("CategoriaPublicaJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
-  hijos              CategoriaPublica[] @relation("CategoriaPublicaJerarquia")
+  parent              CategoriaPublica?   @relation("CategoriaPublicaJerarquia", fields: [parentId], references: [id], onDelete: SetNull)
+  hijos               CategoriaPublica[]  @relation("CategoriaPublicaJerarquia")
   productosPublicados ProductoPublicado[]
 
   @@unique([slugSeo])
@@ -3432,34 +3435,34 @@ model CategoriaPublica {
 }
 
 model ProductoPublicado {
-  id                  String   @id @default(cuid())
-  productoId          String   @unique @map("producto_id")
-  categoriaPublicaId  String?  @map("categoria_publica_id")
-  tituloPublico       String   @map("titulo_publico")
-  slugSeo             String   @map("slug_seo")
-  descripcionMd       String?  @map("descripcion_md")
-  descripcionCortaMd  String?  @map("descripcion_corta_md")
-  metaTitulo          String?  @map("meta_titulo")
-  metaDescripcion     String?  @map("meta_descripcion")
-  fotosArray          Json     @default("[]") @map("fotos_array")
-  videoUrl            String?  @map("video_url")
-  precioPublicoOverride Decimal? @map("precio_publico_override") @db.Decimal(14, 2)
-  precioPromocion     Decimal? @map("precio_promocion") @db.Decimal(14, 2)
+  id                    String    @id @default(cuid())
+  productoId            String    @unique @map("producto_id")
+  categoriaPublicaId    String?   @map("categoria_publica_id")
+  tituloPublico         String    @map("titulo_publico")
+  slugSeo               String    @map("slug_seo")
+  descripcionMd         String?   @map("descripcion_md")
+  descripcionCortaMd    String?   @map("descripcion_corta_md")
+  metaTitulo            String?   @map("meta_titulo")
+  metaDescripcion       String?   @map("meta_descripcion")
+  fotosArray            Json      @default("[]") @map("fotos_array")
+  videoUrl              String?   @map("video_url")
+  precioPublicoOverride Decimal?  @map("precio_publico_override") @db.Decimal(14, 2)
+  precioPromocion       Decimal?  @map("precio_promocion") @db.Decimal(14, 2)
   promocionVigenteHasta DateTime? @map("promocion_vigente_hasta")
-  atributosPublicos   Json     @default("{}") @map("atributos_publicos")
-  tags                Json     @default("[]")
-  rankingScore        Int      @default(0) @map("ranking_score")
-  destacadoHome       Boolean  @default(false) @map("destacado_home")
-  publicadoAt         DateTime @default(now()) @map("publicado_at")
-  relacionadosIds     Json     @default("[]") @map("relacionados_ids")
-  isPublicado         Boolean  @default(true) @map("is_publicado")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  atributosPublicos     Json      @default("{}") @map("atributos_publicos")
+  tags                  Json      @default("[]")
+  rankingScore          Int       @default(0) @map("ranking_score")
+  destacadoHome         Boolean   @default(false) @map("destacado_home")
+  publicadoAt           DateTime  @default(now()) @map("publicado_at")
+  relacionadosIds       Json      @default("[]") @map("relacionados_ids")
+  isPublicado           Boolean   @default(true) @map("is_publicado")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  producto       Producto            @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  categoriaPublica CategoriaPublica? @relation(fields: [categoriaPublicaId], references: [id], onDelete: SetNull)
-  traducciones   ProductoTraduccion[]
-  resenas        ProductoResena[]
+  producto         Producto             @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  categoriaPublica CategoriaPublica?    @relation(fields: [categoriaPublicaId], references: [id], onDelete: SetNull)
+  traducciones     ProductoTraduccion[]
+  resenas          ProductoResena[]
 
   @@unique([slugSeo])
   @@index([categoriaPublicaId])
@@ -3486,35 +3489,35 @@ model ProductoTraduccion {
 }
 
 model CarritoEcommerce {
-  id                 String        @id @default(cuid())
-  sessionIdAnonimo   String?       @map("session_id_anonimo")
-  clienteId          String?       @map("cliente_id")
-  emailAnonimo       String?       @map("email_anonimo")
-  canal              CarritoCanal  @default(web)
-  items              Json          @default("[]")
-  subtotal           Decimal       @default(0) @db.Decimal(14, 4)
-  descuentoTotal     Decimal       @default(0) @map("descuento_total") @db.Decimal(14, 4)
-  costoEnvio         Decimal       @default(0) @map("costo_envio") @db.Decimal(14, 4)
-  total              Decimal       @default(0) @db.Decimal(14, 4)
-  moneda             String        @default("MXN")
-  cuponCodigo        String?       @map("cupon_codigo")
-  promocionesAplicadas Json        @default("[]") @map("promociones_aplicadas")
-  direccionEnvio     Json?         @map("direccion_envio")
-  direccionFactura   Json?         @map("direccion_factura")
-  metodoEnvio        PedidoEcommerceMetodoEnvio? @map("metodo_envio")
-  metodoPagoSeleccionado String?   @map("metodo_pago_seleccionado")
-  status             CarritoEstado @default(activo)
-  abandonadoAt       DateTime?     @map("abandonado_at")
-  recordatorio24hAt  DateTime?     @map("recordatorio_24h_at")
-  recordatorio72hAt  DateTime?     @map("recordatorio_72h_at")
-  recoveryCodigo     String?       @unique @map("recovery_codigo")
-  convertidoAPedidoId String?      @map("convertido_a_pedido_id")
-  ip                 String?
-  userAgent          String?       @map("user_agent")
-  referrer           String?
-  utm                Json?
-  createdAt          DateTime      @default(now()) @map("created_at")
-  updatedAt          DateTime      @updatedAt @map("updated_at")
+  id                     String                      @id @default(cuid())
+  sessionIdAnonimo       String?                     @map("session_id_anonimo")
+  clienteId              String?                     @map("cliente_id")
+  emailAnonimo           String?                     @map("email_anonimo")
+  canal                  CarritoCanal                @default(web)
+  items                  Json                        @default("[]")
+  subtotal               Decimal                     @default(0) @db.Decimal(14, 4)
+  descuentoTotal         Decimal                     @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  costoEnvio             Decimal                     @default(0) @map("costo_envio") @db.Decimal(14, 4)
+  total                  Decimal                     @default(0) @db.Decimal(14, 4)
+  moneda                 String                      @default("MXN")
+  cuponCodigo            String?                     @map("cupon_codigo")
+  promocionesAplicadas   Json                        @default("[]") @map("promociones_aplicadas")
+  direccionEnvio         Json?                       @map("direccion_envio")
+  direccionFactura       Json?                       @map("direccion_factura")
+  metodoEnvio            PedidoEcommerceMetodoEnvio? @map("metodo_envio")
+  metodoPagoSeleccionado String?                     @map("metodo_pago_seleccionado")
+  status                 CarritoEstado               @default(activo)
+  abandonadoAt           DateTime?                   @map("abandonado_at")
+  recordatorio24hAt      DateTime?                   @map("recordatorio_24h_at")
+  recordatorio72hAt      DateTime?                   @map("recordatorio_72h_at")
+  recoveryCodigo         String?                     @unique @map("recovery_codigo")
+  convertidoAPedidoId    String?                     @map("convertido_a_pedido_id")
+  ip                     String?
+  userAgent              String?                     @map("user_agent")
+  referrer               String?
+  utm                    Json?
+  createdAt              DateTime                    @default(now()) @map("created_at")
+  updatedAt              DateTime                    @updatedAt @map("updated_at")
 
   cliente Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
 
@@ -3525,45 +3528,48 @@ model CarritoEcommerce {
 }
 
 model PedidoEcommerce {
-  id                 String                    @id @default(cuid())
-  folioPublico       String                    @unique @map("folio_publico")
-  carritoOrigenId    String?                   @map("carrito_origen_id")
-  clienteId          String?                   @map("cliente_id")
-  emailComprador     String                    @map("email_comprador")
-  items              Json                      @default("[]")
-  subtotal           Decimal                   @db.Decimal(14, 4)
-  descuentoTotal     Decimal                   @default(0) @map("descuento_total") @db.Decimal(14, 4)
-  costoEnvio         Decimal                   @default(0) @map("costo_envio") @db.Decimal(14, 4)
-  total              Decimal                   @db.Decimal(14, 4)
-  moneda             String                    @default("MXN")
-  tipoCambio         Decimal                   @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
-  cuponesSnapshot    Json                      @default("[]") @map("cupones_snapshot")
-  direccionEnvio     Json?                     @map("direccion_envio")
-  direccionFactura   Json?                     @map("direccion_factura")
-  requiereFactura    Boolean                   @default(false) @map("requiere_factura")
-  datosFactura       Json?                     @map("datos_factura")
-  statusPago         PedidoEcommerceEstadoPago @default(pendiente) @map("status_pago")
-  paymentIntentId    String?                   @map("payment_intent_id")
-  metodoPago         String?                   @map("metodo_pago")
-  metodoEnvio        PedidoEcommerceMetodoEnvio @map("metodo_envio")
-  sucursalPickupId   String?                   @map("sucursal_pickup_id")
-  paqueteria         EnvioPaqueteria?
-  guiaTracking       String?                   @map("guia_tracking")
-  costoEnvioReal     Decimal?                  @map("costo_envio_real") @db.Decimal(14, 4)
-  statusPedido       PedidoEcommerceEstado     @default(recibido) @map("status_pedido")
-  ventaIdGenerada    String?                   @unique @map("venta_id_generada")
-  facturaCfdiId      String?                   @map("factura_cfdi_id")
-  pagoConfirmadoAt   DateTime?                 @map("pago_confirmado_at")
-  enviadoAt          DateTime?                 @map("enviado_at")
-  entregadoAt        DateTime?                 @map("entregado_at")
-  canceladoAt        DateTime?                 @map("cancelado_at")
-  canceladoMotivo    String?                   @map("cancelado_motivo")
-  createdAt          DateTime                  @default(now()) @map("created_at")
-  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  id               String                     @id @default(cuid())
+  folioPublico     String                     @unique @map("folio_publico")
+  carritoOrigenId  String?                    @map("carrito_origen_id")
+  clienteId        String?                    @map("cliente_id")
+  emailComprador   String                     @map("email_comprador")
+  items            Json                       @default("[]")
+  subtotal         Decimal                    @db.Decimal(14, 4)
+  descuentoTotal   Decimal                    @default(0) @map("descuento_total") @db.Decimal(14, 4)
+  costoEnvio       Decimal                    @default(0) @map("costo_envio") @db.Decimal(14, 4)
+  total            Decimal                    @db.Decimal(14, 4)
+  moneda           String                     @default("MXN")
+  tipoCambio       Decimal                    @default(1) @map("tipo_cambio") @db.Decimal(10, 6)
+  cuponesSnapshot  Json                       @default("[]") @map("cupones_snapshot")
+  direccionEnvio   Json?                      @map("direccion_envio")
+  direccionFactura Json?                      @map("direccion_factura")
+  requiereFactura  Boolean                    @default(false) @map("requiere_factura")
+  datosFactura     Json?                      @map("datos_factura")
+  statusPago       PedidoEcommerceEstadoPago  @default(pendiente) @map("status_pago")
+  paymentIntentId  String?                    @map("payment_intent_id")
+  metodoPago       String?                    @map("metodo_pago")
+  metodoEnvio      PedidoEcommerceMetodoEnvio @map("metodo_envio")
+  sucursalPickupId String?                    @map("sucursal_pickup_id")
+  paqueteria       EnvioPaqueteria?
+  guiaTracking     String?                    @map("guia_tracking")
+  costoEnvioReal   Decimal?                   @map("costo_envio_real") @db.Decimal(14, 4)
+  statusPedido     PedidoEcommerceEstado      @default(recibido) @map("status_pedido")
+  asignadoAId      String?                    @map("asignado_a_id")
+  asignadoAt       DateTime?                  @map("asignado_at")
+  ventaIdGenerada  String?                    @unique @map("venta_id_generada")
+  facturaCfdiId    String?                    @map("factura_cfdi_id")
+  pagoConfirmadoAt DateTime?                  @map("pago_confirmado_at")
+  enviadoAt        DateTime?                  @map("enviado_at")
+  entregadoAt      DateTime?                  @map("entregado_at")
+  canceladoAt      DateTime?                  @map("cancelado_at")
+  canceladoMotivo  String?                    @map("cancelado_motivo")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+  updatedAt        DateTime                   @updatedAt @map("updated_at")
 
-  cliente        Cliente?              @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  sucursalPickup Sucursal?             @relation(fields: [sucursalPickupId], references: [id], onDelete: SetNull)
-  ventaGenerada  Venta?                @relation("PedidoEcommerceVenta", fields: [ventaIdGenerada], references: [id], onDelete: SetNull)
+  cliente        Cliente?                @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  sucursalPickup Sucursal?               @relation(fields: [sucursalPickupId], references: [id], onDelete: SetNull)
+  asignadoA      Usuario?                @relation("PedidoEcommerceAsignado", fields: [asignadoAId], references: [id], onDelete: SetNull)
+  ventaGenerada  Venta?                  @relation("PedidoEcommerceVenta", fields: [ventaIdGenerada], references: [id], onDelete: SetNull)
   eventos        PedidoEcommerceEvento[]
   envio          EnvioPedido?
   pickup         PickupPedido?
@@ -3573,17 +3579,18 @@ model PedidoEcommerce {
   @@index([statusPedido, createdAt])
   @@index([statusPago])
   @@index([emailComprador])
+  @@index([asignadoAId])
   @@map("pedidos_ecommerce")
 }
 
 model PedidoEcommerceEvento {
-  id              String   @id @default(cuid())
-  pedidoId        String   @map("pedido_id")
-  tipo            String
-  descripcion     String
-  visibleCliente  Boolean  @default(true) @map("visible_cliente")
-  metadata        Json?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  pedidoId       String   @map("pedido_id")
+  tipo           String
+  descripcion    String
+  visibleCliente Boolean  @default(true) @map("visible_cliente")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
 
   pedido PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
@@ -3599,14 +3606,54 @@ model PedidoEcommerceFolioCounter {
   @@map("pedido_ecommerce_folio_counter")
 }
 
-model ZonaEnvio {
-  id              String   @id @default(cuid())
-  nombre          String
-  cpsIncluidos    Json     @default("[]") @map("cps_incluidos")
-  estadosIncluidos Json    @default("[]") @map("estados_incluidos")
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
+/// Config personalizable del flujo de pedidos online por tenant (singleton).
+/// etiquetasEstado: override de los nombres visibles de cada estado canónico
+/// (ej. { "preparando": "Surtido", "en_camino": "En proceso" }).
+model ConfigEcommerce {
+  id              Int      @id @default(1)
+  etiquetasEstado Json     @default("{}") @map("etiquetas_estado")
   updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("config_ecommerce")
+}
+
+enum NotificacionDestinatario {
+  usuario
+  cliente
+}
+
+/// Notificación in-app (campana). Polimórfica: dirigida a un empleado del
+/// tenant (usuarioId) o a un cliente de la tienda (clienteId).
+model Notificacion {
+  id               String                   @id @default(cuid())
+  destinatarioTipo NotificacionDestinatario @map("destinatario_tipo")
+  usuarioId        String?                  @map("usuario_id")
+  clienteId        String?                  @map("cliente_id")
+  tipo             String
+  titulo           String
+  cuerpo           String
+  link             String?
+  leida            Boolean                  @default(false)
+  leidaAt          DateTime?                @map("leida_at")
+  metadata         Json?
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  usuario Usuario? @relation("NotificacionUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  cliente Cliente? @relation("NotificacionCliente", fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, leida, createdAt])
+  @@index([clienteId, leida, createdAt])
+  @@map("notificaciones")
+}
+
+model ZonaEnvio {
+  id               String   @id @default(cuid())
+  nombre           String
+  cpsIncluidos     Json     @default("[]") @map("cps_incluidos")
+  estadosIncluidos Json     @default("[]") @map("estados_incluidos")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   tarifas TarifaEnvio[]
 
@@ -3614,18 +3661,18 @@ model ZonaEnvio {
 }
 
 model TarifaEnvio {
-  id                   String                 @id @default(cuid())
-  zonaEnvioId          String                 @map("zona_envio_id")
-  paqueteria           EnvioPaqueteria
-  nombrePublico        String                 @map("nombre_publico")
-  tipoCalculo          TarifaEnvioTipoCalculo @default(fija) @map("tipo_calculo")
-  montoFijo            Decimal?               @map("monto_fijo") @db.Decimal(14, 2)
-  escalonPeso          Json?                  @map("escalon_peso")
-  montoMinimoEnvioGratis Decimal?             @map("monto_minimo_envio_gratis") @db.Decimal(14, 2)
-  diasEntregaEstimados Int?                   @map("dias_entrega_estimados")
-  isActive             Boolean                @default(true) @map("is_active")
-  createdAt            DateTime               @default(now()) @map("created_at")
-  updatedAt            DateTime               @updatedAt @map("updated_at")
+  id                     String                 @id @default(cuid())
+  zonaEnvioId            String                 @map("zona_envio_id")
+  paqueteria             EnvioPaqueteria
+  nombrePublico          String                 @map("nombre_publico")
+  tipoCalculo            TarifaEnvioTipoCalculo @default(fija) @map("tipo_calculo")
+  montoFijo              Decimal?               @map("monto_fijo") @db.Decimal(14, 2)
+  escalonPeso            Json?                  @map("escalon_peso")
+  montoMinimoEnvioGratis Decimal?               @map("monto_minimo_envio_gratis") @db.Decimal(14, 2)
+  diasEntregaEstimados   Int?                   @map("dias_entrega_estimados")
+  isActive               Boolean                @default(true) @map("is_active")
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
 
   zonaEnvio ZonaEnvio @relation(fields: [zonaEnvioId], references: [id], onDelete: Cascade)
 
@@ -3634,18 +3681,18 @@ model TarifaEnvio {
 }
 
 model EnvioPedido {
-  id              String          @id @default(cuid())
-  pedidoId        String          @unique @map("pedido_id")
-  paqueteria      EnvioPaqueteria
-  guiaTracking    String?         @map("guia_tracking")
-  etiquetaUrl     String?         @map("etiqueta_url")
-  costoReal       Decimal?        @map("costo_real") @db.Decimal(14, 4)
-  costoCobrado    Decimal?        @map("costo_cobrado") @db.Decimal(14, 4)
-  statusExterno   String?         @map("status_externo")
-  eventosExternos Json            @default("[]") @map("eventos_externos")
-  evidenciaEntregaUrl String?     @map("evidencia_entrega_url")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  id                  String          @id @default(cuid())
+  pedidoId            String          @unique @map("pedido_id")
+  paqueteria          EnvioPaqueteria
+  guiaTracking        String?         @map("guia_tracking")
+  etiquetaUrl         String?         @map("etiqueta_url")
+  costoReal           Decimal?        @map("costo_real") @db.Decimal(14, 4)
+  costoCobrado        Decimal?        @map("costo_cobrado") @db.Decimal(14, 4)
+  statusExterno       String?         @map("status_externo")
+  eventosExternos     Json            @default("[]") @map("eventos_externos")
+  evidenciaEntregaUrl String?         @map("evidencia_entrega_url")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
 
   pedido PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
@@ -3681,13 +3728,13 @@ model ProductoResena {
 }
 
 model Wishlist {
-  id           String   @id @default(cuid())
-  clienteId    String   @map("cliente_id")
-  nombre       String   @default("Mi lista")
-  esPublica    Boolean  @default(false) @map("es_publica")
-  slugPublico  String?  @unique @map("slug_publico")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  clienteId   String   @map("cliente_id")
+  nombre      String   @default("Mi lista")
+  esPublica   Boolean  @default(false) @map("es_publica")
+  slugPublico String?  @unique @map("slug_publico")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   items   WishlistItem[]
@@ -3697,10 +3744,10 @@ model Wishlist {
 }
 
 model WishlistItem {
-  id          String   @id @default(cuid())
-  wishlistId  String   @map("wishlist_id")
-  productoPublicadoId String @map("producto_publicado_id")
-  agregadoAt  DateTime @default(now()) @map("agregado_at")
+  id                  String   @id @default(cuid())
+  wishlistId          String   @map("wishlist_id")
+  productoPublicadoId String   @map("producto_publicado_id")
+  agregadoAt          DateTime @default(now()) @map("agregado_at")
 
   wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
 
@@ -3709,15 +3756,15 @@ model WishlistItem {
 }
 
 model ConfigPickupSucursal {
-  id                      String   @id @default(cuid())
-  sucursalId              String   @unique @map("sucursal_id")
-  activa                  Boolean  @default(false)
-  horarioPickup           Json     @default("{}") @map("horario_pickup")
-  tiempoPreparacionPromedioMin Int @default(60) @map("tiempo_preparacion_promedio_min")
-  requiereIdRecoger       Boolean  @default(true) @map("requiere_id_recoger")
-  notificacionListoCanal  String   @default("email") @map("notificacion_listo_canal")
-  createdAt               DateTime @default(now()) @map("created_at")
-  updatedAt               DateTime @updatedAt @map("updated_at")
+  id                           String   @id @default(cuid())
+  sucursalId                   String   @unique @map("sucursal_id")
+  activa                       Boolean  @default(false)
+  horarioPickup                Json     @default("{}") @map("horario_pickup")
+  tiempoPreparacionPromedioMin Int      @default(60) @map("tiempo_preparacion_promedio_min")
+  requiereIdRecoger            Boolean  @default(true) @map("requiere_id_recoger")
+  notificacionListoCanal       String   @default("email") @map("notificacion_listo_canal")
+  createdAt                    DateTime @default(now()) @map("created_at")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
 
@@ -3725,16 +3772,16 @@ model ConfigPickupSucursal {
 }
 
 model PickupPedido {
-  id              String    @id @default(cuid())
-  pedidoId        String    @unique @map("pedido_id")
-  sucursalId      String    @map("sucursal_id")
-  listoAt         DateTime? @map("listo_at")
-  recogidoAt      DateTime? @map("recogido_at")
-  recogidoPorNombre String? @map("recogido_por_nombre")
-  recogidoPorId   String?   @map("recogido_por_id")
-  responsableUserId String? @map("responsable_user_id")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(cuid())
+  pedidoId          String    @unique @map("pedido_id")
+  sucursalId        String    @map("sucursal_id")
+  listoAt           DateTime? @map("listo_at")
+  recogidoAt        DateTime? @map("recogido_at")
+  recogidoPorNombre String?   @map("recogido_por_nombre")
+  recogidoPorId     String?   @map("recogido_por_id")
+  responsableUserId String?   @map("responsable_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   pedido          PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   sucursal        Sucursal        @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
@@ -3744,16 +3791,16 @@ model PickupPedido {
 }
 
 model SeoConfiguracionTienda {
-  id                   String   @id @default(cuid())
-  robotsTxt            String?  @map("robots_txt")
-  sitemapAuto          Boolean  @default(true) @map("sitemap_auto")
-  redirects301         Json     @default("[]") @map("redirects_301")
-  structuredDataTemplate Json?  @map("structured_data_template")
-  googleSearchConsoleVerif String? @map("google_search_console_verif")
-  bingVerif            String?  @map("bing_verif")
-  canonicalDominio     String?  @map("canonical_dominio")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(cuid())
+  robotsTxt                String?  @map("robots_txt")
+  sitemapAuto              Boolean  @default(true) @map("sitemap_auto")
+  redirects301             Json     @default("[]") @map("redirects_301")
+  structuredDataTemplate   Json?    @map("structured_data_template")
+  googleSearchConsoleVerif String?  @map("google_search_console_verif")
+  bingVerif                String?  @map("bing_verif")
+  canonicalDominio         String?  @map("canonical_dominio")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@map("seo_configuracion_tienda")
 }
@@ -3898,30 +3945,30 @@ enum LoyaltyMovimientoTipo {
 }
 
 model Promocion {
-  id                String          @id @default(cuid())
-  nombre            String
-  descripcion       String?
-  tipo              PromocionTipo
-  condiciones       Json            @default("{}")
-  acciones          Json            @default("{}")
-  vigenciaInicio    DateTime        @map("vigencia_inicio")
-  vigenciaFin       DateTime?       @map("vigencia_fin")
-  horarios          Json?
-  canales           Json            @default("[\"todos\"]")
-  sucursalesAplicables Json         @default("[]") @map("sucursales_aplicables")
-  stackConOtras     Boolean         @default(false) @map("stack_con_otras")
-  prioridad         Int             @default(100)
-  limiteUsosTotal   Int?            @map("limite_usos_total")
-  limiteUsosCliente Int?            @map("limite_usos_cliente")
-  usosActuales      Int             @default(0) @map("usos_actuales")
-  requiereCodigo    Boolean         @default(false) @map("requiere_codigo")
-  codigo            String?
-  visiblePublico    Boolean         @default(true) @map("visible_publico")
-  bannerUrl         String?         @map("banner_url")
-  status            PromocionStatus @default(draft)
-  tags              Json            @default("[]")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  id                   String          @id @default(cuid())
+  nombre               String
+  descripcion          String?
+  tipo                 PromocionTipo
+  condiciones          Json            @default("{}")
+  acciones             Json            @default("{}")
+  vigenciaInicio       DateTime        @map("vigencia_inicio")
+  vigenciaFin          DateTime?       @map("vigencia_fin")
+  horarios             Json?
+  canales              Json            @default("[\"todos\"]")
+  sucursalesAplicables Json            @default("[]") @map("sucursales_aplicables")
+  stackConOtras        Boolean         @default(false) @map("stack_con_otras")
+  prioridad            Int             @default(100)
+  limiteUsosTotal      Int?            @map("limite_usos_total")
+  limiteUsosCliente    Int?            @map("limite_usos_cliente")
+  usosActuales         Int             @default(0) @map("usos_actuales")
+  requiereCodigo       Boolean         @default(false) @map("requiere_codigo")
+  codigo               String?
+  visiblePublico       Boolean         @default(true) @map("visible_publico")
+  bannerUrl            String?         @map("banner_url")
+  status               PromocionStatus @default(draft)
+  tags                 Json            @default("[]")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
 
   productos    PromocionProducto[]
   aplicaciones PromocionAplicacion[]
@@ -3933,10 +3980,10 @@ model Promocion {
 }
 
 model PromocionProducto {
-  id           String              @id @default(cuid())
-  promocionId  String              @map("promocion_id")
-  productoId   String              @map("producto_id")
-  rol          PromocionProductoRol @default(incluido)
+  id          String               @id @default(cuid())
+  promocionId String               @map("promocion_id")
+  productoId  String               @map("producto_id")
+  rol         PromocionProductoRol @default(incluido)
 
   promocion Promocion @relation(fields: [promocionId], references: [id], onDelete: Cascade)
   producto  Producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
@@ -3947,14 +3994,14 @@ model PromocionProducto {
 }
 
 model PromocionAplicacion {
-  id                String    @id @default(cuid())
-  promocionId       String    @map("promocion_id")
-  ventaId           String    @map("venta_id")
-  clienteId         String?   @map("cliente_id")
-  montoDescuento    Decimal   @map("monto_descuento") @db.Decimal(14, 4)
-  productosAfectados Json     @default("[]") @map("productos_afectados")
-  revocadaAt        DateTime? @map("revocada_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  id                 String    @id @default(cuid())
+  promocionId        String    @map("promocion_id")
+  ventaId            String    @map("venta_id")
+  clienteId          String?   @map("cliente_id")
+  montoDescuento     Decimal   @map("monto_descuento") @db.Decimal(14, 4)
+  productosAfectados Json      @default("[]") @map("productos_afectados")
+  revocadaAt         DateTime? @map("revocada_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   promocion Promocion @relation(fields: [promocionId], references: [id], onDelete: Restrict)
   venta     Venta     @relation("VentaPromociones", fields: [ventaId], references: [id], onDelete: Cascade)
@@ -3998,17 +4045,17 @@ model SegmentoClienteMiembro {
 }
 
 model ClienteMetricasRfm {
-  id                    String      @id @default(cuid())
-  clienteId             String      @unique @map("cliente_id")
-  recencyDias           Int?        @map("recency_dias")
-  frequency             Int         @default(0)
-  monetary              Decimal     @default(0) @db.Decimal(14, 2)
-  scoreR                Int?        @map("score_r")
-  scoreF                Int?        @map("score_f")
-  scoreM                Int?        @map("score_m")
-  segmentoRfmCalculado  SegmentoRfm? @map("segmento_rfm_calculado")
-  ultimaCompraAt        DateTime?   @map("ultima_compra_at")
-  refreshedAt           DateTime    @default(now()) @map("refreshed_at")
+  id                   String       @id @default(cuid())
+  clienteId            String       @unique @map("cliente_id")
+  recencyDias          Int?         @map("recency_dias")
+  frequency            Int          @default(0)
+  monetary             Decimal      @default(0) @db.Decimal(14, 2)
+  scoreR               Int?         @map("score_r")
+  scoreF               Int?         @map("score_f")
+  scoreM               Int?         @map("score_m")
+  segmentoRfmCalculado SegmentoRfm? @map("segmento_rfm_calculado")
+  ultimaCompraAt       DateTime?    @map("ultima_compra_at")
+  refreshedAt          DateTime     @default(now()) @map("refreshed_at")
 
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
@@ -4017,20 +4064,20 @@ model ClienteMetricasRfm {
 }
 
 model PlantillaMensaje {
-  id                  String         @id @default(cuid())
-  nombre              String
-  canal               PlantillaCanal
-  tipo                PlantillaTipo
-  idioma              String         @default("es-MX")
-  asunto              String?
-  contenidoHandlebars String         @map("contenido_handlebars")
-  variablesDisponibles Json          @default("[]") @map("variables_disponibles")
-  aprobacionMetaStatus String        @default("no_aplica") @map("aprobacion_meta_status")
-  metaTemplateId      String?        @map("meta_template_id")
-  scope               PlantillaScope @default(tenant_propia)
-  isActive            Boolean        @default(true) @map("is_active")
-  createdAt           DateTime       @default(now()) @map("created_at")
-  updatedAt           DateTime       @updatedAt @map("updated_at")
+  id                   String         @id @default(cuid())
+  nombre               String
+  canal                PlantillaCanal
+  tipo                 PlantillaTipo
+  idioma               String         @default("es-MX")
+  asunto               String?
+  contenidoHandlebars  String         @map("contenido_handlebars")
+  variablesDisponibles Json           @default("[]") @map("variables_disponibles")
+  aprobacionMetaStatus String         @default("no_aplica") @map("aprobacion_meta_status")
+  metaTemplateId       String?        @map("meta_template_id")
+  scope                PlantillaScope @default(tenant_propia)
+  isActive             Boolean        @default(true) @map("is_active")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
 
   campanas Campana[]
 
@@ -4039,24 +4086,24 @@ model PlantillaMensaje {
 }
 
 model Campana {
-  id                    String             @id @default(cuid())
-  nombre                String
-  objetivo              String
-  canal                 CampanaCanal
-  segmentoId            String?            @map("segmento_id")
-  plantillaId           String?            @map("plantilla_id")
-  variablesDinamicas    Json               @default("{}") @map("variables_dinamicas")
-  tipoDisparo           CampanaTipoDisparo @default(inmediato) @map("tipo_disparo")
-  triggerEventConfig    Json?              @map("trigger_event_config")
-  recurrenteCron        String?            @map("recurrente_cron")
-  ventanaHorarioEnvio   Json               @default("{\"desde\":\"09:00\",\"hasta\":\"21:00\"}") @map("ventana_horario_envio")
-  status                CampanaStatus      @default(draft)
-  stats                 Json               @default("{}")
-  presupuestoMaxCreditos Decimal           @default(500) @map("presupuesto_max_creditos") @db.Decimal(14, 2)
-  creditosConsumidos    Decimal            @default(0) @map("creditos_consumidos") @db.Decimal(14, 2)
-  programadaPara        DateTime?          @map("programada_para")
-  createdAt             DateTime           @default(now()) @map("created_at")
-  updatedAt             DateTime           @updatedAt @map("updated_at")
+  id                     String             @id @default(cuid())
+  nombre                 String
+  objetivo               String
+  canal                  CampanaCanal
+  segmentoId             String?            @map("segmento_id")
+  plantillaId            String?            @map("plantilla_id")
+  variablesDinamicas     Json               @default("{}") @map("variables_dinamicas")
+  tipoDisparo            CampanaTipoDisparo @default(inmediato) @map("tipo_disparo")
+  triggerEventConfig     Json?              @map("trigger_event_config")
+  recurrenteCron         String?            @map("recurrente_cron")
+  ventanaHorarioEnvio    Json               @default("{\"desde\":\"09:00\",\"hasta\":\"21:00\"}") @map("ventana_horario_envio")
+  status                 CampanaStatus      @default(draft)
+  stats                  Json               @default("{}")
+  presupuestoMaxCreditos Decimal            @default(500) @map("presupuesto_max_creditos") @db.Decimal(14, 2)
+  creditosConsumidos     Decimal            @default(0) @map("creditos_consumidos") @db.Decimal(14, 2)
+  programadaPara         DateTime?          @map("programada_para")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
   segmento  SegmentoCliente?  @relation(fields: [segmentoId], references: [id], onDelete: SetNull)
   plantilla PlantillaMensaje? @relation(fields: [plantillaId], references: [id], onDelete: SetNull)
@@ -4068,21 +4115,21 @@ model Campana {
 }
 
 model CampanaEnvio {
-  id            String             @id @default(cuid())
-  campanaId     String             @map("campana_id")
-  clienteId     String?            @map("cliente_id")
-  destino       String
-  canal         CampanaCanal
-  status        CampanaEnvioStatus @default(pendiente)
-  proveedorMsgId String?           @map("proveedor_msg_id")
-  creditos      Decimal            @default(0) @db.Decimal(14, 4)
-  errorMensaje  String?            @map("error_mensaje")
-  enviadoAt     DateTime?          @map("enviado_at")
-  entregadoAt   DateTime?          @map("entregado_at")
-  abiertoAt     DateTime?          @map("abierto_at")
-  clickAt       DateTime?          @map("click_at")
-  convertidoAt  DateTime?          @map("convertido_at")
-  createdAt     DateTime           @default(now()) @map("created_at")
+  id             String             @id @default(cuid())
+  campanaId      String             @map("campana_id")
+  clienteId      String?            @map("cliente_id")
+  destino        String
+  canal          CampanaCanal
+  status         CampanaEnvioStatus @default(pendiente)
+  proveedorMsgId String?            @map("proveedor_msg_id")
+  creditos       Decimal            @default(0) @db.Decimal(14, 4)
+  errorMensaje   String?            @map("error_mensaje")
+  enviadoAt      DateTime?          @map("enviado_at")
+  entregadoAt    DateTime?          @map("entregado_at")
+  abiertoAt      DateTime?          @map("abierto_at")
+  clickAt        DateTime?          @map("click_at")
+  convertidoAt   DateTime?          @map("convertido_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
 
   campana Campana  @relation(fields: [campanaId], references: [id], onDelete: Cascade)
   cliente Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
@@ -4094,13 +4141,13 @@ model CampanaEnvio {
 }
 
 model CampanaTrigger {
-  id                       String   @id @default(cuid())
-  evento                   String
-  campanaId                String   @map("campana_id")
-  ventanaEnvio             Json?    @map("ventana_envio")
-  frecuenciaMaxPorCliente30d Int    @default(1) @map("frecuencia_max_por_cliente_30d")
-  isActive                 Boolean  @default(true) @map("is_active")
-  createdAt                DateTime @default(now()) @map("created_at")
+  id                         String   @id @default(cuid())
+  evento                     String
+  campanaId                  String   @map("campana_id")
+  ventanaEnvio               Json?    @map("ventana_envio")
+  frecuenciaMaxPorCliente30d Int      @default(1) @map("frecuencia_max_por_cliente_30d")
+  isActive                   Boolean  @default(true) @map("is_active")
+  createdAt                  DateTime @default(now()) @map("created_at")
 
   campana Campana @relation(fields: [campanaId], references: [id], onDelete: Cascade)
 
@@ -4109,11 +4156,11 @@ model CampanaTrigger {
 }
 
 model ClienteOptOut {
-  id         String     @id @default(cuid())
-  clienteId  String     @map("cliente_id")
-  canal      CampanaCanal
-  tipo       OptOutTipo @default(promocional)
-  createdAt  DateTime   @default(now()) @map("created_at")
+  id        String       @id @default(cuid())
+  clienteId String       @map("cliente_id")
+  canal     CampanaCanal
+  tipo      OptOutTipo   @default(promocional)
+  createdAt DateTime     @default(now()) @map("created_at")
 
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
@@ -4123,18 +4170,18 @@ model ClienteOptOut {
 }
 
 model LoyaltyProgram {
-  id                    String      @id @default(cuid())
-  nombre                String
-  tipo                  LoyaltyTipo @default(puntos_por_peso)
-  reglaAcumulacion      Json        @default("{}") @map("regla_acumulacion")
-  valorPuntoRedimible   Decimal     @default(0.1) @map("valor_punto_redimible") @db.Decimal(10, 4)
-  caducidadPuntosMeses  Int         @default(12) @map("caducidad_puntos_meses")
-  tiers                 Json        @default("[]")
-  inscripcionAutomatica Boolean     @default(false) @map("inscripcion_automatica")
-  requiereConsentimiento Boolean    @default(true) @map("requiere_consentimiento")
-  isActive              Boolean     @default(true) @map("is_active")
-  createdAt             DateTime    @default(now()) @map("created_at")
-  updatedAt             DateTime    @updatedAt @map("updated_at")
+  id                     String      @id @default(cuid())
+  nombre                 String
+  tipo                   LoyaltyTipo @default(puntos_por_peso)
+  reglaAcumulacion       Json        @default("{}") @map("regla_acumulacion")
+  valorPuntoRedimible    Decimal     @default(0.1) @map("valor_punto_redimible") @db.Decimal(10, 4)
+  caducidadPuntosMeses   Int         @default(12) @map("caducidad_puntos_meses")
+  tiers                  Json        @default("[]")
+  inscripcionAutomatica  Boolean     @default(false) @map("inscripcion_automatica")
+  requiereConsentimiento Boolean     @default(true) @map("requiere_consentimiento")
+  isActive               Boolean     @default(true) @map("is_active")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
 
   inscritos   ClienteLoyalty[]
   movimientos LoyaltyMovimiento[]
@@ -4143,17 +4190,17 @@ model LoyaltyProgram {
 }
 
 model ClienteLoyalty {
-  id                String   @id @default(cuid())
-  loyaltyProgramId  String   @map("loyalty_program_id")
-  clienteId         String   @map("cliente_id")
-  puntosActuales    Int      @default(0) @map("puntos_actuales")
-  lifetimeAcumulado Int      @default(0) @map("lifetime_acumulado")
-  lifetimeCanjeado  Int      @default(0) @map("lifetime_canjeado")
-  tierActual        String?  @map("tier_actual")
+  id                String    @id @default(cuid())
+  loyaltyProgramId  String    @map("loyalty_program_id")
+  clienteId         String    @map("cliente_id")
+  puntosActuales    Int       @default(0) @map("puntos_actuales")
+  lifetimeAcumulado Int       @default(0) @map("lifetime_acumulado")
+  lifetimeCanjeado  Int       @default(0) @map("lifetime_canjeado")
+  tierActual        String?   @map("tier_actual")
   fechaAlcanzoTier  DateTime? @map("fecha_alcanzo_tier")
   consentimientoAt  DateTime? @map("consentimiento_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   programa LoyaltyProgram @relation(fields: [loyaltyProgramId], references: [id], onDelete: Cascade)
   cliente  Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)

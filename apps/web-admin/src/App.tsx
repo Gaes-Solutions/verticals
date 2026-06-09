@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
+import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -80,19 +81,26 @@ export function App() {
     setMenuOpen(false);
   }
 
+  function abrirLink(link: string) {
+    if (link.startsWith("/pedidos")) navegar("pedidos");
+  }
+
   return (
     <div className="flex h-full flex-col md:flex-row">
       {/* Barra superior móvil */}
       <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-slate-100 md:hidden">
         <span className="text-lg font-bold text-brand">GaesSoft</span>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Menú"
-          className="rounded p-2 hover:bg-slate-800"
-        >
-          ☰
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificacionesBell onOpenLink={abrirLink} />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Menú"
+            className="rounded p-2 hover:bg-slate-800"
+          >
+            ☰
+          </button>
+        </div>
       </header>
 
       {/* Overlay al abrir el drawer en móvil */}
@@ -139,6 +147,9 @@ export function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
+        <div className="mb-4 hidden justify-end md:flex">
+          <NotificacionesBell onOpenLink={abrirLink} />
+        </div>
         {seccion === "dashboard" && <DashboardPage />}
         {seccion === "reportes" && <ReportesPage />}
         {seccion === "productos" && <ProductosPage />}
