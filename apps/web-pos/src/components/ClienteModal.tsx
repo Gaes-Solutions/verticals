@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type { Cliente, ClienteList } from "../lib/types.js";
 
 /**
@@ -138,13 +138,15 @@ export function ClienteModal({
               >
                 Público en general
               </button>
-              <button
-                type="button"
-                onClick={() => setModoAlta(true)}
-                className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark"
-              >
-                + Nuevo cliente
-              </button>
+              {puede("clientes.crear") && (
+                <button
+                  type="button"
+                  onClick={() => setModoAlta(true)}
+                  className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark"
+                >
+                  + Nuevo cliente
+                </button>
+              )}
             </div>
           </>
         )}

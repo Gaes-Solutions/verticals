@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "../App.js";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type {
   Cliente,
   Producto,
@@ -177,14 +177,16 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
           <span className="hidden text-teal-100 sm:inline">{session.cajeroNombre}</span>
-          <button
-            type="button"
-            onClick={() => setModalDevolucion(true)}
-            className="rounded bg-brand-dark px-3 py-1"
-          >
-            Devolución
-          </button>
-          {session.caja && (
+          {puede("ventas.devolver") && (
+            <button
+              type="button"
+              onClick={() => setModalDevolucion(true)}
+              className="rounded bg-brand-dark px-3 py-1"
+            >
+              Devolución
+            </button>
+          )}
+          {session.caja && puede("corte.consultar") && (
             <button
               type="button"
               onClick={() => setModalCorte(true)}

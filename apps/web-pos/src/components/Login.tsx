@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import type { Session } from "../App.js";
-import { ApiError, api, setToken } from "../lib/api.js";
+import { ApiError, api, setPermisos, setToken } from "../lib/api.js";
 import { resolverSession } from "../lib/session.js";
 import type { LoginResponse } from "../lib/types.js";
 
@@ -35,6 +35,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
         body: { tenantSlug, email, password },
       });
       setToken(res.accessToken);
+      setPermisos(res.user.permissions);
       localStorage.setItem(SLUG_KEY, tenantSlug);
       onLogin(await resolverSession(res.user.nombre));
     } catch (err) {
