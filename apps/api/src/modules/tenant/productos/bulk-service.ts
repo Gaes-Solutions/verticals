@@ -1,4 +1,6 @@
 import type { TenantPrismaClient } from "@gaespos/db";
+import Decimal from "decimal.js";
+import { aplicarAjuste } from "../inventario/service.js";
 
 /** Resultado por fila — el front lo muestra como reporte de importación. */
 export interface FilaResultado {
@@ -40,6 +42,8 @@ export interface ProductoBulkRow {
   nombre: string;
   categoriaNombre?: string | undefined;
   precioBase: string;
+  costo?: string | undefined;
+  stockInicial?: string | undefined;
   aplicaIva?: boolean | undefined;
   tasaIva?: string | undefined;
   codigoBarras?: string | undefined;
@@ -80,21 +84,53 @@ async function resolverCategoriaId(
  * no tumba el resto) y devuelve un reporte. Crea la categoría por nombre si no
  * existe. El precio va a la variante default (sku = skuPadre).
  */
+const ETIQUETA_COLUMNA: Record<string, string> = {
+  categoriaNombre: "Categoría",
+  costo: "Costo",
+  stockInicial: "Stock",
+  tasaIva: "IVA",
+  codigoBarras: "Código de barras",
+};
+
 export async function bulkUpsertProductos(
   prisma: TenantPrismaClient,
+  usuarioId: string,
   rows: ProductoBulkRow[],
+  columnasObligatorias: string[] = [],
 ): Promise<BulkResumen> {
   const filas: FilaResultado[] = [];
   const catCache = new Map<string, string>();
+
+  // Sucursal principal (para el stock inicial). Se resuelve una sola vez.
+  const sucursalPrincipal = await prisma.sucursal.findFirst({
+    where: { isActive: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
     const numFila = i + 1;
     try {
+      // valida las columnas que el tenant marcó obligatorias
+      const faltantes = columnasObligatorias.filter(
+        (c) => (row as unknown as Record<string, unknown>)[c] === undefined,
+      );
+      if (faltantes.length > 0) {
+        filas.push({
+          fila: numFila,
+          sku: row.skuPadre,
+          accion: "error",
+          mensaje: `Faltan columnas obligatorias: ${faltantes.map((c) => ETIQUETA_COLUMNA[c] ?? c).join(", ")}`,
+        });
+        continue;
+      }
       const categoriaId = row.categoriaNombre
         ? await resolverCategoriaId(prisma, catCache, row.categoriaNombre)
         : undefined;
+      const datosCosto =
+        row.costo !== undefined ? { costoUltimo: row.costo, costoPromedio: row.costo } : {};
 
       const existente = await prisma.producto.findFirst({
         where: { skuPadre: row.skuPadre },
@@ -104,6 +140,7 @@ export async function bulkUpsertProductos(
         },
       });
 
+      let varianteId: string | undefined;
       if (existente) {
         await prisma.producto.update({
           where: { id: existente.id },
@@ -116,14 +153,15 @@ export async function bulkUpsertProductos(
         });
         const varDefault = existente.variantes[0];
         if (varDefault) {
+          varianteId = varDefault.id;
           await prisma.productoVariante.update({
             where: { id: varDefault.id },
-            data: { precioBase: row.precioBase },
+            data: { precioBase: row.precioBase, ...datosCosto },
           });
         }
         filas.push({ fila: numFila, sku: row.skuPadre, accion: "actualizado" });
       } else {
-        await prisma.producto.create({
+        const creado = await prisma.producto.create({
           data: {
             skuPadre: row.skuPadre,
             nombre: row.nombre,
@@ -136,6 +174,7 @@ export async function bulkUpsertProductos(
                   sku: row.skuPadre,
                   precioBase: row.precioBase,
                   isDefault: true,
+                  ...datosCosto,
                   ...(row.codigoBarras
                     ? {
                         codigosBarras: {
@@ -147,8 +186,32 @@ export async function bulkUpsertProductos(
               ],
             },
           },
+          select: { variantes: { where: { isDefault: true }, select: { id: true }, take: 1 } },
         });
+        varianteId = creado.variantes[0]?.id;
         filas.push({ fila: numFila, sku: row.skuPadre, accion: "creado" });
+      }
+
+      // Stock inicial: ajusta la sucursal principal al valor absoluto contado.
+      if (row.stockInicial !== undefined && varianteId && sucursalPrincipal) {
+        const inv = await prisma.inventarioSucursal.findUnique({
+          where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
+          select: { stockActual: true },
+        });
+        const actual = new Decimal(inv?.stockActual?.toString() ?? "0");
+        const delta = new Decimal(row.stockInicial).minus(actual);
+        if (!delta.isZero()) {
+          await prisma.$transaction((tx) =>
+            aplicarAjuste(tx, {
+              varianteId,
+              sucursalId: sucursalPrincipal.id,
+              tipo: delta.gt(0) ? "ajuste_positivo" : "ajuste_negativo",
+              cantidad: delta.abs().toString(),
+              motivo: "Stock inicial (carga masiva)",
+              usuarioId,
+            }),
+          );
+        }
       }
     } catch (err) {
       filas.push({

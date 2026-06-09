@@ -25,6 +25,8 @@ const bulkProductosSchema = z.object({
         nombre: z.string().min(1).max(240),
         categoriaNombre: z.string().max(120).optional(),
         precioBase: decimalStr,
+        costo: decimalStr.optional(),
+        stockInicial: decimalStr.optional(),
         aplicaIva: z.boolean().optional(),
         tasaIva: decimalStr.optional(),
         codigoBarras: z.string().max(60).optional(),
@@ -39,6 +41,21 @@ const bulkPreciosSchema = z.object({
     .array(z.object({ sku: z.string().min(1).max(60), precioBase: decimalStr }))
     .min(1)
     .max(5000),
+});
+
+// Columnas opcionales del import que el dueño puede incluir/marcar obligatorias.
+// (skuPadre, nombre y precioBase siempre van y son obligatorias fijas.)
+const COLUMNAS_OPCIONALES = [
+  "categoriaNombre",
+  "costo",
+  "stockInicial",
+  "tasaIva",
+  "codigoBarras",
+] as const;
+
+const importConfigSchema = z.object({
+  columnasActivas: z.array(z.enum(COLUMNAS_OPCIONALES)),
+  columnasObligatorias: z.array(z.enum(COLUMNAS_OPCIONALES)),
 });
 
 const PRODUCTO_BASE_INCLUDE = {
@@ -158,10 +175,38 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Importación masiva (upsert por skuPadre). El front parsea Excel/CSV y manda JSON.
+  // Config de la plantilla de import (qué columnas y cuáles obligatorias).
+  app.get("/import-config", async (req) => {
+    req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
+    const cfg = await req.tenantPrisma.configImportacionProductos.findFirst();
+    // default: todas las opcionales activas, ninguna extra obligatoria
+    return {
+      columnasActivas: (cfg?.columnasActivas as string[]) ?? [...COLUMNAS_OPCIONALES],
+      columnasObligatorias: (cfg?.columnasObligatorias as string[]) ?? [],
+    };
+  });
+
+  app.put("/import-config", async (req) => {
+    req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
+    const body = importConfigSchema.parse(req.body);
+    // una obligatoria debe estar también activa
+    const obligatorias = body.columnasObligatorias.filter((c) => body.columnasActivas.includes(c));
+    const existente = await req.tenantPrisma.configImportacionProductos.findFirst();
+    const data = {
+      columnasActivas: body.columnasActivas,
+      columnasObligatorias: obligatorias,
+    };
+    return existente
+      ? req.tenantPrisma.configImportacionProductos.update({ where: { id: existente.id }, data })
+      : req.tenantPrisma.configImportacionProductos.create({ data });
+  });
+
   app.post("/bulk", async (req) => {
     req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
     const body = bulkProductosSchema.parse(req.body);
-    return bulkUpsertProductos(req.tenantPrisma, body.filas);
+    const cfg = await req.tenantPrisma.configImportacionProductos.findFirst();
+    const requeridas = (cfg?.columnasObligatorias as string[] | undefined) ?? [];
+    return bulkUpsertProductos(req.tenantPrisma, req.principal.userId, body.filas, requeridas);
   });
 
   app.post("/bulk-precios", async (req) => {

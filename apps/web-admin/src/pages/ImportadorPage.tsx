@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { ApiError, api } from "../lib/api.js";
 
@@ -7,6 +7,12 @@ interface Columna {
   campo: string; // campo que espera el backend
   req: boolean;
   ejemplo: string;
+  core?: boolean; // columna fija (no se puede quitar ni desmarcar como opcional)
+}
+
+interface ImportConfig {
+  columnasActivas: string[];
+  columnasObligatorias: string[];
 }
 
 interface TipoImport {
@@ -25,10 +31,12 @@ const TIPOS: TipoImport[] = [
       "Alta y actualización de productos (upsert por SKU). Crea la categoría si no existe.",
     endpoint: "/t/productos/bulk",
     columnas: [
-      { header: "SKU", campo: "skuPadre", req: true, ejemplo: "ABA-001" },
-      { header: "Nombre", campo: "nombre", req: true, ejemplo: "Galletas Marías 170g" },
+      { header: "SKU", campo: "skuPadre", req: true, ejemplo: "ABA-001", core: true },
+      { header: "Nombre", campo: "nombre", req: true, ejemplo: "Galletas Marías 170g", core: true },
       { header: "Categoria", campo: "categoriaNombre", req: false, ejemplo: "Abarrotes" },
-      { header: "Precio", campo: "precioBase", req: true, ejemplo: "15.50" },
+      { header: "Costo", campo: "costo", req: false, ejemplo: "9.00" },
+      { header: "Precio", campo: "precioBase", req: true, ejemplo: "15.50", core: true },
+      { header: "Stock", campo: "stockInicial", req: false, ejemplo: "50" },
       { header: "IVA", campo: "tasaIva", req: false, ejemplo: "16" },
       { header: "CodigoBarras", campo: "codigoBarras", req: false, ejemplo: "7501000123457" },
     ],
@@ -81,7 +89,29 @@ export function ImportadorPage() {
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [resumen, setResumen] = useState<ResumenResp | null>(null);
+  const [config, setConfig] = useState<ImportConfig | null>(null);
+  const [configurando, setConfigurando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // La config de columnas solo aplica a productos (las otras son fijas).
+  const esProductos = tipo.key === "productos";
+
+  useEffect(() => {
+    if (!esProductos) return;
+    api<ImportConfig>("/t/productos/import-config")
+      .then(setConfig)
+      .catch(() => setConfig(null));
+  }, [esProductos]);
+
+  // Columnas efectivas: core siempre + opcionales activas; obligatoriedad según config.
+  const columnas: Columna[] = esProductos
+    ? tipo.columnas
+        .filter((c) => c.core || !config || config.columnasActivas.includes(c.campo))
+        .map((c) => ({
+          ...c,
+          req: c.core ? c.req : (config?.columnasObligatorias.includes(c.campo) ?? false),
+        }))
+    : tipo.columnas;
 
   function reset() {
     setFilas([]);
@@ -97,8 +127,8 @@ export function ImportadorPage() {
   }
 
   function descargarPlantilla() {
-    const headers = tipo.columnas.map((c) => c.header);
-    const ejemplo = tipo.columnas.map((c) => c.ejemplo);
+    const headers = columnas.map((c) => c.header);
+    const ejemplo = columnas.map((c) => c.ejemplo);
     const ws = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
@@ -118,7 +148,7 @@ export function ImportadorPage() {
       if (!sheet) throw new Error("El archivo no tiene hojas");
       const crudas = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       // mapea encabezados de la plantilla → campos del backend
-      const mapHeader = new Map(tipo.columnas.map((c) => [norm(c.header), c]));
+      const mapHeader = new Map(columnas.map((c) => [norm(c.header), c]));
       const parsed: Record<string, string>[] = [];
       for (const cruda of crudas) {
         const fila: Record<string, string> = {};
@@ -143,7 +173,7 @@ export function ImportadorPage() {
   }
 
   // validación cliente: campos requeridos presentes por fila
-  const requeridos = tipo.columnas.filter((c) => c.req).map((c) => c.campo);
+  const requeridos = columnas.filter((c) => c.req).map((c) => c.campo);
   const filasInvalidas = filas.filter((f) => requeridos.some((r) => !f[r]));
 
   async function importar() {
@@ -200,6 +230,11 @@ export function ImportadorPage() {
               className="hidden"
             />
           </label>
+          {esProductos && (
+            <button type="button" onClick={() => setConfigurando(true)} className="gx-btn-ghost">
+              ⚙ Configurar columnas
+            </button>
+          )}
           {nombreArchivo && (
             <span className="self-center text-sm text-slate-500">{nombreArchivo}</span>
           )}
@@ -207,7 +242,7 @@ export function ImportadorPage() {
 
         <div className="text-xs text-slate-500">
           Columnas:{" "}
-          {tipo.columnas.map((c) => (
+          {columnas.map((c) => (
             <span key={c.campo} className="mr-2 inline-block">
               <span className="font-medium">{c.header}</span>
               {c.req && <span className="text-danger">*</span>}
@@ -215,6 +250,18 @@ export function ImportadorPage() {
           ))}
         </div>
       </div>
+
+      {configurando && config && (
+        <ConfigColumnasModal
+          columnas={TIPOS[0]!.columnas}
+          config={config}
+          onClose={() => setConfigurando(false)}
+          onSaved={(c) => {
+            setConfig(c);
+            setConfigurando(false);
+          }}
+        />
+      )}
 
       {errorArchivo && (
         <p className="mb-4 rounded-lg bg-danger-light p-3 text-sm text-danger">{errorArchivo}</p>
@@ -246,7 +293,7 @@ export function ImportadorPage() {
               <thead>
                 <tr>
                   <th className="gx-th">#</th>
-                  {tipo.columnas.map((c) => (
+                  {columnas.map((c) => (
                     <th key={c.campo} className="gx-th">
                       {c.header}
                     </th>
@@ -256,9 +303,9 @@ export function ImportadorPage() {
               <tbody>
                 {filas.slice(0, 50).map((f, idx) => {
                   return (
-                    <tr key={`${idx}-${f[tipo.columnas[0]!.campo] ?? idx}`}>
+                    <tr key={`${idx}-${f[columnas[0]!.campo] ?? idx}`}>
                       <td className="gx-td text-slate-400">{idx + 1}</td>
-                      {tipo.columnas.map((c) => (
+                      {columnas.map((c) => (
                         <td
                           key={c.campo}
                           className={`gx-td ${c.req && !f[c.campo] ? "bg-danger-light text-danger" : ""}`}
@@ -331,6 +378,115 @@ export function ImportadorPage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Configurador: el dueño elige qué columnas opcionales incluir y cuáles obligatorias. */
+function ConfigColumnasModal({
+  columnas,
+  config,
+  onClose,
+  onSaved,
+}: {
+  columnas: Columna[];
+  config: ImportConfig;
+  onClose: () => void;
+  onSaved: (c: ImportConfig) => void;
+}) {
+  const opcionales = columnas.filter((c) => !c.core);
+  const [activas, setActivas] = useState<Set<string>>(new Set(config.columnasActivas));
+  const [obligatorias, setObligatorias] = useState<Set<string>>(
+    new Set(config.columnasObligatorias),
+  );
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggleActiva(campo: string, on: boolean) {
+    setActivas((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(campo);
+      else {
+        next.delete(campo);
+        setObligatorias((o) => {
+          const n = new Set(o);
+          n.delete(campo); // una columna desactivada no puede ser obligatoria
+          return n;
+        });
+      }
+      return next;
+    });
+  }
+
+  function toggleObligatoria(campo: string, on: boolean) {
+    setObligatorias((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(campo);
+      else next.delete(campo);
+      return next;
+    });
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    setError(null);
+    try {
+      const r = await api<ImportConfig>("/t/productos/import-config", {
+        method: "PUT",
+        body: { columnasActivas: [...activas], columnasObligatorias: [...obligatorias] },
+      });
+      onSaved(r);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al guardar");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel">
+        <h2 className="mb-1 text-lg font-bold text-slate-800">Configurar columnas</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          SKU, Nombre y Precio siempre van. Elige qué más incluir y qué será obligatorio para tu
+          negocio.
+        </p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-1 text-xs font-medium text-slate-400">
+            <span>Columna</span>
+            <span className="flex gap-6">
+              <span>Incluir</span>
+              <span>Obligatoria</span>
+            </span>
+          </div>
+          {opcionales.map((c) => (
+            <div key={c.campo} className="flex items-center justify-between py-1 text-sm">
+              <span className="font-medium text-slate-700">{c.header}</span>
+              <span className="flex items-center gap-10 pr-2">
+                <input
+                  type="checkbox"
+                  checked={activas.has(c.campo)}
+                  onChange={(e) => toggleActiva(c.campo, e.target.checked)}
+                />
+                <input
+                  type="checkbox"
+                  checked={obligatorias.has(c.campo)}
+                  disabled={!activas.has(c.campo)}
+                  onChange={(e) => toggleObligatoria(c.campo, e.target.checked)}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="gx-btn-ghost">
+            Cancelar
+          </button>
+          <button type="button" onClick={guardar} disabled={guardando} className="gx-btn-primary">
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

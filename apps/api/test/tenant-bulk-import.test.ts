@@ -34,7 +34,7 @@ afterAll(async () => {
 });
 
 describe("bulk import de productos (upsert por SKU)", () => {
-  it("crea productos nuevos y auto-crea la categoría por nombre", async () => {
+  it("crea productos nuevos con costo + stock inicial y auto-crea categoría", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/t/productos/bulk",
@@ -46,6 +46,8 @@ describe("bulk import de productos (upsert por SKU)", () => {
             nombre: "Galletas",
             categoriaNombre: "Abarrotes",
             precioBase: "15.50",
+            costo: "9",
+            stockInicial: "50",
           },
           {
             skuPadre: "BULK-B",
@@ -60,6 +62,25 @@ describe("bulk import de productos (upsert por SKU)", () => {
     const r = res.json() as { creados: number; actualizados: number; errores: number };
     expect(r.creados).toBe(2);
     expect(r.errores).toBe(0);
+
+    // el stock inicial de BULK-A debe haber quedado en 50 en la sucursal principal
+    const prods = await app.inject({
+      method: "GET",
+      url: "/t/productos?q=BULK-A",
+      headers: auth(ownerToken),
+    });
+    const prod = (prods.json() as { items: Array<{ variantes: Array<{ id: string }> }> }).items[0];
+    const varId = prod?.variantes[0]?.id;
+    const inv = await app.inject({
+      method: "GET",
+      url: `/t/inventario?varianteId=${varId}`,
+      headers: auth(ownerToken),
+    });
+    const invFilas = inv.json() as
+      | Array<{ stockActual: string }>
+      | { items: Array<{ stockActual: string }> };
+    const invLista = Array.isArray(invFilas) ? invFilas : invFilas.items;
+    expect(Number(invLista[0]?.stockActual)).toBe(50);
 
     const cats = await app.inject({
       method: "GET",
@@ -131,6 +152,85 @@ describe("bulk import de productos (upsert por SKU)", () => {
   });
 });
 
+describe("configurador de columnas del import", () => {
+  it("default: todas las opcionales activas, ninguna extra obligatoria", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/productos/import-config",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const c = res.json() as { columnasActivas: string[]; columnasObligatorias: string[] };
+    expect(c.columnasActivas).toContain("costo");
+    expect(c.columnasObligatorias).toEqual([]);
+  });
+
+  it("marca costo obligatorio → rechaza filas sin costo y acepta con costo", async () => {
+    const put = await app.inject({
+      method: "PUT",
+      url: "/t/productos/import-config",
+      headers: auth(ownerToken),
+      payload: {
+        columnasActivas: ["categoriaNombre", "costo", "stockInicial", "tasaIva", "codigoBarras"],
+        columnasObligatorias: ["costo"],
+      },
+    });
+    expect(put.statusCode).toBe(200);
+
+    const sinCosto = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: { filas: [{ skuPadre: "CFG-A", nombre: "Sin costo", precioBase: "10" }] },
+    });
+    expect(sinCosto.json().errores).toBe(1);
+    expect((sinCosto.json() as { filas: Array<{ mensaje?: string }> }).filas[0]?.mensaje).toContain(
+      "Costo",
+    );
+
+    const conCosto = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [{ skuPadre: "CFG-B", nombre: "Con costo", precioBase: "10", costo: "6" }],
+      },
+    });
+    expect(conCosto.json().creados).toBe(1);
+
+    // restaura el default para no afectar otros tests del archivo
+    await app.inject({
+      method: "PUT",
+      url: "/t/productos/import-config",
+      headers: auth(ownerToken),
+      payload: {
+        columnasActivas: ["categoriaNombre", "costo", "stockInicial", "tasaIva", "codigoBarras"],
+        columnasObligatorias: [],
+      },
+    });
+  });
+
+  it("una obligatoria que no está activa se descarta al guardar", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/t/productos/import-config",
+      headers: auth(ownerToken),
+      payload: { columnasActivas: ["costo"], columnasObligatorias: ["stockInicial"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { columnasObligatorias: string[] }).columnasObligatorias).toEqual([]);
+    await app.inject({
+      method: "PUT",
+      url: "/t/productos/import-config",
+      headers: auth(ownerToken),
+      payload: {
+        columnasActivas: ["categoriaNombre", "costo", "stockInicial", "tasaIva", "codigoBarras"],
+        columnasObligatorias: [],
+      },
+    });
+  });
+});
+
 describe("bulk actualización de precios", () => {
   it("actualiza precio por SKU y reporta SKU inexistente como error", async () => {
     const res = await app.inject({
@@ -167,7 +267,8 @@ describe("bulk conteo físico de inventario", () => {
       filas: Array<{ stockAnterior: string; stockNuevo: string }>;
     };
     expect(r.ajustados).toBe(1);
-    expect(Number(r.filas[0]?.stockAnterior)).toBe(0);
+    // BULK-A ya tenía 50 de stock inicial (cargado en el import de productos)
+    expect(Number(r.filas[0]?.stockAnterior)).toBe(50);
     expect(Number(r.filas[0]?.stockNuevo)).toBe(120);
   });
 

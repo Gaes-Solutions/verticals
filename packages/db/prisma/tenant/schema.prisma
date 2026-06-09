@@ -3758,6 +3758,19 @@ model SeoConfiguracionTienda {
   @@map("seo_configuracion_tienda")
 }
 
+/// Configuración de la plantilla de carga masiva de productos (singleton por tenant).
+/// El dueño elige qué columnas opcionales incluir y cuáles son obligatorias para su
+/// negocio. SKU, Nombre y Precio siempre van (obligatorias fijas, no se guardan aquí).
+model ConfigImportacionProductos {
+  id                   String   @id @default(cuid())
+  columnasActivas      Json     @default("[]") @map("columnas_activas")
+  columnasObligatorias Json     @default("[]") @map("columnas_obligatorias")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("config_importacion_productos")
+}
+
 // ============================================================
 // HITO 4.2 — Marketing (Modelo 4.18)
 // Promociones automáticas, segmentación RFM, campañas multicanal,
