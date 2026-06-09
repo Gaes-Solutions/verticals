@@ -115,13 +115,13 @@ describe("tenant CRUD — sucursales", () => {
     expect(body.missing).toContain("sucursales.crear");
   });
 
-  it("cajero tampoco puede listar sucursales (no tiene sucursales.leer)", async () => {
+  it("cajero SÍ puede listar sucursales (tiene sucursales.leer para el POS)", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/t/sucursales",
       headers: { authorization: `Bearer ${cashierToken}` },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
   });
 
   it("rechaza request sin token (401)", async () => {

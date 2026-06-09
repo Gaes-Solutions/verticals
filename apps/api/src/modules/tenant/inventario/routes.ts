@@ -1,6 +1,8 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
+import { bulkConteoFisico } from "./bulk-service.js";
 import {
   ajusteManualSchema,
   inventarioListQuerySchema,
@@ -10,6 +12,21 @@ import {
   transferenciaSchema,
 } from "./schemas.js";
 import { InsufficientStockError, aplicarAjuste, aplicarTransferencia } from "./service.js";
+
+const bulkConteoSchema = z.object({
+  filas: z
+    .array(
+      z.object({
+        sku: z.string().min(1).max(60),
+        sucursalCodigo: z.string().min(1).max(40),
+        cantidadFisica: z
+          .union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)])
+          .transform((v) => String(v)),
+      }),
+    )
+    .min(1)
+    .max(5000),
+});
 
 const inventarioRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
@@ -85,6 +102,13 @@ const inventarioRoutes: FastifyPluginAsync = async (app) => {
         typeof req.tenantPrisma.inventarioSucursal.update
       >[0]["data"],
     });
+  });
+
+  // Conteo físico masivo: el front parsea Excel/CSV y manda JSON (sku, sucursal, cantidad real).
+  app.post("/bulk-conteo", async (req) => {
+    req.requirePerm(PERMISSIONS.INVENTARIO_AJUSTAR);
+    const body = bulkConteoSchema.parse(req.body);
+    return bulkConteoFisico(req.tenantPrisma, req.principal.userId, body.filas);
   });
 
   app.post("/ajustes", async (req, reply) => {

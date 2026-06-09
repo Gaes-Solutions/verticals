@@ -6,7 +6,7 @@
 
 ## 🎯 Estado actual
 
-- **Fase**: 🎉 Hitos 1-6 · 🏷️ tag `retail-v1` (vertical Retail completo) · 🏢 **VERTICAL B2B MAYOREO punta a punta (2026-06-06)**: web-b2b (portal autoservicio del cliente mayorista) sobre backend B2B que ya existía (clientes-b2b, cotizaciones, pedidos, CxC, listas de precios). Suite 554 verde.
+- **Fase**: 🎉 Hitos 1-6 · 🏷️ tag `retail-v1` · 🏢 vertical B2B mayoreo (web-b2b) · 🎨 **estándar visual compartido** (packages/ui + docs/design-system.md) + responsive en las 4 apps · ⬆️ **CARGA MASIVA (2026-06-06)**: import Excel/CSV de productos + precios + conteo físico de inventario, con plantilla descargable, preview y reporte fila-por-fila. Suite 562 verde.
 - **👤 cuenta cliente B2C (2026-05-28, wishlist 2026-06-05)**: passwordHash en Cliente + auth `/auth/cliente/{registro,login}` (JWT kind `cliente`, resuelve tenant del token) + `/cliente-portal/{me,pedidos,wishlist}` (pedidos por clienteId O email guest). Frontend web-tienda: cookie httpOnly + páginas /cuenta/{login,registro} + /cuenta (mis pedidos + **mi lista de deseos** con quitar) + botón **♡ Guardar** en producto (401→login) + **prefill email/nombre en checkout** si hay sesión. 13 tests backend + smoke E2E verde. Ya NO hay diferidos de la cuenta cliente.
 - **🖥️ web-admin (2026-05-28)**: back-office del negocio (SPA Vite+React+Tailwind, login dueño/gerente). 6 secciones: **Resumen** (ventas hoy + alertas bajo stock), **Reportes** (periodo 7/30/90d: gráfica barras por día SVG, ticket promedio, IVA, top productos, por canal), **Productos** (CRUD), **Inventario** (ver + ajustar), **Ventas** (filtros + detalle), **Tienda online** (config + publicar). Backend: módulo `tenant/reportes` (GET /t/reportes/resumen?dias=N, agregación Prisma, 5 tests). Conecta a la API real. Build verde (web-admin 224kB). **PROBAR**: `pnpm --filter @gaespos/web-admin dev` → http://localhost:5174 (guía en `apps/web-admin/README.md`).
 - **🖥️ web-pos (2026-05-28)**: SPA Vite+React+Tailwind, **primer frontend del producto que vende de verdad**. Login cajero → buscar producto (texto/barcode) → ticket → **cliente (buscar/alta)** → **descuento global** → cobro multi-pago → comprobante con **imprimir ticket 58mm + facturar CFDI best-effort**; **corte de caja X/Z** + **devoluciones** (busca folio → devuelve parcial/total, repone stock) desde el header. Conecta a la API real. Verificado con smoke tests curl (venta+descuento, devolución parcial+stock, corte X/Z diferencia, cliente). Build verde (225kB). **PARA PROBAR YA**: API mock → setup `apps/web-pos/README.md` → `pnpm --filter @gaespos/web-pos dev` → http://localhost:5173.
@@ -99,6 +99,30 @@ Ver [`docs/decisiones-pendientes.md`](docs/decisiones-pendientes.md) para detall
 5. Si dudo de algo: leer [`docs/analisis/`](docs/analisis/) (especialmente 04-modelo-datos para schema, 09-arquitectura para stack) o preguntar a Gaby
 
 ## 📜 Bitácora de sesiones
+
+### 2026-06-06 — ⬆️ Carga masiva (Excel/CSV) de productos, precios e inventario
+Hueco grande para reemplazar Eleventa: antes todo era uno-por-uno. Patrón Shopify
+(subir → preview validado → confirmar → reporte fila-por-fila):
+- **Backend** (8 tests): `POST /t/productos/bulk` (upsert por skuPadre, auto-crea
+  categoría por nombre con cache, precio a variante default), `/t/productos/bulk-precios`
+  (precio base por SKU), `/t/inventario/bulk-conteo` (conteo físico: stock ABSOLUTO,
+  calcula delta y registra movimiento ajuste_positivo/negativo). Cada fila reporta
+  creado/actualizado/error sin tumbar el resto. Perm `productos.bulk_import` (ya
+  existía en catálogo) + `inventario.ajustar`.
+- **Frontend** web-admin: nueva sección "Carga masiva" (⬆️) con SheetJS (`xlsx`):
+  parsea .xlsx/.csv en el navegador, mapea encabezados→campos, **plantilla
+  descargable** por tipo, preview con validación de requeridos resaltada, y reporte
+  de resultados con errores por fila. Usa los componentes `gx-*` del design system.
+- Smoke E2E verde: productos (2 creados + auto-categoría), precios (1 ok + 1 error),
+  conteo (stock 0→75). Suite 562.
+
+### 2026-06-06 — 🎨 Estándar visual + responsive (ver design-system.md)
+- `packages/ui`: preset Tailwind (tokens) + `components.css` (clases `gx-*`). Las 4
+  apps lo extienden; cada una solo cambia su acento (teal / azul mayoreo). Tienda
+  necesitó postcss-import. `docs/design-system.md` + reglas en CLAUDE.md.
+- Responsive en las 4 apps: sidebars→drawer hamburguesa en móvil, tablas con scroll,
+  POS apilado, headers que envuelven. Fix: rol cajero/vendedor preset sin
+  sucursales.leer/cajas.leer (corregido en código + demo).
 
 ### 2026-06-06 — 🏢 Portal B2B Mayorista (web-b2b) punta a punta
 Vertical mayoreo completada: el backend B2B ya existía (clientes-b2b CRUD,

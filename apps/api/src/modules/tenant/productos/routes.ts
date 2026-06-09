@@ -1,6 +1,8 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
+import { bulkActualizarPrecios, bulkUpsertProductos } from "./bulk-service.js";
 import {
   type ProductoCreateInput,
   type ProductoUpdateInput,
@@ -10,6 +12,34 @@ import {
   productoListQuerySchema,
   productoUpdateSchema,
 } from "./schemas.js";
+
+const decimalStr = z
+  .union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/)])
+  .transform((v) => String(v));
+
+const bulkProductosSchema = z.object({
+  filas: z
+    .array(
+      z.object({
+        skuPadre: z.string().min(1).max(60),
+        nombre: z.string().min(1).max(240),
+        categoriaNombre: z.string().max(120).optional(),
+        precioBase: decimalStr,
+        aplicaIva: z.boolean().optional(),
+        tasaIva: decimalStr.optional(),
+        codigoBarras: z.string().max(60).optional(),
+      }),
+    )
+    .min(1)
+    .max(5000),
+});
+
+const bulkPreciosSchema = z.object({
+  filas: z
+    .array(z.object({ sku: z.string().min(1).max(60), precioBase: decimalStr }))
+    .min(1)
+    .max(5000),
+});
 
 const PRODUCTO_BASE_INCLUDE = {
   categoria: { select: { id: true, nombre: true, slug: true } },
@@ -125,6 +155,19 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
         .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });
     }
     return item;
+  });
+
+  // Importación masiva (upsert por skuPadre). El front parsea Excel/CSV y manda JSON.
+  app.post("/bulk", async (req) => {
+    req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
+    const body = bulkProductosSchema.parse(req.body);
+    return bulkUpsertProductos(req.tenantPrisma, body.filas);
+  });
+
+  app.post("/bulk-precios", async (req) => {
+    req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
+    const body = bulkPreciosSchema.parse(req.body);
+    return bulkActualizarPrecios(req.tenantPrisma, body.filas);
   });
 
   app.post("/", async (req, reply) => {
