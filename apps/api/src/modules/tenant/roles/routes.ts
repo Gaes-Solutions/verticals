@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, listPermissionsByCategory } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
 import { rolCreateSchema, rolIdParamSchema, rolUpdateSchema } from "./schemas.js";
@@ -10,6 +10,17 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
       orderBy: [{ isPreset: "desc" }, { codigo: "asc" }],
     });
     return items;
+  });
+
+  // Catálogo de permisos disponibles, agrupado por categoría y FILTRADO por la
+  // vertical del negocio (un retail no ve permisos de clínica/Doctoralia, etc.).
+  app.get("/catalogo-permisos", async (req) => {
+    req.requirePerm(PERMISSIONS.ROLES_LEER);
+    const tenant = await app.masterPrisma.tenant.findUnique({
+      where: { slug: req.tenantSlug },
+      select: { vertical: true },
+    });
+    return listPermissionsByCategory(tenant?.vertical ?? undefined);
   });
 
   app.get("/:id", async (req, reply) => {

@@ -609,10 +609,50 @@ export function permissionMeta(code: PermissionCode): PermissionMeta {
   return { code, ...META[code] };
 }
 
-export function listPermissionsByCategory(): Record<string, PermissionMeta[]> {
+/**
+ * Categorías de permisos que SOLO aplican a ciertas verticales. Las categorías
+ * no listadas aquí son universales (aplican a cualquier negocio). Así un retail
+ * no ve permisos de clínica/Doctoralia y un consultorio no ve los de ecommerce.
+ * Verticales: retail_mayoreo | abarrotes | salud_vet | salud_humana | despacho_contable | otro.
+ */
+const CATEGORY_VERTICALS: Record<string, ReadonlyArray<string>> = {
+  // comercio B2B / tienda en línea
+  cotizaciones: ["retail_mayoreo", "abarrotes"],
+  pedidos: ["retail_mayoreo", "abarrotes"],
+  ecommerce: ["retail_mayoreo", "abarrotes"],
+  // abarrotes
+  recargas: ["abarrotes"],
+  // salud (vet + humana)
+  pacientes: ["salud_vet", "salud_humana"],
+  consultas: ["salud_vet", "salud_humana"],
+  citas: ["salud_vet", "salud_humana"],
+  agenda: ["salud_vet", "salud_humana"],
+  medicos: ["salud_vet", "salud_humana"],
+  recetas: ["salud_vet", "salud_humana"],
+  hospitalizacion: ["salud_vet", "salud_humana"],
+  doctoralia: ["salud_vet", "salud_humana"],
+  phr: ["salud_vet", "salud_humana"],
+  vacunas: ["salud_vet", "salud_humana"],
+  mascotas: ["salud_vet"],
+  // despacho contable
+  despacho: ["despacho_contable"],
+};
+
+/** True si la categoría aplica a la vertical dada (universal o explícitamente incluida). */
+export function categoryAppliesToVertical(category: string, vertical: string): boolean {
+  const verts = CATEGORY_VERTICALS[category];
+  return verts === undefined || verts.includes(vertical);
+}
+
+/**
+ * Catálogo de permisos agrupado por categoría. Si se pasa `vertical`, oculta las
+ * categorías que no aplican a ese tipo de negocio.
+ */
+export function listPermissionsByCategory(vertical?: string): Record<string, PermissionMeta[]> {
   const grouped: Record<string, PermissionMeta[]> = {};
   for (const code of ALL_PERMISSIONS) {
     const meta = permissionMeta(code);
+    if (vertical && !categoryAppliesToVertical(meta.category, vertical)) continue;
     const bucket = grouped[meta.category];
     if (bucket) {
       bucket.push(meta);

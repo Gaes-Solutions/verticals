@@ -41,4 +41,31 @@ describe("catalog", () => {
     expect(isKnownPermission("inexistente.permiso")).toBe(false);
     expect(isKnownPermission("")).toBe(false);
   });
+
+  it("filtra por vertical: retail no ve salud/doctoralia, sí ecommerce", () => {
+    const retail = listPermissionsByCategory("retail_mayoreo");
+    expect(retail.pacientes).toBeUndefined();
+    expect(retail.doctoralia).toBeUndefined();
+    expect(retail.consultas).toBeUndefined();
+    expect(retail.recargas).toBeUndefined();
+    expect(retail.ecommerce).toBeDefined();
+    expect(retail.ventas).toBeDefined();
+    expect(retail.pos).toBeDefined();
+  });
+
+  it("filtra por vertical: salud humana ve clínica, no ecommerce", () => {
+    const salud = listPermissionsByCategory("salud_humana");
+    expect(salud.consultas).toBeDefined();
+    expect(salud.pacientes).toBeDefined();
+    expect(salud.ecommerce).toBeUndefined();
+    expect(salud.cotizaciones).toBeUndefined();
+    // categorías universales siempre presentes
+    expect(salud.ventas).toBeDefined();
+    expect(salud.usuarios).toBeDefined();
+  });
+
+  it("sin vertical devuelve TODO el catálogo", () => {
+    const todo = listPermissionsByCategory();
+    expect(Object.values(todo).flat().length).toBe(ALL_PERMISSIONS.length);
+  });
 });

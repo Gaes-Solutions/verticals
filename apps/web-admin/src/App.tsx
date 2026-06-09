@@ -10,6 +10,7 @@ import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
+import { UsuariosRolesPage } from "./pages/UsuariosRolesPage.js";
 import { VentasPage } from "./pages/VentasPage.js";
 
 export interface AdminSession {
@@ -27,6 +28,7 @@ type Seccion =
   | "envios"
   | "resenas"
   | "importador"
+  | "usuarios"
   | "tienda";
 
 const NAV: { key: Seccion; label: string; icon: string }[] = [
@@ -39,6 +41,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "pedidos", label: "Pedidos online", icon: "📬" },
   { key: "envios", label: "Envíos", icon: "🚚" },
   { key: "resenas", label: "Reseñas", icon: "⭐" },
+  { key: "usuarios", label: "Usuarios y permisos", icon: "👥" },
   { key: "tienda", label: "Tienda online", icon: "🛒" },
 ];
 
@@ -138,6 +141,7 @@ export function App() {
         {seccion === "productos" && <ProductosPage />}
         {seccion === "inventario" && <InventarioPage />}
         {seccion === "importador" && <ImportadorPage />}
+        {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}
         {seccion === "envios" && <EnviosPage />}

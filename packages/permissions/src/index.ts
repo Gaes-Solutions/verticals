@@ -1,6 +1,7 @@
 export {
   ALL_PERMISSIONS,
   PERMISSIONS,
+  categoryAppliesToVertical,
   isKnownPermission,
   listPermissionsByCategory,
   permissionMeta,
