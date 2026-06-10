@@ -61,7 +61,13 @@ export interface PedidoDetalleCliente {
   total: string;
   subtotal: string;
   costoEnvio: string;
-  items: Array<{ nombre: string; cantidad: number; precioUnitario: string; subtotal: string }>;
+  items: Array<{
+    varianteId: string;
+    nombre: string;
+    cantidad: number;
+    precioUnitario: string;
+    subtotal: string;
+  }>;
   direccionEnvio: Record<string, string> | null;
   guiaTracking: string | null;
   paqueteria: string | null;

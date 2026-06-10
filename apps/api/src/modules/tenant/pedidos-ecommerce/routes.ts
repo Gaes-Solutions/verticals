@@ -2,6 +2,12 @@ import type { EmailProvider } from "@gaespos/email";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
+import {
+  MensajePedidoError,
+  enviarMensajeEmpleado,
+  listarMensajes,
+  marcarHiloLeido,
+} from "../mensajes-pedido/service.js";
 import { notificarCliente, notificarUsuario } from "../notificaciones/service.js";
 import {
   DEFAULT_ETIQUETAS,
@@ -291,6 +297,31 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
       }
     }
     return { ...updated, statusLabel: label };
+  });
+
+  // Hilo de mensajes pedido↔cliente (lado empleado).
+  app.get("/:id/mensajes", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
+    const { id } = idParam.parse(req.params);
+    const mensajes = await listarMensajes(req.tenantPrisma, id);
+    await marcarHiloLeido(req.tenantPrisma, id, "empleado");
+    return mensajes;
+  });
+
+  app.post("/:id/mensajes", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    const { id } = idParam.parse(req.params);
+    const { cuerpo } = z.object({ cuerpo: z.string().min(1).max(2000) }).parse(req.body);
+    try {
+      return await enviarMensajeEmpleado(req.tenantPrisma, req.principal.userId, id, cuerpo);
+    } catch (err) {
+      if (err instanceof MensajePedidoError) {
+        return reply
+          .code(err.statusCode)
+          .send({ statusCode: err.statusCode, error: "Error", message: err.message });
+      }
+      throw err;
+    }
   });
 
   // Tracking público (BFF pasa token de servicio; comprador valida con email)

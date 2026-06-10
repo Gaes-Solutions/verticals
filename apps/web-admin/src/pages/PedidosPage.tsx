@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ChatPedido } from "../components/ChatPedido.js";
 import { ApiError, api, getUserId, puede } from "../lib/api.js";
 
 interface UsuarioRef {
@@ -283,6 +284,8 @@ function DetalleModal({
         )}
 
         {puedeGestionar && <AsignarSeccion pedido={pedido} usuarios={usuarios} />}
+
+        <ChatPedido pedidoId={pedido.id} />
 
         <div className="mb-4">
           <h3 className="mb-2 text-sm font-bold text-slate-700">Historial</h3>

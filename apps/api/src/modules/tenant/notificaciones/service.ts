@@ -1,5 +1,6 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import { type PermissionCode, hasPermission, mergeRolePermissions } from "@gaespos/permissions";
+import { canalCliente, canalUsuario, publish } from "../../../realtime/bus.js";
 
 export interface NuevaNotificacion {
   tipo: string;
@@ -26,6 +27,7 @@ export async function notificarUsuario(
       ...(n.metadata ? { metadata: n.metadata as object } : {}),
     },
   });
+  publish(canalUsuario(usuarioId), { type: "notificacion", tipo: n.tipo });
 }
 
 /** Crea una notificación in-app para un cliente de la tienda. */
@@ -45,6 +47,7 @@ export async function notificarCliente(
       ...(n.metadata ? { metadata: n.metadata as object } : {}),
     },
   });
+  publish(canalCliente(clienteId), { type: "notificacion", tipo: n.tipo });
 }
 
 /** IDs de empleados activos cuyos roles otorgan el permiso (o son dueños). */
@@ -87,6 +90,9 @@ export async function notificarUsuariosConPermiso(
       ...(n.metadata ? { metadata: n.metadata as object } : {}),
     })),
   });
+  for (const usuarioId of ids) {
+    publish(canalUsuario(usuarioId), { type: "notificacion", tipo: n.tipo });
+  }
 }
 
 interface ListaOpts {

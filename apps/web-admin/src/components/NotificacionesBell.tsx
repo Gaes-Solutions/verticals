@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../lib/api.js";
+import { api, subscribeRealtime } from "../lib/api.js";
 
 interface Notificacion {
   id: string;
@@ -31,8 +31,13 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
 
   useEffect(() => {
     cargar();
+    // Tiempo real (SSE) + polling de respaldo por si la conexión se cae.
+    const cerrar = subscribeRealtime(cargar);
     const t = setInterval(cargar, POLL_MS);
-    return () => clearInterval(t);
+    return () => {
+      cerrar();
+      clearInterval(t);
+    };
   }, [cargar]);
 
   useEffect(() => {

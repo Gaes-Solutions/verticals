@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { canalUsuario } from "../../../realtime/bus.js";
+import { streamSse } from "../../../realtime/sse.js";
 import { listarNotificacionesUsuario, marcarLeida, marcarTodasLeidas } from "./service.js";
 
 const listQuery = z.object({
@@ -25,6 +27,11 @@ const notificacionesRoutes: FastifyPluginAsync = async (app) => {
   app.post("/leer-todas", async (req) => {
     const count = await marcarTodasLeidas(req.tenantPrisma, { usuarioId: req.principal.userId });
     return { marcadas: count };
+  });
+
+  // Stream SSE: empuja en tiempo real cuando llega una notificación nueva.
+  app.get("/realtime", (req, reply) => {
+    streamSse(req, reply, canalUsuario(req.principal.userId));
   });
 };
 

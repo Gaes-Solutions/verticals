@@ -56,6 +56,37 @@ export function getUserId(): string | null {
   return localStorage.getItem(UID_KEY);
 }
 
+/**
+ * Suscripción en tiempo real (SSE) al stream de notificaciones del usuario.
+ * Usa fetch+stream para poder mandar el Bearer token (EventSource no soporta
+ * headers). Llama onEvent en cada mensaje. Devuelve una función para cerrar.
+ */
+export function subscribeRealtime(onEvent: () => void): () => void {
+  const ctrl = new AbortController();
+  (async () => {
+    const t = loadToken();
+    if (!t) return;
+    try {
+      const res = await fetch(`${BASE}/t/notificaciones/realtime`, {
+        headers: { Authorization: `Bearer ${t}` },
+        signal: ctrl.signal,
+      });
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        if (chunk.includes("data:")) onEvent();
+      }
+    } catch {
+      // conexión cerrada o abortada; el polling de respaldo sigue
+    }
+  })();
+  return () => ctrl.abort();
+}
+
 export async function api<T = unknown>(
   path: string,
   opts: { method?: string; body?: unknown; auth?: boolean } = {},

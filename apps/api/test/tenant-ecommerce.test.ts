@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import { MockEmailProvider } from "@gaespos/email";
 import { MockPaymentProvider, StripeClient } from "@gaespos/pagos";
 import type { FastifyInstance } from "fastify";
@@ -700,5 +701,164 @@ describe("wishlist", () => {
       payload: { productoPublicadoId },
     });
     expect(item.statusCode).toBe(201);
+  });
+});
+
+describe("devolución desde la tienda (solicitud → aprobación) + mensajería", () => {
+  let clienteToken: string;
+  let pedidoId: string;
+  let pedidoFolio: string;
+  let solicitudId: string;
+
+  async function stock(): Promise<number> {
+    const inv = await app.inject({
+      method: "GET",
+      url: `/t/inventario?varianteId=${varianteId}`,
+      headers: auth(ownerToken),
+    });
+    const filas = inv.json() as
+      | Array<{ stockActual: string }>
+      | { items: Array<{ stockActual: string }> };
+    const lista = Array.isArray(filas) ? filas : filas.items;
+    return Number(lista[0]?.stockActual);
+  }
+
+  beforeAll(async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/auth/cliente/registro",
+      payload: {
+        tenantSlug: TENANT_SLUG,
+        nombre: "Compradora Online",
+        email: "online@cliente.mx",
+        password: "Cliente!2026",
+      },
+    });
+    clienteToken = reg.json().accessToken;
+    const clienteId = reg.json().cliente.id as string;
+
+    // Toma el pedido entregado (con venta generada) y lo liga a este cliente.
+    const list = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce?statusPedido=entregado",
+      headers: auth(ownerToken),
+    });
+    const entregado = (list.json() as { items: Array<{ id: string; folioPublico: string }> })
+      .items[0]!;
+    pedidoId = entregado.id;
+    pedidoFolio = entregado.folioPublico;
+    await getTenantClient(TENANT_SLUG).pedidoEcommerce.update({
+      where: { id: pedidoId },
+      data: { clienteId, emailComprador: "online@cliente.mx" },
+    });
+  });
+
+  function clienteAuth() {
+    return { authorization: `Bearer ${clienteToken}` };
+  }
+
+  it("cliente solicita devolución de 1 unidad", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/pedidos/${pedidoFolio}/devoluciones`,
+      headers: clienteAuth(),
+      payload: {
+        motivo: "defectuoso",
+        descripcion: "Llegó con un defecto",
+        items: [{ varianteId, nombre: "Playera GaesSoft", cantidad: 1 }],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    solicitudId = res.json().id;
+    expect(res.json().estado).toBe("solicitada");
+  });
+
+  it("no permite una segunda solicitud abierta para el mismo pedido", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/pedidos/${pedidoFolio}/devoluciones`,
+      headers: clienteAuth(),
+      payload: {
+        motivo: "otro",
+        items: [{ varianteId, nombre: "Playera GaesSoft", cantidad: 1 }],
+      },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("admin ve la solicitud en su bandeja", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/devoluciones-online?estado=solicitada",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{ id: string }>;
+    expect(items.some((s) => s.id === solicitudId)).toBe(true);
+  });
+
+  it("aprobar repone stock (+1), genera devolución y marca pedido reembolsado", async () => {
+    const antes = await stock();
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/devoluciones-online/${solicitudId}/aprobar`,
+      headers: auth(ownerToken),
+      payload: { metodoReembolso: "tarjeta_misma" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().devolucionId).toBeTruthy();
+    expect(await stock()).toBe(antes + 1);
+
+    const det = await app.inject({
+      method: "GET",
+      url: `/t/pedidos-ecommerce/${pedidoId}`,
+      headers: auth(ownerToken),
+    });
+    expect(det.json().statusPago).toBe("reembolsado");
+  });
+
+  it("aprobar una solicitud ya resuelta → 409", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/devoluciones-online/${solicitudId}/aprobar`,
+      headers: auth(ownerToken),
+      payload: { metodoReembolso: "tarjeta_misma" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("mensajería: cliente escribe, admin ve y responde, cliente ve el hilo", async () => {
+    const env = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/pedidos/${pedidoFolio}/mensajes`,
+      headers: clienteAuth(),
+      payload: { cuerpo: "¿Cuándo llega mi reembolso?" },
+    });
+    expect(env.statusCode).toBe(201);
+
+    const adminList = await app.inject({
+      method: "GET",
+      url: `/t/pedidos-ecommerce/${pedidoId}/mensajes`,
+      headers: auth(ownerToken),
+    });
+    const msgs = adminList.json() as Array<{ autorTipo: string; cuerpo: string }>;
+    expect(msgs.some((m) => m.autorTipo === "cliente")).toBe(true);
+
+    const resp = await app.inject({
+      method: "POST",
+      url: `/t/pedidos-ecommerce/${pedidoId}/mensajes`,
+      headers: auth(ownerToken),
+      payload: { cuerpo: "En 3-5 días hábiles." },
+    });
+    expect(resp.statusCode).toBe(200);
+
+    const clienteList = await app.inject({
+      method: "GET",
+      url: `/cliente-portal/pedidos/${pedidoFolio}/mensajes`,
+      headers: clienteAuth(),
+    });
+    const hilo = clienteList.json() as Array<{ autorTipo: string }>;
+    expect(hilo.filter((m) => m.autorTipo === "empleado").length).toBeGreaterThanOrEqual(1);
+    expect(hilo.length).toBeGreaterThanOrEqual(2);
   });
 });

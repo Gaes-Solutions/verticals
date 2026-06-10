@@ -1,6 +1,19 @@
 import { getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { canalCliente } from "../../realtime/bus.js";
+import { streamSse } from "../../realtime/sse.js";
+import {
+  DevolucionOnlineError,
+  listarSolicitudesCliente,
+  solicitarDevolucion,
+} from "../tenant/devoluciones-online/service.js";
+import {
+  MensajePedidoError,
+  enviarMensajeCliente,
+  listarMensajes,
+  marcarHiloLeido,
+} from "../tenant/mensajes-pedido/service.js";
 import {
   listarNotificacionesCliente,
   marcarLeida,
@@ -160,6 +173,98 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
     const { clienteId, tenantSlug } = clienteCtx(req);
     const marcadas = await marcarTodasLeidas(getTenantClient(tenantSlug), { clienteId });
     return { marcadas };
+  });
+
+  // Stream SSE en tiempo real para la campana del cliente.
+  app.get("/realtime", (req, reply) => {
+    const { clienteId } = clienteCtx(req);
+    streamSse(req, reply, canalCliente(clienteId));
+  });
+
+  // ── Devoluciones (solicitud con aprobación) ──────────────────────────────
+  app.get("/devoluciones", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    return listarSolicitudesCliente(getTenantClient(tenantSlug), clienteId);
+  });
+
+  app.post("/pedidos/:folio/devoluciones", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { folio } = z.object({ folio: z.string().min(1) }).parse(req.params);
+    const body = z
+      .object({
+        motivo: z.enum([
+          "defectuoso",
+          "cambio_opinion",
+          "talla_color",
+          "error_cobro",
+          "garantia",
+          "otro",
+        ]),
+        descripcion: z.string().max(1000).optional(),
+        items: z
+          .array(
+            z.object({
+              varianteId: z.string().min(1),
+              nombre: z.string(),
+              cantidad: z.number().int().positive(),
+            }),
+          )
+          .min(1),
+        fotos: z.array(z.string().url()).max(6).optional(),
+      })
+      .parse(req.body);
+    try {
+      const r = await solicitarDevolucion(getTenantClient(tenantSlug), clienteId, folio, {
+        motivo: body.motivo,
+        ...(body.descripcion ? { descripcion: body.descripcion } : {}),
+        items: body.items,
+        ...(body.fotos ? { fotos: body.fotos } : {}),
+      });
+      return reply.code(201).send(r);
+    } catch (err) {
+      if (err instanceof DevolucionOnlineError) {
+        return reply
+          .code(err.statusCode)
+          .send({ statusCode: err.statusCode, error: "Error", message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // ── Mensajería pedido↔cliente ─────────────────────────────────────────────
+  app.get("/pedidos/:folio/mensajes", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { folio } = z.object({ folio: z.string().min(1) }).parse(req.params);
+    const client = getTenantClient(tenantSlug);
+    const pedido = await client.pedidoEcommerce.findUnique({
+      where: { folioPublico: folio },
+      select: { id: true, clienteId: true },
+    });
+    if (!pedido || pedido.clienteId !== clienteId) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Pedido no encontrado" });
+    }
+    const mensajes = await listarMensajes(client, pedido.id);
+    await marcarHiloLeido(client, pedido.id, "cliente");
+    return mensajes;
+  });
+
+  app.post("/pedidos/:folio/mensajes", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { folio } = z.object({ folio: z.string().min(1) }).parse(req.params);
+    const { cuerpo } = z.object({ cuerpo: z.string().min(1).max(2000) }).parse(req.body);
+    try {
+      const m = await enviarMensajeCliente(getTenantClient(tenantSlug), clienteId, folio, cuerpo);
+      return reply.code(201).send(m);
+    } catch (err) {
+      if (err instanceof MensajePedidoError) {
+        return reply
+          .code(err.statusCode)
+          .send({ statusCode: err.statusCode, error: "Error", message: err.message });
+      }
+      throw err;
+    }
   });
 
   app.get("/wishlist", async (req) => {

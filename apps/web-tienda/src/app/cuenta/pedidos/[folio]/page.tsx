@@ -1,6 +1,14 @@
+import { ChatPedidoCliente } from "@/components/chat-pedido-cliente";
+import { SolicitarDevolucion } from "@/components/solicitar-devolucion";
 import { type PedidoDetalleCliente, clienteApi, getClienteToken } from "@/lib/cliente";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+
+interface SolicitudDevolucion {
+  estado: string;
+  rechazoMotivo: string | null;
+  pedido: { folioPublico: string };
+}
 
 export default async function PedidoDetallePage({
   params,
@@ -18,6 +26,12 @@ export default async function PedidoDetallePage({
   } catch {
     notFound();
   }
+
+  const solicitudes = await clienteApi<SolicitudDevolucion[]>("/cliente-portal/devoluciones").catch(
+    () => [] as SolicitudDevolucion[],
+  );
+  const solicitud = solicitudes.find((s) => s.pedido?.folioPublico === pedido.folioPublico) ?? null;
+  const devolible = ["entregado", "recogido"].includes(pedido.statusPedido);
 
   const fecha = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
@@ -123,6 +137,23 @@ export default async function PedidoDetallePage({
           </p>
         </>
       )}
+
+      {(devolible || solicitud) && (
+        <div className="mb-6">
+          <SolicitarDevolucion
+            folio={pedido.folioPublico}
+            items={pedido.items}
+            devolible={devolible}
+            solicitudExistente={
+              solicitud
+                ? { estado: solicitud.estado, rechazoMotivo: solicitud.rechazoMotivo }
+                : null
+            }
+          />
+        </div>
+      )}
+
+      <ChatPedidoCliente folio={pedido.folioPublico} />
     </div>
   );
 }

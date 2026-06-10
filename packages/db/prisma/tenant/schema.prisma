@@ -156,66 +156,68 @@ model Usuario {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  lastLoginSucursal             Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
-  sucursales                    UsuarioSucursal[]
-  roles                         UsuarioRol[]                 @relation("UsuarioRol_Usuario")
-  rolesAsignados                UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
-  vistasGuardadas               UsuarioVistaGuardada[]
-  movimientos                   InventarioMovimiento[]
-  ventasCreadas                 Venta[]                      @relation("VentaUsuarioCreador")
-  ventasCanceladas              Venta[]                      @relation("VentaUsuarioCancelador")
-  aperturasAbiertas             CajaApertura[]               @relation("CajaAperturaUsuario")
-  aperturasCerradas             CajaApertura[]               @relation("CajaAperturaCerradaPor")
-  cajaMovimientos               CajaMovimiento[]
-  cortes                        Corte[]
-  cfdisEmitidos                 Cfdi[]                       @relation("CfdiEmitidoPor")
-  cfdisCancelados               Cfdi[]                       @relation("CfdiCanceladoPor")
-  clientesAsignados             Cliente[]                    @relation("ClienteVendedorAsignado")
-  clientesB2bAsignados          ClienteB2bVendedorAsignado[]
-  fiadoMovimientos              FiadoMovimiento[]
-  creditosB2bAprobados          ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
-  apartadosCreados              Apartado[]                   @relation("ApartadoUsuarioCreador")
-  apartadosCancelados           Apartado[]                   @relation("ApartadoUsuarioCancelador")
-  apartadoAbonos                ApartadoAbono[]
-  cuentasCobrarVendedor         CuentaCobrar[]               @relation("CuentaCobrarVendedor")
-  cxcPagos                      CxcPago[]
-  devolucionesProcesadas        Devolucion[]                 @relation("DevolucionProcesadaPor")
-  devolucionesAprobadas         Devolucion[]                 @relation("DevolucionAprobadaPor")
-  devolucionesCanceladas        Devolucion[]                 @relation("DevolucionCanceladaPor")
-  cotizacionesVendedor          Cotizacion[]                 @relation("CotizacionVendedor")
-  pedidosVendedor               Pedido[]                     @relation("PedidoVendedor")
-  pedidosAprobados              Pedido[]                     @relation("PedidoAprobadoPor")
-  pedidosCancelados             Pedido[]                     @relation("PedidoCanceladoPor")
-  recargasProcesadas            Recarga[]                    @relation("RecargaProcesadaPor")
-  recargasReembolsadas          Recarga[]                    @relation("RecargaReembolsadaPor")
-  medicoPerfil                  Medico?
-  pacientesAsignados            Paciente[]                   @relation("PacienteMedicoAsignado")
-  agendas                       Agenda[]                     @relation("AgendaMedico")
-  agendaBloqueos                AgendaBloqueo[]              @relation("AgendaBloqueoMedico")
-  citasMedico                   Cita[]                       @relation("CitaMedico")
-  citasCheckin                  Cita[]                       @relation("CitaCheckinPor")
-  citasCanceladas               Cita[]                       @relation("CitaCanceladaPor")
-  consultasMedico               Consulta[]                   @relation("ConsultaMedico")
-  consultasEnfermera            Consulta[]                   @relation("ConsultaEnfermeraAsistente")
-  consultasFirmadas             Consulta[]                   @relation("ConsultaFirmadaPor")
-  recetasMedico                 Receta[]                     @relation("RecetaMedico")
-  recetasCanceladas             Receta[]                     @relation("RecetaCanceladaPor")
-  mascotasAsignadas             Mascota[]                    @relation("MascotaMedicoAsignado")
-  vacunacionesAplicador         Vacunacion[]                 @relation("VacunacionAplicador")
-  hospitalizacionesMedico       Hospitalizacion[]            @relation("HospitalizacionMedico")
-  hospitalizacionesAltaPor      Hospitalizacion[]            @relation("HospitalizacionAltaPor")
-  medicacionesPrescritas        MedicacionProgramada[]       @relation("MedicacionProgramadaPrescritaPor")
-  kardexAplicaciones            KardexAplicacion[]           @relation("KardexEnfermeraAplicador")
-  signosHospitalCapturados      SignoVitalHospital[]         @relation("SignoVitalHospitalCapturadoPor")
-  cargosHospitalCapturados      CargoHospital[]              @relation("CargoHospitalCapturadoPor")
-  cfdisRecibidosUpload          CfdiRecibido[]               @relation("CfdiRecibidoUploadedPor")
-  cfdiCategorizacionesAsignadas CfdiRecibidoCategorizacion[] @relation("CfdiCategorizacionAsignadoPor")
-  ordenesCompraCreadas          OrdenCompra[]                @relation("OrdenCompraCreadoPor")
-  ordenesCompraAutorizadas      OrdenCompra[]                @relation("OrdenCompraAutorizadoPor")
-  resenasRespondidas            ProductoResena[]             @relation("ResenaRespondidaPor")
-  pickupsResponsable            PickupPedido[]               @relation("PickupResponsable")
-  pedidosEcommerceAsignados     PedidoEcommerce[]            @relation("PedidoEcommerceAsignado")
-  notificaciones                Notificacion[]               @relation("NotificacionUsuario")
+  lastLoginSucursal              Sucursal?                    @relation("UsuarioLastLoginSucursal", fields: [lastLoginSucursalId], references: [id], onDelete: SetNull)
+  sucursales                     UsuarioSucursal[]
+  roles                          UsuarioRol[]                 @relation("UsuarioRol_Usuario")
+  rolesAsignados                 UsuarioRol[]                 @relation("UsuarioRol_AsignadoPor")
+  vistasGuardadas                UsuarioVistaGuardada[]
+  movimientos                    InventarioMovimiento[]
+  ventasCreadas                  Venta[]                      @relation("VentaUsuarioCreador")
+  ventasCanceladas               Venta[]                      @relation("VentaUsuarioCancelador")
+  aperturasAbiertas              CajaApertura[]               @relation("CajaAperturaUsuario")
+  aperturasCerradas              CajaApertura[]               @relation("CajaAperturaCerradaPor")
+  cajaMovimientos                CajaMovimiento[]
+  cortes                         Corte[]
+  cfdisEmitidos                  Cfdi[]                       @relation("CfdiEmitidoPor")
+  cfdisCancelados                Cfdi[]                       @relation("CfdiCanceladoPor")
+  clientesAsignados              Cliente[]                    @relation("ClienteVendedorAsignado")
+  clientesB2bAsignados           ClienteB2bVendedorAsignado[]
+  fiadoMovimientos               FiadoMovimiento[]
+  creditosB2bAprobados           ClienteB2bCredito[]          @relation("ClienteB2bCreditoAprobadoPor")
+  apartadosCreados               Apartado[]                   @relation("ApartadoUsuarioCreador")
+  apartadosCancelados            Apartado[]                   @relation("ApartadoUsuarioCancelador")
+  apartadoAbonos                 ApartadoAbono[]
+  cuentasCobrarVendedor          CuentaCobrar[]               @relation("CuentaCobrarVendedor")
+  cxcPagos                       CxcPago[]
+  devolucionesProcesadas         Devolucion[]                 @relation("DevolucionProcesadaPor")
+  devolucionesAprobadas          Devolucion[]                 @relation("DevolucionAprobadaPor")
+  devolucionesCanceladas         Devolucion[]                 @relation("DevolucionCanceladaPor")
+  cotizacionesVendedor           Cotizacion[]                 @relation("CotizacionVendedor")
+  pedidosVendedor                Pedido[]                     @relation("PedidoVendedor")
+  pedidosAprobados               Pedido[]                     @relation("PedidoAprobadoPor")
+  pedidosCancelados              Pedido[]                     @relation("PedidoCanceladoPor")
+  recargasProcesadas             Recarga[]                    @relation("RecargaProcesadaPor")
+  recargasReembolsadas           Recarga[]                    @relation("RecargaReembolsadaPor")
+  medicoPerfil                   Medico?
+  pacientesAsignados             Paciente[]                   @relation("PacienteMedicoAsignado")
+  agendas                        Agenda[]                     @relation("AgendaMedico")
+  agendaBloqueos                 AgendaBloqueo[]              @relation("AgendaBloqueoMedico")
+  citasMedico                    Cita[]                       @relation("CitaMedico")
+  citasCheckin                   Cita[]                       @relation("CitaCheckinPor")
+  citasCanceladas                Cita[]                       @relation("CitaCanceladaPor")
+  consultasMedico                Consulta[]                   @relation("ConsultaMedico")
+  consultasEnfermera             Consulta[]                   @relation("ConsultaEnfermeraAsistente")
+  consultasFirmadas              Consulta[]                   @relation("ConsultaFirmadaPor")
+  recetasMedico                  Receta[]                     @relation("RecetaMedico")
+  recetasCanceladas              Receta[]                     @relation("RecetaCanceladaPor")
+  mascotasAsignadas              Mascota[]                    @relation("MascotaMedicoAsignado")
+  vacunacionesAplicador          Vacunacion[]                 @relation("VacunacionAplicador")
+  hospitalizacionesMedico        Hospitalizacion[]            @relation("HospitalizacionMedico")
+  hospitalizacionesAltaPor       Hospitalizacion[]            @relation("HospitalizacionAltaPor")
+  medicacionesPrescritas         MedicacionProgramada[]       @relation("MedicacionProgramadaPrescritaPor")
+  kardexAplicaciones             KardexAplicacion[]           @relation("KardexEnfermeraAplicador")
+  signosHospitalCapturados       SignoVitalHospital[]         @relation("SignoVitalHospitalCapturadoPor")
+  cargosHospitalCapturados       CargoHospital[]              @relation("CargoHospitalCapturadoPor")
+  cfdisRecibidosUpload           CfdiRecibido[]               @relation("CfdiRecibidoUploadedPor")
+  cfdiCategorizacionesAsignadas  CfdiRecibidoCategorizacion[] @relation("CfdiCategorizacionAsignadoPor")
+  ordenesCompraCreadas           OrdenCompra[]                @relation("OrdenCompraCreadoPor")
+  ordenesCompraAutorizadas       OrdenCompra[]                @relation("OrdenCompraAutorizadoPor")
+  resenasRespondidas             ProductoResena[]             @relation("ResenaRespondidaPor")
+  pickupsResponsable             PickupPedido[]               @relation("PickupResponsable")
+  pedidosEcommerceAsignados      PedidoEcommerce[]            @relation("PedidoEcommerceAsignado")
+  notificaciones                 Notificacion[]               @relation("NotificacionUsuario")
+  solicitudesDevolucionResueltas SolicitudDevolucion[]        @relation("SolicitudDevolucionResueltaPor")
+  mensajesPedido                 MensajePedido[]              @relation("MensajePedidoUsuario")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -1225,27 +1227,29 @@ model Cliente {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
-  grupo             ClienteGrupo?            @relation(fields: [clienteGrupoId], references: [id], onDelete: SetNull)
-  vendedorAsignado  Usuario?                 @relation("ClienteVendedorAsignado", fields: [vendedorAsignadoId], references: [id], onDelete: SetNull)
-  direcciones       ClienteDireccion[]
-  telefonos         ClienteTelefono[]
-  etiquetas         ClienteEtiqueta[]
-  fiado             Fiado?
-  ventas            Venta[]
-  apartados         Apartado[]
-  cuentasCobrar     CuentaCobrar[]
-  pacientesTutor    Paciente[]               @relation("PacienteTutor")
-  mascotasTutor     Mascota[]                @relation("MascotaTutor")
-  carritosEcommerce CarritoEcommerce[]
-  pedidosEcommerce  PedidoEcommerce[]
-  resenas           ProductoResena[]
-  wishlists         Wishlist[]
-  segmentosMiembro  SegmentoClienteMiembro[]
-  metricasRfm       ClienteMetricasRfm?
-  campanasEnvios    CampanaEnvio[]
-  optOuts           ClienteOptOut[]
-  loyalty           ClienteLoyalty[]
-  notificaciones    Notificacion[]           @relation("NotificacionCliente")
+  grupo                 ClienteGrupo?            @relation(fields: [clienteGrupoId], references: [id], onDelete: SetNull)
+  vendedorAsignado      Usuario?                 @relation("ClienteVendedorAsignado", fields: [vendedorAsignadoId], references: [id], onDelete: SetNull)
+  direcciones           ClienteDireccion[]
+  telefonos             ClienteTelefono[]
+  etiquetas             ClienteEtiqueta[]
+  fiado                 Fiado?
+  ventas                Venta[]
+  apartados             Apartado[]
+  cuentasCobrar         CuentaCobrar[]
+  pacientesTutor        Paciente[]               @relation("PacienteTutor")
+  mascotasTutor         Mascota[]                @relation("MascotaTutor")
+  carritosEcommerce     CarritoEcommerce[]
+  pedidosEcommerce      PedidoEcommerce[]
+  resenas               ProductoResena[]
+  wishlists             Wishlist[]
+  segmentosMiembro      SegmentoClienteMiembro[]
+  metricasRfm           ClienteMetricasRfm?
+  campanasEnvios        CampanaEnvio[]
+  optOuts               ClienteOptOut[]
+  loyalty               ClienteLoyalty[]
+  notificaciones        Notificacion[]           @relation("NotificacionCliente")
+  solicitudesDevolucion SolicitudDevolucion[]
+  mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
 
   @@unique([rfc])
   @@index([nombre])
@@ -1840,14 +1844,15 @@ model Devolucion {
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 
-  sucursal     Sucursal          @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
-  caja         Caja?             @relation(fields: [cajaId], references: [id], onDelete: SetNull)
-  usuario      Usuario           @relation("DevolucionProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
-  venta        Venta             @relation(fields: [ventaId], references: [id], onDelete: Restrict)
-  aprobadoPor  Usuario?          @relation("DevolucionAprobadaPor", fields: [aprobadoPorId], references: [id], onDelete: SetNull)
-  canceladoPor Usuario?          @relation("DevolucionCanceladaPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
-  lineas       DevolucionLinea[]
-  cfdiEgreso   Cfdi?             @relation("DevolucionCfdiEgreso")
+  sucursal        Sucursal             @relation(fields: [sucursalId], references: [id], onDelete: Restrict)
+  caja            Caja?                @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+  usuario         Usuario              @relation("DevolucionProcesadaPor", fields: [usuarioId], references: [id], onDelete: Restrict)
+  venta           Venta                @relation(fields: [ventaId], references: [id], onDelete: Restrict)
+  aprobadoPor     Usuario?             @relation("DevolucionAprobadaPor", fields: [aprobadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor    Usuario?             @relation("DevolucionCanceladaPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  lineas          DevolucionLinea[]
+  cfdiEgreso      Cfdi?                @relation("DevolucionCfdiEgreso")
+  solicitudOrigen SolicitudDevolucion? @relation("SolicitudDevolucionGenerada")
 
   @@unique([sucursalId, folio])
   @@index([ventaId])
@@ -3566,14 +3571,16 @@ model PedidoEcommerce {
   createdAt        DateTime                   @default(now()) @map("created_at")
   updatedAt        DateTime                   @updatedAt @map("updated_at")
 
-  cliente        Cliente?                @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  sucursalPickup Sucursal?               @relation(fields: [sucursalPickupId], references: [id], onDelete: SetNull)
-  asignadoA      Usuario?                @relation("PedidoEcommerceAsignado", fields: [asignadoAId], references: [id], onDelete: SetNull)
-  ventaGenerada  Venta?                  @relation("PedidoEcommerceVenta", fields: [ventaIdGenerada], references: [id], onDelete: SetNull)
-  eventos        PedidoEcommerceEvento[]
-  envio          EnvioPedido?
-  pickup         PickupPedido?
-  resenas        ProductoResena[]
+  cliente               Cliente?                @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  sucursalPickup        Sucursal?               @relation(fields: [sucursalPickupId], references: [id], onDelete: SetNull)
+  asignadoA             Usuario?                @relation("PedidoEcommerceAsignado", fields: [asignadoAId], references: [id], onDelete: SetNull)
+  ventaGenerada         Venta?                  @relation("PedidoEcommerceVenta", fields: [ventaIdGenerada], references: [id], onDelete: SetNull)
+  eventos               PedidoEcommerceEvento[]
+  envio                 EnvioPedido?
+  pickup                PickupPedido?
+  resenas               ProductoResena[]
+  solicitudesDevolucion SolicitudDevolucion[]
+  mensajes              MensajePedido[]
 
   @@index([clienteId])
   @@index([statusPedido, createdAt])
@@ -3644,6 +3651,69 @@ model Notificacion {
   @@index([usuarioId, leida, createdAt])
   @@index([clienteId, leida, createdAt])
   @@map("notificaciones")
+}
+
+enum SolicitudDevolucionEstado {
+  solicitada
+  aprobada
+  rechazada
+  cancelada
+}
+
+/// Solicitud de devolución iniciada por el cliente desde la tienda (flujo con
+/// aprobación, estilo Mercado Libre). Al aprobarse genera una Devolucion real
+/// contra la venta ligada al pedido (repone stock + reembolso + CFDI Egreso).
+model SolicitudDevolucion {
+  id                String                    @id @default(cuid())
+  folio             String                    @unique
+  pedidoEcommerceId String                    @map("pedido_ecommerce_id")
+  clienteId         String                    @map("cliente_id")
+  motivo            DevolucionMotivo
+  descripcion       String?
+  items             Json                      @default("[]")
+  fotos             Json                      @default("[]")
+  estado            SolicitudDevolucionEstado @default(solicitada)
+  rechazoMotivo     String?                   @map("rechazo_motivo")
+  devolucionId      String?                   @unique @map("devolucion_id")
+  resueltaPorId     String?                   @map("resuelta_por_id")
+  resueltaAt        DateTime?                 @map("resuelta_at")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  pedido      PedidoEcommerce @relation(fields: [pedidoEcommerceId], references: [id], onDelete: Cascade)
+  cliente     Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  devolucion  Devolucion?     @relation("SolicitudDevolucionGenerada", fields: [devolucionId], references: [id], onDelete: SetNull)
+  resueltaPor Usuario?        @relation("SolicitudDevolucionResueltaPor", fields: [resueltaPorId], references: [id], onDelete: SetNull)
+
+  @@index([estado, createdAt])
+  @@index([clienteId])
+  @@index([pedidoEcommerceId])
+  @@map("solicitudes_devolucion")
+}
+
+enum MensajePedidoAutor {
+  cliente
+  empleado
+}
+
+/// Mensaje en el hilo pedido↔cliente (preguntas/soporte estilo Mercado Libre).
+model MensajePedido {
+  id                String             @id @default(cuid())
+  pedidoEcommerceId String             @map("pedido_ecommerce_id")
+  autorTipo         MensajePedidoAutor @map("autor_tipo")
+  usuarioId         String?            @map("usuario_id")
+  clienteId         String?            @map("cliente_id")
+  cuerpo            String
+  leidoPorCliente   Boolean            @default(false) @map("leido_por_cliente")
+  leidoPorEmpleado  Boolean            @default(false) @map("leido_por_empleado")
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  pedido  PedidoEcommerce @relation(fields: [pedidoEcommerceId], references: [id], onDelete: Cascade)
+  usuario Usuario?        @relation("MensajePedidoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  cliente Cliente?        @relation("MensajePedidoCliente", fields: [clienteId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoEcommerceId, createdAt])
+  @@map("mensajes_pedido")
 }
 
 model ZonaEnvio {

@@ -27,8 +27,14 @@ export function NotificacionesCliente() {
 
   useEffect(() => {
     cargar();
+    // Tiempo real (SSE) + polling de respaldo por si la conexión se cae.
+    const es = new EventSource("/api/cuenta/realtime");
+    es.onmessage = () => cargar();
     const t = setInterval(cargar, POLL_MS);
-    return () => clearInterval(t);
+    return () => {
+      es.close();
+      clearInterval(t);
+    };
   }, [cargar]);
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
+import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
@@ -27,6 +28,7 @@ type Seccion =
   | "inventario"
   | "ventas"
   | "pedidos"
+  | "devoluciones"
   | "envios"
   | "resenas"
   | "importador"
@@ -43,6 +45,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "compras", label: "Compras (OC)", icon: "🧾" },
   { key: "ventas", label: "Ventas", icon: "🧾" },
   { key: "pedidos", label: "Pedidos online", icon: "📬" },
+  { key: "devoluciones", label: "Devoluciones", icon: "↩️" },
   { key: "envios", label: "Envíos", icon: "🚚" },
   { key: "resenas", label: "Reseñas", icon: "⭐" },
   { key: "usuarios", label: "Usuarios y permisos", icon: "👥" },
@@ -159,6 +162,7 @@ export function App() {
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}
+        {seccion === "devoluciones" && <DevolucionesPage />}
         {seccion === "envios" && <EnviosPage />}
         {seccion === "resenas" && <ResenasPage />}
         {seccion === "tienda" && <TiendaPage />}
