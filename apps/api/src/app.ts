@@ -1,5 +1,9 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
+import adminAuditRoutes from "./modules/admin/audit-routes.js";
+import adminBillingOpsRoutes from "./modules/admin/billing-ops-routes.js";
+import adminMetricsRoutes from "./modules/admin/metrics-routes.js";
+import adminTeamRoutes from "./modules/admin/team-routes.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import { b2bAuthRoutes, b2bPortalRoutes } from "./modules/b2b-portal/routes.js";
@@ -144,6 +148,10 @@ export async function buildApp(
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
   await app.register(tenantRoutes, { prefix: "/tenants" });
+  await app.register(adminMetricsRoutes, { prefix: "/admin/metrics" });
+  await app.register(adminBillingOpsRoutes, { prefix: "/admin/billing-ops" });
+  await app.register(adminAuditRoutes, { prefix: "/admin/audit" });
+  await app.register(adminTeamRoutes, { prefix: "/admin/team" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);

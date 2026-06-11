@@ -11,6 +11,13 @@ type AdminTokenPayload = {
   kind: "admin";
 };
 
+// Token intermedio: password validada, falta el reto TOTP (no da acceso a nada más).
+type AdminMfaTokenPayload = {
+  sub: string;
+  email: string;
+  kind: "admin_mfa";
+};
+
 type TenantTokenPayload = {
   sub: string;
   email: string;
@@ -52,6 +59,7 @@ type ClienteB2bTokenPayload = {
 
 type TokenPayload =
   | AdminTokenPayload
+  | AdminMfaTokenPayload
   | TenantTokenPayload
   | PatientTokenPayload
   | AdminTenantTokenPayload

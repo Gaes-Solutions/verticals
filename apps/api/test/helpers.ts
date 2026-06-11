@@ -6,12 +6,16 @@ import {
 } from "@gaespos/db";
 import { hash as argon2Hash } from "@node-rs/argon2";
 import type { FastifyInstance } from "fastify";
+import { authenticator } from "otplib";
 import { Client } from "pg";
 import { buildApp } from "../src/app.js";
 import type { Config } from "../src/config.js";
 
 export const TEST_ADMIN_EMAIL = "admin@gaessoft.local";
 export const TEST_ADMIN_PASSWORD = "ChangeMe!2026";
+// Secret TOTP fijo para tests: todos los archivos lo fijan idéntico sobre el
+// admin sembrado, así el login MFA es determinístico aunque corran en paralelo.
+export const TEST_ADMIN_MFA_SECRET = "JBSWY3DPEHPK3PXP";
 
 export const TEST_TENANT_PREFIX = "test-";
 
@@ -61,13 +65,31 @@ export async function loginAdmin(
   email: string = TEST_ADMIN_EMAIL,
   password: string = TEST_ADMIN_PASSWORD,
 ): Promise<LoggedInAdmin> {
-  const res = await app.inject({
+  // El admin se autentica con password + TOTP. Fijamos un secret conocido y ya
+  // verificado para que el login sea de un paso (password → verify) en tests.
+  await masterPrisma.adminUser.update({
+    where: { email },
+    data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+  });
+
+  const login = await app.inject({
     method: "POST",
     url: "/auth/login",
     payload: { email, password },
   });
+  if (login.statusCode !== 200) {
+    throw new Error(`login failed: ${login.statusCode} ${login.body}`);
+  }
+  const mfaToken = (login.json() as { mfaToken: string }).mfaToken;
+
+  const res = await app.inject({
+    method: "POST",
+    url: "/auth/mfa/verify",
+    headers: { authorization: `Bearer ${mfaToken}` },
+    payload: { code: authenticator.generate(TEST_ADMIN_MFA_SECRET) },
+  });
   if (res.statusCode !== 200) {
-    throw new Error(`login failed: ${res.statusCode} ${res.body}`);
+    throw new Error(`mfa verify failed: ${res.statusCode} ${res.body}`);
   }
   const body = res.json() as { accessToken: string; user: { id: string } };
   const setCookie = res.headers["set-cookie"];

@@ -1,6 +1,14 @@
+import { masterPrisma } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
+import { authenticator } from "otplib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD, buildTestApp, loginAdmin } from "./helpers.js";
+import {
+  TEST_ADMIN_EMAIL,
+  TEST_ADMIN_MFA_SECRET,
+  TEST_ADMIN_PASSWORD,
+  buildTestApp,
+  loginAdmin,
+} from "./helpers.js";
 
 describe("auth module", () => {
   let app: FastifyInstance;
@@ -45,11 +53,42 @@ describe("auth module", () => {
       expect(res.statusCode).toBe(401);
     });
 
-    it("login OK retorna access token + set-cookie HttpOnly Path=/auth", async () => {
+    it("password OK con admin enrolado retorna reto MFA (sin sesión directa)", async () => {
+      // Asegura el admin enrolado con un secret conocido.
+      await masterPrisma.adminUser.update({
+        where: { email: TEST_ADMIN_EMAIL },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+      });
       const res = await app.inject({
         method: "POST",
         url: "/auth/login",
         payload: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { mfaRequired?: boolean; mfaToken?: string; accessToken?: string };
+      expect(body.mfaRequired).toBe(true);
+      expect(body.mfaToken).toMatch(/^eyJ/);
+      // El paso 1 NUNCA emite sesión ni cookie.
+      expect(body.accessToken).toBeUndefined();
+      expect(res.headers["set-cookie"]).toBeUndefined();
+    });
+
+    it("completar TOTP (verify) emite sesión + set-cookie HttpOnly Path=/auth", async () => {
+      await masterPrisma.adminUser.update({
+        where: { email: TEST_ADMIN_EMAIL },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+      });
+      const login = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD },
+      });
+      const mfaToken = (login.json() as { mfaToken: string }).mfaToken;
+      const res = await app.inject({
+        method: "POST",
+        url: "/auth/mfa/verify",
+        headers: { authorization: `Bearer ${mfaToken}` },
+        payload: { code: authenticator.generate(TEST_ADMIN_MFA_SECRET) },
       });
       expect(res.statusCode).toBe(200);
       const body = res.json() as { accessToken: string; user: { email: string } };
@@ -61,6 +100,25 @@ describe("auth module", () => {
       expect(cookieStr).toContain("gaespos_refresh=");
       expect(cookieStr).toContain("HttpOnly");
       expect(cookieStr).toContain("Path=/auth");
+    });
+
+    it("código TOTP incorrecto → 401", async () => {
+      await masterPrisma.adminUser.update({
+        where: { email: TEST_ADMIN_EMAIL },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+      });
+      const login = await app.inject({
+        method: "POST",
+        url: "/auth/login",
+        payload: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD },
+      });
+      const res = await app.inject({
+        method: "POST",
+        url: "/auth/mfa/verify",
+        headers: { authorization: `Bearer ${(login.json() as { mfaToken: string }).mfaToken}` },
+        payload: { code: "000000" },
+      });
+      expect(res.statusCode).toBe(401);
     });
   });
 

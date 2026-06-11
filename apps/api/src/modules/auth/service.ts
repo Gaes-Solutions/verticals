@@ -1,8 +1,50 @@
 import { createHash, randomBytes } from "node:crypto";
 import { type AdminUser, type MasterPrismaClient, masterPrisma } from "@gaespos/db";
 import { verify as verifyArgon2 } from "@node-rs/argon2";
+import { authenticator } from "otplib";
 
 const REFRESH_TOKEN_BYTES = 48;
+const TOTP_ISSUER = "GaesSoft Admin";
+
+// 2FA TOTP forzoso (decisión Flujo 10): primer login enrola, después siempre reta.
+
+export function generateTotpSecret(): string {
+  return authenticator.generateSecret();
+}
+
+export function totpKeyUri(email: string, secret: string): string {
+  return authenticator.keyuri(email, TOTP_ISSUER, secret);
+}
+
+export function verifyTotpCode(code: string, secret: string): boolean {
+  try {
+    return authenticator.verify({ token: code, secret });
+  } catch {
+    return false;
+  }
+}
+
+/** Guarda un secret TOTP pendiente de verificar (se confirma en /mfa/activate). */
+export async function setPendingMfaSecret(
+  adminUserId: string,
+  secret: string,
+  client: MasterPrismaClient = masterPrisma,
+): Promise<void> {
+  await client.adminUser.update({
+    where: { id: adminUserId },
+    data: { mfaSecret: secret, mfaVerifiedAt: null },
+  });
+}
+
+export async function markMfaVerified(
+  adminUserId: string,
+  client: MasterPrismaClient = masterPrisma,
+): Promise<void> {
+  await client.adminUser.update({
+    where: { id: adminUserId },
+    data: { mfaVerifiedAt: new Date() },
+  });
+}
 
 export function hashRefreshToken(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex");
