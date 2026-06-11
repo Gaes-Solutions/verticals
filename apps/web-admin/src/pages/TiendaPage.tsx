@@ -45,6 +45,9 @@ export function TiendaPage() {
           mostrarRatingProducto: config.mostrarRatingProducto ?? true,
           cuponEnCheckout: config.cuponEnCheckout ?? true,
           comprarAhora: config.comprarAhora ?? true,
+          cancelacionCliente: config.cancelacionCliente ?? true,
+          facturacionSelfService: config.facturacionSelfService ?? true,
+          preguntasPublicas: config.preguntasPublicas ?? true,
         },
       });
       setMsg("✓ Configuración guardada");
@@ -195,6 +198,21 @@ export function TiendaPage() {
           label='Botón "Comprar ahora" (compra rápida)'
           checked={config.comprarAhora ?? true}
           onChange={(v) => setConfig({ ...config, comprarAhora: v })}
+        />
+        <Toggle
+          label="Permitir que el cliente cancele su compra (antes de envío)"
+          checked={config.cancelacionCliente ?? true}
+          onChange={(v) => setConfig({ ...config, cancelacionCliente: v })}
+        />
+        <Toggle
+          label="Factura (CFDI) self-service desde la cuenta del cliente"
+          checked={config.facturacionSelfService ?? true}
+          onChange={(v) => setConfig({ ...config, facturacionSelfService: v })}
+        />
+        <Toggle
+          label="Preguntas y respuestas públicas en el producto"
+          checked={config.preguntasPublicas ?? true}
+          onChange={(v) => setConfig({ ...config, preguntasPublicas: v })}
         />
 
         <button

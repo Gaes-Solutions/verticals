@@ -9,6 +9,7 @@ import { EnviosPage } from "./pages/EnviosPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
+import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
@@ -29,6 +30,7 @@ type Seccion =
   | "ventas"
   | "pedidos"
   | "devoluciones"
+  | "preguntas"
   | "envios"
   | "resenas"
   | "importador"
@@ -48,6 +50,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "devoluciones", label: "Devoluciones", icon: "↩️" },
   { key: "envios", label: "Envíos", icon: "🚚" },
   { key: "resenas", label: "Reseñas", icon: "⭐" },
+  { key: "preguntas", label: "Preguntas", icon: "❓" },
   { key: "usuarios", label: "Usuarios y permisos", icon: "👥" },
   { key: "tienda", label: "Tienda online", icon: "🛒" },
 ];
@@ -165,6 +168,7 @@ export function App() {
         {seccion === "devoluciones" && <DevolucionesPage />}
         {seccion === "envios" && <EnviosPage />}
         {seccion === "resenas" && <ResenasPage />}
+        {seccion === "preguntas" && <PreguntasPage />}
         {seccion === "tienda" && <TiendaPage />}
       </main>
     </div>

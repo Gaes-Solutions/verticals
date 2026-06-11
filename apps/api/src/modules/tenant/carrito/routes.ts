@@ -53,6 +53,9 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       mostrarRatingProducto: c.mostrarRatingProducto,
       cuponEnCheckout: c.cuponEnCheckout,
       comprarAhora: c.comprarAhora,
+      cancelacionCliente: c.cancelacionCliente,
+      facturacionSelfService: c.facturacionSelfService,
+      preguntasPublicas: c.preguntasPublicas,
     };
   });
 
@@ -87,6 +90,12 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         categoriaPublica: true,
         producto: { include: { variantes: true } },
         resenas: { where: { estado: "aprobada" }, orderBy: { createdAt: "desc" }, take: 20 },
+        preguntas: {
+          where: { estado: "publicada" },
+          orderBy: { respondidaAt: "desc" },
+          take: 20,
+          select: { id: true, pregunta: true, respuesta: true, respondidaAt: true },
+        },
       },
     });
     if (!prod || !prod.isPublicado) {

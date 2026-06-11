@@ -862,3 +862,132 @@ describe("devolución desde la tienda (solicitud → aprobación) + mensajería"
     expect(hilo.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("Tanda 3: cancelar compra + Q&A público (configurable)", () => {
+  let clienteToken: string;
+  let clienteId: string;
+
+  async function nuevoPedido(estado: string, statusPago = "pendiente"): Promise<string> {
+    const p = await getTenantClient(TENANT_SLUG).pedidoEcommerce.create({
+      data: {
+        folioPublico: `GP-T3${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 99)}`,
+        clienteId,
+        emailComprador: "tanda3@cliente.mx",
+        subtotal: "100",
+        total: "100",
+        moneda: "MXN",
+        metodoEnvio: "paqueteria",
+        statusPedido: estado as never,
+        statusPago: statusPago as never,
+      },
+    });
+    return p.folioPublico;
+  }
+
+  beforeAll(async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/auth/cliente/registro",
+      payload: {
+        tenantSlug: TENANT_SLUG,
+        nombre: "Tanda Tres",
+        email: "tanda3@cliente.mx",
+        password: "Cliente!2026",
+      },
+    });
+    clienteToken = reg.json().accessToken;
+    clienteId = reg.json().cliente.id;
+  });
+
+  function cAuth() {
+    return { authorization: `Bearer ${clienteToken}` };
+  }
+
+  it("cliente cancela un pedido aún no enviado", async () => {
+    const folio = await nuevoPedido("preparando");
+    const res = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/pedidos/${folio}/cancelar`,
+      headers: cAuth(),
+      payload: { motivo: "Ya no lo necesito" },
+    });
+    expect(res.statusCode).toBe(200);
+    const det = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce?statusPedido=cancelado",
+      headers: auth(ownerToken),
+    });
+    const folios = (det.json().items as Array<{ folioPublico: string }>).map((p) => p.folioPublico);
+    expect(folios).toContain(folio);
+  });
+
+  it("no se puede cancelar un pedido ya enviado → 409", async () => {
+    const folio = await nuevoPedido("enviado");
+    const res = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/pedidos/${folio}/cancelar`,
+      headers: cAuth(),
+      payload: { motivo: "tarde" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("Q&A: cliente pregunta → owner responde → aparece pública en el producto", async () => {
+    const ask = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/productos/${productoPublicadoId}/preguntas`,
+      headers: cAuth(),
+      payload: { pregunta: "¿De qué material es la playera?" },
+    });
+    expect(ask.statusCode).toBe(201);
+
+    const pend = await app.inject({
+      method: "GET",
+      url: "/t/preguntas?estado=pendiente",
+      headers: auth(ownerToken),
+    });
+    const mia = (pend.json() as Array<{ id: string; pregunta: string }>).find((p) =>
+      p.pregunta.includes("material"),
+    );
+    expect(mia).toBeDefined();
+
+    const resp = await app.inject({
+      method: "POST",
+      url: `/t/preguntas/${mia!.id}/responder`,
+      headers: auth(ownerToken),
+      payload: { respuesta: "100% algodón." },
+    });
+    expect(resp.statusCode).toBe(200);
+
+    const det = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo/playera-gaessoft",
+      headers: auth(ownerToken),
+    });
+    const preguntas = det.json().preguntas as Array<{ pregunta: string; respuesta: string }>;
+    expect(preguntas.some((p) => p.respuesta === "100% algodón.")).toBe(true);
+  });
+
+  it("config: con preguntas deshabilitadas → 403", async () => {
+    await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(ownerToken),
+      payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", preguntasPublicas: false },
+    });
+    const ask = await app.inject({
+      method: "POST",
+      url: `/cliente-portal/productos/${productoPublicadoId}/preguntas`,
+      headers: cAuth(),
+      payload: { pregunta: "¿Tienen otra talla?" },
+    });
+    expect(ask.statusCode).toBe(403);
+    // restaurar
+    await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(ownerToken),
+      payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", preguntasPublicas: true },
+    });
+  });
+});

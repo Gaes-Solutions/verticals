@@ -90,6 +90,9 @@ export interface ConfigTienda {
   mostrarRatingProducto?: boolean;
   cuponEnCheckout?: boolean;
   comprarAhora?: boolean;
+  cancelacionCliente?: boolean;
+  facturacionSelfService?: boolean;
+  preguntasPublicas?: boolean;
 }
 
 export interface ResumenVentas {

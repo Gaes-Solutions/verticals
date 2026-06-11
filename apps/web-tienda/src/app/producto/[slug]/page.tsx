@@ -1,5 +1,6 @@
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
+import { PreguntasProducto } from "@/components/preguntas-producto";
 import { ProductoCompra } from "@/components/producto-compra";
 import { api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
@@ -23,6 +24,7 @@ interface ProductoDetalle {
     }>;
   };
   resenas: Array<{ id: string; rating: number; titulo: string | null; comentario: string | null }>;
+  preguntas: Array<{ id: string; pregunta: string; respuesta: string | null }>;
 }
 
 function precioDe(prod: ProductoDetalle): string {
@@ -168,6 +170,10 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             ))}
           </div>
         </section>
+      )}
+
+      {config.preguntasPublicas && (
+        <PreguntasProducto productoPublicadoId={prod.id} preguntas={prod.preguntas} />
       )}
     </div>
   );

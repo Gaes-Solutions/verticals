@@ -28,6 +28,9 @@ export const configTiendaSchema = z.object({
   mostrarRatingProducto: z.boolean().optional(),
   cuponEnCheckout: z.boolean().optional(),
   comprarAhora: z.boolean().optional(),
+  cancelacionCliente: z.boolean().optional(),
+  facturacionSelfService: z.boolean().optional(),
+  preguntasPublicas: z.boolean().optional(),
 });
 
 export const publicarProductoSchema = z.object({

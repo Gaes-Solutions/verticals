@@ -60,6 +60,7 @@ import ordenesCompraRoutes from "./modules/tenant/ordenes-compra/routes.js";
 import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
 import pedidosEcommerceRoutes from "./modules/tenant/pedidos-ecommerce/routes.js";
 import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
+import preguntasRoutes from "./modules/tenant/preguntas/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
@@ -215,6 +216,7 @@ export async function buildApp(
       await tenantApp.register(checkoutRoutes, { prefix: "/checkout" });
       await tenantApp.register(pedidosEcommerceRoutes, { prefix: "/pedidos-ecommerce" });
       await tenantApp.register(devolucionesOnlineRoutes, { prefix: "/devoluciones-online" });
+      await tenantApp.register(preguntasRoutes, { prefix: "/preguntas" });
       await tenantApp.register(notificacionesRoutes, { prefix: "/notificaciones" });
       await tenantApp.register(resenasRoutes, { prefix: "/resenas" });
       await tenantApp.register(wishlistsRoutes, { prefix: "/wishlists" });

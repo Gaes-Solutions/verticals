@@ -218,6 +218,7 @@ model Usuario {
   notificaciones                 Notificacion[]               @relation("NotificacionUsuario")
   solicitudesDevolucionResueltas SolicitudDevolucion[]        @relation("SolicitudDevolucionResueltaPor")
   mensajesPedido                 MensajePedido[]              @relation("MensajePedidoUsuario")
+  preguntasRespondidas           PreguntaProducto[]           @relation("PreguntaRespondidaPor")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -1250,6 +1251,7 @@ model Cliente {
   notificaciones        Notificacion[]           @relation("NotificacionCliente")
   solicitudesDevolucion SolicitudDevolucion[]
   mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
+  preguntasProducto     PreguntaProducto[]       @relation("PreguntaProductoCliente")
 
   @@unique([rfc])
   @@index([nombre])
@@ -3418,6 +3420,9 @@ model ConfigTiendaEcommerce {
   mostrarRatingProducto          Boolean    @default(true) @map("mostrar_rating_producto")
   cuponEnCheckout                Boolean    @default(true) @map("cupon_en_checkout")
   comprarAhora                   Boolean    @default(true) @map("comprar_ahora")
+  cancelacionCliente             Boolean    @default(true) @map("cancelacion_cliente")
+  facturacionSelfService         Boolean    @default(true) @map("facturacion_self_service")
+  preguntasPublicas              Boolean    @default(true) @map("preguntas_publicas")
   createdAt                      DateTime   @default(now()) @map("created_at")
   updatedAt                      DateTime   @updatedAt @map("updated_at")
 
@@ -3476,6 +3481,7 @@ model ProductoPublicado {
   categoriaPublica CategoriaPublica?    @relation(fields: [categoriaPublicaId], references: [id], onDelete: SetNull)
   traducciones     ProductoTraduccion[]
   resenas          ProductoResena[]
+  preguntas        PreguntaProducto[]
 
   @@unique([slugSeo])
   @@index([categoriaPublicaId])
@@ -3803,6 +3809,36 @@ model ProductoResena {
   @@unique([pedidoId, productoPublicadoId])
   @@index([productoPublicadoId, estado])
   @@map("producto_resenas")
+}
+
+enum PreguntaEstado {
+  pendiente
+  publicada
+  rechazada
+}
+
+/// Pregunta pública sobre un producto (Q&A estilo Mercado Libre). El cliente
+/// pregunta, la tienda responde; las respondidas+publicadas se ven en el producto.
+model PreguntaProducto {
+  id                  String         @id @default(cuid())
+  productoPublicadoId String         @map("producto_publicado_id")
+  clienteId           String?        @map("cliente_id")
+  autorNombre         String?        @map("autor_nombre")
+  pregunta            String
+  respuesta           String?
+  respondidaPorId     String?        @map("respondida_por_id")
+  respondidaAt        DateTime?      @map("respondida_at")
+  estado              PreguntaEstado @default(pendiente)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  productoPublicado ProductoPublicado @relation(fields: [productoPublicadoId], references: [id], onDelete: Cascade)
+  cliente           Cliente?          @relation("PreguntaProductoCliente", fields: [clienteId], references: [id], onDelete: SetNull)
+  respondidaPor     Usuario?          @relation("PreguntaRespondidaPor", fields: [respondidaPorId], references: [id], onDelete: SetNull)
+
+  @@index([productoPublicadoId, estado])
+  @@index([estado, createdAt])
+  @@map("preguntas_producto")
 }
 
 model Wishlist {

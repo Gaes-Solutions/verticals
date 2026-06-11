@@ -1,8 +1,13 @@
+import { CancelarPedido } from "@/components/cancelar-pedido";
 import { ChatPedidoCliente } from "@/components/chat-pedido-cliente";
+import { FacturaPedido } from "@/components/factura-pedido";
 import { SolicitarDevolucion } from "@/components/solicitar-devolucion";
+import { getTiendaConfig } from "@/lib/api";
 import { type PedidoDetalleCliente, clienteApi, getClienteToken } from "@/lib/cliente";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+
+const ESTADOS_CANCELABLES = ["recibido", "pago_confirmado", "preparando", "listo_pickup"];
 
 interface SolicitudDevolucion {
   estado: string;
@@ -32,6 +37,15 @@ export default async function PedidoDetallePage({
   );
   const solicitud = solicitudes.find((s) => s.pedido?.folioPublico === pedido.folioPublico) ?? null;
   const devolible = ["entregado", "recogido"].includes(pedido.statusPedido);
+  const config = await getTiendaConfig();
+  const cancelable =
+    config.cancelacionCliente &&
+    !pedido.cancelado &&
+    ESTADOS_CANCELABLES.includes(pedido.statusPedido);
+  const facturable =
+    config.facturacionSelfService &&
+    pedido.statusPedido !== "cancelado" &&
+    pedido.statusPedido !== "recibido";
 
   const fecha = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
@@ -137,6 +151,11 @@ export default async function PedidoDetallePage({
           </p>
         </>
       )}
+
+      <div className="mb-6 flex flex-wrap items-start gap-3">
+        {cancelable && <CancelarPedido folio={pedido.folioPublico} />}
+        {facturable && <FacturaPedido folio={pedido.folioPublico} />}
+      </div>
 
       {(devolible || solicitud) && (
         <div className="mb-6">

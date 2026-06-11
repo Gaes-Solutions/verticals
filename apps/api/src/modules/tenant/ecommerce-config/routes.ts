@@ -49,6 +49,15 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
         : {}),
       ...(body.cuponEnCheckout !== undefined ? { cuponEnCheckout: body.cuponEnCheckout } : {}),
       ...(body.comprarAhora !== undefined ? { comprarAhora: body.comprarAhora } : {}),
+      ...(body.cancelacionCliente !== undefined
+        ? { cancelacionCliente: body.cancelacionCliente }
+        : {}),
+      ...(body.facturacionSelfService !== undefined
+        ? { facturacionSelfService: body.facturacionSelfService }
+        : {}),
+      ...(body.preguntasPublicas !== undefined
+        ? { preguntasPublicas: body.preguntasPublicas }
+        : {}),
     };
     const cfg = existing
       ? await req.tenantPrisma.configTiendaEcommerce.update({ where: { id: existing.id }, data })

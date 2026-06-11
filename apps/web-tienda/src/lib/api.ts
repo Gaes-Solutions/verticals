@@ -102,6 +102,9 @@ export interface TiendaConfig {
   mostrarRatingProducto: boolean;
   cuponEnCheckout: boolean;
   comprarAhora: boolean;
+  cancelacionCliente: boolean;
+  facturacionSelfService: boolean;
+  preguntasPublicas: boolean;
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -114,6 +117,9 @@ const DEFAULT_CONFIG: TiendaConfig = {
   mostrarRatingProducto: true,
   cuponEnCheckout: true,
   comprarAhora: true,
+  cancelacionCliente: true,
+  facturacionSelfService: true,
+  preguntasPublicas: true,
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {
