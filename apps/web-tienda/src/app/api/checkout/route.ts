@@ -17,7 +17,11 @@ export async function POST(req: NextRequest) {
       sucursalPickupId?: string;
       direccionEnvio?: Record<string, unknown>;
       cuponCodigo?: string;
+      cardTokenId?: string;
+      mesesSinIntereses?: number;
     };
+    // Con token de tarjeta → cobro real con Conekta; sin token → demo mock.
+    const conConekta = Boolean(body.cardTokenId);
 
     // emailAnonimo permite recuperar el carrito por correo si el pago no se completa
     const carrito = await api<{ id: string }>("/tienda", {
@@ -37,8 +41,10 @@ export async function POST(req: NextRequest) {
           carritoId: carrito.id,
           emailComprador: body.emailComprador,
           metodoPago: "tarjeta",
-          proveedorPago: "mock",
+          proveedorPago: conConekta ? "conekta" : "mock",
           metodoEnvio: body.metodoEnvio,
+          ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
+          ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
           ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
           ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
           ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
@@ -46,7 +52,11 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
+    // Conekta cobra la tarjeta al crear la orden; el webhook order.paid genera la
+    // venta. Solo el flujo demo necesita el disparo manual del pago.
+    if (!conConekta) {
+      await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
+    }
 
     return NextResponse.json({ folioPublico: checkout.folioPublico, total: checkout.total });
   } catch (err) {

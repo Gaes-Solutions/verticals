@@ -45,6 +45,8 @@ export interface IniciarCheckoutInput {
   sucursalPickupId?: string;
   direccionEnvio?: Record<string, unknown>;
   tarifaEnvioId?: string | undefined;
+  cardTokenId?: string | undefined;
+  mesesSinIntereses?: number | undefined;
   requiereFactura: boolean;
   datosFactura?: Record<string, unknown>;
 }
@@ -144,7 +146,13 @@ export async function iniciarCheckout(
     metodo: input.metodoPago,
     emailComprador: input.emailComprador,
     descripcion: `Pedido ${folioPublico}`,
-    metadata: { pedidoId: pedido.id, folioPublico },
+    metadata: {
+      pedidoId: pedido.id,
+      folioPublico,
+      ...(input.mesesSinIntereses ? { msi: String(input.mesesSinIntereses) } : {}),
+    },
+    ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
+    ...(input.mesesSinIntereses ? { mesesSinIntereses: input.mesesSinIntereses } : {}),
   });
 
   await client.pedidoEcommerce.update({

@@ -88,6 +88,52 @@ describe("ConektaClient", () => {
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
+  it("tarjeta con token → charge card pagado (confirmado)", async () => {
+    const spy = mockFetch(200, {
+      id: "ord_card_1",
+      payment_status: "paid",
+      charges: { data: [{ id: "chr_c1", status: "paid", payment_method: { type: "card" } }] },
+    });
+    const client = new ConektaClient(OPTS);
+    const intent = await client.crearIntent({
+      pedidoId: "p",
+      montoCentavos: 59800,
+      moneda: "MXN",
+      metodo: "tarjeta",
+      emailComprador: "a@test.mx",
+      cardTokenId: "tok_test_visa_4242",
+    });
+    expect(intent.status).toBe("confirmado");
+    const body = JSON.parse((spy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.charges[0].payment_method).toMatchObject({
+      type: "card",
+      token_id: "tok_test_visa_4242",
+    });
+    expect(body.charges[0].payment_method.monthly_installments).toBeUndefined();
+  });
+
+  it("tarjeta con MSI → incluye monthly_installments en el cargo", async () => {
+    const spy = mockFetch(200, {
+      id: "ord_card_msi",
+      payment_status: "paid",
+      charges: {
+        data: [{ id: "chr_msi", payment_method: { type: "card", monthly_installments: 6 } }],
+      },
+    });
+    const client = new ConektaClient(OPTS);
+    await client.crearIntent({
+      pedidoId: "p",
+      montoCentavos: 600000,
+      moneda: "MXN",
+      metodo: "tarjeta",
+      emailComprador: "a@test.mx",
+      cardTokenId: "tok_test",
+      mesesSinIntereses: 6,
+    });
+    const body = JSON.parse((spy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.charges[0].payment_method.monthly_installments).toBe(6);
+  });
+
   it("parseWebhook order.paid con firma válida → confirmado", () => {
     const client = new ConektaClient(OPTS);
     const payload = JSON.stringify({

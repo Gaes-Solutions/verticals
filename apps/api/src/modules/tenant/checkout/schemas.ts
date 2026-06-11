@@ -23,6 +23,10 @@ export const iniciarCheckoutSchema = z.object({
   // El costo de envío se calcula server-side a partir de la tarifa elegida;
   // sin tarifa (tenant sin envíos configurados) el costo es 0.
   tarifaEnvioId: z.string().optional(),
+  // Pago con tarjeta: token de Conekta.js/Stripe.js (la tarjeta nunca toca el
+  // backend) + meses sin intereses opcionales.
+  cardTokenId: z.string().optional(),
+  mesesSinIntereses: z.number().int().min(3).max(48).optional(),
   requiereFactura: z.boolean().default(false),
   datosFactura: z
     .object({

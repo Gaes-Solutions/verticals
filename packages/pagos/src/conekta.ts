@@ -28,9 +28,20 @@ interface ConektaOrderResponse {
     data?: Array<{
       id: string;
       status?: string;
-      payment_method?: { reference?: string; clabe?: string; expires_at?: number };
+      payment_method?: {
+        reference?: string;
+        clabe?: string;
+        expires_at?: number;
+        monthly_installments?: number;
+      };
     }>;
   };
+}
+
+interface ConektaPaymentMethod {
+  type: string;
+  token_id?: string;
+  monthly_installments?: number;
 }
 
 /**
@@ -53,6 +64,30 @@ export class ConektaClient implements PaymentProvider {
     this.baseUrl = opts.baseUrl ?? "https://api.conekta.io";
   }
 
+  /** Arma el payment_method de Conekta según el método. Tarjeta usa el token del
+   * frontend (Conekta.js) y, si aplica, los meses sin intereses. */
+  private resolverPaymentMethod(input: CrearIntentInput): ConektaPaymentMethod {
+    if (input.metodo === "tarjeta") {
+      if (!input.cardTokenId) {
+        throw new PagoError(
+          "Conekta tarjeta requiere el token de la tarjeta (Conekta.js)",
+          "INVALID_INPUT",
+        );
+      }
+      const pm: ConektaPaymentMethod = { type: "card", token_id: input.cardTokenId };
+      // MSI solo aplica con tarjeta; Conekta valida los plazos permitidos (3/6/9/12…).
+      if (input.mesesSinIntereses && input.mesesSinIntereses >= 3) {
+        pm.monthly_installments = input.mesesSinIntereses;
+      }
+      return pm;
+    }
+    const chargeType = METODO_A_CHARGE_TYPE[input.metodo];
+    if (!chargeType) {
+      throw new PagoError(`Conekta no soporta el método ${input.metodo}`, "INVALID_INPUT");
+    }
+    return { type: chargeType };
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
@@ -73,13 +108,7 @@ export class ConektaClient implements PaymentProvider {
   }
 
   async crearIntent(input: CrearIntentInput): Promise<PagoIntent> {
-    const chargeType = METODO_A_CHARGE_TYPE[input.metodo];
-    if (!chargeType) {
-      throw new PagoError(
-        `Conekta ${input.metodo} requiere token del frontend (V1.5) — usa Stripe para tarjeta`,
-        "INVALID_INPUT",
-      );
-    }
+    const paymentMethod = this.resolverPaymentMethod(input);
     const order = await this.post<ConektaOrderResponse>("/orders", {
       currency: input.moneda.toUpperCase(),
       customer_info: { email: input.emailComprador, name: input.emailComprador },
@@ -91,7 +120,7 @@ export class ConektaClient implements PaymentProvider {
         },
       ],
       metadata: input.metadata ?? {},
-      charges: [{ payment_method: { type: chargeType } }],
+      charges: [{ payment_method: paymentMethod }],
     });
     const charge = order.charges?.data?.[0];
     const referencia = charge?.payment_method?.reference ?? charge?.payment_method?.clabe;

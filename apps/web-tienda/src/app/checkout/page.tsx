@@ -1,5 +1,6 @@
 "use client";
 
+import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type CarritoLineaLocal, leerCarrito, sessionId, vaciar } from "@/lib/carrito-store";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -92,13 +93,32 @@ export default function CheckoutPage() {
   const envioSeleccionado = opcionesEnvio.find((o) => o.tarifaId === tarifaId);
   const costoEnvio = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
   const total = subtotal + costoEnvio;
+  const conektaKey = process.env.NEXT_PUBLIC_CONEKTA_PUBLIC_KEY ?? "";
+  // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
+  const msiOfrecibles =
+    config?.msiHabilitado && total >= Number(config.msiMontoMinimo) ? config.msiMeses : [];
 
-  async function pagar(e: React.FormEvent) {
-    e.preventDefault();
+  function validar(): boolean {
+    if (!email.trim() || !nombre.trim()) {
+      setError("Completa tu correo y nombre");
+      return false;
+    }
     if (modoEntrega === "pickup" && !sucursalId) {
       setError("Elige la sucursal donde recogerás tu pedido");
-      return;
+      return false;
     }
+    if (
+      modoEntrega === "envio" &&
+      (cp.length !== 5 || !ciudad.trim() || estado.trim().length < 3)
+    ) {
+      setError("Completa la dirección de envío");
+      return false;
+    }
+    return true;
+  }
+
+  async function procesarPedido(cardTokenId?: string, meses?: number | null) {
+    if (!validar()) return;
     setProcesando(true);
     setError(null);
     try {
@@ -111,6 +131,8 @@ export default function CheckoutPage() {
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
           ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
+          ...(cardTokenId ? { cardTokenId, proveedorPago: "conekta" } : {}),
+          ...(meses ? { mesesSinIntereses: meses } : {}),
           ...(modoEntrega === "pickup"
             ? { sucursalPickupId: sucursalId }
             : {
@@ -138,7 +160,7 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="mb-6 text-2xl font-bold">Finalizar compra</h1>
-      <form onSubmit={pagar} className="space-y-4 rounded-lg border bg-white p-6">
+      <div className="space-y-4 rounded-lg border bg-white p-6">
         <Campo label="Email" value={email} onChange={setEmail} type="email" required />
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
 
@@ -220,39 +242,49 @@ export default function CheckoutPage() {
             <span>Total a pagar</span>
             <span className="text-marca">${total.toFixed(2)}</span>
           </div>
-          {config?.msiHabilitado &&
-            config.msiMeses.length > 0 &&
-            total >= Number(config.msiMontoMinimo) && (
-              <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                <p className="mb-2 font-medium text-marca text-sm">💳 Meses sin intereses</p>
-                <div className="space-y-1 text-gray-600 text-sm">
-                  {[...config.msiMeses]
-                    .sort((a, b) => a - b)
-                    .map((m) => (
-                      <div key={m} className="flex justify-between">
-                        <span>{m} pagos de</span>
-                        <span className="font-semibold">${(total / m).toFixed(2)}</span>
-                      </div>
-                    ))}
-                </div>
-                <p className="mt-2 text-gray-400 text-xs">
-                  Elige tus meses al pagar con tarjeta participante.
-                </p>
-              </div>
-            )}
           {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={procesando}
-            className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
-          >
-            {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
-          </button>
-          <p className="mt-2 text-center text-xs text-gray-400">
-            Pago simulado con proveedor mock (sin cobro real)
-          </p>
+
+          {conektaKey ? (
+            <PagoTarjetaConekta
+              publicKey={conektaKey}
+              montoTotal={total}
+              msiMeses={msiOfrecibles}
+              procesando={procesando}
+              onPagar={(token, meses) => procesarPedido(token, meses)}
+            />
+          ) : (
+            <>
+              {msiOfrecibles.length > 0 && (
+                <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+                  <p className="mb-2 font-medium text-marca text-sm">💳 Meses sin intereses</p>
+                  <div className="space-y-1 text-gray-600 text-sm">
+                    {[...msiOfrecibles]
+                      .sort((a, b) => a - b)
+                      .map((m) => (
+                        <div key={m} className="flex justify-between">
+                          <span>{m} pagos de</span>
+                          <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => procesarPedido()}
+                disabled={procesando}
+                className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
+              >
+                {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+              </button>
+              <p className="mt-2 text-center text-gray-400 text-xs">
+                Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar de
+                verdad con MSI.
+              </p>
+            </>
+          )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }

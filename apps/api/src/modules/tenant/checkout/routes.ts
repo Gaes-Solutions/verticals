@@ -62,6 +62,8 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
         ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
         ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
+        ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
+        ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
         requiereFactura: body.requiereFactura,
         ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
       });

@@ -10,6 +10,11 @@ export interface CrearIntentInput {
   emailComprador: string;
   descripcion?: string;
   metadata?: Record<string, string>;
+  /** Token de tarjeta generado en el frontend (Conekta.js / Stripe.js). PCI: la
+   * tarjeta nunca toca nuestro backend, solo este token. */
+  cardTokenId?: string;
+  /** Meses sin intereses (3/6/9/12…). Solo aplica a pago con tarjeta. */
+  mesesSinIntereses?: number;
 }
 
 export interface PagoIntent {
