@@ -1165,3 +1165,93 @@ describe("Tanda 4: auto-guías de paquetería + webhook de tracking (configurabl
     });
   });
 });
+
+describe("Tanda 5: catálogo enriquecido (promo + stock + orden + relacionados)", () => {
+  it("catálogo devuelve precioDesde + stockPublico del producto", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const item = (res.json().items as Array<Record<string, unknown>>).find(
+      (i) => i.slugSeo === "playera-gaessoft",
+    );
+    expect(item).toBeDefined();
+    expect(Number(item?.precioDesde)).toBeCloseTo(299, 0);
+    expect(typeof item?.stockPublico).toBe("number");
+    expect(item?.enOferta).toBe(false);
+  });
+
+  it("con promoción vigente → enOferta + descuentoPct en lista y detalle", async () => {
+    const tc = getTenantClient(TENANT_SLUG);
+    await tc.productoPublicado.update({
+      where: { id: productoPublicadoId },
+      data: { precioPromocion: "199.00", promocionVigenteHasta: new Date(Date.now() + 86_400_000) },
+    });
+    const lista = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo?soloOfertas=true",
+      headers: auth(ownerToken),
+    });
+    const item = (lista.json().items as Array<Record<string, unknown>>).find(
+      (i) => i.slugSeo === "playera-gaessoft",
+    );
+    expect(item?.enOferta).toBe(true);
+    expect(item?.precioPromocion).toBe("199.00");
+    expect(Number(item?.descuentoPct)).toBeGreaterThanOrEqual(30);
+
+    const detalle = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo/playera-gaessoft",
+      headers: auth(ownerToken),
+    });
+    const d = detalle.json() as Record<string, unknown>;
+    expect(d.enOferta).toBe(true);
+    expect(d.precioPromocion).toBe("199.00");
+    expect(Array.isArray(d.relacionados)).toBe(true);
+    // limpiar
+    await tc.productoPublicado.update({
+      where: { id: productoPublicadoId },
+      data: { precioPromocion: null, promocionVigenteHasta: null },
+    });
+  });
+
+  it("filtro por precio + soloDisponibles (camino en memoria)", async () => {
+    const incluido = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo?precioMin=100&precioMax=400&soloDisponibles=true",
+      headers: auth(ownerToken),
+    });
+    expect(
+      (incluido.json().items as Array<{ slugSeo: string }>).some(
+        (i) => i.slugSeo === "playera-gaessoft",
+      ),
+    ).toBe(true);
+
+    const excluido = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo?precioMax=50",
+      headers: auth(ownerToken),
+    });
+    expect(
+      (excluido.json().items as Array<{ slugSeo: string }>).some(
+        (i) => i.slugSeo === "playera-gaessoft",
+      ),
+    ).toBe(false);
+  });
+
+  it("orden=precio_asc responde ordenado por precio efectivo", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo?orden=precio_asc",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    const precios = (res.json().items as Array<{ precioDesde: string }>).map((i) =>
+      Number(i.precioDesde),
+    );
+    const ordenado = [...precios].sort((a, b) => a - b);
+    expect(precios).toEqual(ordenado);
+  });
+});

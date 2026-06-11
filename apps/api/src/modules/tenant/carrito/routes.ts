@@ -1,6 +1,12 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import {
+  enriquecerDetalle,
+  listarCatalogo,
+  productosRelacionados,
+  ventaConfig,
+} from "./catalogo-service.js";
 import { correrRecoveryCarritos } from "./recovery-service.js";
 import {
   type CatalogoQuery,
@@ -41,6 +47,11 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
   app.get("/config-publica", async (req) => {
     const c = await req.tenantPrisma.configTiendaEcommerce.findFirst();
     if (!c) return null;
+    const tarifaGratis = await req.tenantPrisma.tarifaEnvio.findFirst({
+      where: { isActive: true, montoMinimoEnvioGratis: { not: null } },
+      orderBy: { montoMinimoEnvioGratis: "asc" },
+      select: { montoMinimoEnvioGratis: true },
+    });
     return {
       nombre: c.nombre,
       lema: c.lema,
@@ -58,30 +69,17 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       preguntasPublicas: c.preguntasPublicas,
       pushHabilitado: c.pushHabilitado,
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
+      envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
+        ? Number(tarifaGratis.montoMinimoEnvioGratis).toFixed(2)
+        : null,
     };
   });
 
   // --- Catálogo público (lectura) ---
   app.get("/catalogo", async (req) => {
     const q: CatalogoQuery = catalogoQuerySchema.parse(req.query);
-    const where: Record<string, unknown> = { isPublicado: true };
-    if (q.categoriaPublicaId) where.categoriaPublicaId = q.categoriaPublicaId;
-    if (q.destacado !== undefined) where.destacadoHome = q.destacado;
-    if (q.q) where.tituloPublico = { contains: q.q, mode: "insensitive" };
-    const [total, items] = await Promise.all([
-      req.tenantPrisma.productoPublicado.count({ where }),
-      req.tenantPrisma.productoPublicado.findMany({
-        where,
-        include: {
-          categoriaPublica: { select: { nombre: true, slugSeo: true } },
-          producto: { select: { id: true, variantes: { select: { id: true, precioBase: true } } } },
-        },
-        orderBy: [{ destacadoHome: "desc" }, { rankingScore: "desc" }],
-        skip: (q.page - 1) * q.pageSize,
-        take: q.pageSize,
-      }),
-    ]);
-    return { items, total, page: q.page, pageSize: q.pageSize };
+    const config = await ventaConfig(req.tenantPrisma);
+    return listarCatalogo(req.tenantPrisma, config, q);
   });
 
   app.get("/catalogo/:slug", async (req, reply) => {
@@ -105,7 +103,12 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });
     }
-    return prod;
+    const config = await ventaConfig(req.tenantPrisma);
+    const [enriquecido, relacionados] = await Promise.all([
+      enriquecerDetalle(req.tenantPrisma, config, prod),
+      productosRelacionados(req.tenantPrisma, config, prod),
+    ]);
+    return { ...prod, ...enriquecido, relacionados };
   });
 
   // --- Carrito ---

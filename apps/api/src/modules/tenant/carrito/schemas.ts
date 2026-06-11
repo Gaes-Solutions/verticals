@@ -22,12 +22,24 @@ export const carritoUpsertSchema = z
 
 export const carritoIdParamSchema = z.object({ id: z.string().min(1) });
 
+const boolParam = z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean());
+const numParam = z.preprocess(
+  (v) => (typeof v === "string" && v !== "" ? Number(v) : v),
+  z.number().nonnegative(),
+);
+
 export const catalogoQuerySchema = z.object({
   categoriaPublicaId: z.string().optional(),
-  destacado: z
-    .preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean())
-    .optional(),
+  destacado: boolParam.optional(),
   q: z.string().optional(),
+  orden: z
+    .enum(["relevancia", "precio_asc", "precio_desc", "novedad", "populares"])
+    .default("relevancia"),
+  precioMin: numParam.optional(),
+  precioMax: numParam.optional(),
+  soloOfertas: boolParam.optional(),
+  soloDisponibles: boolParam.optional(),
+  recienLlegados: boolParam.optional(),
   page: z
     .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1))
     .default(1),
