@@ -67,6 +67,14 @@ export interface ProductoPublicado {
   precioPublicoOverride: string | null;
   categoriaPublica: { nombre: string; slugSeo: string } | null;
   producto: { id: string; variantes: Array<{ id: string; precioBase: string }> };
+  // Enriquecido por el backend (Tanda 5):
+  precioDesde: string;
+  precioPromocion: string | null;
+  enOferta: boolean;
+  descuentoPct: number;
+  stockPublico: number | null;
+  stockBajo: boolean;
+  envioGratis: boolean;
 }
 
 export interface CatalogoResponse {
@@ -107,6 +115,7 @@ export interface TiendaConfig {
   preguntasPublicas: boolean;
   pushHabilitado: boolean;
   vapidPublicKey: string | null;
+  envioGratisDesde: string | null;
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -124,6 +133,7 @@ const DEFAULT_CONFIG: TiendaConfig = {
   preguntasPublicas: true,
   pushHabilitado: false,
   vapidPublicKey: null,
+  envioGratisDesde: null,
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {

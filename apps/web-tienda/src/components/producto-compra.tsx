@@ -23,18 +23,31 @@ function etiquetaVariante(v: VarianteCompra, i: number): string {
   return ops.length ? ops.join(" · ") : `Opción ${i + 1}`;
 }
 
+export interface OfertaCompra {
+  precioPromocion: string;
+  descuentoPct: number;
+}
+
 export function ProductoCompra({
   variantes,
   precioOverride,
   titulo,
   comprarAhora,
   msi,
+  oferta,
+  stockPublico,
+  stockBajo,
+  envioGratis,
 }: {
   variantes: VarianteCompra[];
   precioOverride: string | null;
   titulo: string;
   comprarAhora: boolean;
   msi: MsiConfig;
+  oferta?: OfertaCompra | null;
+  stockPublico?: number | null;
+  stockBajo?: boolean;
+  envioGratis?: boolean;
 }) {
   const router = useRouter();
   const [sel, setSel] = useState(0);
@@ -43,8 +56,10 @@ export function ProductoCompra({
 
   const variante = variantes[sel] ?? variantes[0];
   if (!variante) return null;
-  const precio = precioOverride ?? variante.precioBase;
-  const precioNum = Number(precio);
+  const precioLista = Number(precioOverride ?? variante.precioBase);
+  const precioNum = oferta ? Number(oferta.precioPromocion) : precioLista;
+  const precio = String(precioNum);
+  const sinStock = stockPublico != null && stockPublico <= 0;
 
   function alCarrito() {
     if (!variante) return;
@@ -65,7 +80,34 @@ export function ProductoCompra({
 
   return (
     <div className="mt-4">
-      <p className="text-3xl font-bold text-marca">${precioNum.toFixed(2)}</p>
+      <div className="flex flex-wrap items-baseline gap-2">
+        {oferta && (
+          <span className="text-gray-400 text-lg line-through">${precioLista.toFixed(2)}</span>
+        )}
+        <p className="font-bold text-3xl text-marca">${precioNum.toFixed(2)}</p>
+        {oferta && oferta.descuentoPct > 0 && (
+          <span className="rounded bg-red-600 px-2 py-0.5 font-bold text-sm text-white">
+            -{oferta.descuentoPct}%
+          </span>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-2 text-sm">
+        {envioGratis && (
+          <span className="rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+            🚚 Envío gratis
+          </span>
+        )}
+        {stockBajo && stockPublico != null && (
+          <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+            ¡Últimas {stockPublico} piezas!
+          </span>
+        )}
+        {sinStock && (
+          <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-500">
+            Sin stock
+          </span>
+        )}
+      </div>
       {mostrarMsi && (
         <p className="mt-1 text-gray-600 text-sm">
           o hasta <span className="font-semibold text-marca">{mejorPlazo} meses sin intereses</span>{" "}
@@ -106,7 +148,8 @@ export function ProductoCompra({
         <button
           type="button"
           onClick={onAgregar}
-          className="rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5"
+          disabled={sinStock}
+          className="rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {agregado ? "✓ Agregado" : "Agregar al carrito"}
         </button>
@@ -114,7 +157,8 @@ export function ProductoCompra({
           <button
             type="button"
             onClick={onComprarAhora}
-            className="rounded-lg bg-marca px-6 py-2 font-semibold text-white transition hover:opacity-90"
+            disabled={sinStock}
+            className="rounded-lg bg-marca px-6 py-2 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Comprar ahora
           </button>

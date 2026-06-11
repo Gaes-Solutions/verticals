@@ -1,8 +1,9 @@
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { PreguntasProducto } from "@/components/preguntas-producto";
+import { ProductoGrid } from "@/components/producto-card";
 import { ProductoCompra } from "@/components/producto-compra";
-import { api, getTiendaConfig } from "@/lib/api";
+import { type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -23,12 +24,31 @@ interface ProductoDetalle {
       opciones: Record<string, string> | null;
     }>;
   };
-  resenas: Array<{ id: string; rating: number; titulo: string | null; comentario: string | null }>;
+  resenas: Array<{
+    id: string;
+    rating: number;
+    titulo: string | null;
+    comentario: string | null;
+    imagenesArray?: string[];
+  }>;
   preguntas: Array<{ id: string; pregunta: string; respuesta: string | null }>;
+  // Enriquecido (Tanda 5):
+  precioDesde: string;
+  precioPromocion: string | null;
+  promocionVigenteHasta: string | null;
+  enOferta: boolean;
+  descuentoPct: number;
+  stockPublico: number | null;
+  stockBajo: boolean;
+  envioGratis: boolean;
+  relacionados: ProductoPublicado[];
 }
 
 function precioDe(prod: ProductoDetalle): string {
-  return prod.precioPublicoOverride ?? prod.producto.variantes[0]?.precioBase ?? "0";
+  if (prod.enOferta && prod.precioPromocion) return prod.precioPromocion;
+  return (
+    prod.precioDesde ?? prod.precioPublicoOverride ?? prod.producto.variantes[0]?.precioBase ?? "0"
+  );
 }
 
 export async function generateMetadata({
@@ -70,7 +90,13 @@ function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
       "@type": "Offer",
       priceCurrency: "MXN",
       price: Number(precioDe(prod)).toFixed(2),
-      availability: "https://schema.org/InStock",
+      availability:
+        prod.stockPublico != null && prod.stockPublico <= 0
+          ? "https://schema.org/OutOfStock"
+          : "https://schema.org/InStock",
+      ...(prod.enOferta && prod.promocionVigenteHasta
+        ? { priceValidUntil: String(prod.promocionVigenteHasta).slice(0, 10) }
+        : {}),
     },
     ...(ratings.length > 0
       ? {
@@ -146,6 +172,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
               meses: config.msiMeses,
               montoMinimo: config.msiMontoMinimo,
             }}
+            oferta={
+              prod.enOferta && prod.precioPromocion
+                ? { precioPromocion: prod.precioPromocion, descuentoPct: prod.descuentoPct }
+                : null
+            }
+            stockPublico={prod.stockPublico}
+            stockBajo={prod.stockBajo}
+            envioGratis={prod.envioGratis}
           />
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
@@ -174,6 +208,13 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
 
       {config.preguntasPublicas && (
         <PreguntasProducto productoPublicadoId={prod.id} preguntas={prod.preguntas} />
+      )}
+
+      {prod.relacionados.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-4 font-bold text-lg">También te puede interesar</h2>
+          <ProductoGrid items={prod.relacionados} />
+        </section>
       )}
     </div>
   );
