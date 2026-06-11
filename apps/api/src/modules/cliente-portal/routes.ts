@@ -28,6 +28,12 @@ import {
 import { PreguntaError, crearPregunta } from "../tenant/preguntas/service.js";
 import { eliminarSuscripcion, guardarSuscripcion } from "../tenant/push/service.js";
 import {
+  actualizarDireccion,
+  crearDireccion,
+  eliminarDireccion,
+  listarDirecciones,
+} from "./direcciones-service.js";
+import {
   ClientePortalError,
   agregarAWishlist,
   crearResenaCliente,
@@ -46,6 +52,20 @@ const pushSubscribeSchema = z.object({
   keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
 });
 const pushUnsubscribeSchema = z.object({ endpoint: z.string().url() });
+
+const direccionSchema = z.object({
+  etiqueta: z.string().min(1).max(60),
+  calle: z.string().min(1).max(200),
+  numeroExterior: z.string().max(20).optional(),
+  numeroInterior: z.string().max(20).optional(),
+  colonia: z.string().max(120).optional(),
+  municipio: z.string().max(120).optional(),
+  estado: z.string().min(2).max(60),
+  codigoPostal: z.string().regex(/^\d{5}$/),
+  pais: z.string().max(4).optional(),
+  referencias: z.string().max(300).optional(),
+  isDefaultEnvio: z.boolean().optional(),
+});
 
 const crearResenaSchema = z.object({
   pedidoId: z.string().min(1),
@@ -202,6 +222,38 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
     const { endpoint } = pushUnsubscribeSchema.parse(req.body);
     await eliminarSuscripcion(getTenantClient(tenantSlug), clienteId, endpoint);
     return { ok: true };
+  });
+
+  app.get("/direcciones", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    return listarDirecciones(getTenantClient(tenantSlug), clienteId);
+  });
+
+  app.post("/direcciones", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const body = direccionSchema.parse(req.body);
+    const dir = await crearDireccion(getTenantClient(tenantSlug), clienteId, body);
+    return reply.code(201).send(dir);
+  });
+
+  app.put("/direcciones/:id", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    const body = direccionSchema.parse(req.body);
+    const ok = await actualizarDireccion(getTenantClient(tenantSlug), clienteId, id, body);
+    if (!ok) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Dirección no encontrada" });
+    }
+    return { ok: true };
+  });
+
+  app.delete("/direcciones/:id", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    await eliminarDireccion(getTenantClient(tenantSlug), clienteId, id);
+    return reply.code(204).send();
   });
 
   app.post("/notificaciones/leer-todas", async (req) => {

@@ -26,15 +26,32 @@ interface TiendaConfig {
   cuponEnCheckout: boolean;
 }
 
+interface DireccionGuardada {
+  id: string;
+  etiqueta: string;
+  calle: string;
+  numeroExterior: string | null;
+  colonia: string | null;
+  municipio: string | null;
+  estado: string | null;
+  codigoPostal: string | null;
+  isDefaultEnvio: boolean;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
+  const [calle, setCalle] = useState("");
+  const [numero, setNumero] = useState("");
+  const [colonia, setColonia] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [estado, setEstado] = useState("");
   const [cp, setCp] = useState("");
   const [cupon, setCupon] = useState("");
+  const [direcciones, setDirecciones] = useState<DireccionGuardada[]>([]);
+  const [guardarDir, setGuardarDir] = useState(false);
   const [config, setConfig] = useState<TiendaConfig | null>(null);
   const [modoEntrega, setModoEntrega] = useState<"envio" | "pickup">("envio");
   const [opcionesEnvio, setOpcionesEnvio] = useState<OpcionEnvio[]>([]);
@@ -57,7 +74,25 @@ export default function CheckoutPage() {
       setEmail((prev) => prev || (me.email ?? ""));
       setNombre((prev) => prev || me.nombre);
     });
+    // direcciones guardadas (checkout rápido)
+    fetch("/api/cuenta/direcciones").then(async (res) => {
+      if (!res.ok) return;
+      const dirs = (await res.json()) as DireccionGuardada[];
+      if (!Array.isArray(dirs) || dirs.length === 0) return;
+      setDirecciones(dirs);
+      const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
+      if (def) usarDireccion(def);
+    });
   }, []);
+
+  function usarDireccion(d: DireccionGuardada) {
+    setCalle(d.calle);
+    setNumero(d.numeroExterior ?? "");
+    setColonia(d.colonia ?? "");
+    setCiudad(d.municipio ?? "");
+    setEstado(d.estado ?? "");
+    setCp(d.codigoPostal ?? "");
+  }
 
   const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
 
@@ -109,7 +144,7 @@ export default function CheckoutPage() {
     }
     if (
       modoEntrega === "envio" &&
-      (cp.length !== 5 || !ciudad.trim() || estado.trim().length < 3)
+      (cp.length !== 5 || !calle.trim() || !ciudad.trim() || estado.trim().length < 3)
     ) {
       setError("Completa la dirección de envío");
       return false;
@@ -137,12 +172,35 @@ export default function CheckoutPage() {
             ? { sucursalPickupId: sucursalId }
             : {
                 ...(tarifaId ? { tarifaEnvioId: tarifaId } : {}),
-                direccionEnvio: { nombre, calle: "—", ciudad, estado, cp },
+                direccionEnvio: {
+                  nombre,
+                  calle,
+                  numero,
+                  colonia,
+                  ciudad,
+                  estado,
+                  cp,
+                },
               }),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? "Error en el pago");
+      if (guardarDir && modoEntrega === "envio") {
+        await fetch("/api/cuenta/direcciones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            etiqueta: "Mi dirección",
+            calle,
+            numeroExterior: numero || undefined,
+            colonia: colonia || undefined,
+            municipio: ciudad || undefined,
+            estado,
+            codigoPostal: cp,
+          }),
+        }).catch(() => {});
+      }
       vaciar();
       router.push(
         `/seguimiento?folio=${data.folioPublico}&email=${encodeURIComponent(email)}&ok=1`,
@@ -181,11 +239,40 @@ export default function CheckoutPage() {
 
         {modoEntrega === "envio" ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
-              <Campo label="Estado" value={estado} onChange={setEstado} required />
+            {direcciones.length > 0 && (
+              <label className="block">
+                <span className="mb-1 block font-medium text-gray-700 text-sm">
+                  Dirección guardada
+                </span>
+                <select
+                  onChange={(e) => {
+                    const d = direcciones.find((x) => x.id === e.target.value);
+                    if (d) usarDireccion(d);
+                  }}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  {direcciones.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.etiqueta} — {d.calle} {d.numeroExterior}, {d.municipio}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <Campo label="Calle" value={calle} onChange={setCalle} required />
+              </div>
+              <Campo label="Número" value={numero} onChange={setNumero} />
             </div>
-            <Campo label="Código postal" value={cp} onChange={setCp} required />
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Colonia" value={colonia} onChange={setColonia} />
+              <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Estado" value={estado} onChange={setEstado} required />
+              <Campo label="Código postal" value={cp} onChange={setCp} required />
+            </div>
             <OpcionesEnvio
               opciones={opcionesEnvio}
               tarifaId={tarifaId}
@@ -193,6 +280,14 @@ export default function CheckoutPage() {
               cotizando={cotizando}
               direccionLista={cp.length === 5 && estado.trim().length >= 3}
             />
+            <label className="flex items-center gap-2 text-gray-600 text-sm">
+              <input
+                type="checkbox"
+                checked={guardarDir}
+                onChange={(e) => setGuardarDir(e.target.checked)}
+              />
+              Guardar esta dirección para próximas compras
+            </label>
           </>
         ) : (
           <div className="space-y-2">

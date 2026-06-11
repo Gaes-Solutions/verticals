@@ -1,3 +1,4 @@
+import { DireccionesCuenta } from "@/components/direcciones-cuenta";
 import { LogoutBoton } from "@/components/logout-boton";
 import { NotificacionesCliente } from "@/components/notificaciones-cliente";
 import { PwaPush } from "@/components/pwa-push";
@@ -95,6 +96,10 @@ export default async function CuentaPage() {
           </table>
         </div>
       )}
+
+      <div className="mt-10">
+        <DireccionesCuenta />
+      </div>
 
       <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>
       <ResenasCuenta inicial={resenables} />

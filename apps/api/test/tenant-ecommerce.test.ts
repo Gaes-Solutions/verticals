@@ -1255,3 +1255,75 @@ describe("Tanda 5: catálogo enriquecido (promo + stock + orden + relacionados)"
     expect(precios).toEqual(ordenado);
   });
 });
+
+describe("Tanda 5: direcciones guardadas del cliente", () => {
+  let clienteToken: string;
+  function cAuth() {
+    return { authorization: `Bearer ${clienteToken}` };
+  }
+
+  beforeAll(async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/auth/cliente/registro",
+      payload: {
+        tenantSlug: TENANT_SLUG,
+        nombre: "Cliente Dir",
+        email: "dir@cliente.mx",
+        password: "Cliente!2026",
+      },
+    });
+    clienteToken = reg.json().accessToken;
+  });
+
+  it("crea, lista, edita y elimina; la primera es default", async () => {
+    const crear = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/direcciones",
+      headers: cAuth(),
+      payload: {
+        etiqueta: "Casa",
+        calle: "Reforma",
+        numeroExterior: "100",
+        municipio: "GDL",
+        estado: "Jalisco",
+        codigoPostal: "44100",
+      },
+    });
+    expect(crear.statusCode).toBe(201);
+    const id = crear.json().id as string;
+    expect(crear.json().isDefaultEnvio).toBe(true);
+
+    const lista = await app.inject({
+      method: "GET",
+      url: "/cliente-portal/direcciones",
+      headers: cAuth(),
+    });
+    expect((lista.json() as unknown[]).length).toBe(1);
+
+    const editar = await app.inject({
+      method: "PUT",
+      url: `/cliente-portal/direcciones/${id}`,
+      headers: cAuth(),
+      payload: {
+        etiqueta: "Casa nueva",
+        calle: "Juárez",
+        estado: "Jalisco",
+        codigoPostal: "44200",
+      },
+    });
+    expect(editar.statusCode).toBe(200);
+
+    const borrar = await app.inject({
+      method: "DELETE",
+      url: `/cliente-portal/direcciones/${id}`,
+      headers: cAuth(),
+    });
+    expect(borrar.statusCode).toBe(204);
+  });
+
+  it("sin sesión → 401", async () => {
+    const res = await app.inject({ method: "GET", url: "/cliente-portal/direcciones" });
+    expect(res.statusCode).toBe(401);
+  });
+});
