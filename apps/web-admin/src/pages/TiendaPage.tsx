@@ -48,6 +48,12 @@ export function TiendaPage() {
           cancelacionCliente: config.cancelacionCliente ?? true,
           facturacionSelfService: config.facturacionSelfService ?? true,
           preguntasPublicas: config.preguntasPublicas ?? true,
+          paqueteriaProvider: config.paqueteriaProvider ?? null,
+          paqueteriaAutoGuia: config.paqueteriaAutoGuia ?? false,
+          tarifasEnVivo: config.tarifasEnVivo ?? false,
+          paqueteriaPesoDefaultKg: String(config.paqueteriaPesoDefaultKg ?? 1),
+          pushHabilitado: config.pushHabilitado ?? false,
+          pushEventos: config.pushEventos ?? ["pago_confirmado", "enviado", "entregado"],
         },
       });
       setMsg("✓ Configuración guardada");
@@ -222,6 +228,116 @@ export function TiendaPage() {
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar funciones"}
+        </button>
+      </section>
+
+      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="mb-1 font-bold text-slate-800">Envíos automáticos y notificaciones</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          Conecta una paquetería para generar guías solas y avisar a tus clientes por push.
+        </p>
+
+        <div className="mb-4 rounded-lg border border-slate-200 p-3">
+          <span className="mb-2 block font-medium text-slate-800 text-sm">
+            Paquetería (agregador)
+          </span>
+          <select
+            value={config.paqueteriaProvider ?? ""}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                paqueteriaProvider: (e.target.value || null) as "skydropx" | "envia" | null,
+              })
+            }
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+          >
+            <option value="">Sin conectar (alta manual de guías)</option>
+            <option value="skydropx">Skydropx</option>
+            <option value="envia">Envía.com</option>
+          </select>
+
+          {config.paqueteriaProvider && (
+            <div className="mt-3 space-y-2 pl-1">
+              <Toggle
+                label="Generar la guía automáticamente al confirmarse el pago"
+                checked={config.paqueteriaAutoGuia ?? false}
+                onChange={(v) => setConfig({ ...config, paqueteriaAutoGuia: v })}
+              />
+              <Toggle
+                label="Mostrar tarifas en vivo del proveedor (informativo)"
+                checked={config.tarifasEnVivo ?? false}
+                onChange={(v) => setConfig({ ...config, tarifasEnVivo: v })}
+              />
+              <label className="block">
+                <span className="mb-1 block text-slate-500 text-xs">
+                  Peso por paquete por defecto (kg)
+                </span>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={Number(config.paqueteriaPesoDefaultKg ?? 1)}
+                  onChange={(e) =>
+                    setConfig({ ...config, paqueteriaPesoDefaultKg: e.target.value })
+                  }
+                  className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-3">
+          <Toggle
+            label="Notificaciones push a clientes (tienda instalable / PWA)"
+            checked={config.pushHabilitado ?? false}
+            onChange={(v) => setConfig({ ...config, pushHabilitado: v })}
+          />
+          {config.pushHabilitado && (
+            <div className="mt-2 pl-6">
+              <p className="mb-1 text-slate-500 text-xs">Avisar al cliente cuando:</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["pago_confirmado", "Pago confirmado"],
+                    ["enviado", "Pedido enviado"],
+                    ["entregado", "Pedido entregado"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const activos = config.pushEventos ?? ["pago_confirmado", "enviado", "entregado"];
+                  const on = activos.includes(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...config,
+                          pushEventos: on ? activos.filter((x) => x !== key) : [...activos, key],
+                        })
+                      }
+                      className={`rounded-lg border px-3 py-1 text-sm ${
+                        on
+                          ? "border-brand bg-brand text-white"
+                          : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={guardarConfig}
+          disabled={guardando}
+          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar envíos"}
         </button>
       </section>
 

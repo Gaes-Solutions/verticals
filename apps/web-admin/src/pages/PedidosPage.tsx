@@ -31,6 +31,14 @@ interface PedidoDetalle extends PedidoRow {
   canceladoMotivo: string | null;
   eventos: Array<{ id: string; tipo: string; descripcion: string; createdAt: string }>;
   ventaGenerada: { folio: string } | null;
+  envio: {
+    guiaTracking: string | null;
+    etiquetaUrl: string | null;
+    trackingUrl: string | null;
+    statusExterno: string | null;
+    proveedorLogistico: string | null;
+    carrierReal: string | null;
+  } | null;
 }
 
 interface ConfigEstados {
@@ -285,6 +293,10 @@ function DetalleModal({
 
         {puedeGestionar && <AsignarSeccion pedido={pedido} usuarios={usuarios} />}
 
+        {puedeGestionar && pedido.metodoEnvio === "paqueteria" && (
+          <GuiaSeccion pedido={pedido} onChanged={onChanged} />
+        )}
+
         <ChatPedido pedidoId={pedido.id} />
 
         <div className="mb-4">
@@ -366,6 +378,106 @@ function AsignarSeccion({
           </button>
         )}
       </div>
+      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+    </div>
+  );
+}
+
+/** Auto-guía de paquetería: generar, descargar etiqueta PDF, cancelar. */
+function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: () => void }) {
+  const [envio, setEnvio] = useState(pedido.envio);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generar() {
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api<{
+        guia: { trackingNumber: string; etiquetaUrl: string; carrier: string };
+      }>(`/t/envios/${pedido.id}/guia`, { method: "POST", body: {} });
+      setEnvio({
+        guiaTracking: r.guia.trackingNumber,
+        etiquetaUrl: r.guia.etiquetaUrl,
+        trackingUrl: null,
+        statusExterno: "creada",
+        proveedorLogistico: null,
+        carrierReal: r.guia.carrier,
+      });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo generar la guía");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelar() {
+    setError(null);
+    setBusy(true);
+    try {
+      await api(`/t/envios/${pedido.id}/guia/cancelar`, { method: "POST" });
+      setEnvio(null);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cancelar la guía");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const guia = envio?.guiaTracking;
+
+  return (
+    <div className="mb-4 rounded-lg border border-slate-200 p-3">
+      <h3 className="mb-2 font-bold text-slate-700 text-sm">Guía de envío</h3>
+      {guia ? (
+        <div className="space-y-2 text-sm">
+          <p className="text-slate-600">
+            {envio?.carrierReal ? `${envio.carrierReal} · ` : ""}
+            <span className="font-mono">{guia}</span>
+            {envio?.statusExterno && (
+              <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-slate-500 text-xs">
+                {envio.statusExterno}
+              </span>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {envio?.etiquetaUrl && (
+              <a
+                href={envio.etiquetaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-brand px-3 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50"
+              >
+                🏷️ Descargar etiqueta
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={cancelar}
+              disabled={busy}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-600 text-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancelar guía
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <p className="mb-2 text-slate-500 text-sm">
+            Aún sin guía. Genera una con tu paquetería configurada.
+          </p>
+          <button
+            type="button"
+            onClick={generar}
+            disabled={busy}
+            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {busy ? "Generando…" : "Generar guía"}
+          </button>
+        </div>
+      )}
       {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
     </div>
   );

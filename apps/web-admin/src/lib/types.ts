@@ -93,6 +93,12 @@ export interface ConfigTienda {
   cancelacionCliente?: boolean;
   facturacionSelfService?: boolean;
   preguntasPublicas?: boolean;
+  paqueteriaProvider?: "skydropx" | "envia" | null;
+  paqueteriaAutoGuia?: boolean;
+  tarifasEnVivo?: boolean;
+  paqueteriaPesoDefaultKg?: string | number | null;
+  pushHabilitado?: boolean;
+  pushEventos?: Array<"pago_confirmado" | "enviado" | "entregado">;
 }
 
 export interface ResumenVentas {

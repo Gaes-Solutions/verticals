@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import { SwRegister } from "@/components/sw-register";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Tienda GaesSoft",
   description: "Tienda en línea impulsada por GaesSoft POS",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Tienda", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0d9488",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="mt-16 border-t bg-white py-6 text-center text-sm text-gray-500">
           Powered by GaesSoft POS
         </footer>
+        <SwRegister />
       </body>
     </html>
   );

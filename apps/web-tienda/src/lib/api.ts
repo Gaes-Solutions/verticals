@@ -105,6 +105,8 @@ export interface TiendaConfig {
   cancelacionCliente: boolean;
   facturacionSelfService: boolean;
   preguntasPublicas: boolean;
+  pushHabilitado: boolean;
+  vapidPublicKey: string | null;
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -120,6 +122,8 @@ const DEFAULT_CONFIG: TiendaConfig = {
   cancelacionCliente: true,
   facturacionSelfService: true,
   preguntasPublicas: true,
+  pushHabilitado: false,
+  vapidPublicKey: null,
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {

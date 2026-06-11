@@ -1,5 +1,6 @@
 import { LogoutBoton } from "@/components/logout-boton";
 import { NotificacionesCliente } from "@/components/notificaciones-cliente";
+import { PwaPush } from "@/components/pwa-push";
 import { ResenasCuenta } from "@/components/resenas-cuenta";
 import { WishlistCuenta } from "@/components/wishlist-cuenta";
 import {
@@ -43,6 +44,10 @@ export default async function CuentaPage() {
           <NotificacionesCliente />
           <LogoutBoton />
         </div>
+      </div>
+
+      <div className="mb-6">
+        <PwaPush />
       </div>
 
       <h2 className="mb-4 text-lg font-bold">Mis pedidos</h2>
