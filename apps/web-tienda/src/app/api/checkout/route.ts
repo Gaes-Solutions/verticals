@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       tarifaEnvioId?: string;
       sucursalPickupId?: string;
       direccionEnvio?: Record<string, unknown>;
+      cuponCodigo?: string;
     };
 
     // emailAnonimo permite recuperar el carrito por correo si el pago no se completa
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
         canal: "web",
         items: body.items,
         emailAnonimo: body.emailComprador,
+        ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
       },
     });
 

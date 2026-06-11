@@ -1,0 +1,125 @@
+"use client";
+
+import { agregar } from "@/lib/carrito-store";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+export interface VarianteCompra {
+  id: string;
+  precioBase: string;
+  nombreVariante: string | null;
+  opciones?: Record<string, string> | null;
+}
+
+interface MsiConfig {
+  habilitado: boolean;
+  meses: number[];
+  montoMinimo: string;
+}
+
+function etiquetaVariante(v: VarianteCompra, i: number): string {
+  if (v.nombreVariante) return v.nombreVariante;
+  const ops = v.opciones ? Object.values(v.opciones) : [];
+  return ops.length ? ops.join(" · ") : `Opción ${i + 1}`;
+}
+
+export function ProductoCompra({
+  variantes,
+  precioOverride,
+  titulo,
+  comprarAhora,
+  msi,
+}: {
+  variantes: VarianteCompra[];
+  precioOverride: string | null;
+  titulo: string;
+  comprarAhora: boolean;
+  msi: MsiConfig;
+}) {
+  const router = useRouter();
+  const [sel, setSel] = useState(0);
+  const [cantidad, setCantidad] = useState(1);
+  const [agregado, setAgregado] = useState(false);
+
+  const variante = variantes[sel] ?? variantes[0];
+  if (!variante) return null;
+  const precio = precioOverride ?? variante.precioBase;
+  const precioNum = Number(precio);
+
+  function alCarrito() {
+    if (!variante) return;
+    agregar({ varianteId: variante.id, titulo, precio, cantidad });
+  }
+  function onAgregar() {
+    alCarrito();
+    setAgregado(true);
+    setTimeout(() => setAgregado(false), 1500);
+  }
+  function onComprarAhora() {
+    alCarrito();
+    router.push("/checkout");
+  }
+
+  const mostrarMsi = msi.habilitado && msi.meses.length > 0 && precioNum >= Number(msi.montoMinimo);
+  const mejorPlazo = mostrarMsi ? Math.max(...msi.meses) : 0;
+
+  return (
+    <div className="mt-4">
+      <p className="text-3xl font-bold text-marca">${precioNum.toFixed(2)}</p>
+      {mostrarMsi && (
+        <p className="mt-1 text-gray-600 text-sm">
+          o hasta <span className="font-semibold text-marca">{mejorPlazo} meses sin intereses</span>{" "}
+          de ${(precioNum / mejorPlazo).toFixed(2)}
+        </p>
+      )}
+
+      {variantes.length > 1 && (
+        <div className="mt-4">
+          <p className="mb-1 font-medium text-gray-700 text-sm">Elige una opción:</p>
+          <div className="flex flex-wrap gap-2">
+            {variantes.map((v, i) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSel(i)}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${
+                  i === sel
+                    ? "border-marca bg-marca/10 font-medium text-marca"
+                    : "border-gray-300 text-gray-700 hover:border-marca"
+                }`}
+              >
+                {etiquetaVariante(v, i)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <input
+          type="number"
+          min={1}
+          value={cantidad}
+          onChange={(e) => setCantidad(Math.max(1, Number(e.target.value)))}
+          className="w-20 rounded-lg border px-3 py-2"
+        />
+        <button
+          type="button"
+          onClick={onAgregar}
+          className="rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5"
+        >
+          {agregado ? "✓ Agregado" : "Agregar al carrito"}
+        </button>
+        {comprarAhora && (
+          <button
+            type="button"
+            onClick={onComprarAhora}
+            className="rounded-lg bg-marca px-6 py-2 font-semibold text-white transition hover:opacity-90"
+          >
+            Comprar ahora
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -38,6 +38,13 @@ export function TiendaPage() {
           activa: config.activa ?? false,
           subdominio: config.subdominio ?? "",
           nombre: config.nombre ?? "",
+          msiHabilitado: config.msiHabilitado ?? false,
+          msiMeses: config.msiMeses ?? [3, 6, 12],
+          msiMontoMinimo: String(config.msiMontoMinimo ?? 0),
+          galeriaZoom: config.galeriaZoom ?? true,
+          mostrarRatingProducto: config.mostrarRatingProducto ?? true,
+          cuponEnCheckout: config.cuponEnCheckout ?? true,
+          comprarAhora: config.comprarAhora ?? true,
         },
       });
       setMsg("✓ Configuración guardada");
@@ -108,6 +115,98 @@ export function TiendaPage() {
         </button>
       </section>
 
+      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="mb-1 font-bold text-slate-800">Funciones de la tienda</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          Activa solo lo que quieras mostrar. Se aplican a tu tienda al guardar.
+        </p>
+
+        <div className="mb-4 rounded-lg border border-slate-200 p-3">
+          <label className="flex items-center gap-2 font-medium text-slate-800 text-sm">
+            <input
+              type="checkbox"
+              checked={config.msiHabilitado ?? false}
+              onChange={(e) => setConfig({ ...config, msiHabilitado: e.target.checked })}
+            />
+            Meses sin intereses (MSI)
+          </label>
+          {config.msiHabilitado && (
+            <div className="mt-3 pl-6">
+              <p className="mb-1 text-slate-500 text-xs">Plazos que ofreces:</p>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {[3, 6, 9, 12, 18, 24].map((m) => {
+                  const activos = config.msiMeses ?? [3, 6, 12];
+                  const on = activos.includes(m);
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...config,
+                          msiMeses: on
+                            ? activos.filter((x) => x !== m)
+                            : [...activos, m].sort((a, b) => a - b),
+                        })
+                      }
+                      className={`rounded-lg border px-3 py-1 text-sm ${
+                        on
+                          ? "border-brand bg-brand text-white"
+                          : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {m} meses
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-slate-500 text-xs">
+                  Monto mínimo de compra para ofrecer MSI ($)
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={Number(config.msiMontoMinimo ?? 0)}
+                  onChange={(e) => setConfig({ ...config, msiMontoMinimo: e.target.value })}
+                  className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        <Toggle
+          label="Galería de fotos con zoom"
+          checked={config.galeriaZoom ?? true}
+          onChange={(v) => setConfig({ ...config, galeriaZoom: v })}
+        />
+        <Toggle
+          label="Mostrar calificación (estrellas) en el producto"
+          checked={config.mostrarRatingProducto ?? true}
+          onChange={(v) => setConfig({ ...config, mostrarRatingProducto: v })}
+        />
+        <Toggle
+          label="Campo de cupón en el checkout"
+          checked={config.cuponEnCheckout ?? true}
+          onChange={(v) => setConfig({ ...config, cuponEnCheckout: v })}
+        />
+        <Toggle
+          label='Botón "Comprar ahora" (compra rápida)'
+          checked={config.comprarAhora ?? true}
+          onChange={(v) => setConfig({ ...config, comprarAhora: v })}
+        />
+
+        <button
+          type="button"
+          onClick={guardarConfig}
+          disabled={guardando}
+          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar funciones"}
+        </button>
+      </section>
+
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Publicar productos</h2>
         <p className="mb-4 text-sm text-slate-500">
@@ -140,5 +239,22 @@ export function TiendaPage() {
       {msg && <p className="mt-4 text-sm text-emerald-600">{msg}</p>}
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </div>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="mb-2 flex items-center gap-2 text-slate-700 text-sm">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
   );
 }

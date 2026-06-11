@@ -3410,6 +3410,14 @@ model ConfigTiendaEcommerce {
   guestCheckoutPermitido         Boolean    @default(true) @map("guest_checkout_permitido")
   requiereAprobacionClienteNuevo Boolean    @default(false) @map("requiere_aprobacion_cliente_nuevo")
   brandingOverride               Json?      @map("branding_override")
+  // Funciones del storefront configurables por el tenant (default personalizable).
+  msiHabilitado                  Boolean    @default(false) @map("msi_habilitado")
+  msiMeses                       Json       @default("[3, 6, 12]") @map("msi_meses")
+  msiMontoMinimo                 Decimal    @default(0) @map("msi_monto_minimo") @db.Decimal(14, 2)
+  galeriaZoom                    Boolean    @default(true) @map("galeria_zoom")
+  mostrarRatingProducto          Boolean    @default(true) @map("mostrar_rating_producto")
+  cuponEnCheckout                Boolean    @default(true) @map("cupon_en_checkout")
+  comprarAhora                   Boolean    @default(true) @map("comprar_ahora")
   createdAt                      DateTime   @default(now()) @map("created_at")
   updatedAt                      DateTime   @updatedAt @map("updated_at")
 

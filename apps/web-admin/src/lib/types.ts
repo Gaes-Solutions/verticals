@@ -83,6 +83,13 @@ export interface ConfigTienda {
   activa?: boolean;
   subdominio?: string | null;
   nombre?: string | null;
+  msiHabilitado?: boolean;
+  msiMeses?: number[];
+  msiMontoMinimo?: string | number | null;
+  galeriaZoom?: boolean;
+  mostrarRatingProducto?: boolean;
+  cuponEnCheckout?: boolean;
+  comprarAhora?: boolean;
 }
 
 export interface ResumenVentas {

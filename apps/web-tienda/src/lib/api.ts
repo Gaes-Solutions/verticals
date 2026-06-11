@@ -90,3 +90,37 @@ export async function getCategorias(): Promise<CategoriaPublica[]> {
     return [];
   }
 }
+
+/** Funciones del storefront que el tenant activó (MSI, zoom, rating, cupón…). */
+export interface TiendaConfig {
+  nombre: string;
+  lema: string | null;
+  msiHabilitado: boolean;
+  msiMeses: number[];
+  msiMontoMinimo: string;
+  galeriaZoom: boolean;
+  mostrarRatingProducto: boolean;
+  cuponEnCheckout: boolean;
+  comprarAhora: boolean;
+}
+
+const DEFAULT_CONFIG: TiendaConfig = {
+  nombre: "Tienda",
+  lema: null,
+  msiHabilitado: false,
+  msiMeses: [],
+  msiMontoMinimo: "0",
+  galeriaZoom: true,
+  mostrarRatingProducto: true,
+  cuponEnCheckout: true,
+  comprarAhora: true,
+};
+
+export async function getTiendaConfig(): Promise<TiendaConfig> {
+  try {
+    const c = await api<TiendaConfig | null>("/tienda/config-publica", { revalidate: 120 });
+    return c ? { ...DEFAULT_CONFIG, ...c } : DEFAULT_CONFIG;
+  } catch {
+    return DEFAULT_CONFIG;
+  }
+}

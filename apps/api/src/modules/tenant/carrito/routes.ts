@@ -36,6 +36,26 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
  * identifica por sessionIdAnonimo en el body.
  */
 const carritoRoutes: FastifyPluginAsync = async (app) => {
+  // Config pública del storefront: qué funciones activó el tenant (MSI, zoom,
+  // rating, cupón, comprar-ahora). El BFF la lee para renderizar la tienda.
+  app.get("/config-publica", async (req) => {
+    const c = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    if (!c) return null;
+    return {
+      nombre: c.nombre,
+      lema: c.lema,
+      monedas: c.monedas,
+      mostrarInventarioPublico: c.mostrarInventarioPublico,
+      msiHabilitado: c.msiHabilitado,
+      msiMeses: c.msiMeses,
+      msiMontoMinimo: c.msiMontoMinimo.toString(),
+      galeriaZoom: c.galeriaZoom,
+      mostrarRatingProducto: c.mostrarRatingProducto,
+      cuponEnCheckout: c.cuponEnCheckout,
+      comprarAhora: c.comprarAhora,
+    };
+  });
+
   // --- Catálogo público (lectura) ---
   app.get("/catalogo", async (req) => {
     const q: CatalogoQuery = catalogoQuerySchema.parse(req.query);

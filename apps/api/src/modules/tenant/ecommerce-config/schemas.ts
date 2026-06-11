@@ -17,6 +17,17 @@ export const configTiendaSchema = z.object({
   mostrarInventarioPublico: z.boolean().optional(),
   bufferInventarioPublico: z.number().int().min(0).optional(),
   guestCheckoutPermitido: z.boolean().optional(),
+  // Funciones del storefront (configurables por el tenant).
+  msiHabilitado: z.boolean().optional(),
+  msiMeses: z.array(z.number().int().min(2).max(48)).max(8).optional(),
+  msiMontoMinimo: z
+    .union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .transform((v) => String(v))
+    .optional(),
+  galeriaZoom: z.boolean().optional(),
+  mostrarRatingProducto: z.boolean().optional(),
+  cuponEnCheckout: z.boolean().optional(),
+  comprarAhora: z.boolean().optional(),
 });
 
 export const publicarProductoSchema = z.object({

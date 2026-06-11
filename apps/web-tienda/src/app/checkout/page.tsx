@@ -18,6 +18,13 @@ interface OpcionPickup {
   tiempoPreparacionPromedioMin: number;
 }
 
+interface TiendaConfig {
+  msiHabilitado: boolean;
+  msiMeses: number[];
+  msiMontoMinimo: string;
+  cuponEnCheckout: boolean;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
@@ -26,6 +33,8 @@ export default function CheckoutPage() {
   const [ciudad, setCiudad] = useState("");
   const [estado, setEstado] = useState("");
   const [cp, setCp] = useState("");
+  const [cupon, setCupon] = useState("");
+  const [config, setConfig] = useState<TiendaConfig | null>(null);
   const [modoEntrega, setModoEntrega] = useState<"envio" | "pickup">("envio");
   const [opcionesEnvio, setOpcionesEnvio] = useState<OpcionEnvio[]>([]);
   const [pickups, setPickups] = useState<OpcionPickup[]>([]);
@@ -37,6 +46,9 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     setItems(leerCarrito());
+    fetch("/api/tienda-config").then(async (res) => {
+      if (res.ok) setConfig((await res.json()) as TiendaConfig);
+    });
     // prefill con la sesión del cliente si está logueado
     fetch("/api/cuenta/me").then(async (res) => {
       if (!res.ok) return;
@@ -98,6 +110,7 @@ export default function CheckoutPage() {
           emailComprador: email,
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
+          ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
           ...(modoEntrega === "pickup"
             ? { sucursalPickupId: sucursalId }
             : {
@@ -182,6 +195,18 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {config?.cuponEnCheckout && (
+          <label className="block">
+            <span className="mb-1 block font-medium text-sm">¿Tienes un cupón?</span>
+            <input
+              value={cupon}
+              onChange={(e) => setCupon(e.target.value.toUpperCase())}
+              placeholder="CODIGO"
+              className="w-full rounded border px-3 py-2 uppercase"
+            />
+          </label>
+        )}
+
         <div className="border-t pt-4">
           <div className="mb-1 flex justify-between text-sm text-gray-600">
             <span>Subtotal</span>
@@ -195,6 +220,26 @@ export default function CheckoutPage() {
             <span>Total a pagar</span>
             <span className="text-marca">${total.toFixed(2)}</span>
           </div>
+          {config?.msiHabilitado &&
+            config.msiMeses.length > 0 &&
+            total >= Number(config.msiMontoMinimo) && (
+              <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+                <p className="mb-2 font-medium text-marca text-sm">💳 Meses sin intereses</p>
+                <div className="space-y-1 text-gray-600 text-sm">
+                  {[...config.msiMeses]
+                    .sort((a, b) => a - b)
+                    .map((m) => (
+                      <div key={m} className="flex justify-between">
+                        <span>{m} pagos de</span>
+                        <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                      </div>
+                    ))}
+                </div>
+                <p className="mt-2 text-gray-400 text-xs">
+                  Elige tus meses al pagar con tarjeta participante.
+                </p>
+              </div>
+            )}
           {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">{error}</p>}
           <button
             type="submit"

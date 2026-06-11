@@ -1,6 +1,7 @@
-import { AgregarAlCarrito } from "@/components/agregar-al-carrito";
+import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
-import { api } from "@/lib/api";
+import { ProductoCompra } from "@/components/producto-compra";
+import { api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -13,7 +14,14 @@ interface ProductoDetalle {
   metaDescripcion: string | null;
   fotosArray: string[];
   precioPublicoOverride: string | null;
-  producto: { variantes: Array<{ id: string; precioBase: string; nombreVariante: string | null }> };
+  producto: {
+    variantes: Array<{
+      id: string;
+      precioBase: string;
+      nombreVariante: string | null;
+      opciones: Record<string, string> | null;
+    }>;
+  };
   resenas: Array<{ id: string; rating: number; titulo: string | null; comentario: string | null }>;
 }
 
@@ -73,9 +81,9 @@ function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
       : {}),
   };
   return (
-    // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD requerido para SEO, contenido propio serializado
     <script
       type="application/ld+json"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD de SEO, contenido propio serializado
       dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
     />
   );
@@ -96,8 +104,10 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
       </div>
     );
   }
-  const variante = prod.producto.variantes[0];
-  const precio = precioDe(prod);
+  const config = await getTiendaConfig();
+
+  const ratings = prod.resenas.map((r) => r.rating);
+  const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
 
   return (
     <div>
@@ -106,37 +116,45 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         ← Catálogo
       </Link>
       <div className="mt-4 grid gap-8 md:grid-cols-2">
-        <div className="flex aspect-square items-center justify-center rounded-lg border bg-white text-6xl">
-          {prod.fotosArray[0] ? (
-            <img
-              src={prod.fotosArray[0]}
-              alt={prod.tituloPublico}
-              className="h-full w-full rounded-lg object-cover"
-            />
-          ) : (
-            "📦"
-          )}
-        </div>
+        <GaleriaProducto
+          fotos={prod.fotosArray}
+          alt={prod.tituloPublico}
+          zoom={config.galeriaZoom}
+        />
         <div>
-          <h1 className="text-2xl font-bold">{prod.tituloPublico}</h1>
-          <p className="mt-3 text-3xl font-bold text-marca">${Number(precio).toFixed(2)}</p>
-          {prod.descripcionMd && <p className="mt-4 text-gray-600">{prod.descripcionMd}</p>}
-          {variante && (
-            <div className="flex items-end gap-3">
-              <AgregarAlCarrito
-                varianteId={variante.id}
-                titulo={prod.tituloPublico}
-                precio={precio}
-              />
-              <GuardarWishlist productoPublicadoId={prod.id} />
+          <h1 className="font-bold text-2xl">{prod.tituloPublico}</h1>
+          {config.mostrarRatingProducto && ratings.length > 0 && (
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              <span className="text-amber-500">
+                {"★".repeat(Math.round(ratingProm))}
+                {"☆".repeat(5 - Math.round(ratingProm))}
+              </span>
+              <span className="text-gray-500">
+                {ratingProm.toFixed(1)} · {ratings.length} reseña{ratings.length === 1 ? "" : "s"}
+              </span>
             </div>
           )}
+          <ProductoCompra
+            variantes={prod.producto.variantes}
+            precioOverride={prod.precioPublicoOverride}
+            titulo={prod.tituloPublico}
+            comprarAhora={config.comprarAhora}
+            msi={{
+              habilitado: config.msiHabilitado,
+              meses: config.msiMeses,
+              montoMinimo: config.msiMontoMinimo,
+            }}
+          />
+          <div className="mt-4">
+            <GuardarWishlist productoPublicadoId={prod.id} />
+          </div>
+          {prod.descripcionMd && <p className="mt-6 text-gray-600">{prod.descripcionMd}</p>}
         </div>
       </div>
 
       {prod.resenas.length > 0 && (
         <section className="mt-12">
-          <h2 className="mb-4 text-lg font-bold">Reseñas</h2>
+          <h2 className="mb-4 font-bold text-lg">Reseñas</h2>
           <div className="space-y-4">
             {prod.resenas.map((r) => (
               <div key={r.id} className="rounded border bg-white p-4">
@@ -145,7 +163,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
                   {"☆".repeat(5 - r.rating)}
                 </div>
                 {r.titulo && <p className="mt-1 font-medium">{r.titulo}</p>}
-                {r.comentario && <p className="mt-1 text-sm text-gray-600">{r.comentario}</p>}
+                {r.comentario && <p className="mt-1 text-gray-600 text-sm">{r.comentario}</p>}
               </div>
             ))}
           </div>
