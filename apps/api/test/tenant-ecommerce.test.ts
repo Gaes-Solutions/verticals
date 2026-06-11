@@ -1,6 +1,7 @@
 import { getTenantClient } from "@gaespos/db";
 import { MockEmailProvider } from "@gaespos/email";
 import { MockPaymentProvider, StripeClient } from "@gaespos/pagos";
+import { MockShippingProvider } from "@gaespos/paqueterias";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -10,6 +11,7 @@ const OWNER = { email: "owner-ecom@test.local", password: "ChangeMe!2026" };
 
 let app: FastifyInstance;
 let pagoMock: MockPaymentProvider;
+let shippingMock: MockShippingProvider;
 let emailMock: MockEmailProvider;
 let ownerToken: string;
 let sucursalId: string;
@@ -25,6 +27,7 @@ function auth(t: string) {
 
 beforeAll(async () => {
   pagoMock = new MockPaymentProvider();
+  shippingMock = new MockShippingProvider();
   emailMock = new MockEmailProvider();
   app = await buildTestApp(
     {},
@@ -32,6 +35,7 @@ beforeAll(async () => {
       // stripe sin keys reproduce el comportamiento del factory default (lanza)
       pagoProviderFactory: (proveedor) =>
         proveedor === "stripe" ? new StripeClient({ apiKey: "", webhookSecret: "" }) : pagoMock,
+      shippingProviderFactory: () => shippingMock,
       emailProviderFactory: () => emailMock,
     },
   );
@@ -988,6 +992,176 @@ describe("Tanda 3: cancelar compra + Q&A público (configurable)", () => {
       url: "/t/ecommerce/config",
       headers: auth(ownerToken),
       payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", preguntasPublicas: true },
+    });
+  });
+});
+
+describe("Tanda 4: auto-guías de paquetería + webhook de tracking (configurable)", () => {
+  async function crearPedidoPagado(email: string): Promise<{ pedidoId: string; folio: string }> {
+    const cart = await app.inject({
+      method: "POST",
+      url: "/t/tienda",
+      headers: auth(ownerToken),
+      payload: {
+        sessionIdAnonimo: `sess-t4-${email}`,
+        canal: "web",
+        items: [{ varianteId, cantidad: 1 }],
+      },
+    });
+    const ini = await app.inject({
+      method: "POST",
+      url: "/t/checkout/iniciar",
+      headers: auth(ownerToken),
+      payload: {
+        carritoId: cart.json().id,
+        emailComprador: email,
+        metodoPago: "tarjeta",
+        proveedorPago: "mock",
+        metodoEnvio: "paqueteria",
+        tarifaEnvioId,
+        direccionEnvio: {
+          nombre: "Ana",
+          calle: "Reforma 100",
+          ciudad: "GDL",
+          estado: "Jalisco",
+          cp: "44100",
+        },
+      },
+    });
+    const { pedidoId, intentId, folioPublico } = ini.json() as {
+      pedidoId: string;
+      intentId: string;
+      folioPublico: string;
+    };
+    const { payload, signature } = pagoMock.simularWebhook(intentId);
+    await app.inject({
+      method: "POST",
+      url: "/t/checkout/webhook",
+      headers: auth(ownerToken),
+      payload: { payload, signature, proveedorPago: "mock" },
+    });
+    return { pedidoId, folio: folioPublico };
+  }
+
+  beforeAll(async () => {
+    // La sucursal de origen necesita dirección completa para cotizar/generar guía.
+    const tc = getTenantClient(TENANT_SLUG);
+    await tc.sucursal.update({
+      where: { id: sucursalId },
+      data: {
+        direccion: {
+          calle: "Av. Vallarta",
+          numero: "1000",
+          cp: "44100",
+          estado: "Jalisco",
+          pais: "MX",
+        },
+      },
+    });
+  });
+
+  it("genera guía manual con proveedor mock → tracking + etiqueta", async () => {
+    const { pedidoId } = await crearPedidoPagado("guia-manual@test.mx");
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/envios/${pedidoId}/guia`,
+      headers: auth(ownerToken),
+      payload: { proveedor: "mock" },
+    });
+    expect(res.statusCode).toBe(201);
+    const r = res.json() as { guia: { trackingNumber: string; etiquetaUrl: string } };
+    expect(r.guia.trackingNumber).toMatch(/^MOCK/);
+    expect(r.guia.etiquetaUrl).toContain(".pdf");
+
+    // El pedido quedó con la guía persistida.
+    const tc = getTenantClient(TENANT_SLUG);
+    const envio = await tc.envioPedido.findUnique({ where: { pedidoId } });
+    expect(envio?.guiaTracking).toBe(r.guia.trackingNumber);
+    expect(envio?.proveedorLogistico).toBe("mock");
+  });
+
+  it("segunda guía sobre el mismo pedido → 409", async () => {
+    const { pedidoId } = await crearPedidoPagado("guia-doble@test.mx");
+    await app.inject({
+      method: "POST",
+      url: `/t/envios/${pedidoId}/guia`,
+      headers: auth(ownerToken),
+      payload: { proveedor: "mock" },
+    });
+    const dup = await app.inject({
+      method: "POST",
+      url: `/t/envios/${pedidoId}/guia`,
+      headers: auth(ownerToken),
+      payload: { proveedor: "mock" },
+    });
+    expect(dup.statusCode).toBe(409);
+  });
+
+  it("webhook recolectada → enviado; entregado → entregado (visible al cliente)", async () => {
+    const { pedidoId, folio } = await crearPedidoPagado("guia-track@test.mx");
+    const gen = await app.inject({
+      method: "POST",
+      url: `/t/envios/${pedidoId}/guia`,
+      headers: auth(ownerToken),
+      payload: { proveedor: "mock" },
+    });
+    const tracking = (gen.json() as { guia: { trackingNumber: string } }).guia.trackingNumber;
+
+    const recolectada = shippingMock.simularWebhook(tracking, "recolectada");
+    const w1 = await app.inject({
+      method: "POST",
+      url: "/t/envios/webhook",
+      headers: auth(ownerToken),
+      payload: { paqueteria: "mock", ...recolectada },
+    });
+    expect(w1.statusCode).toBe(200);
+    expect(w1.json().statusPedido).toBe("enviado");
+
+    const entregada = shippingMock.simularWebhook(tracking, "entregado");
+    const w2 = await app.inject({
+      method: "POST",
+      url: "/t/envios/webhook",
+      headers: auth(ownerToken),
+      payload: { paqueteria: "mock", ...entregada },
+    });
+    expect(w2.json().statusPedido).toBe("entregado");
+
+    // El tracking público muestra el evento de entrega.
+    const track = await app.inject({
+      method: "GET",
+      url: `/t/pedidos-ecommerce/seguimiento/${folio}?email=guia-track@test.mx`,
+      headers: auth(ownerToken),
+    });
+    expect(track.json().statusPedido).toBe("entregado");
+  });
+
+  it("webhook con tracking desconocido → 200 sin efecto", async () => {
+    const fake = shippingMock.simularWebhook("MOCKDESCONOCIDO", "en_transito");
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/envios/webhook",
+      headers: auth(ownerToken),
+      payload: { paqueteria: "mock", ...fake },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().pedidoId).toBeNull();
+  });
+
+  it("auto-guía: con config activada, el pago confirmado genera la guía solo", async () => {
+    const tc = getTenantClient(TENANT_SLUG);
+    const cfg = await tc.configTiendaEcommerce.findFirst();
+    await tc.configTiendaEcommerce.update({
+      where: { id: cfg!.id },
+      data: { paqueteriaProvider: "mock", paqueteriaAutoGuia: true },
+    });
+    const { pedidoId } = await crearPedidoPagado("auto-guia@test.mx");
+    const envio = await tc.envioPedido.findUnique({ where: { pedidoId } });
+    expect(envio?.guiaTracking).toMatch(/^MOCK/);
+    expect(envio?.proveedorLogistico).toBe("mock");
+    // restaurar
+    await tc.configTiendaEcommerce.update({
+      where: { id: cfg!.id },
+      data: { paqueteriaProvider: null, paqueteriaAutoGuia: false },
     });
   });
 });

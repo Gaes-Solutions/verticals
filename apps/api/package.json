@@ -35,6 +35,7 @@
     "@gaespos/fiscal": "workspace:*",
     "@gaespos/mensajeria": "workspace:*",
     "@gaespos/pagos": "workspace:*",
+    "@gaespos/paqueterias": "workspace:*",
     "@gaespos/permissions": "workspace:*",
     "@gaespos/pricing": "workspace:*",
     "@gaespos/recargas": "workspace:*",
@@ -46,11 +47,13 @@
     "fastify-type-provider-zod": "^4.0.2",
     "otplib": "^12.0.1",
     "pino": "^9.5.0",
+    "web-push": "^3.6.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "@types/web-push": "^3.6.4",
     "pg": "^8.13.1",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.19.2",

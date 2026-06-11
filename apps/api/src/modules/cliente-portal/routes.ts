@@ -26,6 +26,7 @@ import {
   marcarTodasLeidas,
 } from "../tenant/notificaciones/service.js";
 import { PreguntaError, crearPregunta } from "../tenant/preguntas/service.js";
+import { eliminarSuscripcion, guardarSuscripcion } from "../tenant/push/service.js";
 import {
   ClientePortalError,
   agregarAWishlist,
@@ -39,6 +40,12 @@ import {
   quitarDeWishlist,
   registrarCliente,
 } from "./service.js";
+
+const pushSubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
+const pushUnsubscribeSchema = z.object({ endpoint: z.string().url() });
 
 const crearResenaSchema = z.object({
   pedidoId: z.string().min(1),
@@ -174,6 +181,27 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     const ok = await marcarLeida(getTenantClient(tenantSlug), { clienteId }, id);
     return { ok };
+  });
+
+  app.post("/push/subscribe", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const body = pushSubscribeSchema.parse(req.body);
+    await guardarSuscripcion(getTenantClient(tenantSlug), clienteId, {
+      endpoint: body.endpoint,
+      p256dh: body.keys.p256dh,
+      auth: body.keys.auth,
+      ...(typeof req.headers["user-agent"] === "string"
+        ? { userAgent: req.headers["user-agent"] }
+        : {}),
+    });
+    return reply.code(201).send({ ok: true });
+  });
+
+  app.post("/push/unsubscribe", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { endpoint } = pushUnsubscribeSchema.parse(req.body);
+    await eliminarSuscripcion(getTenantClient(tenantSlug), clienteId, endpoint);
+    return { ok: true };
   });
 
   app.post("/notificaciones/leer-todas", async (req) => {

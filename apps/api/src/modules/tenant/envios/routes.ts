@@ -1,11 +1,24 @@
+import type { TenantPrismaClient } from "@gaespos/db";
+import { PaqueteriaError, type ShippingProvider } from "@gaespos/paqueterias";
 import { PERMISSIONS } from "@gaespos/permissions";
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
+  GuiaError,
+  cancelarGuiaPedido,
+  cotizarEnVivo,
+  generarGuiaPedido,
+  procesarWebhookEnvio,
+} from "./guias-service.js";
+import {
   cotizarQuerySchema,
+  cotizarVivoQuerySchema,
+  generarGuiaSchema,
   idParamSchema,
+  pedidoParamSchema,
   pickupConfigSchema,
   tarifaEnvioSchema,
+  webhookEnvioSchema,
   zonaEnvioSchema,
 } from "./schemas.js";
 import { EnviosError, cotizarEnvio } from "./service.js";
@@ -13,7 +26,7 @@ import { EnviosError, cotizarEnvio } from "./service.js";
 const sucursalParamSchema = z.object({ sucursalId: z.string().min(1) });
 
 function handleErr(reply: FastifyReply, err: unknown): boolean {
-  if (err instanceof EnviosError) {
+  if (err instanceof EnviosError || err instanceof GuiaError) {
     reply.code(err.statusCode).send({
       statusCode: err.statusCode,
       error: err.statusCode >= 500 ? "Internal" : "Unprocessable Entity",
@@ -21,7 +34,31 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
     });
     return true;
   }
+  if (err instanceof PaqueteriaError) {
+    const status = err.code === "PROVIDER_UNAVAILABLE" ? 503 : 400;
+    reply.code(status).send({
+      statusCode: status,
+      error: status === 503 ? "Service Unavailable" : "Bad Request",
+      message: err.message,
+    });
+    return true;
+  }
   return false;
+}
+
+/** Resuelve el proveedor de paquetería: el indicado, o el configurado por el tenant, o mock. */
+async function resolverShippingProvider(
+  app: FastifyInstance,
+  prisma: TenantPrismaClient,
+  pedido?: "skydropx" | "envia" | "mock",
+): Promise<ShippingProvider> {
+  let proveedor = pedido;
+  if (!proveedor) {
+    const config = await prisma.configTiendaEcommerce.findFirst();
+    const c = config?.paqueteriaProvider;
+    proveedor = c === "skydropx" || c === "envia" ? c : "mock";
+  }
+  return app.shippingProviderFactory(proveedor);
 }
 
 function tarifaData(body: z.infer<typeof tarifaEnvioSchema>) {
@@ -178,6 +215,64 @@ const enviosRoutes: FastifyPluginAsync = async (app) => {
       create: { sucursalId, ...data },
       update: data,
     });
+  });
+
+  // Cotización en vivo del proveedor (informativa). La usa la tienda con token de servicio.
+  app.get("/cotizar-vivo", async (req, reply) => {
+    const q = cotizarVivoQuerySchema.parse(req.query);
+    try {
+      const provider = await resolverShippingProvider(app, req.tenantPrisma);
+      const tarifas = await cotizarEnVivo(req.tenantPrisma, provider, q);
+      return { tarifas };
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  // --- Auto-guías de paquetería (Skydropx / Envía / mock) ---
+  app.post("/:pedidoId/guia", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_ENVIOS_GESTIONAR);
+    const { pedidoId } = pedidoParamSchema.parse(req.params);
+    const body = generarGuiaSchema.parse(req.body ?? {});
+    try {
+      const provider = await resolverShippingProvider(app, req.tenantPrisma, body.proveedor);
+      const result = await generarGuiaPedido(req.tenantPrisma, provider, pedidoId, {
+        ...(body.rateId ? { rateId: body.rateId } : {}),
+      });
+      return reply.code(201).send(result);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post("/:pedidoId/guia/cancelar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_ENVIOS_GESTIONAR);
+    const { pedidoId } = pedidoParamSchema.parse(req.params);
+    try {
+      const provider = await resolverShippingProvider(app, req.tenantPrisma);
+      return await cancelarGuiaPedido(req.tenantPrisma, provider, pedidoId);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  // Webhook de la paquetería (sin permiso; se valida la firma del proveedor).
+  app.post("/webhook", async (req, reply) => {
+    const body = webhookEnvioSchema.parse(req.body);
+    const provider = app.shippingProviderFactory(body.paqueteria);
+    let evento: ReturnType<typeof provider.parseWebhook>;
+    try {
+      evento = provider.parseWebhook(body.payload, body.signature);
+    } catch {
+      return reply
+        .code(400)
+        .send({ statusCode: 400, error: "Bad Request", message: "Webhook de envío inválido" });
+    }
+    const result = await procesarWebhookEnvio(req.tenantPrisma, evento);
+    return reply.code(200).send(result);
   });
 };
 

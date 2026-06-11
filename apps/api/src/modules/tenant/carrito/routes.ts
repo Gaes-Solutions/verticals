@@ -56,6 +56,8 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       cancelacionCliente: c.cancelacionCliente,
       facturacionSelfService: c.facturacionSelfService,
       preguntasPublicas: c.preguntasPublicas,
+      pushHabilitado: c.pushHabilitado,
+      vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
     };
   });
 

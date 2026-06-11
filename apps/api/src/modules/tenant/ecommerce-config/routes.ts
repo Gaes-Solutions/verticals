@@ -58,6 +58,18 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       ...(body.preguntasPublicas !== undefined
         ? { preguntasPublicas: body.preguntasPublicas }
         : {}),
+      ...(body.paqueteriaProvider !== undefined
+        ? { paqueteriaProvider: body.paqueteriaProvider }
+        : {}),
+      ...(body.paqueteriaAutoGuia !== undefined
+        ? { paqueteriaAutoGuia: body.paqueteriaAutoGuia }
+        : {}),
+      ...(body.tarifasEnVivo !== undefined ? { tarifasEnVivo: body.tarifasEnVivo } : {}),
+      ...(body.paqueteriaPesoDefaultKg !== undefined
+        ? { paqueteriaPesoDefaultKg: body.paqueteriaPesoDefaultKg }
+        : {}),
+      ...(body.pushHabilitado !== undefined ? { pushHabilitado: body.pushHabilitado } : {}),
+      ...(body.pushEventos ? { pushEventos: body.pushEventos } : {}),
     };
     const cfg = existing
       ? await req.tenantPrisma.configTiendaEcommerce.update({ where: { id: existing.id }, data })

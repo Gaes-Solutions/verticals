@@ -87,6 +87,7 @@ import errorHandlerPlugin from "./plugins/error-handler.js";
 import fiscalPlugin, { type FiscalProviderFactory } from "./plugins/fiscal.js";
 import mensajeriaPlugin, { type MensajeriaProviderFactory } from "./plugins/mensajeria.js";
 import pagosPlugin, { type PagoProviderFactory } from "./plugins/pagos.js";
+import paqueteriasPlugin, { type ShippingProviderFactory } from "./plugins/paqueterias.js";
 import recargasPlugin, { type RecargaProviderFactory } from "./plugins/recargas.js";
 import securityPlugin from "./plugins/security.js";
 import tenantContextPlugin from "./plugins/tenant-context.js";
@@ -96,6 +97,7 @@ export interface BuildAppOptions {
   recargaProviderFactory?: RecargaProviderFactory;
   aiProviderFactory?: AiProviderFactory;
   pagoProviderFactory?: PagoProviderFactory;
+  shippingProviderFactory?: ShippingProviderFactory;
   emailProviderFactory?: EmailProviderFactory;
   mensajeriaProviderFactory?: MensajeriaProviderFactory;
 }
@@ -135,6 +137,10 @@ export async function buildApp(
   await app.register(
     pagosPlugin,
     opts.pagoProviderFactory ? { factory: opts.pagoProviderFactory } : {},
+  );
+  await app.register(
+    paqueteriasPlugin,
+    opts.shippingProviderFactory ? { factory: opts.shippingProviderFactory } : {},
   );
   await app.register(
     emailPlugin,

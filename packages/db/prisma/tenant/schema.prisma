@@ -1252,6 +1252,7 @@ model Cliente {
   solicitudesDevolucion SolicitudDevolucion[]
   mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
   preguntasProducto     PreguntaProducto[]       @relation("PreguntaProductoCliente")
+  pushSubscriptions     PushSubscription[]
 
   @@unique([rfc])
   @@index([nombre])
@@ -3379,6 +3380,7 @@ enum EnvioPaqueteria {
   paquete_express
   huipix
   propio
+  otro
 }
 
 enum ResenaEstado {
@@ -3423,6 +3425,14 @@ model ConfigTiendaEcommerce {
   cancelacionCliente             Boolean    @default(true) @map("cancelacion_cliente")
   facturacionSelfService         Boolean    @default(true) @map("facturacion_self_service")
   preguntasPublicas              Boolean    @default(true) @map("preguntas_publicas")
+  // Logística automática (Tanda 4): proveedor de paquetería + auto-guía + tarifas en vivo.
+  paqueteriaProvider             String?    @map("paqueteria_provider")
+  paqueteriaAutoGuia             Boolean    @default(false) @map("paqueteria_auto_guia")
+  tarifasEnVivo                  Boolean    @default(false) @map("tarifas_en_vivo")
+  paqueteriaPesoDefaultKg        Decimal    @default(1) @map("paqueteria_peso_default_kg") @db.Decimal(8, 3)
+  // Push transaccional (PWA): qué eventos del pedido disparan notificación push.
+  pushHabilitado                 Boolean    @default(false) @map("push_habilitado")
+  pushEventos                    Json       @default("[\"pago_confirmado\", \"enviado\", \"entregado\"]") @map("push_eventos")
   createdAt                      DateTime   @default(now()) @map("created_at")
   updatedAt                      DateTime   @updatedAt @map("updated_at")
 
@@ -3775,11 +3785,18 @@ model EnvioPedido {
   statusExterno       String?         @map("status_externo")
   eventosExternos     Json            @default("[]") @map("eventos_externos")
   evidenciaEntregaUrl String?         @map("evidencia_entrega_url")
+  // Auto-guía vía agregador (Tanda 4): proveedor, carrier real e id del proveedor
+  // para conciliar webhooks y cancelar la guía.
+  proveedorLogistico  String?         @map("proveedor_logistico")
+  carrierReal         String?         @map("carrier_real")
+  guiaProveedorId     String?         @map("guia_proveedor_id")
+  trackingUrl         String?         @map("tracking_url")
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   pedido PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
+  @@index([guiaTracking])
   @@map("envios_pedidos")
 }
 
@@ -3839,6 +3856,25 @@ model PreguntaProducto {
   @@index([productoPublicadoId, estado])
   @@index([estado, createdAt])
   @@map("preguntas_producto")
+}
+
+/// Suscripción Web Push (VAPID) de un cliente de la tienda, para avisos
+/// transaccionales del pedido (pago confirmado, enviado, entregado). Una por
+/// navegador/dispositivo (endpoint único). Tanda 4 / PWA.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  clienteId String   @map("cliente_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@map("push_subscriptions")
 }
 
 model Wishlist {

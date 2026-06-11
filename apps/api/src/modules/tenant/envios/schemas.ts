@@ -45,6 +45,25 @@ export const cotizarQuerySchema = z.object({
   pesoKg: z.coerce.number().positive().optional(),
 });
 
+export const pedidoParamSchema = z.object({ pedidoId: z.string().min(1) });
+
+export const generarGuiaSchema = z.object({
+  proveedor: z.enum(["skydropx", "envia", "mock"]).optional(),
+  rateId: z.string().min(1).optional(),
+});
+
+export const webhookEnvioSchema = z.object({
+  paqueteria: z.enum(["skydropx", "envia", "mock"]),
+  payload: z.string().min(1),
+  signature: z.string().min(1),
+});
+
+export const cotizarVivoQuerySchema = z.object({
+  cp: z.string().regex(/^\d{5}$/),
+  estado: z.string().min(2).max(40),
+  pesoKg: z.coerce.number().positive().optional(),
+});
+
 export type ZonaEnvioInput = z.infer<typeof zonaEnvioSchema>;
 export type TarifaEnvioInput = z.infer<typeof tarifaEnvioSchema>;
 export type PickupConfigInput = z.infer<typeof pickupConfigSchema>;

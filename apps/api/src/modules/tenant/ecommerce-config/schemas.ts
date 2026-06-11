@@ -31,6 +31,19 @@ export const configTiendaSchema = z.object({
   cancelacionCliente: z.boolean().optional(),
   facturacionSelfService: z.boolean().optional(),
   preguntasPublicas: z.boolean().optional(),
+  // Logística automática + push transaccional (Tanda 4).
+  paqueteriaProvider: z.enum(["skydropx", "envia"]).nullable().optional(),
+  paqueteriaAutoGuia: z.boolean().optional(),
+  tarifasEnVivo: z.boolean().optional(),
+  paqueteriaPesoDefaultKg: z
+    .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .transform((v) => String(v))
+    .optional(),
+  pushHabilitado: z.boolean().optional(),
+  pushEventos: z
+    .array(z.enum(["pago_confirmado", "enviado", "entregado"]))
+    .max(3)
+    .optional(),
 });
 
 export const publicarProductoSchema = z.object({

@@ -1,8 +1,47 @@
+import type { TenantPrismaClient } from "@gaespos/db";
 import { PagoError, type PaymentProvider } from "@gaespos/pagos";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import { intentarAutoGuia } from "../envios/guias-service.js";
+import { enviarPushCliente } from "../push/service.js";
 import { iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
-import { CheckoutError, iniciarCheckout, procesarWebhookPago } from "./service.js";
+import {
+  CheckoutError,
+  type ConfirmarPagoResult,
+  iniciarCheckout,
+  procesarWebhookPago,
+} from "./service.js";
+
+/**
+ * Tras confirmarse el pago: intenta la auto-guía y manda push de pago_confirmado
+ * si el tenant lo activó. Todo best-effort (no rompe la respuesta del webhook).
+ */
+async function postPago(
+  app: FastifyInstance,
+  prisma: TenantPrismaClient,
+  result: ConfirmarPagoResult,
+): Promise<void> {
+  if (result.statusPago !== "pago_confirmado") return;
+  await intentarAutoGuia(prisma, app.shippingProviderFactory, result.pedidoId);
+  try {
+    const config = await prisma.configTiendaEcommerce.findFirst();
+    const eventos = Array.isArray(config?.pushEventos) ? (config.pushEventos as string[]) : [];
+    if (!config?.pushHabilitado || !eventos.includes("pago_confirmado")) return;
+    const pedido = await prisma.pedidoEcommerce.findUnique({
+      where: { id: result.pedidoId },
+      select: { clienteId: true, folioPublico: true },
+    });
+    if (!pedido?.clienteId) return;
+    await enviarPushCliente(prisma, pedido.clienteId, {
+      titulo: `Pedido ${pedido.folioPublico}`,
+      cuerpo: "Recibimos tu pago. Estamos preparando tu pedido.",
+      url: `/cuenta/pedidos/${pedido.folioPublico}`,
+      tag: `pedido-${pedido.folioPublico}`,
+    });
+  } catch {
+    // best-effort
+  }
+}
 
 function errLabel(s: number): string {
   if (s >= 500) return "Internal";
@@ -93,6 +132,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         evento,
         app.emailProviderFactory(),
       );
+      await postPago(app, req.tenantPrisma, result);
       return reply.code(200).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;
@@ -124,6 +164,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         evento,
         app.emailProviderFactory(),
       );
+      await postPago(app, req.tenantPrisma, result);
       return reply.code(200).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;
