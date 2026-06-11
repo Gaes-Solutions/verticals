@@ -200,6 +200,18 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
                 </div>
                 {r.titulo && <p className="mt-1 font-medium">{r.titulo}</p>}
                 {r.comentario && <p className="mt-1 text-gray-600 text-sm">{r.comentario}</p>}
+                {r.imagenesArray && r.imagenesArray.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {r.imagenesArray.map((src) => (
+                      <img
+                        key={src.slice(-16)}
+                        src={src}
+                        alt="Foto de reseña"
+                        className="h-20 w-20 rounded object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

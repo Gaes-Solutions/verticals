@@ -1,8 +1,11 @@
 "use client";
 
 import type { CompraResenable } from "@/lib/cliente";
+import { comprimirImagen } from "@/lib/imagen";
 import Link from "next/link";
-import { useState } from "react";
+import { type ChangeEvent, useState } from "react";
+
+const MAX_FOTOS = 3;
 
 /** "Califica tus compras": estrellas + comentario por producto entregado. */
 export function ResenasCuenta({ inicial }: { inicial: CompraResenable[] }) {
@@ -22,8 +25,25 @@ export function ResenasCuenta({ inicial }: { inicial: CompraResenable[] }) {
 function FormResena({ item }: { item: CompraResenable }) {
   const [rating, setRating] = useState(0);
   const [comentario, setComentario] = useState("");
+  const [fotos, setFotos] = useState<string[]>([]);
   const [estado, setEstado] = useState<"idle" | "enviando" | "enviada">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  async function agregarFotos(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setError(null);
+    try {
+      const nuevas: string[] = [];
+      for (const f of files.slice(0, MAX_FOTOS - fotos.length)) {
+        nuevas.push(await comprimirImagen(f));
+      }
+      setFotos((prev) => [...prev, ...nuevas].slice(0, MAX_FOTOS));
+    } catch {
+      setError("No se pudo procesar una de las fotos");
+    }
+  }
 
   async function enviar() {
     if (rating === 0) {
@@ -40,6 +60,7 @@ function FormResena({ item }: { item: CompraResenable }) {
         productoPublicadoId: item.productoPublicadoId,
         rating,
         ...(comentario.trim() ? { comentario: comentario.trim() } : {}),
+        ...(fotos.length ? { imagenes: fotos } : {}),
       }),
     });
     if (res.ok) {
@@ -88,6 +109,33 @@ function FormResena({ item }: { item: CompraResenable }) {
         rows={2}
         className="mb-2 w-full rounded border px-3 py-2 text-sm"
       />
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {fotos.map((src, i) => (
+          <div key={src.slice(-16)} className="relative">
+            <img src={src} alt="reseña" className="h-14 w-14 rounded object-cover" />
+            <button
+              type="button"
+              onClick={() => setFotos((prev) => prev.filter((_, j) => j !== i))}
+              className="-right-1.5 -top-1.5 absolute flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white text-xs"
+              aria-label="Quitar foto"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {fotos.length < MAX_FOTOS && (
+          <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded border border-gray-300 border-dashed text-gray-400 text-xl hover:border-marca hover:text-marca">
+            +
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={agregarFotos}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
       <button
         type="button"

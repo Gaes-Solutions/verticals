@@ -73,6 +73,8 @@ const crearResenaSchema = z.object({
   rating: z.number().int().min(1).max(5),
   titulo: z.string().max(120).optional(),
   comentario: z.string().max(2000).optional(),
+  // Fotos del cliente (data URL comprimida en el navegador). Hasta 3, ~250KB c/u.
+  imagenes: z.array(z.string().max(250_000)).max(3).optional(),
 });
 
 const registroSchema = z.object({

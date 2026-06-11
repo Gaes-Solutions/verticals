@@ -378,6 +378,7 @@ export interface CrearResenaClienteInput {
   rating: number;
   titulo?: string | undefined;
   comentario?: string | undefined;
+  imagenes?: string[] | undefined;
 }
 
 /**
@@ -421,8 +422,9 @@ export async function crearResenaCliente(
       rating: input.rating,
       ...(input.titulo ? { titulo: input.titulo } : {}),
       ...(input.comentario ? { comentario: input.comentario } : {}),
-      // con comentario pasa a moderación; sin comentario (solo estrellas) se aprueba
-      estado: input.comentario ? "pendiente" : "aprobada",
+      ...(input.imagenes?.length ? { imagenesArray: input.imagenes } : {}),
+      // con comentario o fotos pasa a moderación; solo estrellas se aprueba directo
+      estado: input.comentario || input.imagenes?.length ? "pendiente" : "aprobada",
       verificadaPorCompra: true,
     },
   });
