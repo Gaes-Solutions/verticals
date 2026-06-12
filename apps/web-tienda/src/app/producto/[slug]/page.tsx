@@ -1,8 +1,10 @@
+import { CalculadoraEnvio } from "@/components/calculadora-envio";
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { PreguntasProducto } from "@/components/preguntas-producto";
 import { ProductoGrid } from "@/components/producto-card";
 import { ProductoCompra } from "@/components/producto-compra";
+import { ResenasResumen } from "@/components/resenas-resumen";
 import { type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -16,6 +18,7 @@ interface ProductoDetalle {
   metaDescripcion: string | null;
   fotosArray: string[];
   precioPublicoOverride: string | null;
+  categoriaPublica: { nombre: string; slugSeo: string } | null;
   producto: {
     variantes: Array<{
       id: string;
@@ -117,6 +120,34 @@ function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
   );
 }
 
+/** JSON-LD BreadcrumbList para que Google muestre la ruta en los resultados. */
+function BreadcrumbJsonLd({ prod, slug }: { prod: ProductoDetalle; slug: string }) {
+  const items = [
+    { name: "Inicio", item: "/" },
+    ...(prod.categoriaPublica
+      ? [{ name: prod.categoriaPublica.nombre, item: `/?cat=${prod.categoriaPublica.slugSeo}` }]
+      : []),
+    { name: prod.tituloPublico, item: `/producto/${slug}` },
+  ];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      item: it.item,
+    })),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD de SEO, contenido propio serializado
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
+
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   let prod: ProductoDetalle;
@@ -137,19 +168,38 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
   const ratings = prod.resenas.map((r) => r.rating);
   const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
 
+  const precioActual = Number(precioDe(prod));
+
   return (
     <div>
       <ProductoJsonLd prod={prod} />
-      <Link href="/" className="text-sm text-marca">
-        ← Catálogo
-      </Link>
-      <div className="mt-4 grid gap-8 md:grid-cols-2">
-        <GaleriaProducto
-          fotos={prod.fotosArray}
-          alt={prod.tituloPublico}
-          zoom={config.galeriaZoom}
-        />
-        <div>
+      <BreadcrumbJsonLd prod={prod} slug={slug} />
+
+      <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-gray-500 text-sm">
+        <Link href="/" className="hover:text-marca">
+          Inicio
+        </Link>
+        {prod.categoriaPublica && (
+          <>
+            <span className="text-gray-300">›</span>
+            <Link href={`/?cat=${prod.categoriaPublica.slugSeo}`} className="hover:text-marca">
+              {prod.categoriaPublica.nombre}
+            </Link>
+          </>
+        )}
+        <span className="text-gray-300">›</span>
+        <span className="text-gray-700">{prod.tituloPublico}</span>
+      </nav>
+
+      <div className="grid gap-8 md:grid-cols-2">
+        <div className="rounded-xl border bg-white p-4">
+          <GaleriaProducto
+            fotos={prod.fotosArray}
+            alt={prod.tituloPublico}
+            zoom={config.galeriaZoom}
+          />
+        </div>
+        <div className="rounded-xl border bg-white p-5 sm:p-6">
           <h1 className="font-bold text-2xl">{prod.tituloPublico}</h1>
           {config.mostrarRatingProducto && ratings.length > 0 && (
             <div className="mt-2 flex items-center gap-2 text-sm">
@@ -186,13 +236,19 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
           </div>
-          {prod.descripcionMd && <p className="mt-6 text-gray-600">{prod.descripcionMd}</p>}
+          <CalculadoraEnvio subtotal={precioActual} />
+          {prod.descripcionMd && (
+            <p className="mt-6 whitespace-pre-line text-gray-600 leading-relaxed">
+              {prod.descripcionMd}
+            </p>
+          )}
         </div>
       </div>
 
       {prod.resenas.length > 0 && (
         <section className="mt-12">
-          <h2 className="mb-4 font-bold text-lg">Reseñas</h2>
+          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">Reseñas</h2>
+          <ResenasResumen ratings={ratings} />
           <div className="space-y-4">
             {prod.resenas.map((r) => (
               <div key={r.id} className="rounded border bg-white p-4">
