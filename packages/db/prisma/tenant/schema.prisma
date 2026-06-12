@@ -1253,6 +1253,7 @@ model Cliente {
   mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
   preguntasProducto     PreguntaProducto[]       @relation("PreguntaProductoCliente")
   pushSubscriptions     PushSubscription[]
+  stockAlerts           StockAlert[]
 
   @@unique([rfc])
   @@index([nombre])
@@ -3492,6 +3493,7 @@ model ProductoPublicado {
   traducciones     ProductoTraduccion[]
   resenas          ProductoResena[]
   preguntas        PreguntaProducto[]
+  stockAlerts      StockAlert[]
 
   @@unique([slugSeo])
   @@index([categoriaPublicaId])
@@ -3875,6 +3877,24 @@ model PushSubscription {
 
   @@index([clienteId])
   @@map("push_subscriptions")
+}
+
+/// Aviso de reabastecimiento: el cliente deja su correo cuando un producto está
+/// agotado y se le notifica (email + push si tiene cuenta) al volver el stock.
+model StockAlert {
+  id                  String    @id @default(cuid())
+  productoPublicadoId String    @map("producto_publicado_id")
+  clienteId           String?   @map("cliente_id")
+  email               String
+  notificado          Boolean   @default(false)
+  notificadoAt        DateTime? @map("notificado_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  productoPublicado ProductoPublicado @relation(fields: [productoPublicadoId], references: [id], onDelete: Cascade)
+  cliente           Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  @@index([productoPublicadoId, notificado])
+  @@map("stock_alerts")
 }
 
 model Wishlist {

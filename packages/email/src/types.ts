@@ -3,7 +3,8 @@ export type EmailPlantilla =
   | "pedido_enviado"
   | "pedido_listo_pickup"
   | "carrito_recovery"
-  | "resena_solicitud";
+  | "resena_solicitud"
+  | "stock_disponible";
 
 export interface EnviarEmailInput {
   para: string;

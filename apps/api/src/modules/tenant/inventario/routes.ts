@@ -2,6 +2,7 @@ import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
+import { procesarAvisosStock } from "../stock-alerts/service.js";
 import { bulkConteoFisico } from "./bulk-service.js";
 import {
   ajusteManualSchema,
@@ -139,6 +140,10 @@ const inventarioRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       throw err;
+    }
+    // Reabastecimiento: notifica avisos de stock pendientes (best-effort, post-commit).
+    if (body.tipo === "ajuste_positivo") {
+      await procesarAvisosStock(req.tenantPrisma, body.varianteId, app.emailProviderFactory());
     }
     return reply.code(201).send({ ok: true });
   });

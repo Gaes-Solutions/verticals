@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import { crearAvisoStock } from "../stock-alerts/service.js";
 import {
   enriquecerDetalle,
   listarCatalogo,
@@ -74,6 +75,27 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         : null,
       politicasHtml: c.politicasHtml ?? {},
     };
+  });
+
+  // Aviso de reabastecimiento (storefront): deja tu correo para un producto agotado.
+  app.post("/avisos-stock", async (req, reply) => {
+    const body = z
+      .object({ productoPublicadoId: z.string().min(1), email: z.string().email() })
+      .parse(req.body);
+    const prod = await req.tenantPrisma.productoPublicado.findUnique({
+      where: { id: body.productoPublicadoId },
+      select: { id: true },
+    });
+    if (!prod) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });
+    }
+    await crearAvisoStock(req.tenantPrisma, {
+      productoPublicadoId: body.productoPublicadoId,
+      email: body.email,
+    });
+    return reply.code(201).send({ ok: true });
   });
 
   // --- Catálogo público (lectura) ---

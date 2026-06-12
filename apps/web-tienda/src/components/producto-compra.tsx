@@ -3,6 +3,7 @@
 import { agregar } from "@/lib/carrito-store";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AvisoStock } from "./aviso-stock";
 
 export interface VarianteCompra {
   id: string;
@@ -40,6 +41,7 @@ export function ProductoCompra({
   envioGratis,
   imagenUrl,
   slugSeo,
+  productoPublicadoId,
 }: {
   variantes: VarianteCompra[];
   precioOverride: string | null;
@@ -52,6 +54,7 @@ export function ProductoCompra({
   envioGratis?: boolean;
   imagenUrl?: string;
   slugSeo?: string;
+  productoPublicadoId?: string;
 }) {
   const router = useRouter();
   const [sel, setSel] = useState(0);
@@ -175,6 +178,8 @@ export function ProductoCompra({
           </button>
         )}
       </div>
+
+      {sinStock && productoPublicadoId && <AvisoStock productoPublicadoId={productoPublicadoId} />}
     </div>
   );
 }

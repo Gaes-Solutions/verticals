@@ -44,6 +44,12 @@ export function renderPlantilla(
         html: `<h1>Cuéntanos tu experiencia</h1><p>Deja una reseña de los productos de tu pedido ${v("folioPublico")}.</p>`,
         texto: `Deja tu reseña del pedido ${v("folioPublico")}.`,
       };
+    case "stock_disponible":
+      return {
+        asunto: `¡${v("producto")} volvió a estar disponible!`,
+        html: `<h1>¡Buenas noticias!</h1><p><strong>${v("producto")}</strong> que esperabas ya tiene stock. Apúrate antes de que se agote.</p><p><a href="/producto/${v("slug")}">Ver producto</a></p>`,
+        texto: `${v("producto")} ya está disponible.`,
+      };
     default:
       return { asunto: "Notificación", html: "<p>Notificación</p>", texto: "Notificación" };
   }

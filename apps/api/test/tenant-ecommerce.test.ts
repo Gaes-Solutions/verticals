@@ -1327,3 +1327,79 @@ describe("Tanda 5: direcciones guardadas del cliente", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe("Tanda 6: aviso de reabastecimiento (avísame cuando haya stock)", () => {
+  it("suscribe aviso y al reabastecer queda notificado", async () => {
+    const tc = getTenantClient(TENANT_SLUG);
+    // Crea una variante sin stock vinculada a un producto publicado nuevo.
+    const cat = await app.inject({
+      method: "POST",
+      url: "/t/categorias",
+      headers: auth(ownerToken),
+      payload: { nombre: "Agotados", codigo: "AGT" },
+    });
+    const prod = await app.inject({
+      method: "POST",
+      url: "/t/productos",
+      headers: auth(ownerToken),
+      payload: {
+        skuPadre: "AGT-001",
+        nombre: "Producto Agotado",
+        categoriaId: cat.json().id,
+        precioBase: "100.00",
+        aplicaIva: true,
+        tasaIva: "16",
+      },
+    });
+    const nuevaVarianteId = prod.json().variantes[0].id as string;
+    const pub = await app.inject({
+      method: "POST",
+      url: "/t/ecommerce/productos-publicados",
+      headers: auth(ownerToken),
+      payload: {
+        productoId: prod.json().id,
+        tituloPublico: "Producto Agotado",
+        slugSeo: "producto-agotado",
+        descripcionMd: "x",
+      },
+    });
+    const publicadoId = pub.json().id as string;
+
+    // Suscribe el aviso (storefront, token de servicio).
+    const aviso = await app.inject({
+      method: "POST",
+      url: "/t/tienda/avisos-stock",
+      headers: auth(ownerToken),
+      payload: { productoPublicadoId: publicadoId, email: "espero@cliente.mx" },
+    });
+    expect(aviso.statusCode).toBe(201);
+    expect(await tc.stockAlert.count({ where: { productoPublicadoId: publicadoId } })).toBe(1);
+
+    // Reabastece: ajuste positivo de stock.
+    await app.inject({
+      method: "POST",
+      url: "/t/inventario/ajustes",
+      headers: auth(ownerToken),
+      payload: {
+        varianteId: nuevaVarianteId,
+        sucursalId,
+        tipo: "ajuste_positivo",
+        cantidad: "10",
+        motivo: "Reabasto",
+      },
+    });
+
+    const alerta = await tc.stockAlert.findFirst({ where: { productoPublicadoId: publicadoId } });
+    expect(alerta?.notificado).toBe(true);
+  });
+
+  it("producto inexistente → 404", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/tienda/avisos-stock",
+      headers: auth(ownerToken),
+      payload: { productoPublicadoId: "noexiste", email: "a@b.mx" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

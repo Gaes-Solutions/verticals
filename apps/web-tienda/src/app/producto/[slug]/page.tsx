@@ -5,6 +5,7 @@ import { PreguntasProducto } from "@/components/preguntas-producto";
 import { ProductoGrid } from "@/components/producto-card";
 import { ProductoCompra } from "@/components/producto-compra";
 import { ResenasResumen } from "@/components/resenas-resumen";
+import { RegistrarVisto, VistosRecientes } from "@/components/vistos-recientes";
 import { type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -174,6 +175,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
     <div>
       <ProductoJsonLd prod={prod} />
       <BreadcrumbJsonLd prod={prod} slug={slug} />
+      <RegistrarVisto
+        visto={{
+          slugSeo: slug,
+          titulo: prod.tituloPublico,
+          precio: String(precioActual),
+          ...(prod.fotosArray[0] ? { imagen: prod.fotosArray[0] } : {}),
+        }}
+      />
 
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-gray-500 text-sm">
         <Link href="/" className="hover:text-marca">
@@ -232,6 +241,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             envioGratis={prod.envioGratis}
             {...(prod.fotosArray[0] ? { imagenUrl: prod.fotosArray[0] } : {})}
             slugSeo={slug}
+            productoPublicadoId={prod.id}
           />
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
@@ -282,10 +292,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
 
       {prod.relacionados.length > 0 && (
         <section className="mt-12">
-          <h2 className="mb-4 font-bold text-lg">También te puede interesar</h2>
+          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">
+            También te puede interesar
+          </h2>
           <ProductoGrid items={prod.relacionados} />
         </section>
       )}
+
+      <VistosRecientes excluir={slug} />
     </div>
   );
 }
