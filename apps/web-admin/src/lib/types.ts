@@ -99,6 +99,7 @@ export interface ConfigTienda {
   paqueteriaPesoDefaultKg?: string | number | null;
   pushHabilitado?: boolean;
   pushEventos?: Array<"pago_confirmado" | "enviado" | "entregado">;
+  politicasHtml?: Record<string, string>;
 }
 
 export interface ResumenVentas {

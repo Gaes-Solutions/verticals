@@ -70,6 +70,7 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
         : {}),
       ...(body.pushHabilitado !== undefined ? { pushHabilitado: body.pushHabilitado } : {}),
       ...(body.pushEventos ? { pushEventos: body.pushEventos } : {}),
+      ...(body.politicasHtml ? { politicasHtml: body.politicasHtml } : {}),
     };
     const cfg = existing
       ? await req.tenantPrisma.configTiendaEcommerce.update({ where: { id: existing.id }, data })

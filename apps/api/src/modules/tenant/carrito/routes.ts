@@ -72,6 +72,7 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
         ? Number(tarifaGratis.montoMinimoEnvioGratis).toFixed(2)
         : null,
+      politicasHtml: c.politicasHtml ?? {},
     };
   });
 

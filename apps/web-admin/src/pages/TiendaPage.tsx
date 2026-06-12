@@ -54,6 +54,7 @@ export function TiendaPage() {
           paqueteriaPesoDefaultKg: String(config.paqueteriaPesoDefaultKg ?? 1),
           pushHabilitado: config.pushHabilitado ?? false,
           pushEventos: config.pushEventos ?? ["pago_confirmado", "enviado", "entregado"],
+          politicasHtml: config.politicasHtml ?? {},
         },
       });
       setMsg("✓ Configuración guardada");
@@ -338,6 +339,44 @@ export function TiendaPage() {
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar envíos"}
+        </button>
+      </section>
+
+      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="mb-1 font-bold text-slate-800">Políticas de la tienda</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          Aparecen en el pie de página de tu tienda. Si dejas un campo vacío se usa un texto base.
+        </p>
+        {(
+          [
+            ["envios", "Envíos"],
+            ["devoluciones", "Cambios y devoluciones"],
+            ["privacidad", "Aviso de privacidad"],
+            ["terminos", "Términos y condiciones"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="mb-3 block">
+            <span className="mb-1 block font-medium text-slate-700 text-sm">{label}</span>
+            <textarea
+              value={config.politicasHtml?.[key] ?? ""}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  politicasHtml: { ...(config.politicasHtml ?? {}), [key]: e.target.value },
+                })
+              }
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+        ))}
+        <button
+          type="button"
+          onClick={guardarConfig}
+          disabled={guardando}
+          className="mt-2 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : "Guardar políticas"}
         </button>
       </section>
 

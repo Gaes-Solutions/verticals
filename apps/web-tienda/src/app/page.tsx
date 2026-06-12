@@ -1,7 +1,6 @@
-import { Buscador } from "@/components/buscador";
 import { OrdenFiltros } from "@/components/orden-filtros";
 import { ProductoGrid } from "@/components/producto-card";
-import { type CatalogoResponse, api, getCategorias } from "@/lib/api";
+import { type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -18,15 +17,42 @@ async function seccion(query: string): Promise<CatalogoResponse["items"]> {
 function Seccion({
   titulo,
   items,
+  verMas,
 }: {
   titulo: string;
   items: CatalogoResponse["items"];
+  verMas?: string;
 }) {
   if (items.length === 0) return null;
   return (
     <section className="mb-10">
-      <h2 className="mb-4 text-xl font-bold">{titulo}</h2>
+      <div className="mb-4 flex items-end justify-between">
+        <h2 className="border-marca border-l-4 pl-3 font-bold text-xl">{titulo}</h2>
+        {verMas && (
+          <Link href={verMas} className="font-medium text-marca text-sm hover:underline">
+            Ver todo →
+          </Link>
+        )}
+      </div>
       <ProductoGrid items={items} />
+    </section>
+  );
+}
+
+function Hero({ nombre, lema }: { nombre: string; lema: string | null }) {
+  return (
+    <section className="mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-marca to-teal-700 px-6 py-10 text-white sm:px-10 sm:py-14">
+      <p className="font-medium text-sm text-white/80">Bienvenido a</p>
+      <h1 className="mt-1 font-bold text-3xl sm:text-4xl">{nombre}</h1>
+      <p className="mt-2 max-w-xl text-white/90">
+        {lema ?? "Todo lo que buscas, con envío a todo México y compra protegida."}
+      </p>
+      <Link
+        href="/?soloOfertas=true"
+        className="mt-5 inline-block rounded-full bg-white px-6 py-2.5 font-semibold text-marca text-sm shadow hover:bg-gray-50"
+      >
+        Ver ofertas 🔥
+      </Link>
     </section>
   );
 }
@@ -53,15 +79,17 @@ export default async function CatalogoPage({
 
   let data: CatalogoResponse;
   let categorias: Awaited<ReturnType<typeof getCategorias>>;
+  let cfg: Awaited<ReturnType<typeof getTiendaConfig>> | null = null;
   let ofertas: CatalogoResponse["items"] = [];
   let novedades: CatalogoResponse["items"] = [];
   let populares: CatalogoResponse["items"] = [];
   try {
-    [data, categorias] = await Promise.all([
+    [data, categorias, cfg] = await Promise.all([
       api<CatalogoResponse>(`/tienda/catalogo?${qs.toString()}`, {
         revalidate: filtrando ? undefined : 60,
       }),
       getCategorias(),
+      getTiendaConfig().catch(() => null),
     ]);
     if (!filtrando) {
       [ofertas, novedades, populares] = await Promise.all([
@@ -86,15 +114,13 @@ export default async function CatalogoPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <Buscador />
-      </div>
+      {!filtrando && <Hero nombre={cfg?.nombre ?? "Tienda"} lema={cfg?.lema ?? null} />}
 
       {categorias.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           <Link
             href="/"
-            className={`rounded-full px-4 py-1.5 text-sm ${!cat && !q ? "bg-marca text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            className={`rounded-full px-4 py-1.5 font-medium text-sm transition ${!cat && !q ? "bg-marca text-white" : "bg-white text-gray-700 ring-1 ring-gray-200 hover:ring-marca"}`}
           >
             Todo
           </Link>
@@ -102,7 +128,7 @@ export default async function CatalogoPage({
             <Link
               key={c.id}
               href={`/?cat=${c.id}`}
-              className={`rounded-full px-4 py-1.5 text-sm ${cat === c.id ? "bg-marca text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+              className={`rounded-full px-4 py-1.5 font-medium text-sm transition ${cat === c.id ? "bg-marca text-white" : "bg-white text-gray-700 ring-1 ring-gray-200 hover:ring-marca"}`}
             >
               {c.nombre}
             </Link>
@@ -112,14 +138,14 @@ export default async function CatalogoPage({
 
       {!filtrando && (
         <>
-          <Seccion titulo="🔥 Ofertas" items={ofertas} />
+          <Seccion titulo="🔥 Ofertas" items={ofertas} verMas="/?soloOfertas=true" />
           <Seccion titulo="🆕 Recién llegados" items={novedades} />
-          <Seccion titulo="⭐ Más populares" items={populares} />
+          <Seccion titulo="⭐ Más populares" items={populares} verMas="/?orden=populares" />
         </>
       )}
 
-      <h1 className="mb-4 text-2xl font-bold">
-        {q ? `Resultados para "${q}"` : catActiva ? catActiva.nombre : "Catálogo"}
+      <h1 className="mb-4 border-marca border-l-4 pl-3 font-bold text-2xl">
+        {q ? `Resultados para "${q}"` : catActiva ? catActiva.nombre : "Todo el catálogo"}
       </h1>
       <Suspense fallback={null}>
         <OrdenFiltros />

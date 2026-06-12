@@ -44,6 +44,7 @@ export const configTiendaSchema = z.object({
     .array(z.enum(["pago_confirmado", "enviado", "entregado"]))
     .max(3)
     .optional(),
+  politicasHtml: z.record(z.string().max(20_000)).optional(),
 });
 
 export const publicarProductoSchema = z.object({

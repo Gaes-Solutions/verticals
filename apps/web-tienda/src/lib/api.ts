@@ -116,6 +116,7 @@ export interface TiendaConfig {
   pushHabilitado: boolean;
   vapidPublicKey: string | null;
   envioGratisDesde: string | null;
+  politicasHtml: Record<string, string>;
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -134,6 +135,7 @@ const DEFAULT_CONFIG: TiendaConfig = {
   pushHabilitado: false,
   vapidPublicKey: null,
   envioGratisDesde: null,
+  politicasHtml: {},
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {

@@ -1,4 +1,7 @@
+import { FooterTienda } from "@/components/footer-tienda";
+import { HeaderAcciones } from "@/components/header-acciones";
 import { SwRegister } from "@/components/sw-register";
+import { getTiendaConfig } from "@/lib/api";
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
@@ -14,35 +17,35 @@ export const viewport: Viewport = {
   themeColor: "#0d9488",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const config = await getTiendaConfig().catch(() => null);
+  const nombre = config?.nombre ?? "Tienda";
+
   return (
     <html lang="es-MX">
-      <body>
-        <header className="border-b bg-white">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:py-4">
-            <Link href="/" className="text-lg font-bold text-marca sm:text-xl">
-              🛍️ Tienda GaesSoft
+      <body className="bg-gray-50 text-gray-900">
+        <div className="bg-marca text-center text-white text-xs">
+          <p className="py-1.5">
+            🚚 Envíos a todo México · 🔒 Compra protegida · 💳 Meses sin intereses
+          </p>
+        </div>
+
+        <header className="sticky top-0 z-40 border-b bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-6">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 font-bold text-lg text-marca sm:text-xl"
+            >
+              <span className="text-2xl">🛍️</span>
+              <span className="hidden whitespace-nowrap sm:inline">{nombre}</span>
             </Link>
-            <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm sm:gap-6">
-              <Link href="/" className="hover:text-marca">
-                Catálogo
-              </Link>
-              <Link href="/carrito" className="hover:text-marca">
-                Carrito
-              </Link>
-              <Link href="/seguimiento" className="hover:text-marca">
-                Rastrear
-              </Link>
-              <Link href="/cuenta" className="hover:text-marca">
-                Mi cuenta
-              </Link>
-            </nav>
+            <HeaderAcciones />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">{children}</main>
-        <footer className="mt-16 border-t bg-white py-6 text-center text-sm text-gray-500">
-          Powered by GaesSoft POS
-        </footer>
+
+        <main className="mx-auto min-h-[60vh] max-w-6xl px-4 py-6 sm:py-8">{children}</main>
+
+        <FooterTienda nombre={nombre} />
         <SwRegister />
       </body>
     </html>
