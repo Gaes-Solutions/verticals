@@ -38,6 +38,8 @@ export function ProductoCompra({
   stockPublico,
   stockBajo,
   envioGratis,
+  imagenUrl,
+  slugSeo,
 }: {
   variantes: VarianteCompra[];
   precioOverride: string | null;
@@ -48,6 +50,8 @@ export function ProductoCompra({
   stockPublico?: number | null;
   stockBajo?: boolean;
   envioGratis?: boolean;
+  imagenUrl?: string;
+  slugSeo?: string;
 }) {
   const router = useRouter();
   const [sel, setSel] = useState(0);
@@ -63,7 +67,14 @@ export function ProductoCompra({
 
   function alCarrito() {
     if (!variante) return;
-    agregar({ varianteId: variante.id, titulo, precio, cantidad });
+    agregar({
+      varianteId: variante.id,
+      titulo,
+      precio,
+      cantidad,
+      ...(imagenUrl ? { imagenUrl } : {}),
+      ...(slugSeo ? { slugSeo } : {}),
+    });
   }
   function onAgregar() {
     alCarrito();

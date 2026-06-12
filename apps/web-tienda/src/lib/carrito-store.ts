@@ -5,6 +5,8 @@ export interface CarritoLineaLocal {
   titulo: string;
   precio: string;
   cantidad: number;
+  imagenUrl?: string;
+  slugSeo?: string;
 }
 
 const KEY = "gaespos_carrito";
@@ -32,6 +34,19 @@ export function agregar(linea: CarritoLineaLocal): void {
     items.push(linea);
   }
   guardarCarrito(items);
+}
+
+export function actualizarCantidad(varianteId: string, cantidad: number): void {
+  if (cantidad <= 0) {
+    quitar(varianteId);
+    return;
+  }
+  const items = leerCarrito();
+  const linea = items.find((i) => i.varianteId === varianteId);
+  if (linea) {
+    linea.cantidad = cantidad;
+    guardarCarrito(items);
+  }
 }
 
 export function quitar(varianteId: string): void {

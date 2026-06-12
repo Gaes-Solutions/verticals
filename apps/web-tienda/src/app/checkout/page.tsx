@@ -1,5 +1,6 @@
 "use client";
 
+import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type CarritoLineaLocal, leerCarrito, sessionId, vaciar } from "@/lib/carrito-store";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ interface TiendaConfig {
   msiMeses: number[];
   msiMontoMinimo: string;
   cuponEnCheckout: boolean;
+  envioGratisDesde: string | null;
 }
 
 interface DireccionGuardada {
@@ -218,6 +220,40 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="mb-6 text-2xl font-bold">Finalizar compra</h1>
+
+      <div className="mb-4 rounded-lg border bg-white p-4">
+        <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
+        <div className="space-y-2">
+          {items.map((i) => (
+            <div key={i.varianteId} className="flex items-center gap-3 text-sm">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-gray-100 text-lg">
+                {i.imagenUrl ? (
+                  <img
+                    src={i.imagenUrl}
+                    alt={i.titulo}
+                    className="h-full w-full rounded object-cover"
+                  />
+                ) : (
+                  "📦"
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="font-medium">{i.titulo}</p>
+                <p className="text-gray-500">
+                  {i.cantidad} × ${Number(i.precio).toFixed(2)}
+                </p>
+              </div>
+              <span className="font-semibold">${(Number(i.precio) * i.cantidad).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+        {config?.envioGratisDesde && (
+          <div className="mt-3">
+            <BarraEnvioGratis subtotal={subtotal} umbral={Number(config.envioGratisDesde)} />
+          </div>
+        )}
+      </div>
+
       <div className="space-y-4 rounded-lg border bg-white p-6">
         <Campo label="Email" value={email} onChange={setEmail} type="email" required />
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />

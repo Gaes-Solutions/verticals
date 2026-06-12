@@ -180,6 +180,8 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             stockPublico={prod.stockPublico}
             stockBajo={prod.stockBajo}
             envioGratis={prod.envioGratis}
+            {...(prod.fotosArray[0] ? { imagenUrl: prod.fotosArray[0] } : {})}
+            slugSeo={slug}
           />
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
