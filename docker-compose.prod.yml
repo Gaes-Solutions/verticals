@@ -80,6 +80,62 @@ services:
     networks:
       - gaespos
 
+  # Tienda online (Next.js, server-side: lee API_URL + credenciales de servicio del tenant)
+  web-tienda:
+    image: ghcr.io/${GITHUB_REPOSITORY:-gaes-solutions/gaespos}/web-tienda:${TIENDA_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_URL: http://api:3000
+      TIENDA_TENANT_SLUG: ${TIENDA_TENANT_SLUG:?required}
+      TIENDA_USER_EMAIL: ${TIENDA_USER_EMAIL:?required}
+      TIENDA_USER_PASSWORD: ${TIENDA_USER_PASSWORD:?required}
+      NEXT_PUBLIC_CONEKTA_PUBLIC_KEY: ${NEXT_PUBLIC_CONEKTA_PUBLIC_KEY:-}
+    ports:
+      - "${TIENDA_PORT:-3001}:3001"
+    networks:
+      - gaespos
+
+  # Back-office del negocio (SPA estática + nginx que proxea /api → api)
+  web-admin:
+    image: ghcr.io/${GITHUB_REPOSITORY:-gaes-solutions/gaespos}/web-admin:${ADMIN_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_PORT:-5174}:80"
+    networks:
+      - gaespos
+
+  # Punto de venta (SPA estática + nginx)
+  web-pos:
+    image: ghcr.io/${GITHUB_REPOSITORY:-gaes-solutions/gaespos}/web-pos:${POS_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${POS_PORT:-5173}:80"
+    networks:
+      - gaespos
+
+  # Panel superadmin de GaesSoft (SPA estática + nginx)
+  web-superadmin:
+    image: ghcr.io/${GITHUB_REPOSITORY:-gaes-solutions/gaespos}/web-superadmin:${SUPERADMIN_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${SUPERADMIN_PORT:-5176}:80"
+    networks:
+      - gaespos
+
 volumes:
   postgres-data:
     driver: local
