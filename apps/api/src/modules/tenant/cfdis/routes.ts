@@ -58,6 +58,13 @@ const cfdisRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.CFDI_CONFIGURAR);
     const body = cfdiConfigUpsertSchema.parse(req.body);
     const existing = await req.tenantPrisma.cfdiConfig.findFirst();
+    if (!existing && !body.facturamaApiKey) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: "La API key de Facturama es requerida para configurar CFDI por primera vez",
+      });
+    }
     const data = stripUndefined(body);
     const upserted = existing
       ? await req.tenantPrisma.cfdiConfig.update({

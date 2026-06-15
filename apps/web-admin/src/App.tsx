@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { loadToken, setToken } from "./lib/api.js";
+import { CfdiPage } from "./pages/CfdiPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
@@ -35,6 +36,7 @@ type Seccion =
   | "resenas"
   | "importador"
   | "compras"
+  | "cfdi"
   | "usuarios"
   | "tienda";
 
@@ -51,6 +53,7 @@ const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "envios", label: "Envíos", icon: "🚚" },
   { key: "resenas", label: "Reseñas", icon: "⭐" },
   { key: "preguntas", label: "Preguntas", icon: "❓" },
+  { key: "cfdi", label: "Facturación", icon: "🧾" },
   { key: "usuarios", label: "Usuarios y permisos", icon: "👥" },
   { key: "tienda", label: "Tienda online", icon: "🛒" },
 ];
@@ -162,6 +165,7 @@ export function App() {
         {seccion === "inventario" && <InventarioPage />}
         {seccion === "importador" && <ImportadorPage />}
         {seccion === "compras" && <ComprasPage />}
+        {seccion === "cfdi" && <CfdiPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}

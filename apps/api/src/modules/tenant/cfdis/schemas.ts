@@ -14,7 +14,8 @@ export const cfdiConfigUpsertSchema = z.object({
   codigoPostalEmisor: z.string().regex(/^\d{5}$/),
   lugarExpedicion: z.string().regex(/^\d{5}$/),
   serieDefault: z.string().min(1).max(10).default("A"),
-  facturamaApiKey: z.string().min(10),
+  // Opcional al editar (se conserva la guardada); requerida al configurar por primera vez.
+  facturamaApiKey: z.string().min(10).optional(),
   facturamaAmbiente: z.enum(["sandbox", "prod"]).default("sandbox"),
   correoEmisor: z.string().email().optional(),
   telefonoEmisor: z.string().max(20).optional(),

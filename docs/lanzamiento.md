@@ -54,8 +54,8 @@ es **post-lanzamiento**.
 
 | # | Integración | Para qué | Estado | Necesito |
 |---|-------------|----------|--------|----------|
-| B1 | **Conekta / Stripe** (pagos) | Cobrar en la tienda + MSI + webhooks | ⚠️ código listo, mock | 🔑 cuenta + llaves sandbox→prod |
-| B2 | **Facturama** (CFDI 4.0) | Timbrado real con CSD del cliente (**legal MX**) | ⚠️ `FacturamaClient` existe | 🔑 cuenta Facturama + CSD de cada tenant |
+| B1 | **Conekta / Stripe** (pagos) | Cobrar en la tienda + MSI + webhooks | ✅ listo para sandbox | 🔑 solo pegar llaves test (env). Guía: `docs/sandbox-pagos-cfdi.md` |
+| B2 | **Facturama** (CFDI 4.0) | Timbrado real con CSD del cliente (**legal MX**) | ✅ listo para sandbox (UI + ambiente) | 🔑 API key sandbox en web-admin → Facturación. Guía: `docs/sandbox-pagos-cfdi.md` |
 | B3 | **Resend** (email) | Confirmaciones de pedido, etc. | ⚠️ mock | 🔑 cuenta + dominio verificado (SPF/DKIM) |
 | B4 | **Skydropx / Envía** (paqueterías) | Auto-guías | ⚠️ mock | 🔑 cuenta (si el cliente usa envíos) |
 | B5 | **Web Push (VAPID)** | Avisos de pedido en la tienda | ⚠️ mock | generar par VAPID (`npx web-push generate-vapid-keys`) |
