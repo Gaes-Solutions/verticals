@@ -1,4 +1,5 @@
 import { OrdenFiltros } from "@/components/orden-filtros";
+import { Paginacion } from "@/components/paginacion";
 import { ProductoGrid } from "@/components/producto-card";
 import { type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
 import Link from "next/link";
@@ -65,10 +66,11 @@ export default async function CatalogoPage({
   const sp = await searchParams;
   const { q, cat, orden, precioMin, precioMax, soloOfertas, soloDisponibles } = sp;
   const filtrando = Boolean(
-    q || cat || orden || precioMin || precioMax || soloOfertas || soloDisponibles,
+    q || cat || orden || precioMin || precioMax || soloOfertas || soloDisponibles || sp.page,
   );
 
-  const qs = new URLSearchParams({ pageSize: "24" });
+  const pageActual = Math.max(1, Number(sp.page) || 1);
+  const qs = new URLSearchParams({ pageSize: "24", page: String(pageActual) });
   if (q) qs.set("q", q);
   if (cat) qs.set("categoriaPublicaId", cat);
   if (orden) qs.set("orden", orden);
@@ -157,7 +159,10 @@ export default async function CatalogoPage({
             : "Aún no hay productos publicados."}
         </p>
       ) : (
-        <ProductoGrid items={data.items} />
+        <>
+          <ProductoGrid items={data.items} />
+          <Paginacion page={data.page} pageSize={data.pageSize} total={data.total} sp={sp} />
+        </>
       )}
     </div>
   );

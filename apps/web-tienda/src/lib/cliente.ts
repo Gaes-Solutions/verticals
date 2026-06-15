@@ -30,6 +30,8 @@ export interface ClienteMe {
   id: string;
   nombre: string;
   email: string | null;
+  apellidos?: string | null;
+  telefono?: string | null;
 }
 
 export interface PedidoCliente {

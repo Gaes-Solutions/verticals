@@ -1,6 +1,7 @@
 import { DireccionesCuenta } from "@/components/direcciones-cuenta";
 import { LogoutBoton } from "@/components/logout-boton";
 import { NotificacionesCliente } from "@/components/notificaciones-cliente";
+import { PerfilCuenta } from "@/components/perfil-cuenta";
 import { PwaPush } from "@/components/pwa-push";
 import { ResenasCuenta } from "@/components/resenas-cuenta";
 import { WishlistCuenta } from "@/components/wishlist-cuenta";
@@ -49,6 +50,18 @@ export default async function CuentaPage() {
 
       <div className="mb-6">
         <PwaPush />
+      </div>
+
+      <h2 className="mb-3 text-lg font-bold">Mi perfil</h2>
+      <div className="mb-10">
+        <PerfilCuenta
+          me={{
+            nombre: me.nombre,
+            apellidos: me.apellidos ?? null,
+            email: me.email ?? null,
+            telefono: me.telefono ?? null,
+          }}
+        />
       </div>
 
       <h2 className="mb-4 text-lg font-bold">Mis pedidos</h2>

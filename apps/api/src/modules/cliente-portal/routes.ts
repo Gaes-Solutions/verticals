@@ -35,7 +35,9 @@ import {
 } from "./direcciones-service.js";
 import {
   ClientePortalError,
+  actualizarPerfilCliente,
   agregarAWishlist,
+  cambiarPasswordCliente,
   crearResenaCliente,
   getClienteMe,
   getComprasResenables,
@@ -168,6 +170,33 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   app.get("/me", async (req) => {
     const { clienteId, tenantSlug } = clienteCtx(req);
     return getClienteMe(getTenantClient(tenantSlug), clienteId);
+  });
+
+  app.put("/me", async (req) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const body = z
+      .object({
+        nombre: z.string().min(1).max(120),
+        apellidos: z.string().max(120).optional(),
+        telefono: z.string().max(20).optional(),
+      })
+      .parse(req.body);
+    await actualizarPerfilCliente(getTenantClient(tenantSlug), clienteId, body);
+    return { ok: true };
+  });
+
+  app.post("/cambiar-password", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const body = z
+      .object({ actual: z.string().min(1), nueva: z.string().min(8).max(100) })
+      .parse(req.body);
+    try {
+      await cambiarPasswordCliente(getTenantClient(tenantSlug), clienteId, body);
+      return { ok: true };
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
   });
 
   app.get("/pedidos", async (req) => {

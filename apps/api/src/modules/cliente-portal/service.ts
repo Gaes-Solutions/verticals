@@ -103,6 +103,38 @@ export async function getClienteMe(
   };
 }
 
+/** Actualiza nombre/apellidos/teléfono del cliente desde su cuenta. */
+export async function actualizarPerfilCliente(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  input: { nombre: string; apellidos?: string | undefined; telefono?: string | undefined },
+): Promise<void> {
+  await prisma.cliente.update({
+    where: { id: clienteId },
+    data: {
+      nombre: input.nombre,
+      ...(input.apellidos !== undefined ? { apellidos: input.apellidos || null } : {}),
+      ...(input.telefono !== undefined ? { telefonoPrincipal: input.telefono || null } : {}),
+    },
+  });
+}
+
+/** Cambia la contraseña del cliente validando la actual. */
+export async function cambiarPasswordCliente(
+  prisma: TenantPrismaClient,
+  clienteId: string,
+  input: { actual: string; nueva: string },
+): Promise<void> {
+  const c = await prisma.cliente.findUniqueOrThrow({ where: { id: clienteId } });
+  if (!c.passwordHash || !(await argon2Verify(c.passwordHash, input.actual))) {
+    throw new ClientePortalError(400, "La contraseña actual no es correcta");
+  }
+  await prisma.cliente.update({
+    where: { id: clienteId },
+    data: { passwordHash: await argon2Hash(input.nueva) },
+  });
+}
+
 /**
  * Pedidos del cliente: los asociados a su clienteId más los que hizo como
  * invitado con su mismo correo (checkout guest antes de tener cuenta).

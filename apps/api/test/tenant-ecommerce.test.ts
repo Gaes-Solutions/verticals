@@ -1465,3 +1465,65 @@ describe("Tienda 100%: cupón aplicado en el checkout", () => {
     expect(res.json().valido).toBe(false);
   });
 });
+
+describe("Tienda 100%: perfil + cambio de contraseña del cliente", () => {
+  let token: string;
+  const cAuth = () => ({ authorization: `Bearer ${token}` });
+
+  beforeAll(async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/auth/cliente/registro",
+      payload: {
+        tenantSlug: TENANT_SLUG,
+        nombre: "Perfil Test",
+        email: "perfil@cliente.mx",
+        password: "Cliente!2026",
+      },
+    });
+    token = reg.json().accessToken;
+  });
+
+  it("actualiza perfil (nombre/teléfono)", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/cliente-portal/me",
+      headers: cAuth(),
+      payload: { nombre: "Perfil Actualizado", telefono: "3331234567" },
+    });
+    expect(res.statusCode).toBe(200);
+    const me = await app.inject({ method: "GET", url: "/cliente-portal/me", headers: cAuth() });
+    expect(me.json()).toMatchObject({ nombre: "Perfil Actualizado", telefono: "3331234567" });
+  });
+
+  it("contraseña actual incorrecta → 400", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/cambiar-password",
+      headers: cAuth(),
+      payload: { actual: "MalActual!1", nueva: "Nueva!2026" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("cambia contraseña y permite login con la nueva", async () => {
+    const cambio = await app.inject({
+      method: "POST",
+      url: "/cliente-portal/cambiar-password",
+      headers: cAuth(),
+      payload: { actual: "Cliente!2026", nueva: "NuevaSegura!2026" },
+    });
+    expect(cambio.statusCode).toBe(200);
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/cliente/login",
+      payload: {
+        tenantSlug: TENANT_SLUG,
+        email: "perfil@cliente.mx",
+        password: "NuevaSegura!2026",
+      },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().accessToken).toBeTruthy();
+  });
+});
