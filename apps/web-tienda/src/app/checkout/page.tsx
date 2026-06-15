@@ -229,9 +229,7 @@ export default function CheckoutPage() {
         }).catch(() => {});
       }
       vaciar();
-      router.push(
-        `/seguimiento?folio=${data.folioPublico}&email=${encodeURIComponent(email)}&ok=1`,
-      );
+      router.push(`/gracias?folio=${data.folioPublico}&email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
       setProcesando(false);

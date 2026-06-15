@@ -91,6 +91,7 @@ export interface NotificacionCliente {
 export interface WishlistItem {
   itemId: string;
   productoPublicadoId: string;
+  varianteId: string | null;
   tituloPublico: string;
   slugSeo: string;
   precio: string;

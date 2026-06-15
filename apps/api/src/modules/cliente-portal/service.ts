@@ -244,6 +244,7 @@ export async function getPedidoClienteDetalle(
 export interface WishlistItemDto {
   itemId: string;
   productoPublicadoId: string;
+  varianteId: string | null;
   tituloPublico: string;
   slugSeo: string;
   precio: string;
@@ -276,7 +277,7 @@ export async function getMiWishlist(
       slugSeo: true,
       precioPublicoOverride: true,
       fotosArray: true,
-      producto: { select: { variantes: { select: { precioBase: true }, take: 1 } } },
+      producto: { select: { variantes: { select: { id: true, precioBase: true }, take: 1 } } },
     },
   });
   const byId = new Map(productos.map((p) => [p.id, p]));
@@ -290,6 +291,7 @@ export async function getMiWishlist(
       return {
         itemId: i.id,
         productoPublicadoId: p.id,
+        varianteId: p.producto.variantes[0]?.id ?? null,
         tituloPublico: p.tituloPublico,
         slugSeo: p.slugSeo,
         precio: precio.toString(),

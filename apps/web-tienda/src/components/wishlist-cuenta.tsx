@@ -1,14 +1,16 @@
 "use client";
 
+import { agregar } from "@/lib/carrito-store";
 import type { WishlistItem } from "@/lib/cliente";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/** Lista de deseos en la página de cuenta, con quitar interactivo. */
+/** Lista de deseos en la página de cuenta, con quitar + agregar al carrito. */
 export function WishlistCuenta({ inicial }: { inicial: WishlistItem[] }) {
   const router = useRouter();
   const [items, setItems] = useState(inicial);
+  const [agregado, setAgregado] = useState<string | null>(null);
 
   async function quitar(itemId: string) {
     const res = await fetch(`/api/cuenta/wishlist/${itemId}`, { method: "DELETE" });
@@ -16,6 +18,23 @@ export function WishlistCuenta({ inicial }: { inicial: WishlistItem[] }) {
       setItems((prev) => prev.filter((i) => i.itemId !== itemId));
       router.refresh();
     }
+  }
+
+  function alCarrito(i: WishlistItem) {
+    if (!i.varianteId) {
+      router.push(`/producto/${i.slugSeo}`);
+      return;
+    }
+    agregar({
+      varianteId: i.varianteId,
+      titulo: i.tituloPublico,
+      precio: i.precio,
+      cantidad: 1,
+      slugSeo: i.slugSeo,
+      ...(i.foto ? { imagenUrl: i.foto } : {}),
+    });
+    setAgregado(i.itemId);
+    setTimeout(() => setAgregado(null), 1500);
   }
 
   if (items.length === 0) {
@@ -45,11 +64,18 @@ export function WishlistCuenta({ inicial }: { inicial: WishlistItem[] }) {
             <button
               type="button"
               onClick={() => quitar(i.itemId)}
-              className="text-xs text-gray-400 hover:text-red-500"
+              className="text-gray-400 text-xs hover:text-red-500"
             >
               Quitar
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => alCarrito(i)}
+            className="mt-2 w-full rounded-lg bg-marca py-1.5 font-semibold text-sm text-white hover:opacity-90"
+          >
+            {agregado === i.itemId ? "✓ Agregado" : "Agregar al carrito"}
+          </button>
         </div>
       ))}
     </div>
