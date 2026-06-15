@@ -2,6 +2,7 @@ import { PermissionDeniedError } from "@gaespos/permissions";
 import type { FastifyError, FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import { ZodError } from "zod";
+import { captureError } from "../observability/sentry.js";
 
 function isPrismaKnownRequestError(
   err: unknown,
@@ -65,6 +66,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
     }
 
     req.log.error({ err }, "Unhandled error");
+    captureError(err, { method: req.method, url: req.url });
     return reply.code(500).send({
       statusCode: 500,
       error: "Internal Server Error",

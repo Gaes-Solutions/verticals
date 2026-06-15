@@ -68,6 +68,9 @@ services:
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@gaessoft.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?required}
+      # Observabilidad (opcional): si SENTRY_DSN está vacío, Sentry queda apagado.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       # FISCAL_PROVIDER: dejar sin definir en prod (default = FacturamaClient real)
     ports:
       - "${API_PORT:-3000}:3000"

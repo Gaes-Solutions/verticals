@@ -3,8 +3,10 @@ import { MockRecargaProvider } from "@gaespos/recargas";
 import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
+import { initSentry } from "./observability/sentry.js";
 
 async function main(): Promise<void> {
+  initSentry();
   const config = loadConfig();
   const useMockFiscal = process.env.FISCAL_PROVIDER === "mock";
   const useMockRecarga = process.env.RECARGA_PROVIDER === "mock";

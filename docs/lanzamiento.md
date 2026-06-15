@@ -40,11 +40,11 @@ es **post-lanzamiento**.
 | A1 | Servidor Hetzner + Coolify | ❌ 🔑 | ADR-006 + runbook en `hito-0-infra.md`. Falta provisionar. |
 | A2 | Dominio + DNS + TLS (Cloudflare) | ❌ 🔑🧠 | Runbook A.0.10 ya escrito. Falta comprar dominio + decidir cuál. |
 | A3 | Dockerfile API | ✅ | `apps/api/Dockerfile` |
-| A4 | Dockerfiles frontends (tienda Next, web-admin, web-pos, web-superadmin) | ❌ | Solo la API tiene. Hay que dockerizar/buildear cada SPA + la tienda. |
-| A5 | `docker-compose.prod` completo | ⚠️ | Tiene postgres+redis+api. Faltan los frontends + reverse proxy. |
+| A4 | Dockerfiles frontends (tienda Next, web-admin, web-pos, web-superadmin) | ✅ | Hecho: Next standalone + nginx para SPAs (`deploy/nginx-spa.conf`). |
+| A5 | `docker-compose.prod` completo | ✅ | 7 servicios (postgres, redis, api + 4 frontends). Reverse proxy lo da Coolify/Traefik. |
 | A6 | Migraciones en prod + provisioning de tenant automatizado | ⚠️ | CLI `gaes-migrate` existe; falta correrlo en prod + script de alta de tenant. |
 | A7 | Backups automáticos Postgres → Backblaze B2 + **restauración probada** | ❌ 🔑 | Crítico antes de datos reales. |
-| A8 | Monitoring: Sentry (errores) + uptime + logs centralizados | ❌ | Está en el stack del plan pero **no cableado en código**. |
+| A8 | Monitoring: Sentry (errores) | ✅ código (⚠️ DSN) | Cableado en API (`observability/sentry.ts`, no-op sin `SENTRY_DSN`). Falta 🔑 cuenta Sentry + DSN. Uptime/logs aún pendientes. |
 | A9 | CI/CD deploy (hoy hay `main.yml`/`pr.yml` de tests) | ⚠️ | Falta el step de deploy a Coolify. |
 
 ## B. Integraciones reales (hoy todo es **mock-first**)
