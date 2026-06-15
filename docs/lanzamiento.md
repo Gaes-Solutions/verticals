@@ -42,7 +42,7 @@ es **post-lanzamiento**.
 | A3 | Dockerfile API | ✅ | `apps/api/Dockerfile` |
 | A4 | Dockerfiles frontends (tienda Next, web-admin, web-pos, web-superadmin) | ✅ | Hecho: Next standalone + nginx para SPAs (`deploy/nginx-spa.conf`). |
 | A5 | `docker-compose.prod` completo | ✅ | 7 servicios (postgres, redis, api + 4 frontends). Reverse proxy lo da Coolify/Traefik. |
-| A6 | Migraciones en prod + provisioning de tenant automatizado | ⚠️ | CLI `gaes-migrate` existe; falta correrlo en prod + script de alta de tenant. |
+| A6 | Migraciones en prod + provisioning de tenant automatizado | ✅ script (⚠️ correr en prod) | `gaes-migrate tenant onboard <slug> -n "Negocio" -e dueño@correo` hace alta end-to-end (schema+migrations+defaults+usuario dueño, idempotente). Falta correrlo en el servidor real. |
 | A7 | Backups automáticos Postgres → Backblaze B2 + **restauración probada** | ❌ 🔑 | Crítico antes de datos reales. |
 | A8 | Monitoring: Sentry (errores) | ✅ código (⚠️ DSN) | Cableado en API (`observability/sentry.ts`, no-op sin `SENTRY_DSN`). Falta 🔑 cuenta Sentry + DSN. Uptime/logs aún pendientes. |
 | A9 | CI/CD deploy (hoy hay `main.yml`/`pr.yml` de tests) | ⚠️ | Falta el step de deploy a Coolify. |

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { masterPrisma } from "../client.js";
+import { onboardTenant } from "../onboard-tenant.js";
 import { seedAllTenantDefaults, seedTenantDefaults } from "../seed-tenant.js";
 import { makeMigration } from "./make-migration.js";
 import { migrateMaster } from "./master.js";
@@ -38,6 +39,44 @@ tenant
       await masterPrisma.$disconnect();
     }
   });
+
+tenant
+  .command("onboard <slug>")
+  .description("Alta completa: tenant + schema + migrations + defaults + usuario dueño")
+  .requiredOption("-n, --name <name>", "Nombre del negocio")
+  .requiredOption("-e, --email <email>", "Correo del dueño")
+  .option("-p, --plan <code>", "Código del plan", "free")
+  .option("-P, --password <password>", "Contraseña del dueño (si se omite, se genera)")
+  .option("--nombre <nombre>", "Nombre del dueño", "Dueño")
+  .action(
+    async (
+      slug: string,
+      opts: { name: string; email: string; plan: string; password?: string; nombre: string },
+    ) => {
+      try {
+        const r = await onboardTenant({
+          slug,
+          name: opts.name,
+          planCode: opts.plan,
+          ownerEmail: opts.email,
+          ...(opts.password ? { ownerPassword: opts.password } : {}),
+          ownerNombre: opts.nombre,
+        });
+        console.info("\n========================================");
+        console.info(`✅ Tenant listo: ${r.slug} (${r.tenantCreado ? "nuevo" : "ya existía"})`);
+        console.info(`   Negocio:   ${opts.name}`);
+        console.info(`   Dueño:     ${r.ownerEmail}`);
+        console.info(`   Password:  ${r.ownerPassword ?? "(la que indicaste)"}`);
+        console.info("   Acceso:    web-admin → slug del negocio + correo + contraseña");
+        if (r.ownerPassword) {
+          console.info("   ⚠️  Guarda/entrega esta contraseña: no se vuelve a mostrar.");
+        }
+        console.info("========================================\n");
+      } finally {
+        await masterPrisma.$disconnect();
+      }
+    },
+  );
 
 tenant
   .command("migrate <slug>")
