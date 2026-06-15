@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import { evaluarCupon } from "../checkout/cupon-service.js";
 import { crearAvisoStock } from "../stock-alerts/service.js";
 import {
   enriquecerDetalle,
@@ -75,6 +76,14 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         : null,
       politicasHtml: c.politicasHtml ?? {},
     };
+  });
+
+  // Validación de cupón en vivo (storefront): feedback antes de pagar.
+  app.get("/cupon", async (req) => {
+    const q = z
+      .object({ codigo: z.string().min(1), subtotal: z.coerce.number().nonnegative() })
+      .parse(req.query);
+    return evaluarCupon(req.tenantPrisma, q.codigo, q.subtotal);
   });
 
   // Aviso de reabastecimiento (storefront): deja tu correo para un producto agotado.

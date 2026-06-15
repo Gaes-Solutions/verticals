@@ -52,6 +52,12 @@ export default function CheckoutPage() {
   const [estado, setEstado] = useState("");
   const [cp, setCp] = useState("");
   const [cupon, setCupon] = useState("");
+  const [cuponInfo, setCuponInfo] = useState<{
+    valido: boolean;
+    mensaje: string;
+    descuentoSubtotal: string;
+    envioGratis: boolean;
+  } | null>(null);
   const [direcciones, setDirecciones] = useState<DireccionGuardada[]>([]);
   const [guardarDir, setGuardarDir] = useState(false);
   const [config, setConfig] = useState<TiendaConfig | null>(null);
@@ -128,8 +134,27 @@ export default function CheckoutPage() {
   }, [cp, estado, subtotal]);
 
   const envioSeleccionado = opcionesEnvio.find((o) => o.tarifaId === tarifaId);
-  const costoEnvio = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
-  const total = subtotal + costoEnvio;
+  const costoEnvioBase = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
+  const cuponOk = cuponInfo?.valido ?? false;
+  const descuentoCupon = cuponOk ? Number(cuponInfo?.descuentoSubtotal ?? 0) : 0;
+  const costoEnvio = cuponOk && cuponInfo?.envioGratis ? 0 : costoEnvioBase;
+  const total = Math.max(0, subtotal - descuentoCupon) + costoEnvio;
+
+  async function aplicarCupon() {
+    if (!cupon.trim()) {
+      setCuponInfo(null);
+      return;
+    }
+    const r = (await fetch(
+      `/api/cupon?codigo=${encodeURIComponent(cupon.trim())}&subtotal=${subtotal}`,
+    ).then((x) => x.json())) as {
+      valido: boolean;
+      mensaje: string;
+      descuentoSubtotal: string;
+      envioGratis: boolean;
+    };
+    setCuponInfo(r);
+  }
   const conektaKey = process.env.NEXT_PUBLIC_CONEKTA_PUBLIC_KEY ?? "";
   // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
   const msiOfrecibles =
@@ -349,23 +374,47 @@ export default function CheckoutPage() {
         )}
 
         {config?.cuponEnCheckout && (
-          <label className="block">
+          <div>
             <span className="mb-1 block font-medium text-sm">¿Tienes un cupón?</span>
-            <input
-              value={cupon}
-              onChange={(e) => setCupon(e.target.value.toUpperCase())}
-              placeholder="CODIGO"
-              className="w-full rounded border px-3 py-2 uppercase"
-            />
-          </label>
+            <div className="flex gap-2">
+              <input
+                value={cupon}
+                onChange={(e) => {
+                  setCupon(e.target.value.toUpperCase());
+                  setCuponInfo(null);
+                }}
+                placeholder="CODIGO"
+                className="flex-1 rounded border px-3 py-2 uppercase"
+              />
+              <button
+                type="button"
+                onClick={aplicarCupon}
+                className="rounded-lg border border-marca px-4 py-2 font-medium text-marca text-sm hover:bg-marca/5"
+              >
+                Aplicar
+              </button>
+            </div>
+            {cuponInfo && (
+              <p className={`mt-1 text-sm ${cuponOk ? "text-emerald-600" : "text-red-600"}`}>
+                {cuponOk ? "✓ " : "✕ "}
+                {cuponInfo.mensaje}
+              </p>
+            )}
+          </div>
         )}
 
         <div className="border-t pt-4">
-          <div className="mb-1 flex justify-between text-sm text-gray-600">
+          <div className="mb-1 flex justify-between text-gray-600 text-sm">
             <span>Subtotal</span>
             <span>${subtotal.toFixed(2)}</span>
           </div>
-          <div className="mb-2 flex justify-between text-sm text-gray-600">
+          {descuentoCupon > 0 && (
+            <div className="mb-1 flex justify-between text-emerald-600 text-sm">
+              <span>Descuento ({cupon})</span>
+              <span>−${descuentoCupon.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="mb-2 flex justify-between text-gray-600 text-sm">
             <span>Envío</span>
             <span>{costoEnvio === 0 ? "Gratis" : `$${costoEnvio.toFixed(2)}`}</span>
           </div>

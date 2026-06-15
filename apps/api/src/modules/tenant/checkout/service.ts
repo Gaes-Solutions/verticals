@@ -6,6 +6,7 @@ import type { FastifyRequest } from "fastify";
 import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
 import { notificarCliente, notificarUsuariosConPermiso } from "../notificaciones/service.js";
 import { crearVenta } from "../ventas/service.js";
+import { evaluarCupon, registrarUsoCupon } from "./cupon-service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 
@@ -97,7 +98,22 @@ export async function iniciarCheckout(
       throw err;
     }
   }
-  const total = subtotal.plus(costoEnvio);
+  // Cupón (si el carrito trae uno válido): descuenta del subtotal o libera el envío.
+  let descuentoTotal = new Decimal(0);
+  const cuponesSnapshot: Array<Record<string, unknown>> = [];
+  if (carrito.cuponCodigo) {
+    const ev = await evaluarCupon(client, carrito.cuponCodigo, subtotal.toNumber());
+    if (ev.valido) {
+      descuentoTotal = new Decimal(ev.descuentoSubtotal);
+      if (ev.envioGratis) costoEnvio = new Decimal(0);
+      cuponesSnapshot.push({
+        codigo: ev.codigo,
+        descuento: ev.descuentoSubtotal,
+        envioGratis: ev.envioGratis,
+      });
+    }
+  }
+  const total = Decimal.max(new Decimal(0), subtotal.minus(descuentoTotal)).plus(costoEnvio);
 
   const folioPublico = await nextFolioPublico(client);
   const pedido = await client.pedidoEcommerce.create({
@@ -108,6 +124,8 @@ export async function iniciarCheckout(
       emailComprador: input.emailComprador,
       items: carrito.items as object,
       subtotal: subtotal.toFixed(4),
+      descuentoTotal: descuentoTotal.toFixed(4),
+      ...(cuponesSnapshot.length ? { cuponesSnapshot: cuponesSnapshot as object } : {}),
       costoEnvio: costoEnvio.toFixed(4),
       total: total.toFixed(4),
       moneda: carrito.moneda,
@@ -159,6 +177,10 @@ export async function iniciarCheckout(
     where: { id: pedido.id },
     data: { paymentIntentId: intent.intentId },
   });
+
+  if (cuponesSnapshot.length && carrito.cuponCodigo) {
+    await registrarUsoCupon(client, carrito.cuponCodigo);
+  }
 
   return {
     pedidoId: pedido.id,

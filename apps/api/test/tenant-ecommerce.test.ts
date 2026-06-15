@@ -1403,3 +1403,65 @@ describe("Tanda 6: aviso de reabastecimiento (avísame cuando haya stock)", () =
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("Tienda 100%: cupón aplicado en el checkout", () => {
+  it("valida cupón y descuenta el total real del pedido", async () => {
+    const tc = getTenantClient(TENANT_SLUG);
+    await tc.cuponTenant.create({
+      data: {
+        codigo: "DESC10",
+        nombre: "10% off",
+        tipo: "porcentaje",
+        valor: "10",
+        isActive: true,
+      },
+    });
+
+    // Validación en vivo (endpoint público).
+    const val = await app.inject({
+      method: "GET",
+      url: "/t/tienda/cupon?codigo=DESC10&subtotal=299",
+      headers: auth(ownerToken),
+    });
+    expect(val.json()).toMatchObject({ valido: true, descuentoSubtotal: "29.90" });
+
+    // Carrito con cupón → checkout aplica el descuento al total.
+    const cart = await app.inject({
+      method: "POST",
+      url: "/t/tienda",
+      headers: auth(ownerToken),
+      payload: {
+        sessionIdAnonimo: "sess-cupon",
+        canal: "web",
+        items: [{ varianteId, cantidad: 1 }],
+        cuponCodigo: "DESC10",
+      },
+    });
+    const ini = await app.inject({
+      method: "POST",
+      url: "/t/checkout/iniciar",
+      headers: auth(ownerToken),
+      payload: {
+        carritoId: cart.json().id,
+        emailComprador: "cupon@test.mx",
+        metodoPago: "tarjeta",
+        proveedorPago: "mock",
+        metodoEnvio: "click_collect",
+        sucursalPickupId: sucursalId,
+      },
+    });
+    expect(ini.statusCode).toBe(201);
+    // 299 − 10% = 269.10 (sin envío en pickup)
+    expect(Number(ini.json().total)).toBeCloseTo(269.1, 1);
+  });
+
+  it("cupón inválido → valido:false sin romper", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/tienda/cupon?codigo=NOEXISTE&subtotal=100",
+      headers: auth(ownerToken),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().valido).toBe(false);
+  });
+});
