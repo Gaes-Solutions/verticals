@@ -45,7 +45,7 @@ es **post-lanzamiento**.
 | A6 | Migraciones en prod + provisioning de tenant automatizado | ✅ script (⚠️ correr en prod) | `gaes-migrate tenant onboard <slug> -n "Negocio" -e dueño@correo` hace alta end-to-end (schema+migrations+defaults+usuario dueño, idempotente). Falta correrlo en el servidor real. |
 | A7 | Backups automáticos Postgres → Backblaze B2 + **restauración probada** | ❌ 🔑 | Crítico antes de datos reales. |
 | A8 | Monitoring: Sentry (errores) | ✅ código (⚠️ DSN) | Cableado en API (`observability/sentry.ts`, no-op sin `SENTRY_DSN`). Falta 🔑 cuenta Sentry + DSN. Uptime/logs aún pendientes. |
-| A9 | CI/CD deploy (hoy hay `main.yml`/`pr.yml` de tests) | ⚠️ | Falta el step de deploy a Coolify. |
+| A9 | CI/CD deploy | ✅ código (⚠️ vars) | `main.yml` buildea+publica las 5 imágenes a GHCR (matriz) y dispara webhook de Coolify. Falta 🔑 configurar var `COOLIFY_WEBHOOK_URL` + secret `COOLIFY_WEBHOOK_TOKEN` en GitHub (y que el server exista). |
 
 ## B. Integraciones reales (hoy todo es **mock-first**)
 

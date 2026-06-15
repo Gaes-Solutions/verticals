@@ -11,17 +11,20 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/api
 
 jobs:
   build-and-push:
-    name: Build + push imagen API a GHCR
+    name: Build + push ${{ matrix.app }} → GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    outputs:
-      image-tag: ${{ steps.meta.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cada app se buildea desde apps/<app>/Dockerfile y se publica como
+        # ghcr.io/<repo>/<app>:<latest|sha>. Coincide con docker-compose.prod.yml.
+        app: [api, web-tienda, web-admin, web-pos, web-superadmin]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +43,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}
           tags: |
             type=raw,value=latest
             type=sha,format=short
@@ -49,13 +52,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: apps/${{ matrix.app }}/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   notify-coolify:
     name: Trigger Coolify deploy webhook
