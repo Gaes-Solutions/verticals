@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_PERMISSIONS,
   PERMISSIONS,
+  categoryArea,
   isKnownPermission,
+  listPermissionsByArea,
   listPermissionsByCategory,
   permissionMeta,
 } from "./catalog.js";
@@ -67,5 +69,26 @@ describe("catalog", () => {
   it("sin vertical devuelve TODO el catálogo", () => {
     const todo = listPermissionsByCategory();
     expect(Object.values(todo).flat().length).toBe(ALL_PERMISSIONS.length);
+  });
+
+  it("categoryArea clasifica por área", () => {
+    expect(categoryArea("ventas")).toBe("general");
+    expect(categoryArea("ecommerce")).toBe("tienda");
+    expect(categoryArea("recargas")).toBe("abarrotes");
+    expect(categoryArea("pacientes")).toBe("salud");
+    expect(categoryArea("despacho")).toBe("despacho");
+  });
+
+  it("listPermissionsByArea: muestra TODO (mezclable) y marca aplica por vertical", () => {
+    const areas = listPermissionsByArea("retail_mayoreo");
+    const total = areas.flatMap((a) => a.categorias.flatMap((c) => c.permisos)).length;
+    expect(total).toBe(ALL_PERMISSIONS.length); // no oculta nada → se puede mezclar
+
+    const salud = areas.find((a) => a.area === "salud");
+    const general = areas.find((a) => a.area === "general");
+    expect(salud?.aplica).toBe(false); // un retail puede mezclar salud, pero no aplica por defecto
+    expect(general?.aplica).toBe(true);
+    // las áreas que aplican van primero
+    expect(areas[0]?.aplica).toBe(true);
   });
 });

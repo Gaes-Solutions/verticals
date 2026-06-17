@@ -1,12 +1,16 @@
 export {
   ALL_PERMISSIONS,
+  AREA_LABEL,
   PERMISSIONS,
+  areaAppliesToVertical,
   categoryAppliesToVertical,
+  categoryArea,
   isKnownPermission,
+  listPermissionsByArea,
   listPermissionsByCategory,
   permissionMeta,
 } from "./catalog.js";
-export type { PermissionCode, PermissionMeta } from "./catalog.js";
+export type { AreaNegocio, AreaPermisos, PermissionCode, PermissionMeta } from "./catalog.js";
 
 export {
   PermissionDeniedError,

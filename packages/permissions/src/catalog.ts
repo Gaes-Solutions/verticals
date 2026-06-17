@@ -666,3 +666,75 @@ export function listPermissionsByCategory(vertical?: string): Record<string, Per
 export function isKnownPermission(value: string): value is PermissionCode {
   return (ALL_PERMISSIONS as ReadonlyArray<string>).includes(value);
 }
+
+// ── Áreas de negocio (para agrupar y mezclar roles por vertical) ─────────────
+
+export type AreaNegocio = "general" | "tienda" | "abarrotes" | "salud" | "despacho";
+
+export const AREA_LABEL: Record<AreaNegocio, string> = {
+  general: "General (cualquier negocio)",
+  tienda: "Tienda y comercio",
+  abarrotes: "Abarrotes",
+  salud: "Salud / clínica",
+  despacho: "Despacho contable",
+};
+
+/** Área a la que pertenece una categoría de permisos. */
+export function categoryArea(category: string): AreaNegocio {
+  const verts = CATEGORY_VERTICALS[category];
+  if (!verts) return "general";
+  if (verts.some((v) => v.startsWith("salud_"))) return "salud";
+  if (verts.includes("despacho_contable")) return "despacho";
+  if (verts.length === 1 && verts[0] === "abarrotes") return "abarrotes";
+  return "tienda";
+}
+
+/** ¿El área aplica al vertical del negocio? (general aplica siempre). */
+export function areaAppliesToVertical(area: AreaNegocio, vertical: string | undefined): boolean {
+  if (area === "general") return true;
+  if (!vertical) return true;
+  if (area === "tienda") return vertical === "retail_mayoreo" || vertical === "abarrotes";
+  if (area === "abarrotes") return vertical === "abarrotes";
+  if (area === "salud") return vertical === "salud_vet" || vertical === "salud_humana";
+  if (area === "despacho") return vertical === "despacho_contable";
+  return true;
+}
+
+export interface AreaPermisos {
+  area: AreaNegocio;
+  label: string;
+  /** True si el área corresponde al vertical del negocio (se expande por defecto). */
+  aplica: boolean;
+  categorias: Array<{ categoria: string; permisos: PermissionMeta[] }>;
+}
+
+/**
+ * Catálogo COMPLETO de permisos agrupado por área de negocio (sin ocultar nada),
+ * marcando qué áreas aplican al vertical del tenant. Permite construir roles que
+ * MEZCLEN permisos de varias verticales (ej. una tienda que también da servicio
+ * de salud). Las áreas que aplican van primero.
+ */
+export function listPermissionsByArea(vertical?: string): AreaPermisos[] {
+  const porCategoria = listPermissionsByCategory(); // todas, sin filtrar
+  const buckets = new Map<AreaNegocio, Array<{ categoria: string; permisos: PermissionMeta[] }>>();
+  for (const [categoria, permisos] of Object.entries(porCategoria)) {
+    const area = categoryArea(categoria);
+    const arr = buckets.get(area) ?? [];
+    arr.push({ categoria, permisos });
+    buckets.set(area, arr);
+  }
+  const orden: AreaNegocio[] = ["general", "tienda", "abarrotes", "salud", "despacho"];
+  const areas: AreaPermisos[] = [];
+  for (const area of orden) {
+    const categorias = buckets.get(area);
+    if (!categorias) continue;
+    areas.push({
+      area,
+      label: AREA_LABEL[area],
+      aplica: areaAppliesToVertical(area, vertical),
+      categorias,
+    });
+  }
+  // Las áreas que aplican al negocio primero; el resto (para mezclar) después.
+  return areas.sort((a, b) => Number(b.aplica) - Number(a.aplica));
+}
