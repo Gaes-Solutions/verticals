@@ -14,3 +14,6 @@ export const tenantLoginBodySchema = z.object({
 });
 
 export type TenantLoginBody = z.infer<typeof tenantLoginBodySchema>;
+
+export const tenantMfaCodeSchema = z.object({ code: z.string().min(6).max(14) });
+export const tenantMfaDisableSchema = z.object({ password: z.string().min(1) });

@@ -86,13 +86,11 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
     const body = perfilUpsertSchema.parse(req.body);
     const medico = await req.tenantPrisma.medico.findUnique({ where: { id: body.medicoIdLocal } });
     if (!medico) {
-      return reply
-        .code(404)
-        .send({
-          statusCode: 404,
-          error: "Not Found",
-          message: "Médico no encontrado en el tenant",
-        });
+      return reply.code(404).send({
+        statusCode: 404,
+        error: "Not Found",
+        message: "Médico no encontrado en el tenant",
+      });
     }
     try {
       const tenantId = await resolverTenantId(app, req.tenantSlug);

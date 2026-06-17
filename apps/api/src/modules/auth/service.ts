@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { type AdminUser, type MasterPrismaClient, masterPrisma } from "@gaespos/db";
 import { verify as verifyArgon2 } from "@node-rs/argon2";
 import { authenticator } from "otplib";
+import { consumeBackupCode, generateBackupCodes, hashBackupCodes } from "../../lib/mfa-backup.js";
 
 const REFRESH_TOKEN_BYTES = 48;
 const TOTP_ISSUER = "GaesSoft Admin";
@@ -44,6 +45,35 @@ export async function markMfaVerified(
     where: { id: adminUserId },
     data: { mfaVerifiedAt: new Date() },
   });
+}
+
+/** Genera y guarda nuevos códigos de respaldo; devuelve los códigos en claro (mostrar 1 vez). */
+export async function resetAdminBackupCodes(
+  adminUserId: string,
+  client: MasterPrismaClient = masterPrisma,
+): Promise<string[]> {
+  const plain = generateBackupCodes();
+  const hashed = await hashBackupCodes(plain);
+  await client.adminUser.update({
+    where: { id: adminUserId },
+    data: { mfaBackupCodes: hashed },
+  });
+  return plain;
+}
+
+/** Intenta consumir un código de respaldo; si acierta lo invalida y devuelve true. */
+export async function consumeAdminBackupCode(
+  admin: AdminUser,
+  code: string,
+  client: MasterPrismaClient = masterPrisma,
+): Promise<boolean> {
+  const { ok, remaining } = await consumeBackupCode(admin.mfaBackupCodes, code);
+  if (!ok) return false;
+  await client.adminUser.update({
+    where: { id: admin.id },
+    data: { mfaBackupCodes: remaining },
+  });
+  return true;
 }
 
 export function hashRefreshToken(plaintext: string): string {

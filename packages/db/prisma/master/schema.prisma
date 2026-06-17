@@ -12,6 +12,24 @@ datasource db {
   url      = env("DATABASE_URL_MASTER")
 }
 
+// Roles predefinidos gobernados por el SUPERADMIN, por vertical (o "todas").
+// Se replican (mirror) como roles isPreset en el schema de cada tenant cuya
+// vertical coincida; editar aquí propaga el cambio a todos (vínculo vivo).
+model RolePlantilla {
+  id          String   @id @default(cuid())
+  vertical    String // TenantVertical (valor) o "todas"
+  codigo      String
+  nombre      String
+  descripcion String?
+  permisos    String[] @default([])
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([vertical, codigo])
+  @@map("role_plantillas")
+}
+
 // Plan de subscripción (Hito 0 mínimo, se expande con billing/coupons en Hito 6)
 model Plan {
   id          String   @id @default(cuid())
@@ -117,6 +135,7 @@ model AdminUser {
   active       Boolean    @default(true)
   mfaSecret    String?    @map("mfa_secret")
   mfaVerifiedAt DateTime? @map("mfa_verified_at")
+  mfaBackupCodes String[] @default([]) @map("mfa_backup_codes")
   lastLoginAt  DateTime?  @map("last_login_at")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")

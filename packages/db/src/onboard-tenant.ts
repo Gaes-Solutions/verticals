@@ -2,12 +2,14 @@ import { randomBytes } from "node:crypto";
 import { hash as argon2Hash } from "@node-rs/argon2";
 import { createTenant } from "./cli/tenant.js";
 import { masterPrisma } from "./client.js";
+import { aplicarPlantillasATenant } from "./role-plantilla-sync.js";
 import { getTenantClient } from "./tenant-client.js";
 
 export interface OnboardTenantInput {
   slug: string;
   name: string;
   planCode?: string;
+  vertical?: string;
   ownerEmail: string;
   ownerPassword?: string;
   ownerNombre?: string;
@@ -69,11 +71,16 @@ export async function onboardTenant(input: OnboardTenantInput): Promise<OnboardT
       slug: input.slug,
       name: input.name,
       planCode: input.planCode ?? "free",
+      ...(input.vertical ? { vertical: input.vertical } : {}),
     });
     tenantCreado = true;
   } else {
     console.info(`[onboard] tenant "${input.slug}" ya existe; solo aseguro el usuario dueño.`);
   }
+
+  // Refleja los roles predefinidos (plantillas del superadmin) de su vertical.
+  const vertical = input.vertical ?? existente?.vertical ?? null;
+  await aplicarPlantillasATenant(input.slug, vertical);
 
   const passwordGenerada = input.ownerPassword ? null : generarPassword();
   const password = input.ownerPassword ?? (passwordGenerada as string);

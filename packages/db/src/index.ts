@@ -78,3 +78,13 @@ export type {
   SeedTenantDefaultsOptions,
   SeedTenantDefaultsResult,
 } from "./seed-tenant.js";
+export { onboardTenant } from "./onboard-tenant.js";
+export type { OnboardTenantInput, OnboardTenantResult } from "./onboard-tenant.js";
+export { seedRolePlantillas } from "./seed-role-plantillas.js";
+export type { SeedRolePlantillasResult } from "./seed-role-plantillas.js";
+export {
+  aplicarPlantillasATenant,
+  plantillasParaVertical,
+  propagarPlantilla,
+  propagarEliminacionPlantilla,
+} from "./role-plantilla-sync.js";

@@ -17,6 +17,7 @@ export interface CreateTenantOptions {
   slug: string;
   name: string;
   planCode: string;
+  vertical?: string;
 }
 
 export async function createTenant(opts: CreateTenantOptions): Promise<void> {
@@ -39,6 +40,7 @@ export async function createTenant(opts: CreateTenantOptions): Promise<void> {
       schemaName,
       planId: plan.id,
       status: "trial",
+      ...(opts.vertical ? { vertical: opts.vertical as never } : {}),
     },
   });
   console.info(`[tenant create] master row id=${tenant.id}`);

@@ -1,7 +1,26 @@
-import { PERMISSIONS, listPermissionsByCategory } from "@gaespos/permissions";
+import {
+  type AreaNegocio,
+  PERMISSIONS,
+  PRESET_ROLES_RETAIL,
+  areaAppliesToVertical,
+  listPermissionsByArea,
+} from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
 import { rolCreateSchema, rolIdParamSchema, rolUpdateSchema } from "./schemas.js";
+
+// Área de negocio de cada rol preset (para agruparlos como plantillas).
+const PRESET_ROLE_AREA: Record<string, AreaNegocio> = {
+  dueno: "general",
+  gerente: "general",
+  contador_interno: "general",
+  cajero: "tienda",
+  vendedor: "tienda",
+  almacen: "tienda",
+  medico: "salud",
+  enfermera: "salud",
+  recepcion: "salud",
+};
 
 const rolesRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
@@ -12,15 +31,37 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
     return items;
   });
 
-  // Catálogo de permisos disponibles, agrupado por categoría y FILTRADO por la
-  // vertical del negocio (un retail no ve permisos de clínica/Doctoralia, etc.).
+  // Catálogo de permisos del dueño: SOLO los de su vertical (general + su área).
+  // El mezclado entre verticales es exclusivo del superadmin (roles predefinidos).
   app.get("/catalogo-permisos", async (req) => {
     req.requirePerm(PERMISSIONS.ROLES_LEER);
     const tenant = await app.masterPrisma.tenant.findUnique({
       where: { slug: req.tenantSlug },
       select: { vertical: true },
     });
-    return listPermissionsByCategory(tenant?.vertical ?? undefined);
+    const areas = listPermissionsByArea(tenant?.vertical ?? undefined).filter((a) => a.aplica);
+    return { verticalActual: tenant?.vertical ?? null, areas };
+  });
+
+  // Plantillas para que el dueño arranque un rol custom: SOLO las de su vertical
+  // (general + su área). Excluye el wildcard (dueño = acceso total).
+  app.get("/plantillas", async (req) => {
+    req.requirePerm(PERMISSIONS.ROLES_LEER);
+    const tenant = await app.masterPrisma.tenant.findUnique({
+      where: { slug: req.tenantSlug },
+      select: { vertical: true },
+    });
+    const vertical = tenant?.vertical ?? undefined;
+    return PRESET_ROLES_RETAIL.filter((r) => {
+      if ((r.permisos as readonly string[]).includes("*")) return false;
+      return areaAppliesToVertical(PRESET_ROLE_AREA[r.codigo] ?? "general", vertical);
+    }).map((r) => ({
+      codigo: r.codigo,
+      nombre: r.nombre,
+      descripcion: r.descripcion ?? null,
+      area: PRESET_ROLE_AREA[r.codigo] ?? "general",
+      permisos: r.permisos,
+    }));
   });
 
   app.get("/:id", async (req, reply) => {

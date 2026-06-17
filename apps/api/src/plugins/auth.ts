@@ -26,6 +26,14 @@ type TenantTokenPayload = {
   kind: "tenant";
 };
 
+// Token intermedio del usuario del negocio: password validada, falta el reto TOTP.
+type TenantMfaTokenPayload = {
+  sub: string;
+  email: string;
+  tenantSlug: string;
+  kind: "tenant_mfa";
+};
+
 type PatientTokenPayload = {
   sub: string;
   phoneE164: string;
@@ -61,6 +69,7 @@ type TokenPayload =
   | AdminTokenPayload
   | AdminMfaTokenPayload
   | TenantTokenPayload
+  | TenantMfaTokenPayload
   | PatientTokenPayload
   | AdminTenantTokenPayload
   | ClienteTokenPayload

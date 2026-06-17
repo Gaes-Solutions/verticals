@@ -147,6 +147,8 @@ model Usuario {
   telefono            String?
   mfaEnabled          Boolean     @default(false) @map("mfa_enabled")
   mfaSecret           String?     @map("mfa_secret")
+  mfaVerifiedAt       DateTime?   @map("mfa_verified_at")
+  mfaBackupCodes      String[]    @default([]) @map("mfa_backup_codes")
   tipoUsuario         UsuarioTipo @default(empleado) @map("tipo_usuario")
   languagePreferred   String      @default("es-MX") @map("language_preferred")
   isActive            Boolean     @default(true) @map("is_active")
@@ -223,6 +225,19 @@ model Usuario {
   @@index([isActive])
   @@index([tipoUsuario])
   @@map("usuarios")
+}
+
+// Política de seguridad del negocio (singleton). El 2FA es opt-in por usuario;
+// el dueño puede exigirlo a todo el equipo o a roles específicos. En verticales
+// de salud se fuerza ON por compliance (se evalúa en el login leyendo el vertical).
+model ConfigSeguridad {
+  id              String   @id @default(cuid())
+  require2faTodos Boolean  @default(false) @map("require_2fa_todos")
+  require2faRoles String[] @default([]) @map("require_2fa_roles")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("config_seguridad")
 }
 
 model UsuarioSucursal {

@@ -5,11 +5,13 @@ import type { Config } from "../../config.js";
 import { writeAudit } from "../../lib/audit.js";
 import { loginBodySchema } from "./schemas.js";
 import {
+  consumeAdminBackupCode,
   createRefreshToken,
   findActiveAdminByEmail,
   findValidRefreshToken,
   generateTotpSecret,
   markMfaVerified,
+  resetAdminBackupCodes,
   revokeRefreshToken,
   revokeRefreshTokenByPlaintext,
   setPendingMfaSecret,
@@ -21,7 +23,8 @@ import {
 const REFRESH_COOKIE_NAME = "gaespos_refresh";
 const MFA_TOKEN_TTL = "10m";
 
-const mfaCodeSchema = z.object({ code: z.string().min(6).max(8) });
+// TOTP de 6 dígitos o un código de respaldo (xxxx-xxxx).
+const mfaCodeSchema = z.object({ code: z.string().min(6).max(14) });
 
 const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => {
   const { config } = opts;
@@ -161,16 +164,18 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
       }
       await markMfaVerified(admin.id, app.masterPrisma);
+      const backupCodes = await resetAdminBackupCodes(admin.id, app.masterPrisma);
       await writeAudit(app.masterPrisma, {
         actor: admin.email,
         action: "admin.mfa_enrolled",
         ipAddress: req.ip,
       });
-      return issueSession(req, reply, admin);
+      const session = await issueSession(req, reply, admin);
+      return { ...session, backupCodes };
     },
   );
 
-  // Paso 2 (logins siguientes): verifica TOTP → sesión.
+  // Paso 2 (logins siguientes): verifica TOTP o un código de respaldo → sesión.
   app.post(
     "/mfa/verify",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
@@ -182,12 +187,50 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .send({ statusCode: 401, error: "Unauthorized", message: "Token MFA inválido" });
       }
       const { code } = mfaCodeSchema.parse(req.body);
-      if (!admin.mfaSecret || !admin.mfaVerifiedAt || !verifyTotpCode(code, admin.mfaSecret)) {
+      const enrolado = Boolean(admin.mfaSecret && admin.mfaVerifiedAt);
+      const totpOk = enrolado && admin.mfaSecret ? verifyTotpCode(code, admin.mfaSecret) : false;
+      const backupOk = enrolado
+        ? !totpOk && (await consumeAdminBackupCode(admin, code, app.masterPrisma))
+        : false;
+      if (!totpOk && !backupOk) {
         return reply
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
       }
+      if (backupOk) {
+        await writeAudit(app.masterPrisma, {
+          actor: admin.email,
+          action: "admin.mfa_backup_code_used",
+          ipAddress: req.ip,
+        });
+      }
       return issueSession(req, reply, admin);
+    },
+  );
+
+  // Regenera los códigos de respaldo (sesión activa). Invalida los anteriores.
+  app.post(
+    "/mfa/backup-codes/regenerate",
+    { preHandler: app.authenticateAdmin },
+    async (req, reply) => {
+      if (req.user.kind !== "admin") {
+        return reply
+          .code(401)
+          .send({ statusCode: 401, error: "Unauthorized", message: "Sesión inválida" });
+      }
+      const admin = await app.masterPrisma.adminUser.findUnique({ where: { id: req.user.sub } });
+      if (!admin || !admin.mfaVerifiedAt) {
+        return reply
+          .code(409)
+          .send({ statusCode: 409, error: "Conflict", message: "MFA no está activo" });
+      }
+      const backupCodes = await resetAdminBackupCodes(admin.id, app.masterPrisma);
+      await writeAudit(app.masterPrisma, {
+        actor: admin.email,
+        action: "admin.mfa_backup_regenerated",
+        ipAddress: req.ip,
+      });
+      return { backupCodes };
     },
   );
 

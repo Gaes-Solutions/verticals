@@ -194,6 +194,45 @@ describe("tenant CRUD — roles", () => {
     );
   });
 
+  it("catálogo agrupa por área y permite mezclar (no oculta otras verticales)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/roles/catalogo-permisos",
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { areas: Array<{ area: string; aplica: boolean }> };
+    const areas = body.areas.map((a) => a.area);
+    expect(areas).toEqual(expect.arrayContaining(["general", "tienda", "salud"]));
+    expect(body.areas[0]?.aplica).toBe(true);
+  });
+
+  it("plantillas de rol vienen etiquetadas por área (sin el wildcard)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/roles/plantillas",
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{ codigo: string; area: string }>;
+    expect(items.find((r) => r.codigo === "cajero")?.area).toBe("tienda");
+    expect(items.find((r) => r.codigo === "dueno")).toBeUndefined();
+  });
+
+  it("owner crea rol custom MEZCLANDO permisos de tienda + salud", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/roles",
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: {
+        codigo: "cajero-recepcion",
+        nombre: "Cajero + Recepción",
+        permisos: ["pos.usar", "ventas.crear", "citas.leer", "pacientes.leer"],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
   it("owner crea rol custom con permisos validados", async () => {
     const res = await app.inject({
       method: "POST",

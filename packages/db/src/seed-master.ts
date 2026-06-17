@@ -1,5 +1,6 @@
 import { hash } from "@node-rs/argon2";
 import { masterPrisma } from "./client.js";
+import { seedRolePlantillas } from "./seed-role-plantillas.js";
 
 /**
  * Planes V1 (Hito 6, modelo de negocio cerrado en sesión 2026-04-24).
@@ -216,6 +217,11 @@ async function main(): Promise<void> {
       `[seed-master] ⚠️  Admin password = "${adminPassword}" (set SEED_ADMIN_PASSWORD env to override)`,
     );
   }
+
+  const plantillas = await seedRolePlantillas();
+  console.info(
+    `[seed-master] role plantillas: ${plantillas.creadas} creadas, ${plantillas.actualizadas} actualizadas`,
+  );
 
   const totalPlans = await masterPrisma.plan.count();
   const totalTenants = await masterPrisma.tenant.count();

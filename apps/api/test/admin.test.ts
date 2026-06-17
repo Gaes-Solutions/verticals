@@ -1,9 +1,9 @@
-import { masterPrisma } from "@gaespos/db";
+import { getTenantClient, masterPrisma } from "@gaespos/db";
 import { hash as argon2Hash } from "@node-rs/argon2";
 import type { FastifyInstance } from "fastify";
 import { authenticator } from "otplib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildTestApp } from "./helpers.js";
+import { buildTestApp, cleanupTestTenants, createTestTenant } from "./helpers.js";
 
 const SUPER = { email: "super-admin@test.local", password: "ChangeMe!Super1" };
 const SUPPORT = { email: "support-admin@test.local", password: "ChangeMe!Supp1" };
@@ -272,5 +272,238 @@ describe("equipo (solo superadmin)", () => {
     });
     expect(mfa.statusCode).toBe(200);
     expect(mfa.json().ok).toBe(true);
+  });
+});
+
+describe("clientes / alta de tenants", () => {
+  const DUP_SLUG = "dup-tenant-test";
+
+  afterAll(async () => {
+    await masterPrisma.tenant.deleteMany({ where: { slug: DUP_SLUG } });
+  });
+
+  it("support NO puede crear cliente → 403", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/tenants",
+      headers: auth(supportToken),
+      payload: {
+        slug: "soporte-no-crea",
+        name: "Soporte No Crea",
+        planCode: "free",
+        ownerEmail: "x@test.local",
+      },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("superadmin lista clientes y planes", async () => {
+    const tenants = await app.inject({
+      method: "GET",
+      url: "/admin/tenants",
+      headers: auth(superToken),
+    });
+    expect(tenants.statusCode).toBe(200);
+    expect(Array.isArray(tenants.json())).toBe(true);
+
+    const planes = await app.inject({
+      method: "GET",
+      url: "/admin/tenants/planes",
+      headers: auth(superToken),
+    });
+    expect(planes.statusCode).toBe(200);
+    expect(Array.isArray(planes.json())).toBe(true);
+  });
+
+  it("plan inexistente → 400 (antes de tocar el onboarding)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/tenants",
+      headers: auth(superToken),
+      payload: {
+        slug: "zzz-plan-fantasma",
+        name: "Plan Fantasma",
+        planCode: "plan-que-no-existe",
+        ownerEmail: "x@test.local",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("slug duplicado → 409", async () => {
+    const plan = await masterPrisma.plan.findFirst({ where: { active: true } });
+    expect(plan).toBeTruthy();
+    await masterPrisma.tenant.create({
+      data: {
+        slug: DUP_SLUG,
+        name: "Dup Tenant",
+        schemaName: `tenant_${DUP_SLUG.replace(/-/g, "_")}`,
+        planId: (plan as { id: string }).id,
+        status: "trial",
+      },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/tenants",
+      headers: auth(superToken),
+      payload: {
+        slug: DUP_SLUG,
+        name: "Dup Tenant 2",
+        planCode: (plan as { code: string }).code,
+        ownerEmail: "x@test.local",
+      },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+});
+
+describe("superadmin — códigos de respaldo 2FA", () => {
+  const BK = { email: "backup-admin@test.local", password: "ChangeMe!Backup1" };
+  let bkId = "";
+  let backupCodes: string[] = [];
+
+  beforeAll(async () => {
+    await masterPrisma.adminUser.deleteMany({ where: { email: BK.email } });
+    const a = await masterPrisma.adminUser.create({
+      data: {
+        email: BK.email,
+        passwordHash: await argon2Hash(BK.password),
+        name: "Backup Admin",
+        role: "superadmin",
+      },
+    });
+    bkId = a.id;
+  });
+
+  afterAll(async () => {
+    if (bkId) await masterPrisma.adminUser.delete({ where: { id: bkId } }).catch(() => undefined);
+  });
+
+  it("al activar el MFA se entregan 10 códigos de respaldo", async () => {
+    const login = await app.inject({ method: "POST", url: "/auth/login", payload: BK });
+    const mfaToken = login.json().mfaToken as string;
+    const setup = await app.inject({
+      method: "POST",
+      url: "/auth/mfa/setup",
+      headers: auth(mfaToken),
+    });
+    const secret = setup.json().secret as string;
+    const activate = await app.inject({
+      method: "POST",
+      url: "/auth/mfa/activate",
+      headers: auth(mfaToken),
+      payload: { code: authenticator.generate(secret) },
+    });
+    expect(activate.statusCode).toBe(200);
+    backupCodes = activate.json().backupCodes as string[];
+    expect(backupCodes).toHaveLength(10);
+  });
+
+  it("login con un código de respaldo funciona y luego ese código ya no", async () => {
+    const code = backupCodes[0] as string;
+    const login = await app.inject({ method: "POST", url: "/auth/login", payload: BK });
+    const verify = await app.inject({
+      method: "POST",
+      url: "/auth/mfa/verify",
+      headers: auth(login.json().mfaToken as string),
+      payload: { code },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json().accessToken).toBeTruthy();
+
+    const login2 = await app.inject({ method: "POST", url: "/auth/login", payload: BK });
+    const reuse = await app.inject({
+      method: "POST",
+      url: "/auth/mfa/verify",
+      headers: auth(login2.json().mfaToken as string),
+      payload: { code },
+    });
+    expect(reuse.statusCode).toBe(401);
+  });
+});
+
+describe("roles predefinidos (superadmin, por vertical + vínculo vivo)", () => {
+  const SLUG = "test-plantillas";
+  const codigos: string[] = [];
+
+  beforeAll(async () => {
+    await cleanupTestTenants();
+    await createTestTenant(SLUG);
+    await masterPrisma.tenant.update({
+      where: { slug: SLUG },
+      data: { vertical: "retail_mayoreo" as never },
+    });
+  });
+
+  afterAll(async () => {
+    await masterPrisma.rolePlantilla.deleteMany({ where: { codigo: { in: codigos } } });
+    await cleanupTestTenants();
+  });
+
+  it("lista verticales y catálogo completo (mezclable)", async () => {
+    const v = await app.inject({
+      method: "GET",
+      url: "/admin/roles-plantilla/verticales",
+      headers: auth(superToken),
+    });
+    expect(v.statusCode).toBe(200);
+    expect((v.json() as Array<{ value: string }>).map((x) => x.value)).toContain("salud_vet");
+
+    const cat = await app.inject({
+      method: "GET",
+      url: "/admin/roles-plantilla/catalogo-permisos",
+      headers: auth(superToken),
+    });
+    expect(cat.statusCode).toBe(200);
+    const areas = (cat.json() as Array<{ area: string }>).map((a) => a.area);
+    expect(areas).toEqual(expect.arrayContaining(["general", "tienda", "salud"]));
+  });
+
+  it("support NO puede crear rol predefinido (403)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/roles-plantilla",
+      headers: auth(supportToken),
+      payload: { vertical: "retail_mayoreo", codigo: "x", nombre: "X", permisos: [] },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("superadmin crea un rol predefinido y se PROPAGA a tenants de esa vertical", async () => {
+    const codigo = "promotor-test";
+    codigos.push(codigo);
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/roles-plantilla",
+      headers: auth(superToken),
+      payload: {
+        vertical: "retail_mayoreo",
+        codigo,
+        nombre: "Promotor",
+        permisos: ["pos.usar", "ventas.crear"],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().tenantsAfectados).toBeGreaterThanOrEqual(1);
+
+    // vínculo vivo: el rol aparece como preset en el schema del tenant retail
+    const rol = await getTenantClient(SLUG).rol.findUnique({ where: { codigo } });
+    expect(rol?.isPreset).toBe(true);
+    expect(rol?.permisos).toEqual(["pos.usar", "ventas.crear"]);
+  });
+
+  it("rechaza permiso desconocido (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/roles-plantilla",
+      headers: auth(superToken),
+      payload: {
+        vertical: "retail_mayoreo",
+        codigo: "malo-test",
+        nombre: "Malo",
+        permisos: ["permiso.que.no.existe"],
+      },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
