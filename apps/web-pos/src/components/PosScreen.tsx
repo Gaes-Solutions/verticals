@@ -1,3 +1,4 @@
+import { CheckCircle2, Printer, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "../App.js";
 import { ApiError, api, puede } from "../lib/api.js";
@@ -292,7 +293,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                         onClick={() => quitarLinea(l.varianteId)}
                         className="text-slate-300 hover:text-red-500"
                       >
-                        ✕
+                        <X size={16} />
                       </button>
                     </div>
                   ))
@@ -419,7 +420,7 @@ function TicketResultado({
       await api(`/t/ventas/${venta.id}/cfdi/emitir`, {
         body: { formaPago: "01", usoCfdi: "G03" },
       });
-      setCfdiMsg("✓ CFDI emitido y enviado");
+      setCfdiMsg("CFDI emitido y enviado");
     } catch (err) {
       setCfdiMsg(
         err instanceof ApiError && err.status === 409
@@ -435,7 +436,7 @@ function TicketResultado({
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="mb-2 text-5xl">✓</div>
+      <CheckCircle2 size={56} className="mb-2 text-emerald-500" />
       <h2 className="text-xl font-bold text-slate-800">Venta registrada</h2>
       <p className="mb-1 text-slate-500">Folio {venta.folio}</p>
       <p className="mb-6 text-3xl font-bold text-brand">
@@ -446,9 +447,9 @@ function TicketResultado({
         <button
           type="button"
           onClick={() => window.print()}
-          className="rounded-lg border border-brand px-5 py-3 font-semibold text-brand hover:bg-teal-50"
+          className="flex items-center gap-1.5 rounded-lg border border-brand px-5 py-3 font-semibold text-brand hover:bg-teal-50"
         >
-          🖨️ Imprimir
+          <Printer size={18} /> Imprimir
         </button>
         <button
           type="button"

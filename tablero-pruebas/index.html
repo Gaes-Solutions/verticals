@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GaesSoft · Tablero de pruebas</title>
+    <style>
+      :root { --brand:#0d9488; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg); color: var(--ink); padding: 16px; }
+      h1 { font-size: 1.4rem; margin: 0 0 2px; }
+      .sub { color: var(--muted); font-size: .85rem; margin: 0 0 16px; }
+      h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+        margin: 22px 0 8px; }
+      .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+      .card h3 { margin:0 0 2px; font-size:1.05rem; }
+      .tag { display:inline-block; background:#ecfeff; color:#0e7490; border-radius:999px;
+        padding:2px 8px; font-size:.72rem; margin-left:6px; vertical-align:middle; }
+      .open { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+      a.btn, button.btn { flex:1 1 auto; min-height:46px; display:flex; align-items:center; justify-content:center;
+        gap:6px; border-radius:10px; font-weight:600; font-size:.95rem; text-decoration:none; border:0;
+        cursor:pointer; padding:0 14px; }
+      a.btn { background:var(--brand); color:#fff; }
+      a.btn.alt { background:#fff; color:var(--brand); border:1.5px solid var(--brand); }
+      .row { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px dashed var(--line); }
+      .row:first-of-type { border-top:0; }
+      .lab { width:64px; color:var(--muted); font-size:.78rem; flex:none; }
+      .val { flex:1; font-family: ui-monospace, monospace; font-size:.9rem; word-break:break-all; }
+      .copy { flex:none; min-width:74px; min-height:38px; border-radius:8px; border:1.5px solid var(--brand);
+        background:#fff; color:var(--brand); font-weight:600; font-size:.82rem; cursor:pointer; }
+      .copy.ok { background:var(--brand); color:#fff; }
+      .note { font-size:.78rem; color:var(--muted); margin-top:8px; }
+      .warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px;
+        padding:10px; font-size:.82rem; margin-bottom:14px; }
+    </style>
+  </head>
+  <body>
+    <h1>GaesSoft · Tablero de pruebas</h1>
+    <p class="sub">Toca <b>Abrir</b> para entrar a cada app. Toca <b>Copiar</b> para la contraseña.</p>
+    <div class="warn">📶 El celular debe estar en la <b>misma red WiFi</b> que la PC (192.168.1.105).</div>
+
+    <h2>Superadmin (tú)</h2>
+    <div class="card">
+      <h3>🧩 Panel de plataforma</h3>
+      <div class="open">
+        <a class="btn" href="http://192.168.1.105:5176" target="_blank" rel="noopener">Abrir superadmin →</a>
+      </div>
+      <div class="row"><span class="lab">Correo</span><span class="val" id="sa-mail">admin@gaessoft.local</span><button class="copy" data-copy="sa-mail">Copiar</button></div>
+      <div class="row"><span class="lab">Clave</span><span class="val" id="sa-pass">ChangeMe!2026</span><button class="copy" data-copy="sa-pass">Copiar</button></div>
+      <p class="note">+ código de 6 dígitos de tu app autenticadora. Luego: menú <b>🧩 Roles predefinidos</b>.</p>
+    </div>
+
+    <h2>Comprador</h2>
+    <div class="card">
+      <h3>🛍️ Tienda online <span class="tag">Globoland</span></h3>
+      <div class="open">
+        <a class="btn" href="http://192.168.1.105:3001" target="_blank" rel="noopener">Abrir tienda →</a>
+      </div>
+      <p class="note">Catálogo público; puedes registrarte como comprador y hacer un pedido.</p>
+    </div>
+
+    <h2>Negocios — panel del dueño y POS</h2>
+    <div id="negocios"></div>
+
+    <p class="note" style="text-align:center;margin-top:18px">
+      Contraseña de todos los dueños demo: <b>Demo!2026</b>
+    </p>
+
+    <script>
+      var PASS = "Demo!2026";
+      var NEGOCIOS = [
+        { nombre: "Globoland", vertical: "Tienda", slug: "globoland", email: "osmar@gmial.com" },
+        { nombre: "Ferretería López", vertical: "Tienda", slug: "ferreteria-lopez", email: "dueno@ferrelopez.mx" },
+        { nombre: "Abarrotes Don Chuy", vertical: "Abarrotes", slug: "abarrotes-don-chuy", email: "dueno@abarrotesdonchuy.mx" },
+        { nombre: "Boutique Bella", vertical: "Tienda", slug: "boutique-bella", email: "dueno@boutiquebella.mx" },
+        { nombre: "Clínica Vet Patitas", vertical: "Veterinaria", slug: "clinica-vet-patitas", email: "dueno@vetpatitas.mx" }
+      ];
+      var IP = "192.168.1.105";
+
+      function copyText(text, btn) {
+        function done() { btn.classList.add("ok"); btn.textContent = "✓"; setTimeout(function(){ btn.classList.remove("ok"); btn.textContent = "Copiar"; }, 1200); }
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(done, function(){ fallback(text, done); });
+        } else { fallback(text, done); }
+      }
+      function fallback(text, done) {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try { document.execCommand("copy"); done(); } catch (e) { window.prompt("Copia manual:", text); }
+        document.body.removeChild(ta);
+      }
+
+      var cont = document.getElementById("negocios");
+      NEGOCIOS.forEach(function (n, i) {
+        var adminUrl = "http://" + IP + ":5174/?negocio=" + n.slug;
+        var posUrl = "http://" + IP + ":5173/?negocio=" + n.slug;
+        var mailId = "m" + i, passId = "p" + i;
+        var html =
+          '<div class="card">' +
+            '<h3>🏪 ' + n.nombre + ' <span class="tag">' + n.vertical + '</span></h3>' +
+            '<div class="open">' +
+              '<a class="btn" href="' + adminUrl + '" target="_blank" rel="noopener">Abrir panel (dueño) →</a>' +
+              '<a class="btn alt" href="' + posUrl + '" target="_blank" rel="noopener">Abrir POS (cajero) →</a>' +
+            '</div>' +
+            '<div class="row"><span class="lab">Correo</span><span class="val" id="' + mailId + '">' + n.email + '</span><button class="copy" data-copy="' + mailId + '">Copiar</button></div>' +
+            '<div class="row"><span class="lab">Clave</span><span class="val" id="' + passId + '">' + PASS + '</span><button class="copy" data-copy="' + passId + '">Copiar</button></div>' +
+          '</div>';
+        cont.insertAdjacentHTML("beforeend", html);
+      });
+
+      document.addEventListener("click", function (e) {
+        var btn = e.target.closest(".copy");
+        if (!btn) return;
+        var el = document.getElementById(btn.getAttribute("data-copy"));
+        if (el) copyText(el.textContent.trim(), btn);
+      });
+    </script>
+  </body>
+</html>

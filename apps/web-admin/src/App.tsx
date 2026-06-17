@@ -1,3 +1,22 @@
+import {
+  BarChart3,
+  FileText,
+  type LucideIcon,
+  Menu,
+  MessageCircleQuestion,
+  Package,
+  PackageCheck,
+  Receipt,
+  RotateCcw,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Star,
+  Tags,
+  Truck,
+  Upload,
+  Users,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
@@ -14,6 +33,7 @@ import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
+import { SeguridadPage } from "./pages/SeguridadPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
 import { UsuariosRolesPage } from "./pages/UsuariosRolesPage.js";
 import { VentasPage } from "./pages/VentasPage.js";
@@ -38,24 +58,26 @@ type Seccion =
   | "compras"
   | "cfdi"
   | "usuarios"
+  | "seguridad"
   | "tienda";
 
-const NAV: { key: Seccion; label: string; icon: string }[] = [
-  { key: "dashboard", label: "Resumen", icon: "📊" },
-  { key: "reportes", label: "Reportes", icon: "📈" },
-  { key: "productos", label: "Productos", icon: "📦" },
-  { key: "inventario", label: "Inventario", icon: "🏷️" },
-  { key: "importador", label: "Carga masiva", icon: "⬆️" },
-  { key: "compras", label: "Compras (OC)", icon: "🧾" },
-  { key: "ventas", label: "Ventas", icon: "🧾" },
-  { key: "pedidos", label: "Pedidos online", icon: "📬" },
-  { key: "devoluciones", label: "Devoluciones", icon: "↩️" },
-  { key: "envios", label: "Envíos", icon: "🚚" },
-  { key: "resenas", label: "Reseñas", icon: "⭐" },
-  { key: "preguntas", label: "Preguntas", icon: "❓" },
-  { key: "cfdi", label: "Facturación", icon: "🧾" },
-  { key: "usuarios", label: "Usuarios y permisos", icon: "👥" },
-  { key: "tienda", label: "Tienda online", icon: "🛒" },
+const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
+  { key: "dashboard", label: "Resumen", icon: BarChart3 },
+  { key: "reportes", label: "Reportes", icon: BarChart3 },
+  { key: "productos", label: "Productos", icon: Package },
+  { key: "inventario", label: "Inventario", icon: Tags },
+  { key: "importador", label: "Carga masiva", icon: Upload },
+  { key: "compras", label: "Compras (OC)", icon: ShoppingBag },
+  { key: "ventas", label: "Ventas", icon: Receipt },
+  { key: "pedidos", label: "Pedidos online", icon: PackageCheck },
+  { key: "devoluciones", label: "Devoluciones", icon: RotateCcw },
+  { key: "envios", label: "Envíos", icon: Truck },
+  { key: "resenas", label: "Reseñas", icon: Star },
+  { key: "preguntas", label: "Preguntas", icon: MessageCircleQuestion },
+  { key: "cfdi", label: "Facturación", icon: FileText },
+  { key: "usuarios", label: "Usuarios y permisos", icon: Users },
+  { key: "seguridad", label: "Seguridad", icon: ShieldCheck },
+  { key: "tienda", label: "Tienda online", icon: ShoppingCart },
 ];
 
 export function App() {
@@ -107,7 +129,7 @@ export function App() {
             aria-label="Menú"
             className="rounded p-2 hover:bg-slate-800"
           >
-            ☰
+            <Menu size={22} />
           </button>
         </div>
       </header>
@@ -138,7 +160,7 @@ export function App() {
                 seccion === n.key ? "bg-brand text-white" : "text-slate-300 hover:bg-slate-800"
               }`}
             >
-              <span>{n.icon}</span>
+              <n.icon size={18} strokeWidth={1.75} className="shrink-0" />
               {n.label}
             </button>
           ))}
@@ -167,6 +189,7 @@ export function App() {
         {seccion === "compras" && <ComprasPage />}
         {seccion === "cfdi" && <CfdiPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
+        {seccion === "seguridad" && <SeguridadPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "pedidos" && <PedidosPage />}
         {seccion === "devoluciones" && <DevolucionesPage />}

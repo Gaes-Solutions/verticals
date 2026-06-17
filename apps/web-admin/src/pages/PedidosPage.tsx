@@ -1,3 +1,4 @@
+import { MapPin, Settings, Store, Tag, Truck, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ChatPedido } from "../components/ChatPedido.js";
 import { ApiError, api, getUserId, puede } from "../lib/api.js";
@@ -119,9 +120,9 @@ export function PedidosPage() {
             <button
               type="button"
               onClick={() => setEditorAbierto(true)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-slate-600 text-sm hover:bg-slate-50"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-slate-600 text-sm hover:bg-slate-50"
             >
-              ⚙ Personalizar estados
+              <Settings size={16} /> Personalizar estados
             </button>
           )}
           <select
@@ -162,7 +163,17 @@ export function PedidosPage() {
                 </td>
                 <td className="px-4 py-2">{p.cliente?.nombre ?? p.emailComprador}</td>
                 <td className="px-4 py-2">
-                  {p.metodoEnvio === "click_collect" ? "🏬 Pickup" : "🚚 Envío"}
+                  <span className="inline-flex items-center gap-1">
+                    {p.metodoEnvio === "click_collect" ? (
+                      <>
+                        <Store size={14} /> Pickup
+                      </>
+                    ) : (
+                      <>
+                        <Truck size={14} /> Envío
+                      </>
+                    )}
+                  </span>
                 </td>
                 <td className="px-4 py-2">
                   <span
@@ -256,7 +267,7 @@ function DetalleModal({
             <p className="text-sm text-slate-500">{pedido.emailComprador}</p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            ✕
+            <X size={20} />
           </button>
         </div>
 
@@ -280,9 +291,12 @@ function DetalleModal({
         </div>
 
         {pedido.direccionEnvio && (
-          <p className="mb-4 text-sm text-slate-600">
-            📍 {pedido.direccionEnvio.calle}, {pedido.direccionEnvio.ciudad},{" "}
-            {pedido.direccionEnvio.estado} CP {pedido.direccionEnvio.cp}
+          <p className="mb-4 flex items-start gap-1.5 text-sm text-slate-600">
+            <MapPin size={16} className="mt-0.5 shrink-0" />
+            <span>
+              {pedido.direccionEnvio.calle}, {pedido.direccionEnvio.ciudad},{" "}
+              {pedido.direccionEnvio.estado} CP {pedido.direccionEnvio.cp}
+            </span>
           </p>
         )}
         {pedido.ventaGenerada && (
@@ -448,9 +462,9 @@ function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: 
                 href={envio.etiquetaUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-lg border border-brand px-3 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50"
+                className="flex items-center gap-1.5 rounded-lg border border-brand px-3 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50"
               >
-                🏷️ Descargar etiqueta
+                <Tag size={15} /> Descargar etiqueta
               </a>
             )}
             <button
@@ -612,7 +626,7 @@ function EditorEstadosModal({
         <div className="mb-2 flex items-start justify-between">
           <h2 className="font-bold text-lg text-slate-800">Personalizar estados</h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            ✕
+            <X size={20} />
           </button>
         </div>
         <p className="mb-4 text-slate-500 text-sm">

@@ -1,4 +1,5 @@
 import type { ProductoPublicado } from "@/lib/api";
+import { ImageOff, Truck } from "lucide-react";
 import Link from "next/link";
 
 /** Tarjeta de producto con señales de venta: oferta, urgencia y envío gratis. */
@@ -27,7 +28,7 @@ export function ProductoCard({ p }: { p: ProductoPublicado }) {
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
-          <span className="text-5xl opacity-30">🛍️</span>
+          <ImageOff size={40} strokeWidth={1.5} className="text-gray-300" />
         )}
       </div>
       <div className="flex flex-1 flex-col p-3.5">
@@ -47,8 +48,8 @@ export function ProductoCard({ p }: { p: ProductoPublicado }) {
         </div>
         <div className="mt-1.5 flex min-h-[20px] flex-wrap gap-1">
           {p.envioGratis && (
-            <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-[11px] text-emerald-700">
-              Envío gratis
+            <span className="flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-[11px] text-emerald-700">
+              <Truck size={12} strokeWidth={2} /> Envío gratis
             </span>
           )}
           {p.stockBajo && p.stockPublico != null && (

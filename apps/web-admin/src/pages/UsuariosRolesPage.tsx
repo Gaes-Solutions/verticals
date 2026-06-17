@@ -20,7 +20,31 @@ interface Usuario {
 }
 
 type PermisoMeta = { code: string; category: string; description: string };
-type Catalogo = Record<string, PermisoMeta[]>;
+interface AreaCatalogo {
+  area: string;
+  label: string;
+  aplica: boolean;
+  categorias: { categoria: string; permisos: PermisoMeta[] }[];
+}
+interface Catalogo {
+  verticalActual: string | null;
+  areas: AreaCatalogo[];
+}
+interface Plantilla {
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  area: string;
+  permisos: string[];
+}
+
+const AREA_LABEL_UI: Record<string, string> = {
+  general: "General",
+  tienda: "Tienda",
+  abarrotes: "Abarrotes",
+  salud: "Salud",
+  despacho: "Despacho",
+};
 
 export function UsuariosRolesPage() {
   const [tab, setTab] = useState<"usuarios" | "roles">("usuarios");
@@ -378,7 +402,8 @@ function RolesUsuarioModal({
 
 function RolesTab() {
   const [roles, setRoles] = useState<Rol[]>([]);
-  const [catalogo, setCatalogo] = useState<Catalogo>({});
+  const [catalogo, setCatalogo] = useState<Catalogo>({ verticalActual: null, areas: [] });
+  const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
   const [editar, setEditar] = useState<Rol | "nuevo" | null>(null);
 
   const cargar = useCallback(() => {
@@ -387,7 +412,10 @@ function RolesTab() {
       .catch(() => setRoles([]));
     api<Catalogo>("/t/roles/catalogo-permisos")
       .then(setCatalogo)
-      .catch(() => setCatalogo({}));
+      .catch(() => setCatalogo({ verticalActual: null, areas: [] }));
+    api<Plantilla[]>("/t/roles/plantillas")
+      .then(setPlantillas)
+      .catch(() => setPlantillas([]));
   }, []);
   useEffect(() => cargar(), [cargar]);
 
@@ -433,6 +461,7 @@ function RolesTab() {
         <RolModal
           rol={editar === "nuevo" ? null : editar}
           catalogo={catalogo}
+          plantillas={plantillas}
           onClose={() => setEditar(null)}
           onSaved={() => {
             setEditar(null);
@@ -447,11 +476,13 @@ function RolesTab() {
 function RolModal({
   rol,
   catalogo,
+  plantillas,
   onClose,
   onSaved,
 }: {
   rol: Rol | null;
   catalogo: Catalogo;
+  plantillas: Plantilla[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -462,6 +493,12 @@ function RolModal({
   const [permisos, setPermisos] = useState<Set<string>>(new Set(rol?.permisos ?? []));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function aplicarPlantilla(p: Plantilla) {
+    if (!codigo) setCodigo(`${p.codigo}-custom`);
+    if (!nombre) setNombre(p.nombre);
+    setPermisos(new Set(p.permisos));
+  }
 
   function togglePermiso(code: string) {
     setPermisos((prev) => {
@@ -538,45 +575,43 @@ function RolModal({
           </label>
         )}
 
+        {!rol && plantillas.length > 0 && (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 font-medium text-slate-600 text-xs">
+              Empieza desde una plantilla (luego la puedes ajustar y mezclar):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {plantillas.map((p) => (
+                <button
+                  key={p.codigo}
+                  type="button"
+                  onClick={() => aplicarPlantilla(p)}
+                  title={p.descripcion ?? undefined}
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1 text-slate-600 text-xs hover:border-brand hover:text-brand"
+                >
+                  {p.nombre} · {AREA_LABEL_UI[p.area] ?? p.area}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tieneWildcard ? (
           <p className="rounded-lg bg-info-light p-3 text-sm text-info">
             Este rol tiene <strong>todos los permisos</strong> (acceso total).
           </p>
         ) : (
-          <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
-            {Object.entries(catalogo).map(([categoria, perms]) => {
-              const todosMarcados = perms.every((p) => permisos.has(p.code));
-              return (
-                <div key={categoria}>
-                  <div className="mb-1 flex items-center justify-between">
-                    <h3 className="text-sm font-bold capitalize text-slate-700">{categoria}</h3>
-                    {!soloLectura && (
-                      <button
-                        type="button"
-                        onClick={() => toggleCategoria(perms, !todosMarcados)}
-                        className="text-xs text-brand hover:underline"
-                      >
-                        {todosMarcados ? "Quitar todos" : "Marcar todos"}
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid gap-1 sm:grid-cols-2">
-                    {perms.map((p) => (
-                      <label key={p.code} className="flex items-start gap-2 text-sm text-slate-600">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={permisos.has(p.code)}
-                          disabled={soloLectura}
-                          onChange={() => togglePermiso(p.code)}
-                        />
-                        <span title={p.code}>{p.description}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            {catalogo.areas.map((area) => (
+              <AreaBloque
+                key={area.area}
+                area={area}
+                permisos={permisos}
+                soloLectura={soloLectura}
+                onTogglePermiso={togglePermiso}
+                onToggleCategoria={toggleCategoria}
+              />
+            ))}
           </div>
         )}
 
@@ -597,6 +632,90 @@ function RolModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Bloque colapsable de un área de negocio con sus categorías de permisos. */
+function AreaBloque({
+  area,
+  permisos,
+  soloLectura,
+  onTogglePermiso,
+  onToggleCategoria,
+}: {
+  area: AreaCatalogo;
+  permisos: Set<string>;
+  soloLectura: boolean;
+  onTogglePermiso: (code: string) => void;
+  onToggleCategoria: (perms: PermisoMeta[], todos: boolean) => void;
+}) {
+  // Las áreas del vertical del negocio abren por defecto; las demás (para mezclar)
+  // empiezan colapsadas para no abrumar.
+  const [abierto, setAbierto] = useState(area.aplica);
+  const todasLasPerms = area.categorias.flatMap((c) => c.permisos);
+  const marcadas = todasLasPerms.filter((p) => permisos.has(p.code)).length;
+
+  return (
+    <div className="rounded-lg border border-slate-200">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-slate-400 text-xs">{abierto ? "▼" : "▶"}</span>
+          <span className="font-bold text-slate-700 text-sm">{area.label}</span>
+          {!area.aplica && (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+              mezclar
+            </span>
+          )}
+        </span>
+        {marcadas > 0 && (
+          <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] text-brand">
+            {marcadas} activo(s)
+          </span>
+        )}
+      </button>
+
+      {abierto && (
+        <div className="space-y-4 border-slate-100 border-t px-3 py-3">
+          {area.categorias.map(({ categoria, permisos: perms }) => {
+            const todosMarcados = perms.every((p) => permisos.has(p.code));
+            return (
+              <div key={categoria}>
+                <div className="mb-1 flex items-center justify-between">
+                  <h4 className="font-semibold text-slate-600 text-xs capitalize">{categoria}</h4>
+                  {!soloLectura && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleCategoria(perms, !todosMarcados)}
+                      className="text-brand text-xs hover:underline"
+                    >
+                      {todosMarcados ? "Quitar todos" : "Marcar todos"}
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-1 sm:grid-cols-2">
+                  {perms.map((p) => (
+                    <label key={p.code} className="flex items-start gap-2 text-slate-600 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={permisos.has(p.code)}
+                        disabled={soloLectura}
+                        onChange={() => onTogglePermiso(p.code)}
+                      />
+                      <span title={p.code}>{p.description}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

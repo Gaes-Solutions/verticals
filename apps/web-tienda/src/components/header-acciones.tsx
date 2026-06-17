@@ -1,6 +1,7 @@
 "use client";
 
 import { leerCarrito } from "@/lib/carrito-store";
+import { Search, ShoppingCart, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
@@ -37,7 +38,7 @@ export function HeaderAcciones() {
           aria-label="Buscar"
           className="-translate-y-1/2 absolute top-1/2 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-marca text-white"
         >
-          🔍
+          <Search size={16} strokeWidth={2.5} />
         </button>
       </form>
 
@@ -45,7 +46,7 @@ export function HeaderAcciones() {
         href="/cuenta"
         className="hidden items-center gap-1.5 text-gray-600 text-sm hover:text-marca sm:flex"
       >
-        <span className="text-lg">👤</span>
+        <User size={20} strokeWidth={1.75} />
         <span className="hidden md:inline">Mi cuenta</span>
       </Link>
 
@@ -54,7 +55,7 @@ export function HeaderAcciones() {
         aria-label="Carrito"
         className="relative flex items-center gap-1.5 text-gray-600 hover:text-marca"
       >
-        <span className="text-xl">🛒</span>
+        <ShoppingCart size={22} strokeWidth={1.75} />
         {count > 0 && (
           <span className="-right-2 -top-2 absolute flex h-5 min-w-5 items-center justify-center rounded-full bg-marca px-1 font-bold text-[11px] text-white">
             {count}

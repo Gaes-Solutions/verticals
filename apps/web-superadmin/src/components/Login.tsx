@@ -3,6 +3,7 @@ import { type FormEvent, useState } from "react";
 import type { AdminSession } from "../App.js";
 import {
   ApiError,
+  type SesionAdmin,
   login,
   mfaActivate,
   mfaSetup,
@@ -10,17 +11,21 @@ import {
   setRole,
   setToken,
 } from "../lib/api.js";
+import { BackupCodes } from "./BackupCodes.js";
 
-type Paso = "password" | "setup" | "verify";
+type Paso = "password" | "setup" | "verify" | "codes";
 
 export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
   const [paso, setPaso] = useState<Paso>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [usarRespaldo, setUsarRespaldo] = useState(false);
   const [mfaToken, setMfaToken] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [secret, setSecret] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [pendiente, setPendiente] = useState<SesionAdmin | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +37,12 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
           ? err.message
           : fallback,
     );
+  }
+
+  function entrar(ses: SesionAdmin) {
+    setToken(ses.accessToken);
+    setRole(ses.user.role);
+    onLogin({ nombre: ses.user.name, email: ses.user.email, role: ses.user.role });
   }
 
   async function submitPassword(e: FormEvent) {
@@ -61,11 +72,18 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
     setError(null);
     setLoading(true);
     try {
-      const ses =
-        paso === "setup" ? await mfaActivate(mfaToken, code) : await mfaVerify(mfaToken, code);
-      setToken(ses.accessToken);
-      setRole(ses.user.role);
-      onLogin({ nombre: ses.user.name, email: ses.user.email, role: ses.user.role });
+      if (paso === "setup") {
+        const ses = await mfaActivate(mfaToken, code);
+        if (ses.backupCodes?.length) {
+          setBackupCodes(ses.backupCodes);
+          setPendiente(ses);
+          setPaso("codes");
+        } else {
+          entrar(ses);
+        }
+      } else {
+        entrar(await mfaVerify(mfaToken, code));
+      }
     } catch (err) {
       fail(err, "Código incorrecto");
     } finally {
@@ -120,7 +138,7 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
             <p className="mb-4 break-all text-center text-slate-400 text-xs">
               ¿No puedes escanear? Clave manual: <span className="font-mono">{secret}</span>
             </p>
-            <CodeInput code={code} setCode={setCode} />
+            <CodeInput code={code} setCode={setCode} respaldo={false} />
             {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button type="submit" disabled={loading} className="gx-btn-primary w-full">
               {loading ? "Activando…" : "Activar y entrar"}
@@ -131,30 +149,77 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
         {paso === "verify" && (
           <form onSubmit={submitCode}>
             <p className="mb-4 text-slate-600 text-sm">
-              Escribe el código de 6 dígitos de tu app autenticadora.
+              {usarRespaldo
+                ? "Escribe uno de tus códigos de respaldo (xxxx-xxxx)."
+                : "Escribe el código de 6 dígitos de tu app autenticadora."}
             </p>
-            <CodeInput code={code} setCode={setCode} />
+            <CodeInput code={code} setCode={setCode} respaldo={usarRespaldo} />
             {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button type="submit" disabled={loading} className="gx-btn-primary w-full">
               {loading ? "Entrando…" : "Entrar"}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUsarRespaldo((v) => !v);
+                setCode("");
+                setError(null);
+              }}
+              className="mt-3 w-full text-center text-brand text-sm hover:underline"
+            >
+              {usarRespaldo
+                ? "Usar código de la app"
+                : "Perdí mi teléfono · usar código de respaldo"}
+            </button>
           </form>
+        )}
+
+        {paso === "codes" && pendiente && (
+          <div>
+            <BackupCodes codes={backupCodes} />
+            <button
+              type="button"
+              onClick={() => entrar(pendiente)}
+              className="gx-btn-primary mt-4 w-full"
+            >
+              Ya los guardé, entrar
+            </button>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function CodeInput({ code, setCode }: { code: string; setCode: (v: string) => void }) {
+function CodeInput({
+  code,
+  setCode,
+  respaldo,
+}: {
+  code: string;
+  setCode: (v: string) => void;
+  respaldo: boolean;
+}) {
   return (
     <label className="mb-5 block">
-      <span className="mb-1 block font-medium text-slate-700 text-sm">Código 2FA</span>
+      <span className="mb-1 block font-medium text-slate-700 text-sm">
+        {respaldo ? "Código de respaldo" : "Código 2FA"}
+      </span>
       <input
-        inputMode="numeric"
+        inputMode={respaldo ? "text" : "numeric"}
         autoComplete="one-time-code"
         value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        placeholder="123456"
+        onChange={(e) =>
+          setCode(
+            respaldo
+              ? e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9-]/g, "")
+                  .slice(0, 14)
+              : e.target.value.replace(/\D/g, "").slice(0, 6),
+          )
+        }
+        placeholder={respaldo ? "xxxx-xxxx" : "123456"}
         className="gx-input text-center font-mono text-lg tracking-widest"
         required
       />

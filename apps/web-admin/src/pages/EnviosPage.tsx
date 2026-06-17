@@ -60,10 +60,10 @@ export function EnviosPage() {
     <div className="max-w-3xl">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Envíos</h1>
 
-      <NuevaZona onCreated={() => notify("✓ Zona creada")} onError={fail} />
+      <NuevaZona onCreated={() => notify("Zona creada")} onError={fail} />
 
       {zonas.map((z) => (
-        <ZonaCard key={z.id} zona={z} onChanged={() => notify("✓ Guardado")} onError={fail} />
+        <ZonaCard key={z.id} zona={z} onChanged={() => notify("Guardado")} onError={fail} />
       ))}
       {zonas.length === 0 && (
         <p className="mb-6 text-sm text-slate-400">
@@ -81,7 +81,7 @@ export function EnviosPage() {
           <PickupRowItem
             key={p.sucursal.id}
             row={p}
-            onChanged={() => notify("✓ Pickup actualizado")}
+            onChanged={() => notify("Pickup actualizado")}
             onError={fail}
           />
         ))}

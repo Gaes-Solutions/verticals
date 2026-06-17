@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, subscribeRealtime } from "../lib/api.js";
 
@@ -75,7 +76,7 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
         aria-label="Notificaciones"
         className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-200"
       >
-        <span className="text-xl">🔔</span>
+        <Bell size={20} strokeWidth={1.75} />
         {noLeidas > 0 && (
           <span className="-right-0.5 -top-0.5 absolute flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 font-bold text-[11px] text-white">
             {noLeidas > 9 ? "9+" : noLeidas}

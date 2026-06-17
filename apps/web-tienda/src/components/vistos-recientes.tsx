@@ -1,6 +1,7 @@
 "use client";
 
 import { type VistoReciente, leerVistos, registrarVisto } from "@/lib/vistos";
+import { ImageOff } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -40,7 +41,7 @@ export function VistosRecientes({ excluir }: { excluir?: string }) {
                   className="h-full w-full object-cover transition group-hover:scale-105"
                 />
               ) : (
-                <span className="text-3xl opacity-30">🛍️</span>
+                <ImageOff size={28} strokeWidth={1.5} className="text-gray-300" />
               )}
             </div>
             <p className="mt-1.5 line-clamp-2 text-gray-700 text-xs group-hover:text-marca">

@@ -1,3 +1,4 @@
+import { ThumbsUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import type { InventarioItem, Paged, VentaListItem } from "../lib/types.js";
@@ -58,7 +59,9 @@ export function DashboardPage() {
 
       <h2 className="mb-3 text-lg font-bold text-slate-800">Alertas de inventario</h2>
       {data.bajoStock.length === 0 ? (
-        <p className="text-sm text-slate-400">Todo el inventario está por encima del mínimo. 👍</p>
+        <p className="flex items-center gap-1.5 text-slate-400 text-sm">
+          <ThumbsUp size={15} /> Todo el inventario está por encima del mínimo.
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
           <table className="w-full min-w-[640px] text-sm">

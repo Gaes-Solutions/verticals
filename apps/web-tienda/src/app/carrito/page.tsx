@@ -7,6 +7,7 @@ import {
   leerCarrito,
   quitar,
 } from "@/lib/carrito-store";
+import { ImageOff } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -53,7 +54,7 @@ export default function CarritoPage() {
       <div className="space-y-3">
         {items.map((i) => (
           <div key={i.varianteId} className="flex gap-3 rounded-lg border bg-white p-3 sm:p-4">
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-gray-100 text-2xl">
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-gray-100">
               {i.imagenUrl ? (
                 <img
                   src={i.imagenUrl}
@@ -61,7 +62,7 @@ export default function CarritoPage() {
                   className="h-full w-full rounded object-cover"
                 />
               ) : (
-                "📦"
+                <ImageOff size={24} strokeWidth={1.5} className="text-gray-300" />
               )}
             </div>
             <div className="flex flex-1 flex-col justify-between">

@@ -1,5 +1,6 @@
 "use client";
 
+import { ImageOff } from "lucide-react";
 import { useState } from "react";
 
 export function GaleriaProducto({
@@ -16,8 +17,8 @@ export function GaleriaProducto({
 
   if (fotos.length === 0) {
     return (
-      <div className="flex aspect-square items-center justify-center rounded-lg border bg-white text-6xl">
-        📦
+      <div className="flex aspect-square items-center justify-center rounded-lg border bg-white">
+        <ImageOff size={56} strokeWidth={1.5} className="text-gray-300" />
       </div>
     );
   }

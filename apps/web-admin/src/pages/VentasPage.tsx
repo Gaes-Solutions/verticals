@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import type { Paged, VentaDetalle, VentaListItem } from "../lib/types.js";
@@ -128,7 +129,7 @@ export function VentasPage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-800">{detalle.folio}</h2>
               <button type="button" onClick={() => setDetalle(null)} className="text-slate-400">
-                ✕
+                <X size={20} />
               </button>
             </div>
             <table className="mb-3 w-full text-sm">

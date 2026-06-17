@@ -48,11 +48,13 @@ export function puede(permiso: string): boolean {
 
 export async function api<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown; auth?: boolean } = {},
+  opts: { method?: string; body?: unknown; auth?: boolean; token?: string } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  if (opts.auth !== false) {
+  if (opts.token) {
+    headers.Authorization = `Bearer ${opts.token}`;
+  } else if (opts.auth !== false) {
     const t = loadToken();
     if (t) headers.Authorization = `Bearer ${t}`;
   }

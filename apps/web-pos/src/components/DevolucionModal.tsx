@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 import type {
@@ -90,7 +91,7 @@ export function DevolucionModal({ onClose }: { onClose: () => void }) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">Devolución</h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            ✕
+            <X size={20} />
           </button>
         </div>
 

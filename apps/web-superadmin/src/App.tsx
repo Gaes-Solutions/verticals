@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { esSuperadmin, loadToken, setToken } from "./lib/api.js";
 import { AuditPage } from "./pages/AuditPage.js";
+import { ClientesPage } from "./pages/ClientesPage.js";
 import { CobranzaPage } from "./pages/CobranzaPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { EquipoPage } from "./pages/EquipoPage.js";
 import { FacturasPage } from "./pages/FacturasPage.js";
+import { RolesPredefinidosPage } from "./pages/RolesPredefinidosPage.js";
 import { SuscripcionesPage } from "./pages/SuscripcionesPage.js";
 import { UsoHoyPage } from "./pages/UsoHoyPage.js";
 
@@ -15,7 +17,16 @@ export interface AdminSession {
   role: string;
 }
 
-type Seccion = "dashboard" | "uso" | "cobranza" | "facturas" | "suscripciones" | "audit" | "equipo";
+type Seccion =
+  | "dashboard"
+  | "clientes"
+  | "roles"
+  | "uso"
+  | "cobranza"
+  | "facturas"
+  | "suscripciones"
+  | "audit"
+  | "equipo";
 
 interface NavItem {
   key: Seccion;
@@ -26,6 +37,8 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
+  { key: "clientes", label: "Clientes", icon: "🏪" },
+  { key: "roles", label: "Roles predefinidos", icon: "🧩" },
   { key: "uso", label: "Uso en vivo", icon: "📈" },
   { key: "cobranza", label: "Cobranza", icon: "💳" },
   { key: "facturas", label: "Facturas", icon: "🧾" },
@@ -136,6 +149,8 @@ export function App() {
 
       <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
         {seccion === "dashboard" && <DashboardPage />}
+        {seccion === "clientes" && <ClientesPage />}
+        {seccion === "roles" && <RolesPredefinidosPage />}
         {seccion === "uso" && <UsoHoyPage />}
         {seccion === "cobranza" && <CobranzaPage />}
         {seccion === "facturas" && <FacturasPage />}

@@ -88,6 +88,8 @@ export interface LoginRetoMfa {
 export interface SesionAdmin {
   accessToken: string;
   user: { id: string; email: string; name: string; role: string };
+  /** Solo presente al activar el 2FA por primera vez: códigos de respaldo en claro. */
+  backupCodes?: string[];
 }
 
 export function login(email: string, password: string): Promise<LoginRetoMfa> {
@@ -104,4 +106,60 @@ export function mfaActivate(mfaToken: string, code: string): Promise<SesionAdmin
 
 export function mfaVerify(mfaToken: string, code: string): Promise<SesionAdmin> {
   return api<SesionAdmin>("/auth/mfa/verify", { token: mfaToken, body: { code } });
+}
+
+export function mfaRegenerateBackupCodes(): Promise<{ backupCodes: string[] }> {
+  return api("/auth/mfa/backup-codes/regenerate", { method: "POST" });
+}
+
+// ── Roles predefinidos (plantillas por vertical) ────────────────────────────
+
+export interface PermisoMeta {
+  code: string;
+  category: string;
+  description: string;
+}
+export interface AreaCatalogo {
+  area: string;
+  label: string;
+  aplica: boolean;
+  categorias: { categoria: string; permisos: PermisoMeta[] }[];
+}
+export interface RolePlantilla {
+  id: string;
+  vertical: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  permisos: string[];
+  activo: boolean;
+}
+
+export function listVerticales(): Promise<{ value: string; label: string }[]> {
+  return api("/admin/roles-plantilla/verticales");
+}
+export function listCatalogoPermisos(): Promise<AreaCatalogo[]> {
+  return api("/admin/roles-plantilla/catalogo-permisos");
+}
+export function listRolePlantillas(vertical?: string): Promise<RolePlantilla[]> {
+  const qs = vertical ? `?vertical=${encodeURIComponent(vertical)}` : "";
+  return api(`/admin/roles-plantilla${qs}`);
+}
+export function crearRolePlantilla(body: {
+  vertical: string;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  permisos: string[];
+}): Promise<RolePlantilla & { tenantsAfectados: number }> {
+  return api("/admin/roles-plantilla", { body });
+}
+export function editarRolePlantilla(
+  id: string,
+  body: { nombre?: string; descripcion?: string | null; permisos?: string[]; activo?: boolean },
+): Promise<RolePlantilla & { tenantsAfectados: number }> {
+  return api(`/admin/roles-plantilla/${id}`, { method: "PATCH", body });
+}
+export function eliminarRolePlantilla(id: string): Promise<{ ok: boolean }> {
+  return api(`/admin/roles-plantilla/${id}`, { method: "DELETE" });
 }

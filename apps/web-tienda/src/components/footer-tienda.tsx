@@ -1,3 +1,4 @@
+import { Banknote, CreditCard, Lock, Store } from "lucide-react";
 import Link from "next/link";
 
 const POLITICAS = [
@@ -57,13 +58,20 @@ export function FooterTienda({ nombre }: { nombre: string }) {
         </div>
         <div>
           <p className="mb-2 font-semibold text-gray-800 text-sm">Pago seguro</p>
-          <div className="flex flex-wrap gap-2 text-2xl">
-            <span title="Visa">💳</span>
-            <span title="Mastercard">💳</span>
-            <span title="OXXO">🏪</span>
-            <span title="Transferencia">🏦</span>
+          <div className="flex flex-wrap items-center gap-2 text-gray-500">
+            <span title="Tarjetas" className="rounded-md border border-gray-200 p-1.5">
+              <CreditCard size={18} strokeWidth={1.75} />
+            </span>
+            <span title="OXXO" className="rounded-md border border-gray-200 p-1.5">
+              <Store size={18} strokeWidth={1.75} />
+            </span>
+            <span title="Transferencia" className="rounded-md border border-gray-200 p-1.5">
+              <Banknote size={18} strokeWidth={1.75} />
+            </span>
           </div>
-          <p className="mt-3 text-gray-400 text-xs">🔒 Tus datos viajan cifrados.</p>
+          <p className="mt-3 flex items-center gap-1.5 text-gray-400 text-xs">
+            <Lock size={13} strokeWidth={2} /> Tus datos viajan cifrados.
+          </p>
         </div>
       </div>
       <div className="border-t py-4 text-center text-gray-400 text-xs">

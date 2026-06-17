@@ -1,3 +1,5 @@
+import { PartyPopper, Truck } from "lucide-react";
+
 /** Barra de progreso "te faltan $X para envío gratis" (nudge de conversión ML). */
 export function BarraEnvioGratis({
   subtotal,
@@ -10,12 +12,15 @@ export function BarraEnvioGratis({
   return (
     <div className="rounded-lg border bg-white p-3 text-sm">
       {falta > 0 ? (
-        <p className="mb-2 text-gray-600">
+        <p className="mb-2 flex items-center gap-1.5 text-gray-600">
+          <Truck size={16} strokeWidth={2} className="text-marca" />
           Te faltan <span className="font-semibold text-marca">${falta.toFixed(2)}</span> para
-          <span className="font-semibold"> envío gratis</span> 🚚
+          <span className="font-semibold"> envío gratis</span>
         </p>
       ) : (
-        <p className="mb-2 font-medium text-emerald-700">¡Tienes envío gratis! 🎉</p>
+        <p className="mb-2 flex items-center gap-1.5 font-medium text-emerald-700">
+          <PartyPopper size={16} strokeWidth={2} /> ¡Tienes envío gratis!
+        </p>
       )}
       <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
         <div

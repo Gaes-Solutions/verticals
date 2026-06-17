@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -27,8 +28,8 @@ function GraciasInner() {
 
   return (
     <div className="mx-auto max-w-lg text-center">
-      <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl">
-        ✓
+      <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+        <Check size={40} strokeWidth={3} />
       </div>
       <h1 className="font-bold text-3xl">¡Gracias por tu compra!</h1>
       <p className="mt-2 text-gray-600">

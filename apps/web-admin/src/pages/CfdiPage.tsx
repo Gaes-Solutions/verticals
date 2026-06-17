@@ -59,7 +59,7 @@ export function CfdiPage() {
           diasAutofactura: cfg.diasAutofactura ?? 30,
         },
       });
-      setMsg("✓ Configuración de facturación guardada");
+      setMsg("Configuración de facturación guardada");
       setConfigurado(true);
       setApiKey("");
     } catch (err) {
@@ -138,7 +138,7 @@ export function CfdiPage() {
         <label className="mb-3 block">
           <span className="mb-1 block font-medium text-slate-700 text-sm">
             API key de Facturama{" "}
-            {configurado && <span className="text-emerald-600 text-xs">· configurada ✓</span>}
+            {configurado && <span className="text-emerald-600 text-xs">· configurada </span>}
           </span>
           <input
             type="password"

@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 
@@ -365,9 +366,9 @@ function NuevaOcModal({
                 <button
                   type="button"
                   onClick={() => setLineas((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-xs text-slate-400 hover:text-danger"
+                  className="text-slate-400 hover:text-danger"
                 >
-                  ✕
+                  <X size={16} />
                 </button>
               </div>
             ))}

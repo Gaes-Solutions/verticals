@@ -1,3 +1,4 @@
+import { FileText, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Session } from "../App.js";
 import { ApiError, api } from "../lib/api.js";
@@ -80,7 +81,9 @@ export function CorteModal({
 
         {resultado ? (
           <div className="text-center">
-            <div className="mb-2 text-4xl">{resultado.tipo === "Z" ? "🔒" : "📄"}</div>
+            <div className="mb-2 flex justify-center text-slate-700">
+              {resultado.tipo === "Z" ? <Lock size={36} /> : <FileText size={36} />}
+            </div>
             <p className="text-lg font-bold text-slate-800">
               Corte {resultado.tipo} {resultado.tipo === "Z" ? "(cierre)" : "(lectura)"}
             </p>

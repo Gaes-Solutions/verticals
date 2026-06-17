@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 import type { Cliente, ClienteList } from "../lib/types.js";
@@ -64,7 +65,7 @@ export function ClienteModal({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">Cliente</h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            ✕
+            <X size={20} />
           </button>
         </div>
 

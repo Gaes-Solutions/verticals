@@ -89,11 +89,13 @@ export function subscribeRealtime(onEvent: () => void): () => void {
 
 export async function api<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown; auth?: boolean } = {},
+  opts: { method?: string; body?: unknown; auth?: boolean; token?: string } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  if (opts.auth !== false) {
+  if (opts.token) {
+    headers.Authorization = `Bearer ${opts.token}`;
+  } else if (opts.auth !== false) {
     const t = loadToken();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
@@ -115,4 +117,71 @@ export async function api<T = unknown>(
     throw new ApiError(res.status, message);
   }
   return data as T;
+}
+
+// ── 2FA (TOTP + códigos de respaldo) ────────────────────────────────────────
+
+export interface SesionTenant {
+  accessToken: string;
+  user: { id: string; nombre: string; permissions: string[]; isOwner: boolean };
+  backupCodes?: string[];
+}
+export interface RetoMfa {
+  mfaRequired?: boolean;
+  mfaSetupRequired?: boolean;
+  mfaToken?: string;
+}
+
+export function loginTenant(
+  tenantSlug: string,
+  email: string,
+  password: string,
+): Promise<SesionTenant & RetoMfa> {
+  return api("/auth/tenant/login", { auth: false, body: { tenantSlug, email, password } });
+}
+
+export function mfaTenantSetup(mfaToken: string): Promise<{ secret: string; otpauthUrl: string }> {
+  return api("/auth/tenant/mfa/setup", { token: mfaToken, method: "POST" });
+}
+export function mfaTenantActivate(mfaToken: string, code: string): Promise<SesionTenant> {
+  return api("/auth/tenant/mfa/activate", { token: mfaToken, body: { code } });
+}
+export function mfaTenantVerify(mfaToken: string, code: string): Promise<SesionTenant> {
+  return api("/auth/tenant/mfa/verify", { token: mfaToken, body: { code } });
+}
+
+export interface MfaEstado {
+  enabled: boolean;
+  backupCodesRestantes: number;
+  requerido: boolean;
+}
+export function mfaEstado(): Promise<MfaEstado> {
+  return api("/auth/tenant/mfa/estado");
+}
+export function mfaEnroll(): Promise<{ secret: string; otpauthUrl: string }> {
+  return api("/auth/tenant/mfa/enroll", { method: "POST" });
+}
+export function mfaEnrollConfirm(code: string): Promise<{ backupCodes: string[] }> {
+  return api("/auth/tenant/mfa/enroll/confirm", { body: { code } });
+}
+export function mfaDisable(password: string): Promise<{ ok: boolean }> {
+  return api("/auth/tenant/mfa/disable", { body: { password } });
+}
+export function mfaRegenerate(code: string): Promise<{ backupCodes: string[] }> {
+  return api("/auth/tenant/mfa/backup-codes/regenerate", { body: { code } });
+}
+
+export interface Politica2fa {
+  require2faTodos: boolean;
+  require2faRoles: string[];
+  forzadoPorVertical?: boolean;
+}
+export function getPolitica2fa(): Promise<Politica2fa> {
+  return api("/t/seguridad/politica-2fa");
+}
+export function putPolitica2fa(body: {
+  require2faTodos: boolean;
+  require2faRoles: string[];
+}): Promise<Politica2fa> {
+  return api("/t/seguridad/politica-2fa", { method: "PUT", body });
 }

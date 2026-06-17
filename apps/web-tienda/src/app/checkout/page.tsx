@@ -3,6 +3,7 @@
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type CarritoLineaLocal, leerCarrito, sessionId, vaciar } from "@/lib/carrito-store";
+import { CreditCard, ImageOff, Store, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -257,7 +258,7 @@ export default function CheckoutPage() {
                     className="h-full w-full rounded object-cover"
                   />
                 ) : (
-                  "📦"
+                  <ImageOff size={20} strokeWidth={1.5} className="text-gray-300" />
                 )}
               </div>
               <div className="flex-1">
@@ -285,13 +286,21 @@ export default function CheckoutPage() {
           <BotonEntrega
             activo={modoEntrega === "envio"}
             onClick={() => setModoEntrega("envio")}
-            label="🚚 Envío a domicilio"
+            label={
+              <>
+                <Truck size={16} strokeWidth={2} /> Envío a domicilio
+              </>
+            }
           />
           {pickups.length > 0 && (
             <BotonEntrega
               activo={modoEntrega === "pickup"}
               onClick={() => setModoEntrega("pickup")}
-              label="🏬 Recoger en tienda"
+              label={
+                <>
+                  <Store size={16} strokeWidth={2} /> Recoger en tienda
+                </>
+              }
             />
           )}
         </div>
@@ -434,7 +443,9 @@ export default function CheckoutPage() {
             <>
               {msiOfrecibles.length > 0 && (
                 <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                  <p className="mb-2 font-medium text-marca text-sm">💳 Meses sin intereses</p>
+                  <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
+                    <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
+                  </p>
                   <div className="space-y-1 text-gray-600 text-sm">
                     {[...msiOfrecibles]
                       .sort((a, b) => a - b)
@@ -527,13 +538,13 @@ function BotonEntrega({
 }: {
   activo: boolean;
   onClick: () => void;
-  label: string;
+  label: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 font-medium text-sm ${
         activo ? "border-marca bg-marca/5 text-marca" : "border-gray-200 text-gray-600"
       }`}
     >

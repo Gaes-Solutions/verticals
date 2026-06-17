@@ -1,5 +1,6 @@
 "use client";
 
+import { Lock } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 /** Tipado mínimo del SDK Conekta.js cargado por <script>. */
@@ -169,8 +170,9 @@ export function PagoTarjetaConekta({
       >
         {cargando ? "Procesando pago…" : `Pagar $${montoTotal.toFixed(2)}`}
       </button>
-      <p className="text-center text-gray-400 text-xs">
-        🔒 Pago seguro con Conekta · tus datos de tarjeta no pasan por la tienda
+      <p className="flex items-center justify-center gap-1.5 text-center text-gray-400 text-xs">
+        <Lock size={12} strokeWidth={2} /> Pago seguro con Conekta · tus datos de tarjeta no pasan
+        por la tienda
       </p>
     </form>
   );

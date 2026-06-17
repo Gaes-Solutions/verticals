@@ -1,6 +1,7 @@
 "use client";
 
 import { agregar } from "@/lib/carrito-store";
+import { Check, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AvisoStock } from "./aviso-stock";
@@ -107,8 +108,8 @@ export function ProductoCompra({
       </div>
       <div className="mt-1 flex flex-wrap gap-2 text-sm">
         {envioGratis && (
-          <span className="rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
-            🚚 Envío gratis
+          <span className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+            <Truck size={14} strokeWidth={2} /> Envío gratis
           </span>
         )}
         {stockBajo && stockPublico != null && (
@@ -163,9 +164,10 @@ export function ProductoCompra({
           type="button"
           onClick={onAgregar}
           disabled={sinStock}
-          className="rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {agregado ? "✓ Agregado" : "Agregar al carrito"}
+          {agregado && <Check size={16} strokeWidth={2.5} />}
+          {agregado ? "Agregado" : "Agregar al carrito"}
         </button>
         {comprarAhora && (
           <button

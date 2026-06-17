@@ -1,5 +1,6 @@
 "use client";
 
+import { Truck } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 interface Opcion {
@@ -41,7 +42,9 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
 
   return (
     <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <p className="mb-2 font-medium text-gray-700 text-sm">🚚 ¿Cuándo llega?</p>
+      <p className="mb-2 flex items-center gap-1.5 font-medium text-gray-700 text-sm">
+        <Truck size={16} strokeWidth={2} /> ¿Cuándo llega?
+      </p>
       <form onSubmit={cotizar} className="flex flex-wrap gap-2">
         <input
           value={cp}

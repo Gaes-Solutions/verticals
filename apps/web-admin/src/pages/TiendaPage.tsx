@@ -57,7 +57,7 @@ export function TiendaPage() {
           politicasHtml: config.politicasHtml ?? {},
         },
       });
-      setMsg("✓ Configuración guardada");
+      setMsg("Configuración guardada");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al guardar");
     } finally {
@@ -78,7 +78,7 @@ export function TiendaPage() {
           destacadoHome: false,
         },
       });
-      setMsg(`✓ "${p.nombre}" publicado en la tienda`);
+      setMsg(`"${p.nombre}" publicado en la tienda`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al publicar (¿ya estaba publicado?)");
     }

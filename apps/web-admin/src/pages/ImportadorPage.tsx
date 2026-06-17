@@ -1,3 +1,4 @@
+import { Download, FileText, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { ApiError, api } from "../lib/api.js";
@@ -217,11 +218,15 @@ export function ImportadorPage() {
       <div className="gx-card mb-4">
         <p className="mb-3 text-sm text-slate-600">{tipo.descripcion}</p>
         <div className="mb-4 flex flex-wrap gap-2">
-          <button type="button" onClick={descargarPlantilla} className="gx-btn-secondary">
-            ⬇ Descargar plantilla
+          <button
+            type="button"
+            onClick={descargarPlantilla}
+            className="gx-btn-secondary inline-flex items-center gap-1.5"
+          >
+            <Download size={16} /> Descargar plantilla
           </button>
-          <label className="gx-btn-primary cursor-pointer">
-            📄 Elegir archivo
+          <label className="gx-btn-primary inline-flex cursor-pointer items-center gap-1.5">
+            <FileText size={16} /> Elegir archivo
             <input
               ref={inputRef}
               type="file"
@@ -231,8 +236,12 @@ export function ImportadorPage() {
             />
           </label>
           {esProductos && (
-            <button type="button" onClick={() => setConfigurando(true)} className="gx-btn-ghost">
-              ⚙ Configurar columnas
+            <button
+              type="button"
+              onClick={() => setConfigurando(true)}
+              className="gx-btn-ghost inline-flex items-center gap-1.5"
+            >
+              <Settings size={16} /> Configurar columnas
             </button>
           )}
           {nombreArchivo && (

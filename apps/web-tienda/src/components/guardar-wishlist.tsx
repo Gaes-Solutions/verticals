@@ -1,5 +1,6 @@
 "use client";
 
+import { Heart } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -27,9 +28,14 @@ export function GuardarWishlist({ productoPublicadoId }: { productoPublicadoId: 
       type="button"
       onClick={guardar}
       disabled={estado === "guardando" || estado === "guardado"}
-      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-marca hover:text-marca disabled:opacity-60"
+      className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 text-sm hover:border-marca hover:text-marca disabled:opacity-60"
     >
-      {estado === "guardado" ? "♥ Guardado" : "♡ Guardar"}
+      <Heart
+        size={16}
+        strokeWidth={2}
+        className={estado === "guardado" ? "fill-marca text-marca" : ""}
+      />
+      {estado === "guardado" ? "Guardado" : "Guardar"}
     </button>
   );
 }
