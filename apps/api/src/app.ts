@@ -80,6 +80,7 @@ import usuariosRoutes from "./modules/tenant/usuarios/routes.js";
 import vacunacionesRoutes from "./modules/tenant/vacunaciones/routes.js";
 import variantesRoutes from "./modules/tenant/variantes/routes.js";
 import ventasRoutes from "./modules/tenant/ventas/routes.js";
+import vistasGuardadasRoutes from "./modules/tenant/vistas-guardadas/routes.js";
 import wishlistsRoutes from "./modules/tenant/wishlists/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
 import aiPlugin, { type AiProviderFactory } from "./plugins/ai.js";
@@ -209,6 +210,7 @@ export async function buildApp(
       await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
       await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(seguridadRoutes, { prefix: "/seguridad" });
+      await tenantApp.register(vistasGuardadasRoutes, { prefix: "/vistas-guardadas" });
       await tenantApp.register(pacientesRoutes, { prefix: "/pacientes" });
       await tenantApp.register(medicosRoutes, { prefix: "/medicos" });
       await tenantApp.register(agendaRoutes, { prefix: "/agenda" });

@@ -10,7 +10,7 @@ La vertical de ventas está **muy madura** (tag `retail-v1` cerrado, hito-1 y hi
 
 Ordenados por valor/independencia. Cada uno se implementa con tests + commit propio.
 
-1. **`vistas-guardadas/` (atajos personalizables)** — RF / hito-1 1.6 lo dejó diferido. Modelo `UsuarioVistaGuardada` YA existe en el schema. Falta el módulo CRUD `/t/vistas-guardadas` (listar mías, crear, actualizar, borrar, marcar default) gated por sesión tenant (cada quien las suyas). Lo consume el POS/admin para filtros guardados. **Backend puro, seguro.**
+1. ~~**`vistas-guardadas/` (atajos personalizables)**~~ ✅ HECHO (2026-06-17). Módulo `/t/vistas-guardadas` (GET con filtro por recurso + compartidas, POST, PATCH, DELETE), default exclusivo por recurso/usuario, ownership (404 si no es tuya), compartidas visibles al equipo. 7 tests verdes (`tenant-vistas-guardadas.test.ts`). Falta solo cablearlo en POS/admin UI (diferido a cuando se consuma).
 
 2. **Autofactura pública (`POST /autofactura`)** — hito-1 1.5.c diferido. Endpoint público (sin auth tenant) que recibe el token JWT del QR del ticket + datos fiscales del cliente y emite el CFDI reusando `emitirCfdi(..., esAutofactura)`. Requiere: firmar un token de autofactura al cerrar venta (corto, con ventaId+tenant) y un endpoint público que lo valide. **Backend, reusa lógica CFDI existente.**
 
