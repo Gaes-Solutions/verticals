@@ -40,6 +40,8 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     CORS_ORIGIN: "http://localhost:5173",
     RATE_LIMIT_MAX: 100000,
     RATE_LIMIT_WINDOW: "1 minute",
+    FLOWS_SCHEDULER_ENABLED: false,
+    FLOWS_RUN_INTERVAL_MIN: 360,
     ...overrides,
   };
 }

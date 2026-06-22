@@ -143,7 +143,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             : {}),
           canal: "pos",
           lineas: ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) })),
-          pagos: [{ metodo: pago.metodo, monto: pago.monto.toFixed(2) }],
+          pagos: pago.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto.toFixed(2) })),
         },
       });
       const detalle = await api<VentaDetalle>(`/t/ventas/${venta.ventaId}`);
@@ -371,6 +371,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       {cobrando && (
         <CobroModal
           total={total}
+          saldoMonedero={cliente ? Number(cliente.saldoMonedero ?? 0) : 0}
           procesando={procesando}
           onCancel={() => setCobrando(false)}
           onConfirm={confirmarCobro}

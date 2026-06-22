@@ -46,7 +46,12 @@ export interface ProductoList {
   pageSize: number;
 }
 
-export type MetodoPago = "efectivo" | "tarjeta_debito" | "tarjeta_credito" | "transferencia";
+export type MetodoPago =
+  | "efectivo"
+  | "tarjeta_debito"
+  | "tarjeta_credito"
+  | "transferencia"
+  | "monedero";
 
 export interface TicketLinea {
   varianteId: string;
@@ -111,6 +116,7 @@ export interface Cliente {
   apellidos?: string | null;
   rfc?: string | null;
   telefonoPrincipal?: string | null;
+  saldoMonedero?: string | null;
 }
 
 export interface ClienteList {

@@ -16,6 +16,11 @@ const configSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
+  FLOWS_SCHEDULER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  FLOWS_RUN_INTERVAL_MIN: z.coerce.number().int().positive().default(360),
 });
 
 export type Config = z.infer<typeof configSchema>;

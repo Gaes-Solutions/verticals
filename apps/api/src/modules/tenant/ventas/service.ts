@@ -236,6 +236,7 @@ function validarPagos(
   cambio: Decimal;
   pagoFiado: Decimal;
   pagoCreditoB2b: Decimal;
+  pagoMonedero: Decimal;
 } {
   const pagoFiado = pagos
     .filter((p) => p.metodo === "credito_fiado")
@@ -249,6 +250,12 @@ function validarPagos(
   if (pagoCreditoB2b.gt(ZERO) && !clienteB2bId) {
     throw new VentaError(400, "Venta a crédito B2B requiere clienteB2bId");
   }
+  const pagoMonedero = pagos
+    .filter((p) => p.metodo === "monedero")
+    .reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
+  if (pagoMonedero.gt(ZERO) && !clienteId) {
+    throw new VentaError(400, "Pago con monedero requiere clienteId del cliente");
+  }
   const totalCobrado = pagos.reduce((acc, p) => acc.plus(new Decimal(p.monto)), ZERO);
   if (totalCobrado.lt(totalPersistir)) {
     throw new VentaError(400, "Pagos insuficientes", {
@@ -258,15 +265,18 @@ function validarPagos(
   }
   const cambio = totalCobrado.minus(totalPersistir);
   if (cambio.gt(ZERO)) {
-    if (pagoFiado.gt(ZERO) || pagoCreditoB2b.gt(ZERO)) {
-      throw new VentaError(400, "Venta con pago a crédito (fiado o B2B) no debe generar cambio");
+    if (pagoFiado.gt(ZERO) || pagoCreditoB2b.gt(ZERO) || pagoMonedero.gt(ZERO)) {
+      throw new VentaError(
+        400,
+        "Venta con pago a crédito o monedero no debe generar cambio en efectivo",
+      );
     }
     const efectivo = pagos.find((p) => p.metodo === "efectivo");
     if (!efectivo) {
       throw new VentaError(400, "Cambio requiere al menos un pago en efectivo");
     }
   }
-  return { totalCobrado, cambio, pagoFiado, pagoCreditoB2b };
+  return { totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero };
 }
 
 async function ejecutarPreviewSegura(
@@ -377,7 +387,7 @@ export async function crearVenta(
 
   const lineasCalc = buildLineasCalculo(ticketFinal, input, snapshots);
   const totales = totalesVenta(ticketFinal, lineasCalc);
-  const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b } = validarPagos(
+  const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero } = validarPagos(
     totales.totalVenta,
     input.pagos,
     input.clienteId,
@@ -406,7 +416,7 @@ export async function crearVenta(
         input,
         lineasCalc,
         usuarioId,
-        totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b },
+        totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero },
         creditoB2b,
       });
       if (promoResult.aplicaciones.length > 0) {
@@ -463,8 +473,44 @@ interface PersistirVentaParams {
     cambio: Decimal;
     pagoFiado: Decimal;
     pagoCreditoB2b: Decimal;
+    pagoMonedero: Decimal;
   };
   creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null;
+}
+
+async function aplicarCargoMonedero(
+  tx: Tx,
+  params: { clienteId: string; monto: Decimal; ventaId: string; folio: string; usuarioId: string },
+): Promise<void> {
+  const cliente = await tx.cliente.findUnique({
+    where: { id: params.clienteId },
+    select: { saldoMonedero: true },
+  });
+  if (!cliente) throw new VentaError(404, "Cliente del monedero no encontrado");
+  const saldoActual = new Decimal(cliente.saldoMonedero.toString());
+  const nuevo = saldoActual.minus(params.monto);
+  if (nuevo.lt(ZERO)) {
+    throw new VentaError(409, "Saldo insuficiente en el monedero", {
+      saldo: saldoActual.toFixed(2),
+      requerido: params.monto.toFixed(2),
+    });
+  }
+  await tx.cliente.update({
+    where: { id: params.clienteId },
+    data: { saldoMonedero: nuevo.toFixed(2) },
+  });
+  await tx.monederoMovimiento.create({
+    data: {
+      clienteId: params.clienteId,
+      tipo: "cargo",
+      monto: params.monto.toFixed(2),
+      saldoResultante: nuevo.toFixed(2),
+      motivo: `Venta ${params.folio}`,
+      refTipo: "venta",
+      refId: params.ventaId,
+      creadoPorId: params.usuarioId,
+    },
+  });
 }
 
 async function descontarStockLineas(
@@ -567,6 +613,15 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
       clienteId: p.input.clienteId,
       ventaId: venta.id,
       monto: p.totales.pagoFiado.toString(),
+      usuarioId: p.usuarioId,
+    });
+  }
+  if (p.totales.pagoMonedero.gt(0) && p.input.clienteId) {
+    await aplicarCargoMonedero(tx, {
+      clienteId: p.input.clienteId,
+      monto: p.totales.pagoMonedero,
+      ventaId: venta.id,
+      folio,
       usuarioId: p.usuarioId,
     });
   }

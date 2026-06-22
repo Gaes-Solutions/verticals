@@ -3,6 +3,7 @@ import { MockRecargaProvider } from "@gaespos/recargas";
 import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
+import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
 import { initSentry } from "./observability/sentry.js";
 
 async function main(): Promise<void> {
@@ -29,9 +30,15 @@ async function main(): Promise<void> {
     app.log.warn("⚠️  RECARGA_PROVIDER=mock — usando MockRecargaProvider (no apto producción)");
   }
 
+  let stopFlowsScheduler: (() => void) | undefined;
+  if (config.FLOWS_SCHEDULER_ENABLED) {
+    stopFlowsScheduler = startFlowsScheduler(app.log, config.FLOWS_RUN_INTERVAL_MIN);
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "shutdown signal received");
     try {
+      stopFlowsScheduler?.();
       await app.close();
       process.exit(0);
     } catch (err) {
