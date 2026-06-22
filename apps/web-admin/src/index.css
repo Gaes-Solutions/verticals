@@ -39,4 +39,30 @@ body {
     font-size: 11px;
     color: #000;
   }
+  /* Hoja de etiquetas: única visible al imprimir */
+  .etiquetas-print,
+  .etiquetas-print * {
+    visibility: visible;
+  }
+  .etiquetas-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  /* Reporte imprimible (hoja carta): única visible al imprimir */
+  .reporte-print,
+  .reporte-print * {
+    visibility: visible;
+  }
+  .reporte-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+  }
+  .no-print {
+    display: none !important;
+  }
 }

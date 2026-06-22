@@ -35,23 +35,41 @@ export function ReportesPage() {
       .finally(() => setCargando(false));
   }, [dias]);
 
+  const periodoLabel = PERIODOS.find((p) => p.dias === dias)?.label ?? `${dias} días`;
+
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Reportes</h1>
-        <div className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
-          {PERIODOS.map((p) => (
-            <button
-              key={p.dias}
-              type="button"
-              onClick={() => setDias(p.dias)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                dias === p.dias ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+    <div className="reporte-print">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-bold text-2xl text-slate-800">Reportes</h1>
+          {/* Solo visible al imprimir: el periodo (los botones se ocultan) */}
+          <p className="hidden text-slate-500 text-sm print:block">
+            Periodo: últimos {periodoLabel} · generado {new Date().toLocaleDateString("es-MX")}
+          </p>
+        </div>
+        <div className="no-print flex items-center gap-2">
+          <div className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
+            {PERIODOS.map((p) => (
+              <button
+                key={p.dias}
+                type="button"
+                onClick={() => setDias(p.dias)}
+                className={`rounded-md px-3 py-1.5 font-medium text-sm ${
+                  dias === p.dias ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            disabled={!data}
+            className="gx-btn-secondary disabled:opacity-50"
+          >
+            Imprimir / PDF
+          </button>
         </div>
       </div>
 
