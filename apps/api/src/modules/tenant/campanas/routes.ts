@@ -1,9 +1,24 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import {
+  EVENTOS_FLOW,
+  crearFlow,
+  eliminarFlow,
+  listarFlows,
+  runFlowsProgramados,
+  toggleFlow,
+} from "./flows.js";
 import { CampanaError, type CanalProviders, encolarEnvios, procesarColaEnvios } from "./service.js";
 
 const idParam = z.object({ id: z.string().min(1) });
+
+const crearFlowSchema = z.object({
+  evento: z.enum(EVENTOS_FLOW.map((e) => e.evento) as [string, ...string[]]),
+  campanaId: z.string().min(1),
+  dias: z.number().int().min(1).max(365).optional(),
+  frecuenciaMax: z.number().int().min(1).max(10).optional(),
+});
 
 const crearCampanaSchema = z.object({
   nombre: z.string().min(1).max(160),
@@ -126,6 +141,58 @@ const campanasRoutes: FastifyPluginAsync = async (app) => {
       if (handleErr(reply, err)) return;
       throw err;
     }
+  });
+
+  // ── Automatizaciones (flows) ──
+  app.get("/flows/eventos", async (req) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_GESTIONAR);
+    return EVENTOS_FLOW;
+  });
+
+  app.get("/flows", async (req) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_GESTIONAR);
+    return listarFlows(req.tenantPrisma);
+  });
+
+  app.post("/flows", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_GESTIONAR);
+    const body = crearFlowSchema.parse(req.body);
+    try {
+      const flow = await crearFlow(req.tenantPrisma, {
+        evento: body.evento,
+        campanaId: body.campanaId,
+        ...(body.dias !== undefined ? { dias: body.dias } : {}),
+        ...(body.frecuenciaMax !== undefined ? { frecuenciaMax: body.frecuenciaMax } : {}),
+      });
+      return reply.code(201).send(flow);
+    } catch (err) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: err instanceof Error ? err.message : "Error",
+      });
+    }
+  });
+
+  app.patch("/flows/:id", async (req) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_GESTIONAR);
+    const { id } = idParam.parse(req.params);
+    const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+    await toggleFlow(req.tenantPrisma, id, isActive);
+    return { ok: true };
+  });
+
+  app.delete("/flows/:id", async (req) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_GESTIONAR);
+    const { id } = idParam.parse(req.params);
+    await eliminarFlow(req.tenantPrisma, id);
+    return { ok: true };
+  });
+
+  // Ejecuta los flows programados (cron / "ejecutar ahora").
+  app.post("/flows/run", async (req) => {
+    req.requirePerm(PERMISSIONS.CAMPANAS_ENVIAR);
+    return runFlowsProgramados(req.tenantPrisma);
   });
 
   app.get("/:id", async (req, reply) => {

@@ -31,6 +31,8 @@ export const configTiendaSchema = z.object({
   cancelacionCliente: z.boolean().optional(),
   facturacionSelfService: z.boolean().optional(),
   preguntasPublicas: z.boolean().optional(),
+  // Pasarela de pago real del negocio (checkout tienda + links de cobro).
+  pasarelaPagoProvider: z.enum(["conekta", "stripe"]).nullable().optional(),
   // Logística automática + push transaccional (Tanda 4).
   paqueteriaProvider: z.enum(["skydropx", "envia"]).nullable().optional(),
   paqueteriaAutoGuia: z.boolean().optional(),

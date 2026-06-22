@@ -93,6 +93,7 @@ export interface ConfigTienda {
   cancelacionCliente?: boolean;
   facturacionSelfService?: boolean;
   preguntasPublicas?: boolean;
+  pasarelaPagoProvider?: "conekta" | "stripe" | null;
   paqueteriaProvider?: "skydropx" | "envia" | null;
   paqueteriaAutoGuia?: boolean;
   tarifasEnVivo?: boolean;

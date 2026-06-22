@@ -58,6 +58,9 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       ...(body.preguntasPublicas !== undefined
         ? { preguntasPublicas: body.preguntasPublicas }
         : {}),
+      ...(body.pasarelaPagoProvider !== undefined
+        ? { pasarelaPagoProvider: body.pasarelaPagoProvider }
+        : {}),
       ...(body.paqueteriaProvider !== undefined
         ? { paqueteriaProvider: body.paqueteriaProvider }
         : {}),

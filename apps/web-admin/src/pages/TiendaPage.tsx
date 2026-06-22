@@ -14,6 +14,7 @@ function slugify(s: string): string {
 export function TiendaPage() {
   const [config, setConfig] = useState<ConfigTienda>({});
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [buscarPub, setBuscarPub] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -22,10 +23,18 @@ export function TiendaPage() {
     api<ConfigTienda>("/t/ecommerce/config")
       .then((c) => setConfig(c ?? {}))
       .catch(() => setConfig({}));
-    api<Paged<Producto>>("/t/productos?pageSize=50")
-      .then((r) => setProductos(r.items))
-      .catch(() => setProductos([]));
   }, []);
+
+  // Lista de productos para publicar, con búsqueda server-side (debounce).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const qs = buscarPub.trim() ? `&q=${encodeURIComponent(buscarPub.trim())}` : "";
+      api<Paged<Producto>>(`/t/productos?pageSize=50${qs}`)
+        .then((r) => setProductos(r.items))
+        .catch(() => setProductos([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [buscarPub]);
 
   async function guardarConfig() {
     setError(null);
@@ -48,6 +57,7 @@ export function TiendaPage() {
           cancelacionCliente: config.cancelacionCliente ?? true,
           facturacionSelfService: config.facturacionSelfService ?? true,
           preguntasPublicas: config.preguntasPublicas ?? true,
+          pasarelaPagoProvider: config.pasarelaPagoProvider ?? null,
           paqueteriaProvider: config.paqueteriaProvider ?? null,
           paqueteriaAutoGuia: config.paqueteriaAutoGuia ?? false,
           tarifasEnVivo: config.tarifasEnVivo ?? false,
@@ -233,6 +243,36 @@ export function TiendaPage() {
       </section>
 
       <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="mb-1 font-bold text-slate-800">Pasarela de pago</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          Con qué procesador cobras los pagos en línea (checkout de la tienda y links de cobro).
+        </p>
+        <div className="mb-1 rounded-lg border border-slate-200 p-3">
+          <span className="mb-2 block font-medium text-slate-800 text-sm">Procesador de pago</span>
+          <select
+            value={config.pasarelaPagoProvider ?? ""}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                pasarelaPagoProvider: (e.target.value || null) as "conekta" | "stripe" | null,
+              })
+            }
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+          >
+            <option value="">Sin cobro en línea (solo demo / mock)</option>
+            <option value="conekta">Conekta (tarjeta, OXXO, SPEI — México)</option>
+            <option value="stripe">Stripe (tarjeta internacional)</option>
+          </select>
+          {!config.pasarelaPagoProvider && (
+            <p className="mt-2 text-amber-600 text-xs">
+              Sin procesador, los pagos no se cobran de verdad. Configura las llaves del proveedor
+              en el servidor antes de activarlo.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Envíos automáticos y notificaciones</h2>
         <p className="mb-4 text-slate-500 text-sm">
           Conecta una paquetería para generar guías solas y avisar a tus clientes por push.
@@ -382,9 +422,15 @@ export function TiendaPage() {
 
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Publicar productos</h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <p className="mb-3 text-sm text-slate-500">
           Pon tus productos a la venta en la tienda online.
         </p>
+        <input
+          value={buscarPub}
+          onChange={(e) => setBuscarPub(e.target.value)}
+          placeholder="Buscar producto por nombre o SKU…"
+          className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+        />
         <div className="max-h-72 overflow-y-auto">
           {productos.map((p) => (
             <div
@@ -403,7 +449,9 @@ export function TiendaPage() {
           ))}
           {productos.length === 0 && (
             <p className="text-sm text-slate-400">
-              Crea productos primero en la sección Productos.
+              {buscarPub.trim()
+                ? `Sin resultados para "${buscarPub.trim()}".`
+                : "Crea productos primero en la sección Productos."}
             </p>
           )}
         </div>

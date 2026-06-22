@@ -1,11 +1,13 @@
 import {
   BarChart3,
   FileText,
+  Link2,
   type LucideIcon,
   Menu,
   MessageCircleQuestion,
   Package,
   PackageCheck,
+  QrCode,
   Receipt,
   RotateCcw,
   ShieldCheck,
@@ -13,21 +15,29 @@ import {
   ShoppingCart,
   Star,
   Tags,
+  TrendingUp,
   Truck,
   Upload,
   Users,
+  Wallet,
+  Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { loadToken, setToken } from "./lib/api.js";
+import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
+import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
+import { EtiquetasPage } from "./pages/EtiquetasPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
+import { InventarioInsightsPage } from "./pages/InventarioInsightsPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
+import { MonederoPage } from "./pages/MonederoPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
 import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
@@ -48,12 +58,17 @@ type Seccion =
   | "reportes"
   | "productos"
   | "inventario"
+  | "inventario-iq"
+  | "etiquetas"
   | "ventas"
+  | "cobros"
+  | "monedero"
   | "pedidos"
   | "devoluciones"
   | "preguntas"
   | "envios"
   | "resenas"
+  | "automatizaciones"
   | "importador"
   | "compras"
   | "cfdi"
@@ -66,13 +81,18 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
   { key: "reportes", label: "Reportes", icon: BarChart3 },
   { key: "productos", label: "Productos", icon: Package },
   { key: "inventario", label: "Inventario", icon: Tags },
+  { key: "inventario-iq", label: "Inteligencia inventario", icon: TrendingUp },
+  { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode },
   { key: "importador", label: "Carga masiva", icon: Upload },
   { key: "compras", label: "Compras (OC)", icon: ShoppingBag },
   { key: "ventas", label: "Ventas", icon: Receipt },
+  { key: "cobros", label: "Cobros / Links", icon: Link2 },
+  { key: "monedero", label: "Monedero / Gift cards", icon: Wallet },
   { key: "pedidos", label: "Pedidos online", icon: PackageCheck },
   { key: "devoluciones", label: "Devoluciones", icon: RotateCcw },
   { key: "envios", label: "Envíos", icon: Truck },
   { key: "resenas", label: "Reseñas", icon: Star },
+  { key: "automatizaciones", label: "Automatizaciones", icon: Zap },
   { key: "preguntas", label: "Preguntas", icon: MessageCircleQuestion },
   { key: "cfdi", label: "Facturación", icon: FileText },
   { key: "usuarios", label: "Usuarios y permisos", icon: Users },
@@ -185,16 +205,21 @@ export function App() {
         {seccion === "reportes" && <ReportesPage />}
         {seccion === "productos" && <ProductosPage />}
         {seccion === "inventario" && <InventarioPage />}
+        {seccion === "inventario-iq" && <InventarioInsightsPage />}
+        {seccion === "etiquetas" && <EtiquetasPage />}
         {seccion === "importador" && <ImportadorPage />}
         {seccion === "compras" && <ComprasPage />}
         {seccion === "cfdi" && <CfdiPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "seguridad" && <SeguridadPage />}
         {seccion === "ventas" && <VentasPage />}
+        {seccion === "cobros" && <CobrosPage />}
+        {seccion === "monedero" && <MonederoPage />}
         {seccion === "pedidos" && <PedidosPage />}
         {seccion === "devoluciones" && <DevolucionesPage />}
         {seccion === "envios" && <EnviosPage />}
         {seccion === "resenas" && <ResenasPage />}
+        {seccion === "automatizaciones" && <AutomatizacionesPage />}
         {seccion === "preguntas" && <PreguntasPage />}
         {seccion === "tienda" && <TiendaPage />}
       </main>

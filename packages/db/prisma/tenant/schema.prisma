@@ -240,6 +240,65 @@ model ConfigSeguridad {
   @@map("config_seguridad")
 }
 
+// Link de cobro (pago a distancia / por WhatsApp). El negocio genera un link por
+// un monto y concepto; el cliente lo abre y paga (Conekta/Stripe/mock).
+model LinkPago {
+  id              String    @id @default(cuid())
+  token           String    @unique
+  concepto        String
+  monto           Decimal   @db.Decimal(12, 2)
+  clienteNombre   String?   @map("cliente_nombre")
+  clienteTelefono String?   @map("cliente_telefono")
+  status          String    @default("pendiente") // pendiente | pagado | cancelado | expirado
+  metodoPago      String?   @map("metodo_pago")
+  proveedorRef    String?   @map("proveedor_ref")
+  vigenciaHasta   DateTime? @map("vigencia_hasta")
+  creadoPorId     String    @map("creado_por_id")
+  pagadoAt        DateTime? @map("pagado_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("links_pago")
+}
+
+// Tarjeta de regalo: se vende/emite con un saldo y se canjea por código.
+model TarjetaRegalo {
+  id            String    @id @default(cuid())
+  codigo        String    @unique
+  montoInicial  Decimal   @map("monto_inicial") @db.Decimal(12, 2)
+  saldoActual   Decimal   @map("saldo_actual") @db.Decimal(12, 2)
+  status        String    @default("activa") // activa | agotada | cancelada | expirada
+  compradaPor   String?   @map("comprada_por")
+  vigenciaHasta DateTime? @map("vigencia_hasta")
+  creadoPorId   String    @map("creado_por_id")
+  canjeadaAt    DateTime? @map("canjeada_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("tarjetas_regalo")
+}
+
+// Movimiento del monedero electrónico (saldo a favor) de un cliente.
+model MonederoMovimiento {
+  id              String   @id @default(cuid())
+  clienteId       String   @map("cliente_id")
+  tipo            String // abono | cargo
+  monto           Decimal  @db.Decimal(12, 2)
+  saldoResultante Decimal  @map("saldo_resultante") @db.Decimal(14, 2)
+  motivo          String
+  refTipo         String?  @map("ref_tipo")
+  refId           String?  @map("ref_id")
+  creadoPorId     String   @map("creado_por_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@map("monedero_movimientos")
+}
+
 model UsuarioSucursal {
   usuarioId  String   @map("usuario_id")
   sucursalId String   @map("sucursal_id")
@@ -1235,6 +1294,7 @@ model Cliente {
   vendedorAsignadoId   String?     @map("vendedor_asignado_id")
   permiteFiado         Boolean     @default(false) @map("permite_fiado")
   limiteFiado          Decimal     @default(0) @map("limite_fiado") @db.Decimal(14, 2)
+  saldoMonedero        Decimal     @default(0) @map("saldo_monedero") @db.Decimal(14, 2)
   aceptaMarketing      Boolean     @default(false) @map("acepta_marketing")
   idiomaPreferido      String      @default("es-MX") @map("idioma_preferido")
   notas                String?
@@ -1255,6 +1315,7 @@ model Cliente {
   pacientesTutor        Paciente[]               @relation("PacienteTutor")
   mascotasTutor         Mascota[]                @relation("MascotaTutor")
   carritosEcommerce     CarritoEcommerce[]
+  monederoMovimientos   MonederoMovimiento[]
   pedidosEcommerce      PedidoEcommerce[]
   resenas               ProductoResena[]
   wishlists             Wishlist[]
@@ -3441,6 +3502,9 @@ model ConfigTiendaEcommerce {
   cancelacionCliente             Boolean    @default(true) @map("cancelacion_cliente")
   facturacionSelfService         Boolean    @default(true) @map("facturacion_self_service")
   preguntasPublicas              Boolean    @default(true) @map("preguntas_publicas")
+  // Pasarela de pago del negocio: conekta | stripe | null (= sin cobro online real).
+  // La usan checkout de tienda y los links de cobro para resolver el provider real.
+  pasarelaPagoProvider           String?    @map("pasarela_pago_provider")
   // Logística automática (Tanda 4): proveedor de paquetería + auto-guía + tarifas en vivo.
   paqueteriaProvider             String?    @map("paqueteria_provider")
   paqueteriaAutoGuia             Boolean    @default(false) @map("paqueteria_auto_guia")
