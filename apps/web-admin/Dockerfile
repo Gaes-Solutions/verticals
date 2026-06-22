@@ -28,7 +28,9 @@ RUN pnpm --filter @gaespos/web-admin build
 
 # ===== Stage 2: runtime (nginx estático) =====
 FROM nginx:1.27-alpine AS runtime
-COPY deploy/nginx-spa.conf /etc/nginx/conf.d/default.conf
+# Upstream del API (envsubst al arrancar). compose: api:3000 · Railway: <api>.railway.internal:3000
+ENV API_UPSTREAM=api:3000
+COPY deploy/nginx-spa.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /repo/apps/web-admin/dist /usr/share/nginx/html
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

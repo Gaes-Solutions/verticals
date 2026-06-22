@@ -1,6 +1,8 @@
 # nginx para las SPAs Vite (web-admin / web-pos / web-superadmin):
-# sirve el build estático + proxy /api/* → api:3000/* (igual que el proxy de Vite en dev).
-# El upstream "api" resuelve dentro de la red de Coolify/compose.
+# sirve el build estático + proxy /api/* → ${API_UPSTREAM}/* (igual que el proxy de Vite en dev).
+# nginx hace envsubst de ${API_UPSTREAM} al arrancar (resto de $vars son de nginx, se preservan).
+#   - compose/Coolify: API_UPSTREAM=api:3000
+#   - Railway:         API_UPSTREAM=<servicio-api>.railway.internal:3000
 server {
   listen 80;
   server_name _;
@@ -12,7 +14,7 @@ server {
 
   # API → backend (strip del prefijo /api por el trailing slash, como el rewrite de Vite)
   location /api/ {
-    proxy_pass http://api:3000/;
+    proxy_pass http://${API_UPSTREAM}/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
