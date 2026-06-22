@@ -3,9 +3,12 @@ import {
   PERMISSIONS,
   PRESET_ROLES_RETAIL,
   areaAppliesToVertical,
+  categoryAppliesToVertical,
+  isKnownPermission,
   listPermissionsByArea,
+  permissionMeta,
 } from "@gaespos/permissions";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
 import { rolCreateSchema, rolIdParamSchema, rolUpdateSchema } from "./schemas.js";
 
@@ -25,7 +28,10 @@ const PRESET_ROLE_AREA: Record<string, AreaNegocio> = {
 const rolesRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
     req.requirePerm(PERMISSIONS.ROLES_LEER);
+    // Solo roles vigentes: los presets de otras verticales se desactivan al
+    // aplicar las plantillas, y no deben aparecerle al dueño.
     const items = await req.tenantPrisma.rol.findMany({
+      where: { isActive: true },
       orderBy: [{ isPreset: "desc" }, { codigo: "asc" }],
     });
     return items;
@@ -78,9 +84,34 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
     return item;
   });
 
+  // Defensa en profundidad: un rol del dueño solo puede usar permisos de su
+  // vertical (general + su área). El mezclado entre verticales es del superadmin.
+  async function permisosFueraDeVertical(
+    req: FastifyRequest,
+    permisos: string[],
+  ): Promise<string[]> {
+    const tenant = await app.masterPrisma.tenant.findUnique({
+      where: { slug: req.tenantSlug },
+      select: { vertical: true },
+    });
+    const vertical = tenant?.vertical ?? undefined;
+    return permisos.filter((p) => {
+      if (p === "*" || !isKnownPermission(p)) return true; // wildcard/desconocido: no permitido al dueño
+      return !categoryAppliesToVertical(permissionMeta(p).category, vertical ?? "");
+    });
+  }
+
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.ROLES_CREAR);
     const body = rolCreateSchema.parse(req.body);
+    const fuera = await permisosFueraDeVertical(req, body.permisos);
+    if (fuera.length > 0) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: `Permisos fuera de tu vertical: ${fuera.join(", ")}`,
+      });
+    }
     const created = await req.tenantPrisma.rol.create({
       data: {
         codigo: body.codigo,
@@ -111,6 +142,16 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
         error: "Forbidden",
         message: "Los roles preset son de sólo lectura. Crea un rol custom para personalizar.",
       });
+    }
+    if (body.permisos) {
+      const fuera = await permisosFueraDeVertical(req, body.permisos);
+      if (fuera.length > 0) {
+        return reply.code(400).send({
+          statusCode: 400,
+          error: "Bad Request",
+          message: `Permisos fuera de tu vertical: ${fuera.join(", ")}`,
+        });
+      }
     }
     const updated = await req.tenantPrisma.rol.update({
       where: { id: params.id },

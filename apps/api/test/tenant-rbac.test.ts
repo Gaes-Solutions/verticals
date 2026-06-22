@@ -1,3 +1,4 @@
+import { masterPrisma } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -15,6 +16,10 @@ let cashierToken: string;
 beforeAll(async () => {
   app = await buildTestApp();
   await createTestTenant(TENANT_SLUG, "Tenant RBAC", "free");
+  await masterPrisma.tenant.update({
+    where: { slug: TENANT_SLUG },
+    data: { vertical: "retail_mayoreo" as never },
+  });
   await createTenantUser(TENANT_SLUG, {
     email: OWNER_EMAIL,
     password: OWNER_PASSWORD,
@@ -194,17 +199,18 @@ describe("tenant CRUD — roles", () => {
     );
   });
 
-  it("catálogo agrupa por área y permite mezclar (no oculta otras verticales)", async () => {
+  it("catálogo del dueño está limitado a SU vertical (retail: general+tienda, sin salud)", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/t/roles/catalogo-permisos",
       headers: { authorization: `Bearer ${ownerToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { areas: Array<{ area: string; aplica: boolean }> };
+    const body = res.json() as { verticalActual: string; areas: Array<{ area: string }> };
     const areas = body.areas.map((a) => a.area);
-    expect(areas).toEqual(expect.arrayContaining(["general", "tienda", "salud"]));
-    expect(body.areas[0]?.aplica).toBe(true);
+    expect(body.verticalActual).toBe("retail_mayoreo");
+    expect(areas).toEqual(expect.arrayContaining(["general", "tienda"]));
+    expect(areas).not.toContain("salud");
   });
 
   it("plantillas de rol vienen etiquetadas por área (sin el wildcard)", async () => {
@@ -219,18 +225,19 @@ describe("tenant CRUD — roles", () => {
     expect(items.find((r) => r.codigo === "dueno")).toBeUndefined();
   });
 
-  it("owner crea rol custom MEZCLANDO permisos de tienda + salud", async () => {
+  it("dueño NO puede usar permisos fuera de su vertical → 400 (defensa en profundidad)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/t/roles",
       headers: { authorization: `Bearer ${ownerToken}` },
       payload: {
-        codigo: "cajero-recepcion",
-        nombre: "Cajero + Recepción",
-        permisos: ["pos.usar", "ventas.crear", "citas.leer", "pacientes.leer"],
+        codigo: "intruso-salud",
+        nombre: "Intruso",
+        permisos: ["pos.usar", "citas.leer", "pacientes.leer"],
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toMatch(/fuera de tu vertical/i);
   });
 
   it("owner crea rol custom con permisos validados", async () => {
