@@ -21,18 +21,10 @@ WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY .npmrc ./
 COPY apps/api/package.json ./apps/api/
-COPY packages/db/package.json ./packages/db/
-COPY packages/permissions/package.json ./packages/permissions/
-COPY packages/pricing/package.json ./packages/pricing/
-COPY packages/fiscal/package.json ./packages/fiscal/
+COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile --filter "@gaespos/api..."
 
-# Fuente: copio solo los workspaces que api necesita (mejor caching)
-COPY packages/db ./packages/db
-COPY packages/permissions ./packages/permissions
-COPY packages/pricing ./packages/pricing
-COPY packages/fiscal ./packages/fiscal
 COPY apps/api ./apps/api
 
 # Genero Prisma clients para master y tenant
