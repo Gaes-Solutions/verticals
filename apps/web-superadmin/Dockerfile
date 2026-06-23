@@ -18,8 +18,7 @@ COPY .npmrc ./
 COPY apps/web-superadmin/package.json ./apps/web-superadmin/
 COPY packages/ui/package.json ./packages/ui/
 
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter "@gaespos/web-superadmin..."
+RUN pnpm install --frozen-lockfile --filter "@gaespos/web-superadmin..."
 
 COPY packages/ui ./packages/ui
 COPY apps/web-superadmin ./apps/web-superadmin

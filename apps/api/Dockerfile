@@ -26,8 +26,7 @@ COPY packages/permissions/package.json ./packages/permissions/
 COPY packages/pricing/package.json ./packages/pricing/
 COPY packages/fiscal/package.json ./packages/fiscal/
 
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter "@gaespos/api..."
+RUN pnpm install --frozen-lockfile --filter "@gaespos/api..."
 
 # Fuente: copio solo los workspaces que api necesita (mejor caching)
 COPY packages/db ./packages/db

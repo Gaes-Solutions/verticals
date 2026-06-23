@@ -18,8 +18,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY .npmrc ./
 COPY apps/web-tienda/package.json ./apps/web-tienda/
 
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
+RUN pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
 
 COPY apps/web-tienda ./apps/web-tienda
 
