@@ -17,9 +17,11 @@ WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY .npmrc ./
 COPY apps/web-tienda/package.json ./apps/web-tienda/
+COPY packages/ui/package.json ./packages/ui/
 
 RUN pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
 
+COPY packages/ui ./packages/ui
 COPY apps/web-tienda ./apps/web-tienda
 
 RUN pnpm --filter @gaespos/web-tienda build
