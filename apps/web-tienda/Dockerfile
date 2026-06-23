@@ -24,7 +24,7 @@ RUN pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
 COPY packages/ui ./packages/ui
 COPY apps/web-tienda ./apps/web-tienda
 
-RUN pnpm --filter @gaespos/web-tienda build
+RUN NODE_ENV=production pnpm --filter @gaespos/web-tienda build
 
 # ===== Stage 2: runtime =====
 FROM node:22-bookworm-slim AS runtime
