@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
-import type { InventarioItem, Paged } from "../lib/types.js";
+import { ApiError, api, puede } from "../lib/api.js";
+import type { InventarioItem, Paged, Producto, Sucursal } from "../lib/types.js";
 
 export function InventarioPage() {
   const [items, setItems] = useState<InventarioItem[]>([]);
   const [cargando, setCargando] = useState(true);
   const [soloBajo, setSoloBajo] = useState(false);
   const [ajuste, setAjuste] = useState<InventarioItem | null>(null);
+  const [entrada, setEntrada] = useState(false);
+  const puedeAjustar = puede("inventario.ajustar");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -26,16 +28,27 @@ export function InventarioPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Inventario</h1>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={soloBajo}
-            onChange={(e) => setSoloBajo(e.target.checked)}
-          />
-          Solo bajo mínimo
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={soloBajo}
+              onChange={(e) => setSoloBajo(e.target.checked)}
+            />
+            Solo bajo mínimo
+          </label>
+          {puedeAjustar && (
+            <button
+              type="button"
+              onClick={() => setEntrada(true)}
+              className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
+            >
+              + Entrada de inventario
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
@@ -81,13 +94,15 @@ export function InventarioPage() {
                   </td>
                   <td className="px-4 py-2 text-right text-slate-500">{i.stockMinimo}</td>
                   <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setAjuste(i)}
-                      className="text-brand hover:underline"
-                    >
-                      Ajustar
-                    </button>
+                    {puedeAjustar && (
+                      <button
+                        type="button"
+                        onClick={() => setAjuste(i)}
+                        className="text-brand hover:underline"
+                      >
+                        Ajustar
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -102,6 +117,16 @@ export function InventarioPage() {
           onClose={() => setAjuste(null)}
           onSaved={() => {
             setAjuste(null);
+            void cargar();
+          }}
+        />
+      )}
+
+      {entrada && (
+        <EntradaModal
+          onClose={() => setEntrada(false)}
+          onSaved={() => {
+            setEntrada(false);
             void cargar();
           }}
         />
@@ -201,6 +226,177 @@ function AjusteModal({
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Aplicar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursalId, setSucursalId] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [resultados, setResultados] = useState<Producto[]>([]);
+  const [producto, setProducto] = useState<Producto | null>(null);
+  const [varianteId, setVarianteId] = useState("");
+  const [cantidad, setCantidad] = useState("");
+  const [motivo, setMotivo] = useState("Stock inicial");
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    api<Sucursal[]>("/t/sucursales")
+      .then((r) => {
+        setSucursales(r);
+        const inicial = r.find((s) => s.isDefault) ?? r[0];
+        if (inicial) setSucursalId(inicial.id);
+      })
+      .catch(() => setSucursales([]));
+  }, []);
+
+  useEffect(() => {
+    if (producto) return;
+    const t = setTimeout(() => {
+      api<Paged<Producto>>(
+        `/t/productos?pageSize=10${busqueda ? `&q=${encodeURIComponent(busqueda)}` : ""}`,
+      )
+        .then((r) => setResultados(r.items))
+        .catch(() => setResultados([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [busqueda, producto]);
+
+  function elegir(p: Producto) {
+    setProducto(p);
+    setVarianteId(p.variantes[0]?.id ?? "");
+  }
+
+  async function guardar() {
+    setError(null);
+    setGuardando(true);
+    try {
+      await api("/t/inventario/ajustes", {
+        body: { varianteId, sucursalId, tipo: "ajuste_positivo", cantidad, motivo },
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error al dar entrada");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="mb-1 text-lg font-bold text-slate-800">Entrada de inventario</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Da stock inicial a un producto que aún no tiene inventario.
+        </p>
+        <div className="space-y-3">
+          {!producto ? (
+            <>
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar producto por nombre o SKU…"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              />
+              <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+                {resultados.length === 0 && (
+                  <p className="px-3 py-4 text-center text-sm text-slate-400">Sin resultados.</p>
+                )}
+                {resultados.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => elegir(p)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  >
+                    <span className="font-medium text-slate-800">{p.nombre}</span>
+                    <span className="text-slate-400">{p.skuPadre}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-medium text-slate-800">{producto.nombre}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setProducto(null);
+                  setVarianteId("");
+                }}
+                className="text-brand hover:underline"
+              >
+                Cambiar
+              </button>
+            </div>
+          )}
+
+          {producto && producto.variantes.length > 1 && (
+            <select
+              value={varianteId}
+              onChange={(e) => setVarianteId(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            >
+              {producto.variantes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nombreVariante ?? v.sku}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {sucursales.length > 1 && (
+            <select
+              value={sucursalId}
+              onChange={(e) => setSucursalId(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            >
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <input
+            type="number"
+            min={0}
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            placeholder="Cantidad inicial"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+          />
+          <input
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Motivo (mín. 3 letras)"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+          />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={
+              guardando || !varianteId || !sucursalId || !cantidad || motivo.trim().length < 3
+            }
+            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Dar entrada"}
           </button>
         </div>
       </div>
