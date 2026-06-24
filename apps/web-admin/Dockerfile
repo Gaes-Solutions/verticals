@@ -23,6 +23,10 @@ RUN pnpm install --frozen-lockfile --filter "@gaespos/web-admin..."
 COPY packages/ui ./packages/ui
 COPY apps/web-admin ./apps/web-admin
 
+# VITE_* vars are inlined at build time; Railway passes service variables as build args.
+ARG VITE_TIENDA_URL
+ENV VITE_TIENDA_URL=$VITE_TIENDA_URL
+
 RUN pnpm --filter @gaespos/web-admin build
 
 # ===== Stage 2: runtime (nginx estático) =====
