@@ -8,6 +8,8 @@ export interface CrearIntentInput {
   moneda: string;
   metodo: PagoMetodo;
   emailComprador: string;
+  /** Nombre del comprador (Conekta valida formato: solo letras/espacios, no el email). */
+  nombreComprador?: string;
   descripcion?: string;
   metadata?: Record<string, string>;
   /** Token de tarjeta generado en el frontend (Conekta.js / Stripe.js). PCI: la

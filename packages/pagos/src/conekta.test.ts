@@ -75,6 +75,39 @@ describe("ConektaClient", () => {
     expect(intent.referenciaPago).toBe("646180111812345678");
   });
 
+  it("customer_info.name usa el nombre saneado (no el email) y cae a 'Cliente'", async () => {
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ id: "ord_n", charges: { data: [] } }), { status: 200 }),
+      );
+    const client = new ConektaClient(OPTS);
+
+    await client.crearIntent({
+      pedidoId: "p",
+      montoCentavos: 100,
+      moneda: "MXN",
+      metodo: "oxxo",
+      emailComprador: "a@test.mx",
+      nombreComprador: "José Pérez 123",
+    });
+    const conNombre = JSON.parse((spy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(conNombre.customer_info.name).toBe("José Pérez");
+    expect(conNombre.customer_info.email).toBe("a@test.mx");
+
+    spy.mockClear();
+    await client.crearIntent({
+      pedidoId: "p",
+      montoCentavos: 100,
+      moneda: "MXN",
+      metodo: "oxxo",
+      emailComprador: "a@test.mx",
+    });
+    const sinNombre = JSON.parse((spy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(sinNombre.customer_info.name).toBe("Cliente");
+  });
+
   it("tarjeta sin token → INVALID_INPUT", async () => {
     const client = new ConektaClient(OPTS);
     await expect(

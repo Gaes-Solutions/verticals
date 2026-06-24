@@ -157,12 +157,14 @@ export async function iniciarCheckout(
     },
   });
 
+  const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
   const intent = await provider.crearIntent({
     pedidoId: pedido.id,
     montoCentavos: Math.round(total.times(100).toNumber()),
     moneda: carrito.moneda,
     metodo: input.metodoPago,
     emailComprador: input.emailComprador,
+    ...(nombreComprador ? { nombreComprador } : {}),
     descripcion: `Pedido ${folioPublico}`,
     metadata: {
       pedidoId: pedido.id,

@@ -21,6 +21,17 @@ const METODO_A_CHARGE_TYPE: Partial<Record<CrearIntentInput["metodo"], string>> 
   transferencia: "spei",
 };
 
+// Conekta valida customer_info.name (solo letras/espacios/'-). Saneamos y damos
+// un fallback para no romper el cobro si falta o trae caracteres no soportados.
+function nombreConekta(nombre: string | undefined): string {
+  const limpio = (nombre ?? "")
+    .normalize("NFC")
+    .replace(/[^\p{L}\s'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return limpio.length >= 2 ? limpio : "Cliente";
+}
+
 interface ConektaOrderResponse {
   id: string;
   payment_status?: string;
@@ -111,7 +122,7 @@ export class ConektaClient implements PaymentProvider {
     const paymentMethod = this.resolverPaymentMethod(input);
     const order = await this.post<ConektaOrderResponse>("/orders", {
       currency: input.moneda.toUpperCase(),
-      customer_info: { email: input.emailComprador, name: input.emailComprador },
+      customer_info: { email: input.emailComprador, name: nombreConekta(input.nombreComprador) },
       line_items: [
         {
           name: input.descripcion ?? `Pedido ${input.pedidoId}`,
