@@ -24,6 +24,10 @@ RUN pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
 COPY packages/ui ./packages/ui
 COPY apps/web-tienda ./apps/web-tienda
 
+# NEXT_PUBLIC_* vars are inlined at build time; Railway passes service variables as build args.
+ARG NEXT_PUBLIC_CONEKTA_PUBLIC_KEY
+ENV NEXT_PUBLIC_CONEKTA_PUBLIC_KEY=$NEXT_PUBLIC_CONEKTA_PUBLIC_KEY
+
 RUN NODE_ENV=production pnpm --filter @gaespos/web-tienda build
 
 # ===== Stage 2: runtime =====
