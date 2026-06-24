@@ -1,5 +1,5 @@
 import type { EmailProvider } from "@gaespos/email";
-import type { PaymentProvider } from "@gaespos/pagos";
+import type { PagoIntent, PaymentProvider } from "@gaespos/pagos";
 import { PERMISSIONS } from "@gaespos/permissions";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
@@ -56,6 +56,8 @@ export interface IniciarCheckoutResult {
   pedidoId: string;
   folioPublico: string;
   intentId: string;
+  intentStatus: PagoIntent["status"];
+  montoCentavos: number;
   clientSecret?: string;
   referenciaPago?: string;
   total: string;
@@ -158,9 +160,10 @@ export async function iniciarCheckout(
   });
 
   const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
+  const montoCentavos = Math.round(total.times(100).toNumber());
   const intent = await provider.crearIntent({
     pedidoId: pedido.id,
-    montoCentavos: Math.round(total.times(100).toNumber()),
+    montoCentavos,
     moneda: carrito.moneda,
     metodo: input.metodoPago,
     emailComprador: input.emailComprador,
@@ -188,6 +191,8 @@ export async function iniciarCheckout(
     pedidoId: pedido.id,
     folioPublico,
     intentId: intent.intentId,
+    intentStatus: intent.status,
+    montoCentavos,
     ...(intent.clientSecret ? { clientSecret: intent.clientSecret } : {}),
     ...(intent.referenciaPago ? { referenciaPago: intent.referenciaPago } : {}),
     total: total.toFixed(2),

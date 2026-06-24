@@ -106,6 +106,22 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         requiereFactura: body.requiereFactura,
         ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
       });
+      // Pago con tarjeta es síncrono: si el proveedor ya confirmó, finalizamos el
+      // pedido en línea (misma lógica idempotente del webhook: marca pagado, genera
+      // venta y descuenta stock). OXXO/SPEI siguen pendientes hasta su webhook.
+      if (result.intentStatus === "confirmado") {
+        const confirmacion = await procesarWebhookPago(
+          req.tenantPrisma,
+          req.principal.userId,
+          {
+            intentId: result.intentId,
+            status: "confirmado",
+            montoCentavos: result.montoCentavos,
+          },
+          app.emailProviderFactory(),
+        );
+        await postPago(app, req.tenantPrisma, confirmacion);
+      }
       return reply.code(201).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;
