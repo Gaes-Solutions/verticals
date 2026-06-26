@@ -8,6 +8,8 @@ import { iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
 import {
   CheckoutError,
   type ConfirmarPagoResult,
+  type IniciarCheckoutInput,
+  type IniciarCheckoutResult,
   iniciarCheckout,
   procesarWebhookPago,
 } from "./service.js";
@@ -16,7 +18,7 @@ import {
  * Tras confirmarse el pago: intenta la auto-guía y manda push de pago_confirmado
  * si el tenant lo activó. Todo best-effort (no rompe la respuesta del webhook).
  */
-async function postPago(
+export async function postPago(
   app: FastifyInstance,
   prisma: TenantPrismaClient,
   result: ConfirmarPagoResult,
@@ -87,41 +89,54 @@ function resolverProvider(
   }
 }
 
+// Pago con tarjeta es síncrono: si el proveedor ya confirmó, finalizamos el pedido
+// en línea (misma lógica idempotente del webhook: marca pagado, genera venta y
+// descuenta stock). OXXO/SPEI siguen pendientes hasta su webhook.
+async function finalizarSiConfirmado(
+  app: FastifyInstance,
+  prisma: TenantPrismaClient,
+  usuarioId: string,
+  result: IniciarCheckoutResult,
+): Promise<void> {
+  if (result.intentStatus !== "confirmado") return;
+  const confirmacion = await procesarWebhookPago(
+    prisma,
+    usuarioId,
+    { intentId: result.intentId, status: "confirmado", montoCentavos: result.montoCentavos },
+    app.emailProviderFactory(),
+  );
+  await postPago(app, prisma, confirmacion);
+}
+
+function buildCheckoutInput(
+  body: z.infer<typeof iniciarCheckoutSchema>,
+  tenantSlug: string,
+): IniciarCheckoutInput {
+  return {
+    carritoId: body.carritoId,
+    tenantSlug,
+    emailComprador: body.emailComprador,
+    metodoPago: body.metodoPago,
+    metodoEnvio: body.metodoEnvio,
+    ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
+    ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
+    ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
+    ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
+    ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
+    requiereFactura: body.requiereFactura,
+    ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
+  };
+}
+
 const checkoutRoutes: FastifyPluginAsync = async (app) => {
   app.post("/iniciar", async (req, reply) => {
     const body = iniciarCheckoutSchema.parse(req.body);
     const provider = resolverProvider(app, body.proveedorPago, reply);
     if (!provider) return;
     try {
-      const result = await iniciarCheckout(req.tenantPrisma, provider, {
-        carritoId: body.carritoId,
-        emailComprador: body.emailComprador,
-        metodoPago: body.metodoPago,
-        metodoEnvio: body.metodoEnvio,
-        ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
-        ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
-        ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
-        ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
-        ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
-        requiereFactura: body.requiereFactura,
-        ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
-      });
-      // Pago con tarjeta es síncrono: si el proveedor ya confirmó, finalizamos el
-      // pedido en línea (misma lógica idempotente del webhook: marca pagado, genera
-      // venta y descuenta stock). OXXO/SPEI siguen pendientes hasta su webhook.
-      if (result.intentStatus === "confirmado") {
-        const confirmacion = await procesarWebhookPago(
-          req.tenantPrisma,
-          req.principal.userId,
-          {
-            intentId: result.intentId,
-            status: "confirmado",
-            montoCentavos: result.montoCentavos,
-          },
-          app.emailProviderFactory(),
-        );
-        await postPago(app, req.tenantPrisma, confirmacion);
-      }
+      const input = buildCheckoutInput(body, req.principal.tenantSlug);
+      const result = await iniciarCheckout(req.tenantPrisma, provider, input);
+      await finalizarSiConfirmado(app, req.tenantPrisma, req.principal.userId, result);
       return reply.code(201).send(result);
     } catch (err) {
       if (handleErr(reply, err)) return;

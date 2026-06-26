@@ -87,6 +87,7 @@ import ventasRoutes from "./modules/tenant/ventas/routes.js";
 import vistasGuardadasRoutes from "./modules/tenant/vistas-guardadas/routes.js";
 import wishlistsRoutes from "./modules/tenant/wishlists/routes.js";
 import tenantRoutes from "./modules/tenants/routes.js";
+import conektaWebhookRoutes from "./modules/webhooks/conekta-routes.js";
 import aiPlugin, { type AiProviderFactory } from "./plugins/ai.js";
 import authPlugin from "./plugins/auth.js";
 import dbPlugin from "./plugins/db.js";
@@ -180,6 +181,7 @@ export async function buildApp(
   await app.register(autofacturaPublicRoutes);
   await app.register(billingAdminTenantRoutes);
   await app.register(billingWebhookRoutes);
+  await app.register(conektaWebhookRoutes);
   await app.register(billingAdminGaesSoftRoutes);
   await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });

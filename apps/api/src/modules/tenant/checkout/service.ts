@@ -40,6 +40,8 @@ async function nextFolioPublico(client: TenantClient): Promise<string> {
 
 export interface IniciarCheckoutInput {
   carritoId: string;
+  /** Slug del tenant; viaja en el metadata del pago para resolver el webhook. */
+  tenantSlug: string;
   emailComprador: string;
   metodoPago: "tarjeta" | "oxxo" | "spei" | "transferencia" | "cod";
   metodoEnvio: "paqueteria" | "click_collect" | "envio_local";
@@ -170,6 +172,7 @@ export async function iniciarCheckout(
     ...(nombreComprador ? { nombreComprador } : {}),
     descripcion: `Pedido ${folioPublico}`,
     metadata: {
+      tenantSlug: input.tenantSlug,
       pedidoId: pedido.id,
       folioPublico,
       ...(input.mesesSinIntereses ? { msi: String(input.mesesSinIntereses) } : {}),
