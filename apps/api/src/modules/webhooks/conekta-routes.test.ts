@@ -1,6 +1,6 @@
 import { createSign, generateKeyPairSync } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { firmaValida, normalizar } from "./conekta-routes.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { firmaValida, normalizar, publicKeyPem } from "./conekta-routes.js";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -29,6 +29,29 @@ describe("firmaValida (RSA-SHA256 estilo Conekta)", () => {
 
   it("rechaza una firma basura sin lanzar", () => {
     expect(firmaValida(body, "no-es-base64-valido", pem)).toBe(false);
+  });
+});
+
+describe("publicKeyPem (normaliza PEM de Conekta)", () => {
+  afterEach(() => {
+    process.env.CONEKTA_WEBHOOK_PUBLIC_KEY = "";
+  });
+
+  it("reconstruye un PEM de una sola línea y verifica firmas", () => {
+    const body = JSON.stringify({ type: "order.paid", data: { object: { id: "ord_x" } } });
+    process.env.CONEKTA_WEBHOOK_PUBLIC_KEY = pem.replace(/\n/g, "");
+    const normalizado = publicKeyPem();
+    expect(normalizado).toContain("\n");
+    expect(firmaValida(body, firmar(body), normalizado as string)).toBe(true);
+  });
+
+  it("acepta PEM con saltos escapados (\\n)", () => {
+    process.env.CONEKTA_WEBHOOK_PUBLIC_KEY = pem.replace(/\n/g, "\\n");
+    expect(publicKeyPem()).toContain("-----BEGIN PUBLIC KEY-----\n");
+  });
+
+  it("sin env → null", () => {
+    expect(publicKeyPem()).toBeNull();
   });
 });
 

@@ -25,11 +25,21 @@ type EventoNormalizado = {
   montoCentavos: number;
 };
 
-function publicKeyPem(): string | null {
+export function publicKeyPem(): string | null {
   const raw = process.env.CONEKTA_WEBHOOK_PUBLIC_KEY;
   if (!raw) return null;
   // Railway suele guardar el salto de línea escapado como "\n".
-  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw;
+  let pem = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw;
+  // Conekta entrega el PEM en una sola línea; Node exige saltos reales para parsearlo.
+  if (!pem.includes("\n")) {
+    const body = pem
+      .replace("-----BEGIN PUBLIC KEY-----", "")
+      .replace("-----END PUBLIC KEY-----", "")
+      .replace(/\s+/g, "");
+    const envuelto = body.match(/.{1,64}/g)?.join("\n") ?? body;
+    pem = `-----BEGIN PUBLIC KEY-----\n${envuelto}\n-----END PUBLIC KEY-----\n`;
+  }
+  return pem;
 }
 
 export function firmaValida(rawBody: string, digest: string | undefined, pem: string): boolean {
