@@ -1,4 +1,5 @@
 import {
+  BadgePercent,
   BarChart3,
   FileText,
   HandCoins,
@@ -43,6 +44,7 @@ import { MonederoPage } from "./pages/MonederoPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
 import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
+import { PromocionesPage } from "./pages/PromocionesPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
 import { SeguridadPage } from "./pages/SeguridadPage.js";
@@ -65,6 +67,7 @@ type Seccion =
   | "ventas"
   | "cobros"
   | "cxc"
+  | "promociones"
   | "monedero"
   | "pedidos"
   | "devoluciones"
@@ -99,6 +102,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "ventas", label: "Ventas", icon: Receipt, perm: "ventas.leer" },
   { key: "cobros", label: "Cobros / Links", icon: Link2, perm: "ventas.crear" },
   { key: "cxc", label: "Cuentas por cobrar", icon: HandCoins, perm: "cxc.leer" },
+  { key: "promociones", label: "Promociones", icon: BadgePercent, perm: "promociones.gestionar" },
   { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
   { key: "pedidos", label: "Pedidos online", icon: PackageCheck, perm: "ecommerce.pedidos_leer" },
   { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
@@ -132,6 +136,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   ventas: VentasPage,
   cobros: CobrosPage,
   cxc: CxcPage,
+  promociones: PromocionesPage,
   monedero: MonederoPage,
   pedidos: PedidosPage,
   devoluciones: DevolucionesPage,
