@@ -171,3 +171,9 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 - **Seed B2B en globoland:** para probar el portal web-b2b por navegador hace falta crear empresa B2B + crédito + lista de precios + usuario portal. ¿Quieres que el seed cree un cliente B2B demo (p.ej. "Fiestas del Valle") con usuario `compras@fiestasdelvalle.mx`? Es dato semilla, no lo invento sin tu ok.
 - **Devoluciones netean en reportes:** ¿"Ventas de hoy"/"más vendidos" deben ser brutos o netos de devoluciones? (ver hallazgo #4).
 - **Apartados/CxC/multi-pago:** decisiones de dónde exponerlos (ver hallazgos 1-3).
+
+## 🔧 Pedidos de Gaby — avance
+- **#1 preview de promo en POS** — HECHO (`e348b6b`).
+- **#2 tipos de promo en motor + selector UI** — HECHO (`e06e193`): descuento_monto/mxn, tres_x_n, compra_x_lleva_y, escalonado_volumen. Verificado API+navegador. `regalo_con_compra` pendiente (cross-producto).
+- **#3 gating web-pos/web-b2b** — en curso.
+- **#4/#5/#6** — en curso (defaults).
