@@ -4,6 +4,7 @@ import {
   FolderHeart,
   type LucideIcon,
   Menu,
+  Pill,
   Stethoscope,
 } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
@@ -12,13 +13,14 @@ import { getUsuario, loadToken, puede, setToken } from "./lib/api.js";
 import { AgendaPage } from "./pages/AgendaPage.js";
 import { ExpedienteSoapPage } from "./pages/ExpedienteSoapPage.js";
 import { ExpedientesPage } from "./pages/ExpedientesPage.js";
+import { RecetaPage } from "./pages/RecetaPage.js";
 
 export interface Session {
   nombre: string;
   userId: string;
 }
 
-type Seccion = "agenda" | "expedientes" | "soap";
+type Seccion = "agenda" | "expedientes" | "soap" | "receta";
 
 // `perm` = permiso de lectura que exige la pantalla. La UI oculta el item si el
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
@@ -26,12 +28,14 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "agenda", label: "Agenda del día", icon: CalendarDays, perm: "citas.leer" },
   { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
   { key: "soap", label: "Consulta SOAP", icon: ClipboardList, perm: "consultas.crear" },
+  { key: "receta", label: "Recetas", icon: Pill, perm: "recetas.emitir" },
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   agenda: AgendaPage,
   expedientes: ExpedientesPage,
   soap: ExpedienteSoapPage,
+  receta: RecetaPage,
 };
 
 export function App() {
