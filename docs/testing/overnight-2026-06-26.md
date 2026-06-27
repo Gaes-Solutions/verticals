@@ -28,8 +28,13 @@ Rama de trabajo: **`autonomo/ventas-veterinaria`** (NO main). Cada fix → commi
 ### ✅ Probado y PASA
 8/8 flujos de venta (cajero) · Dashboard/Ventas/Reportes (dueño) · Superadmin con 2FA · RBAC negativo (API 403 + UI gateada) · B2B cotización→pedido (48 tests) · Cobros/Links · Monedero/Gift cards · Responsive móvil · Venta sin stock bloquea bien · CxC backend (23 tests) · Promociones motor (11 tests).
 
-### 🧱 NECESITA DECISIÓN DE GABY (BLOQUEADO)
-1. **POS no previsualiza promos automáticas**: el cobro cobró $2399 (total del front) pero la venta se registró en $2159.10 (con la promo 10% server-side) → el cajero cobra de más. Hay que previsualizar la promo en el ticket/cobro ANTES de cobrar para que el monto cobrado = el registrado. (Surgió al construir la UI de Promociones.)
+### ✅ Pedidos por Gaby (2026-06-26 noche) — en curso
+- **#1 POS previsualiza promo antes de cobrar — HECHO** (`e348b6b`): nuevo `POST /t/ventas/preview` + el POS muestra "Promoción −$X" y el total real antes de cobrar. Verificado: ticket Power Bank ahora muestra Total $2159.10 (no $2399).
+- **#2 Implementar tipos de promo faltantes + selector** — en curso por el loop.
+- **#3 Gating de escritura web-pos/web-b2b** — en curso por el loop.
+- **#4/#5/#6** (descuento 100% / devoluciones netas / multi-pago) — aplicar defaults, en curso.
+
+### 🧱 DECISIONES ORIGINALES (referencia)
 2. **Tipos de promo no implementados en el motor**: `evaluarPromo` solo aplica `descuento_pct`, `happy_hour`, `precio_especial`, `dos_x_uno`. Están en el schema pero el motor NO los aplica: `descuento_monto`, `tres_x_n`, `compra_x_lleva_y`, `regalo_con_compra`, `escalonado_volumen`, `mxn`. Por eso la UI de alta se acotó a `descuento_pct`. ¿Implementar los demás en el motor?
 3. **Descuento 100% / venta gratis**: hoy se permite. ¿Tope de descuento o aprobación de gerente (estilo Square)?
 4. **Devoluciones no netean en reportes**: ¿"Ventas de hoy"/"más vendidos" deben ser brutos o netos de devoluciones?
