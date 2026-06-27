@@ -440,12 +440,16 @@ export async function crearVenta(
     });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
-      throw new VentaError(409, err.message, {
-        varianteId: err.varianteId,
-        sucursalId: err.sucursalId,
-        stockActual: err.stockActual,
-        intentado: err.intentado,
-      });
+      throw new VentaError(
+        409,
+        `Stock insuficiente: hay ${err.stockActual} disponible(s) y se intentó vender ${err.intentado}.`,
+        {
+          varianteId: err.varianteId,
+          sucursalId: err.sucursalId,
+          stockActual: err.stockActual,
+          intentado: err.intentado,
+        },
+      );
     }
     if (err instanceof FiadoError) {
       throw new VentaError(err.statusCode, err.message, err.extra);

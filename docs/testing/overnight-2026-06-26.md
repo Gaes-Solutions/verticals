@@ -100,6 +100,11 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 
 ## 🧪 Casos borde del POS (fase profundización)
 
+### Bug #6 — Mensaje crudo de stock insuficiente filtra IDs internos al cajero
+- **Causa:** al vender un producto sin stock, el backend (correctamente) bloquea con `InsufficientStockError`, pero `ventas/service.ts` reenviaba `err.message` tal cual: *"Stock insuficiente: variante=glb-v-000000 sucursal=cmqgxbf6v0009…pab actual=0 intentado=1"* — IDs internos visibles al cajero.
+- **Fix:** en el catch de `crearVenta`, construir un mensaje amigable *"Stock insuficiente: hay N disponible(s) y se intentó vender M."*, conservando los IDs solo en el `extra` estructurado (debug). Typecheck limpio.
+- **Verificado:** en el POS el mensaje ahora es legible. La validación de stock es incondicional (no permite negativo), lo cual es correcto.
+
 ### Bug #5 — Venta con descuento 100% ($0) rota + mensaje engañoso
 - **Causa:** en `CobroModal.tsx`, `cubreTodoMonedero = restante <= 0.0001` era `true` con total $0 aunque no hubiera monedero (el $0 venía de un descuento 100%). Resultado: (a) mostraba el mensaje falso "El monedero cubre el total de la venta", y (b) `confirmar()` enviaba `pagos: []`, pero el backend exige `pagos.min(1)` → la venta **fallaba en silencio** (el modal se quedaba abierto, sin error visible).
 - **Fix:** separar `esGratis = total <= 0.0001` de `cubreTodoMonedero = montoMonedero > 0 && restante <= 0.0001`; mensaje propio "Venta sin costo (descuento total aplicado)"; y para satisfacer el backend, registrar un pago de $0 en efectivo cuando no hay otro pago. Typecheck limpio.
