@@ -1,8 +1,15 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { generarSlots } from "./service.js";
 
 const horaRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const disponibilidadQuery = z.object({
+  medicoUsuarioId: z.string().min(1),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "fecha YYYY-MM-DD"),
+  sucursalId: z.string().optional(),
+});
 
 const agendaCreateSchema = z.object({
   medicoUsuarioId: z.string().min(1),
@@ -52,6 +59,43 @@ const agendaRoutes: FastifyPluginAsync = async (app) => {
       orderBy: [{ medicoUsuarioId: "asc" }, { diaSemana: "asc" }, { horaInicio: "asc" }],
     });
     return items;
+  });
+
+  // Slots disponibles de un médico en una fecha (excluye bloqueos y citas).
+  app.get("/disponibilidad", async (req) => {
+    req.requirePerm(PERMISSIONS.AGENDA_LEER);
+    const q = disponibilidadQuery.parse(req.query);
+    const inicioDia = new Date(`${q.fecha}T00:00:00`);
+    const finDia = new Date(`${q.fecha}T23:59:59`);
+    const diaSemana = inicioDia.getDay();
+
+    const agendas = await req.tenantPrisma.agenda.findMany({
+      where: {
+        medicoUsuarioId: q.medicoUsuarioId,
+        isActive: true,
+        ...(q.sucursalId ? { sucursalId: q.sucursalId } : {}),
+        OR: [{ diaSemana }, { fechaEspecifica: { gte: inicioDia, lte: finDia } }],
+      },
+      select: { horaInicio: true, horaFin: true, duracionSlotMinutos: true },
+    });
+    const bloqueos = await req.tenantPrisma.agendaBloqueo.findMany({
+      where: {
+        fechaInicio: { lte: finDia },
+        fechaFin: { gte: inicioDia },
+        OR: [{ medicoUsuarioId: q.medicoUsuarioId }, { medicoUsuarioId: null }],
+      },
+      select: { fechaInicio: true, fechaFin: true },
+    });
+    const citas = await req.tenantPrisma.cita.findMany({
+      where: {
+        medicoUsuarioId: q.medicoUsuarioId,
+        fechaProgramada: { gte: inicioDia, lte: finDia },
+        estado: { notIn: ["cancelada", "no_asistio"] },
+      },
+      select: { fechaProgramada: true },
+    });
+
+    return { fecha: q.fecha, slots: generarSlots(q.fecha, agendas, bloqueos, citas) };
   });
 
   app.post("/", async (req, reply) => {
