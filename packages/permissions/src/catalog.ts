@@ -94,6 +94,11 @@ export const PERMISSIONS = {
   KARDEX_APLICAR: "kardex.aplicar",
   KARDEX_REPROGRAMAR: "kardex.reprogramar",
 
+  LABORATORIO_LEER: "laboratorio.leer",
+  LABORATORIO_SOLICITAR: "laboratorio.solicitar",
+  LABORATORIO_CARGAR_RESULTADO: "laboratorio.cargar_resultado",
+  LABORATORIO_CANCELAR: "laboratorio.cancelar",
+
   CFDIS_RECIBIDOS_LEER: "cfdis_recibidos.leer",
   CFDIS_RECIBIDOS_UPLOAD: "cfdis_recibidos.upload",
   CFDIS_RECIBIDOS_CATEGORIZAR: "cfdis_recibidos.categorizar",
@@ -392,6 +397,20 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "kardex.reprogramar": {
     category: "hospitalizacion",
     description: "Reprogramar dosis pendientes del kardex",
+  },
+
+  "laboratorio.leer": { category: "laboratorio", description: "Consultar estudios de laboratorio" },
+  "laboratorio.solicitar": {
+    category: "laboratorio",
+    description: "Solicitar estudios de laboratorio",
+  },
+  "laboratorio.cargar_resultado": {
+    category: "laboratorio",
+    description: "Cargar resultados de laboratorio",
+  },
+  "laboratorio.cancelar": {
+    category: "laboratorio",
+    description: "Cancelar un estudio de laboratorio",
   },
 
   "cfdis_recibidos.leer": {

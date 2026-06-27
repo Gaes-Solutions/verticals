@@ -3198,6 +3198,38 @@ model CargoHospital {
   @@map("cargos_hospital")
 }
 
+// Estudio de laboratorio: el médico lo solicita para un paciente (humano o
+// mascota) y luego se cargan los resultados. `resultados` es un arreglo de
+// parámetros con su rango de referencia; el backend marca `fueraDeRango`.
+model EstudioLaboratorio {
+  id                  String    @id @default(cuid())
+  folio               String    @unique
+  sucursalId          String    @map("sucursal_id")
+  pacienteId          String?   @map("paciente_id")
+  mascotaId           String?   @map("mascota_id")
+  medicoSolicitanteId String    @map("medico_solicitante_id")
+  consultaId          String?   @map("consulta_id")
+  tipoEstudio         String    @map("tipo_estudio")
+  nombreEstudio       String    @map("nombre_estudio")
+  prioridad           String    @default("rutina")
+  notasClinicas       String?   @map("notas_clinicas")
+  estado              String    @default("solicitado")
+  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResultado      DateTime? @map("fecha_resultado")
+  resultadoResumen    String?   @map("resultado_resumen")
+  resultadoArchivoUrl String?   @map("resultado_archivo_url")
+  resultados          Json      @default("[]")
+  cargadoPorId        String?   @map("cargado_por_id")
+  canceladoMotivo     String?   @map("cancelado_motivo")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([mascotaId])
+  @@index([pacienteId])
+  @@index([estado])
+  @@map("estudios_laboratorio")
+}
+
 // ============================================================
 // HITO 3.5 — Despacho contable (Modelo 4.12)
 // CFDIs recibidos (upload manual + descarga SAT) +

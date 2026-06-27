@@ -56,6 +56,7 @@ import enviosRoutes from "./modules/tenant/envios/routes.js";
 import hospitalizacionesRoutes from "./modules/tenant/hospitalizaciones/routes.js";
 import inventarioInsightsRoutes from "./modules/tenant/inventario-insights/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
+import laboratorioRoutes from "./modules/tenant/laboratorio/routes.js";
 import lealtadRoutes from "./modules/tenant/lealtad/routes.js";
 import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
 import lotesRoutes from "./modules/tenant/lotes/routes.js";
@@ -235,6 +236,7 @@ export async function buildApp(
       await tenantApp.register(vacunacionesRoutes, { prefix: "/vacunaciones" });
       await tenantApp.register(camasRoutes, { prefix: "/camas" });
       await tenantApp.register(hospitalizacionesRoutes, { prefix: "/hospitalizaciones" });
+      await tenantApp.register(laboratorioRoutes, { prefix: "/laboratorio" });
       await tenantApp.register(cfdisRecibidosRoutes, { prefix: "/cfdis-recibidos" });
       await tenantApp.register(ordenesCompraRoutes, { prefix: "/ordenes-compra" });
       await tenantApp.register(diotRoutes, { prefix: "/diot" });
