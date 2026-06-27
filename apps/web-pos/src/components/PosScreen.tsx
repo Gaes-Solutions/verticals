@@ -358,29 +358,31 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 </span>
               </button>
 
-              <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-sm text-slate-500">Descuento</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={descuentoPct || ""}
-                  onChange={(e) =>
-                    setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                  }
-                  className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
-                  placeholder="0"
-                />
-                <span className="text-sm text-slate-500">%</span>
-                {descuentoPct > 0 && (
+              {puede("ventas.aplicar_descuento") && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className="text-sm text-slate-500">Descuento</span>
                   <input
-                    value={descuentoMotivo}
-                    onChange={(e) => setDescuentoMotivo(e.target.value)}
-                    placeholder="Motivo"
-                    className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={descuentoPct || ""}
+                    onChange={(e) =>
+                      setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                    }
+                    className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
+                    placeholder="0"
                   />
-                )}
-              </div>
+                  <span className="text-sm text-slate-500">%</span>
+                  {descuentoPct > 0 && (
+                    <input
+                      value={descuentoMotivo}
+                      onChange={(e) => setDescuentoMotivo(e.target.value)}
+                      placeholder="Motivo"
+                      className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                    />
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-slate-200 pt-3">
                 {descuentoPct > 0 && (

@@ -177,3 +177,7 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 - **#2 tipos de promo en motor + selector UI** — HECHO (`e06e193`): descuento_monto/mxn, tres_x_n, compra_x_lleva_y, escalonado_volumen. Verificado API+navegador. `regalo_con_compra` pendiente (cross-producto).
 - **#3 gating web-pos/web-b2b** — en curso.
 - **#4/#5/#6** — en curso (defaults).
+
+### #3 Gating de escritura web-pos / web-b2b — HECHO
+- **web-pos:** el campo de Descuento no estaba gateado; ahora va envuelto en `puede("ventas.aplicar_descuento")` (un rol con `pos.usar` pero sin ese permiso ya no lo ve). Las demás acciones (Devolución/Apartados/Corte) ya estaban gateadas.
+- **web-b2b:** NO aplica gating por rol — el backend del portal B2B (`b2b-portal/routes.ts`) no diferencia capacidades por el `rol` del usuario B2B; cualquier usuario logueado puede pedir/aceptar/rechazar cotizaciones. Gatear la UI sería inventar un contrato inexistente. Si en el futuro se definen roles B2B con capacidades distintas (ej. "consulta" sin pedir), se gatea entonces. (BLOQUEADO — decisión de modelo de roles B2B.)
