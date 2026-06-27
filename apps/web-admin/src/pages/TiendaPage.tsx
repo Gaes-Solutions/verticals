@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 import type { ConfigTienda, Paged, Producto } from "../lib/types.js";
+
+interface RegistroDns {
+  tipo: string;
+  host: string;
+  valor: string;
+}
+interface DominioEstado {
+  dominioPropio: string | null;
+  verificado: boolean;
+  instrucciones: { cname: RegistroDns; txt: RegistroDns | null } | null;
+}
 
 function slugify(s: string): string {
   return s
@@ -18,6 +29,7 @@ export function TiendaPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [dominioKey, setDominioKey] = useState(0);
 
   useEffect(() => {
     api<ConfigTienda>("/t/ecommerce/config")
@@ -46,6 +58,7 @@ export function TiendaPage() {
         body: {
           activa: config.activa ?? false,
           subdominio: config.subdominio ?? "",
+          dominioPropio: config.dominioPropio ? config.dominioPropio : null,
           nombre: config.nombre ?? "",
           msiHabilitado: config.msiHabilitado ?? false,
           msiMeses: config.msiMeses ?? [3, 6, 12],
@@ -68,6 +81,7 @@ export function TiendaPage() {
         },
       });
       setMsg("Configuración guardada");
+      setDominioKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al guardar");
     } finally {
@@ -125,11 +139,29 @@ export function TiendaPage() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
           />
         </label>
+        <label className="mb-1 block">
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Dominio propio <span className="font-normal text-slate-400">(opcional)</span>
+          </span>
+          <input
+            value={config.dominioPropio ?? ""}
+            onChange={(e) =>
+              setConfig({ ...config, dominioPropio: e.target.value.trim().toLowerCase() || null })
+            }
+            placeholder="tienda.minegocio.com"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+          />
+          <span className="mt-1 block text-slate-400 text-xs">
+            Usa tu propio dominio en vez del subdominio. Tras guardar, sigue las instrucciones de
+            DNS para conectarlo y verificarlo.
+          </span>
+        </label>
+        <DominioPropio refreshKey={dominioKey} />
         <button
           type="button"
           onClick={guardarConfig}
           disabled={guardando}
-          className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar"}
         </button>
@@ -459,6 +491,88 @@ export function TiendaPage() {
 
       {msg && <p className="mt-4 text-sm text-emerald-600">{msg}</p>}
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function DnsRow({ registro }: { registro: RegistroDns }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-slate-100 border-b py-2 last:border-0 sm:flex-row sm:items-center sm:gap-3">
+      <span className="w-12 shrink-0 font-semibold text-slate-500 text-xs">{registro.tipo}</span>
+      <code className="break-all text-slate-700 text-xs">{registro.host}</code>
+      <span className="hidden text-slate-300 sm:inline">→</span>
+      <code className="break-all text-slate-700 text-xs">{registro.valor}</code>
+    </div>
+  );
+}
+
+function DominioPropio({ refreshKey }: { refreshKey: number }) {
+  const [estado, setEstado] = useState<DominioEstado | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const cargar = useCallback(() => {
+    api<DominioEstado>("/t/ecommerce/dominio")
+      .then(setEstado)
+      .catch(() => setEstado(null));
+  }, []);
+  useEffect(() => cargar(), [cargar]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refetch tras guardar (refreshKey)
+  useEffect(() => cargar(), [refreshKey]);
+
+  if (!estado?.dominioPropio || !estado.instrucciones) return null;
+
+  async function verificar() {
+    setVerificando(true);
+    setMsg(null);
+    try {
+      const r = await api<{ verificado: boolean }>("/t/ecommerce/dominio/verificar", {
+        method: "POST",
+      });
+      setMsg(
+        r.verificado
+          ? "¡Dominio verificado! Ya puede usarse para tu tienda."
+          : "Todavía no encontramos el registro TXT. La propagación de DNS puede tardar hasta 1 hora; intenta de nuevo más tarde.",
+      );
+      cargar();
+    } catch {
+      setMsg("No se pudo verificar el dominio");
+    } finally {
+      setVerificando(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 mb-1 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="font-medium text-slate-700 text-sm">{estado.dominioPropio}</span>
+        {estado.verificado ? (
+          <span className="gx-badge-ok">Verificado</span>
+        ) : (
+          <span className="gx-badge-warn">Sin verificar</span>
+        )}
+      </div>
+      {!estado.verificado && (
+        <>
+          <p className="mb-2 text-slate-500 text-xs">
+            En tu proveedor de DNS agrega estos registros. El sistema recomienda ambos: el CNAME
+            enruta el tráfico a tu tienda y el TXT prueba que el dominio es tuyo.
+          </p>
+          <div className="mb-3 rounded-md bg-white px-3 py-1">
+            <DnsRow registro={estado.instrucciones.cname} />
+            {estado.instrucciones.txt && <DnsRow registro={estado.instrucciones.txt} />}
+          </div>
+          <button
+            type="button"
+            onClick={verificar}
+            disabled={verificando}
+            className="rounded-lg border border-brand px-4 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50 disabled:opacity-50"
+          >
+            {verificando ? "Verificando…" : "Verificar dominio"}
+          </button>
+        </>
+      )}
+      {msg && <p className="mt-2 text-slate-600 text-xs">{msg}</p>}
     </div>
   );
 }

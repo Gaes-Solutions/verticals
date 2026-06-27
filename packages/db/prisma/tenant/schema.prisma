@@ -3489,6 +3489,8 @@ model ConfigTiendaEcommerce {
   activa                         Boolean    @default(false)
   subdominio                     String     @unique
   dominioPropio                  String?    @unique @map("dominio_propio")
+  dominioVerificado              Boolean    @default(false) @map("dominio_verificado")
+  dominioTokenVerificacion       String?    @map("dominio_token_verificacion")
   nombre                         String
   lema                           String?
   descripcionSeo                 String?    @map("descripcion_seo")

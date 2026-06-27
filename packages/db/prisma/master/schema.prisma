@@ -1210,3 +1210,20 @@ model TenantSettingsMaster {
 
   @@map("tenant_settings_master")
 }
+
+// Registro global host → tenant para resolver la tienda online por hostname.
+// Vive en master (no en el schema del tenant) porque la resolución ocurre ANTES
+// de conocer el tenant. tipo: "subdominio" (apex de la plataforma, verificado
+// automático) | "propio" (dominio del cliente, verificado por DNS TXT).
+model TiendaDominio {
+  id         String   @id @default(cuid())
+  host       String   @unique
+  tenantSlug String   @map("tenant_slug")
+  tipo       String
+  verificado Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantSlug])
+  @@map("tienda_dominios")
+}

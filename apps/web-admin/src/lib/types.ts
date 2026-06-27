@@ -82,6 +82,7 @@ export interface Sucursal {
 export interface ConfigTienda {
   activa?: boolean;
   subdominio?: string | null;
+  dominioPropio?: string | null;
   nombre?: string | null;
   msiHabilitado?: boolean;
   msiMeses?: number[];
