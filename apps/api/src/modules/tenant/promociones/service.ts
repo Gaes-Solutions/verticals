@@ -148,13 +148,48 @@ function evaluarPromo(
     let descLinea = ZERO;
     if (promo.tipo === "descuento_pct" || promo.tipo === "happy_hour") {
       descLinea = linea.subtotal.mul(valor).div(100);
+    } else if (promo.tipo === "descuento_monto" || promo.tipo === "mxn") {
+      // Monto fijo en MXN de descuento por unidad, con tope al subtotal de la línea.
+      descLinea = Decimal.min(valor.mul(linea.cantidad), linea.subtotal);
     } else if (promo.tipo === "precio_especial") {
       const nuevoSub = valor.mul(linea.cantidad);
       descLinea = Decimal.max(linea.subtotal.minus(nuevoSub), ZERO);
     } else if (promo.tipo === "dos_x_uno") {
       const gratis = linea.cantidad.dividedToIntegerBy(2);
       descLinea = linea.precioUnitario.mul(gratis);
+    } else if (promo.tipo === "tres_x_n") {
+      // acciones { compra, paga }: por cada `compra` unidades, pagas `paga`.
+      const compra = new Decimal(String(promo.acciones.compra ?? 3));
+      const paga = new Decimal(String(promo.acciones.paga ?? 2));
+      if (compra.gt(paga) && compra.gt(ZERO)) {
+        const gratis = linea.cantidad.dividedToIntegerBy(compra).mul(compra.minus(paga));
+        descLinea = linea.precioUnitario.mul(gratis);
+      }
+    } else if (promo.tipo === "compra_x_lleva_y") {
+      // acciones { compra, lleva }: pagas `compra`, te llevas `lleva` (lleva > compra).
+      const compra = new Decimal(String(promo.acciones.compra ?? 2));
+      const lleva = new Decimal(String(promo.acciones.lleva ?? 3));
+      if (lleva.gt(compra) && lleva.gt(ZERO)) {
+        const gratis = linea.cantidad.dividedToIntegerBy(lleva).mul(lleva.minus(compra));
+        descLinea = linea.precioUnitario.mul(gratis);
+      }
+    } else if (promo.tipo === "escalonado_volumen") {
+      // acciones { escalones: [{ minCantidad, descuentoPct }] }: aplica el % del
+      // escalón de mayor minCantidad que la cantidad de la línea alcanza.
+      const escalones = Array.isArray(promo.acciones.escalones)
+        ? (promo.acciones.escalones as Array<{ minCantidad?: number; descuentoPct?: number }>)
+        : [];
+      let pct = ZERO;
+      for (const e of escalones) {
+        if (linea.cantidad.gte(new Decimal(String(e.minCantidad ?? 0)))) {
+          const p = new Decimal(String(e.descuentoPct ?? 0));
+          if (p.gt(pct)) pct = p;
+        }
+      }
+      descLinea = linea.subtotal.mul(pct).div(100);
     }
+    // regalo_con_compra: requiere manejar un producto-regalo cruzando líneas; no
+    // soportado por este motor por-línea todavía (registrado como pendiente).
     if (descLinea.gt(ZERO)) {
       const nuevoSub = Decimal.max(linea.subtotal.minus(descLinea), ZERO);
       linea.precioUnitario = linea.cantidad.gt(ZERO) ? nuevoSub.div(linea.cantidad) : ZERO;

@@ -169,13 +169,43 @@ function ahoraLocalInput(): string {
   return d.toISOString().slice(0, 16);
 }
 
+const TIPOS_CREABLES: { value: string; label: string; valorLabel?: string }[] = [
+  { value: "descuento_pct", label: "Descuento %", valorLabel: "Descuento (%)" },
+  {
+    value: "descuento_monto",
+    label: "Descuento $ por unidad",
+    valorLabel: "Descuento por unidad ($)",
+  },
+  { value: "precio_especial", label: "Precio especial", valorLabel: "Precio final por unidad ($)" },
+  { value: "tres_x_n", label: "NxM (ej. 3x2)" },
+  { value: "compra_x_lleva_y", label: "Compra X lleva Y" },
+];
+
 function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [nombre, setNombre] = useState("");
+  const [tipo, setTipo] = useState("descuento_pct");
   const [valor, setValor] = useState("");
+  const [compra, setCompra] = useState("3");
+  const [paga, setPaga] = useState("2");
+  const [lleva, setLleva] = useState("3");
   const [inicio, setInicio] = useState(ahoraLocalInput);
   const [activar, setActivar] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  const usaValor =
+    tipo === "descuento_pct" || tipo === "descuento_monto" || tipo === "precio_especial";
+  const usaNxM = tipo === "tres_x_n";
+  const usaXY = tipo === "compra_x_lleva_y";
+  const valido =
+    !!nombre &&
+    (usaValor ? !!valor : usaNxM ? Number(compra) > Number(paga) : Number(lleva) > Number(compra));
+
+  function buildAcciones(): Record<string, number> {
+    if (usaNxM) return { compra: Number(compra), paga: Number(paga) };
+    if (usaXY) return { compra: Number(compra), lleva: Number(lleva) };
+    return { valor: Number(valor) };
+  }
 
   async function guardar(e: FormEvent) {
     e.preventDefault();
@@ -185,8 +215,8 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
       const promo = await api<{ id: string }>("/t/promociones", {
         body: {
           nombre,
-          tipo: "descuento_pct",
-          acciones: { valor: Number(valor) },
+          tipo,
+          acciones: buildAcciones(),
           vigenciaInicio: new Date(inicio).toISOString(),
           canales: ["todos"],
         },
@@ -201,13 +231,14 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     }
   }
 
+  const tipoActual = TIPOS_CREABLES.find((t) => t.value === tipo);
+
   return (
     <div className="gx-modal-overlay">
       <form onSubmit={guardar} className="gx-modal-panel">
         <h2 className="mb-1 font-bold text-lg text-slate-800">Nueva promoción</h2>
         <p className="mb-4 text-slate-500 text-sm">
-          Descuento porcentual sobre todo el catálogo. Se aplica solo en la venta mientras esté
-          activa.
+          Aplica sobre todo el catálogo y se descuenta solo en la venta mientras esté activa.
         </p>
 
         <label className="mb-3 block">
@@ -216,25 +247,76 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             className="gx-input"
-            placeholder="Ej. Buen Fin 10%"
+            placeholder="Ej. Buen Fin"
             required
           />
         </label>
 
+        <label className="mb-3 block">
+          <span className="gx-label">Tipo</span>
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="gx-input">
+            {TIPOS_CREABLES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="mb-3 grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="gx-label">Descuento (%)</span>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              className="gx-input"
-              required
-            />
-          </label>
+          {usaValor && (
+            <label className="block">
+              <span className="gx-label">{tipoActual?.valorLabel ?? "Valor"}</span>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                className="gx-input"
+                required
+              />
+            </label>
+          )}
+          {(usaNxM || usaXY) && (
+            <label className="block">
+              <span className="gx-label">{usaXY ? "Paga (X)" : "Compra (N)"}</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={compra}
+                onChange={(e) => setCompra(e.target.value)}
+                className="gx-input"
+              />
+            </label>
+          )}
+          {usaNxM && (
+            <label className="block">
+              <span className="gx-label">Paga (M)</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={paga}
+                onChange={(e) => setPaga(e.target.value)}
+                className="gx-input"
+              />
+            </label>
+          )}
+          {usaXY && (
+            <label className="block">
+              <span className="gx-label">Lleva (Y)</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={lleva}
+                onChange={(e) => setLleva(e.target.value)}
+                className="gx-input"
+              />
+            </label>
+          )}
           <label className="block">
             <span className="gx-label">Inicia</span>
             <input
@@ -256,11 +338,7 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button
-            type="submit"
-            disabled={guardando || !nombre || !valor}
-            className="gx-btn-primary"
-          >
+          <button type="submit" disabled={guardando || !valido} className="gx-btn-primary">
             {guardando ? "Creando…" : "Crear promoción"}
           </button>
         </div>
