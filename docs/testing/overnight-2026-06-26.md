@@ -201,4 +201,18 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 | 6 | Multi-pago (pago dividido) en POS | ✅ CobroModal con varias líneas método+monto. Verificado: venta $2399 = $1200 efectivo + $1199 débito (2 pagos en DB). | fe77669 |
 
 **Rama `autonomo/ventas-veterinaria`: ~25 commits. Producción (`main`) intacta.**
-Pendiente menor para Gaby: `regalo_con_compra` (promo cross-producto), tope de descuento configurable, seed B2B para probar el portal por navegador.
+
+---
+
+## 🟢 Pendientes aprobados por Gaby (2026-06-27) — regla: "configurable por el dueño + el sistema recomienda"
+
+| # | Pendiente | Resultado |
+|---|-----------|-----------|
+| A | `regalo_con_compra` (promo cross-producto) | ✅ Motor (5 tests) + UI con selector de productos. Configurable: cantidad de compra, cantidad de regalo y % de descuento al regalo; el sistema **recomienda 100% (gratis)**. Commit `2c22ba0` |
+| B | Seed demo B2B para probar el portal por navegador | ✅ `seed-b2b-demo.ts` (script `seed:b2b-demo`). Sembrado en `globoland`. Login y catálogo (10,001 productos) verificados vía API |
+| C | Tope de descuento configurable por el dueño | ⏳ En curso |
+
+### Credenciales demo B2B (tenant `globoland`)
+- **Portal:** web-b2b · **tenant:** `globoland`
+- **Usuario:** `compras@demob2b.gaessoft.local` · **Password:** `Demo1234!`
+- Re-sembrar: `pnpm dotenv -e .env -- pnpm --filter @gaespos/db seed:b2b-demo globoland <email> <password> "<razón social>"`
