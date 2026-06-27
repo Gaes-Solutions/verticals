@@ -25,7 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
-import { loadToken, setToken } from "./lib/api.js";
+import { loadToken, puede, setToken } from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
@@ -76,28 +76,41 @@ type Seccion =
   | "seguridad"
   | "tienda";
 
-const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
-  { key: "dashboard", label: "Resumen", icon: BarChart3 },
-  { key: "reportes", label: "Reportes", icon: BarChart3 },
-  { key: "productos", label: "Productos", icon: Package },
-  { key: "inventario", label: "Inventario", icon: Tags },
-  { key: "inventario-iq", label: "Inteligencia inventario", icon: TrendingUp },
-  { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode },
-  { key: "importador", label: "Carga masiva", icon: Upload },
-  { key: "compras", label: "Compras (OC)", icon: ShoppingBag },
-  { key: "ventas", label: "Ventas", icon: Receipt },
-  { key: "cobros", label: "Cobros / Links", icon: Link2 },
-  { key: "monedero", label: "Monedero / Gift cards", icon: Wallet },
-  { key: "pedidos", label: "Pedidos online", icon: PackageCheck },
-  { key: "devoluciones", label: "Devoluciones", icon: RotateCcw },
-  { key: "envios", label: "Envíos", icon: Truck },
-  { key: "resenas", label: "Reseñas", icon: Star },
-  { key: "automatizaciones", label: "Automatizaciones", icon: Zap },
-  { key: "preguntas", label: "Preguntas", icon: MessageCircleQuestion },
-  { key: "cfdi", label: "Facturación", icon: FileText },
-  { key: "usuarios", label: "Usuarios y permisos", icon: Users },
-  { key: "seguridad", label: "Seguridad", icon: ShieldCheck },
-  { key: "tienda", label: "Tienda online", icon: ShoppingCart },
+// `perm` = permiso de lectura que exige la ruta de ese módulo. La UI oculta el
+// item si el usuario no lo tiene (el dueño con "*" ve todo). Defensa en
+// profundidad: el backend revalida igual con requirePerm.
+const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
+  { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
+  { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
+  { key: "productos", label: "Productos", icon: Package, perm: "productos.leer" },
+  { key: "inventario", label: "Inventario", icon: Tags, perm: "inventario.leer" },
+  {
+    key: "inventario-iq",
+    label: "Inteligencia inventario",
+    icon: TrendingUp,
+    perm: "reportes.ventas",
+  },
+  { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode, perm: "productos.leer" },
+  { key: "importador", label: "Carga masiva", icon: Upload, perm: "productos.bulk_import" },
+  { key: "compras", label: "Compras (OC)", icon: ShoppingBag, perm: "compras_oc.leer" },
+  { key: "ventas", label: "Ventas", icon: Receipt, perm: "ventas.leer" },
+  { key: "cobros", label: "Cobros / Links", icon: Link2, perm: "ventas.crear" },
+  { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
+  { key: "pedidos", label: "Pedidos online", icon: PackageCheck, perm: "ecommerce.pedidos_leer" },
+  { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
+  { key: "envios", label: "Envíos", icon: Truck, perm: "ecommerce.envios_gestionar" },
+  { key: "resenas", label: "Reseñas", icon: Star, perm: "ecommerce.resenas_moderar" },
+  { key: "automatizaciones", label: "Automatizaciones", icon: Zap, perm: "plantillas.gestionar" },
+  {
+    key: "preguntas",
+    label: "Preguntas",
+    icon: MessageCircleQuestion,
+    perm: "ecommerce.resenas_moderar",
+  },
+  { key: "cfdi", label: "Facturación", icon: FileText, perm: "cfdi.leer" },
+  { key: "usuarios", label: "Usuarios y permisos", icon: Users, perm: "usuarios.leer" },
+  { key: "seguridad", label: "Seguridad", icon: ShieldCheck, perm: "configuracion.leer" },
+  { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
 
 export function App() {
@@ -105,6 +118,16 @@ export function App() {
   const [seccion, setSeccion] = useState<Seccion>("dashboard");
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const visibleNav = NAV.filter((n) => puede(n.perm));
+
+  // Si la sección activa no es visible para este rol, caer a la primera permitida.
+  useEffect(() => {
+    if (!session || visibleNav.length === 0) return;
+    if (!visibleNav.some((n) => n.key === seccion)) {
+      setSeccion(visibleNav[0].key);
+    }
+  }, [session, seccion, visibleNav]);
 
   useEffect(() => {
     if (!loadToken()) {
@@ -171,7 +194,7 @@ export function App() {
       >
         <div className="hidden px-5 py-4 text-lg font-bold text-brand md:block">GaesSoft</div>
         <nav className="flex-1 overflow-y-auto px-2 pt-3 md:pt-0">
-          {NAV.map((n) => (
+          {visibleNav.map((n) => (
             <button
               key={n.key}
               type="button"

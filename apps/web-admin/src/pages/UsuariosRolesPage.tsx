@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 
 interface Rol {
   id: string;
@@ -138,11 +138,13 @@ function UsuariosTab() {
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
-        <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
-          + Nuevo usuario
-        </button>
-      </div>
+      {puede("usuarios.crear") && (
+        <div className="mb-4 flex justify-end">
+          <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+            + Nuevo usuario
+          </button>
+        </div>
+      )}
       <div className="gx-table-wrap">
         <table className="gx-table">
           <thead>
@@ -178,29 +180,35 @@ function UsuariosTab() {
                 </td>
                 <td className="gx-td text-right">
                   <div className="flex flex-wrap justify-end gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setRolesDe(u)}
-                      className="text-brand hover:underline"
-                    >
-                      Roles
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => resetPassword(u)}
-                      className="text-brand hover:underline"
-                    >
-                      Contraseña
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleActivo(u)}
-                      className={
-                        u.isActive ? "text-danger hover:underline" : "text-ok hover:underline"
-                      }
-                    >
-                      {u.isActive ? "Desactivar" : "Activar"}
-                    </button>
+                    {puede("usuarios.asignar_rol") && (
+                      <button
+                        type="button"
+                        onClick={() => setRolesDe(u)}
+                        className="text-brand hover:underline"
+                      >
+                        Roles
+                      </button>
+                    )}
+                    {puede("usuarios.reset_password") && (
+                      <button
+                        type="button"
+                        onClick={() => resetPassword(u)}
+                        className="text-brand hover:underline"
+                      >
+                        Contraseña
+                      </button>
+                    )}
+                    {puede("usuarios.archivar") && (
+                      <button
+                        type="button"
+                        onClick={() => toggleActivo(u)}
+                        className={
+                          u.isActive ? "text-danger hover:underline" : "text-ok hover:underline"
+                        }
+                      >
+                        {u.isActive ? "Desactivar" : "Activar"}
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -421,11 +429,13 @@ function RolesTab() {
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
-        <button type="button" onClick={() => setEditar("nuevo")} className="gx-btn-primary">
-          + Nuevo rol
-        </button>
-      </div>
+      {puede("roles.crear") && (
+        <div className="mb-4 flex justify-end">
+          <button type="button" onClick={() => setEditar("nuevo")} className="gx-btn-primary">
+            + Nuevo rol
+          </button>
+        </div>
+      )}
       <div className="space-y-2">
         {roles.map((r) => {
           const total = r.permisos.includes("*") ? "todos" : String(r.permisos.length);
@@ -445,13 +455,15 @@ function RolesTab() {
                   {r.codigo} · {total} permiso(s)
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditar(r)}
-                className={r.isPreset ? "gx-btn-ghost" : "gx-btn-secondary"}
-              >
-                {r.isPreset ? "Ver permisos" : "Editar"}
-              </button>
+              {(r.isPreset || puede("roles.actualizar")) && (
+                <button
+                  type="button"
+                  onClick={() => setEditar(r)}
+                  className={r.isPreset ? "gx-btn-ghost" : "gx-btn-secondary"}
+                >
+                  {r.isPreset ? "Ver permisos" : "Editar"}
+                </button>
+              )}
             </div>
           );
         })}
