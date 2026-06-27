@@ -10,6 +10,7 @@ import type {
   VentaDetalle,
   VentaResponse,
 } from "../lib/types.js";
+import { ApartadosModal } from "./ApartadosModal.js";
 import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
@@ -33,6 +34,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [modalCliente, setModalCliente] = useState(false);
   const [modalCorte, setModalCorte] = useState(false);
   const [modalDevolucion, setModalDevolucion] = useState(false);
+  const [modalApartados, setModalApartados] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [descuentoPct, setDescuentoPct] = useState(0);
@@ -185,6 +187,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               className="rounded bg-brand-dark px-3 py-1"
             >
               Devolución
+            </button>
+          )}
+          {puede("apartados.leer") && (
+            <button
+              type="button"
+              onClick={() => setModalApartados(true)}
+              className="rounded bg-brand-dark px-3 py-1"
+            >
+              Apartados
             </button>
           )}
           {session.caja && puede("corte.consultar") && (
@@ -400,6 +411,9 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       )}
 
       {modalDevolucion && <DevolucionModal onClose={() => setModalDevolucion(false)} />}
+      {modalApartados && (
+        <ApartadosModal session={session} onClose={() => setModalApartados(false)} />
+      )}
 
       {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
