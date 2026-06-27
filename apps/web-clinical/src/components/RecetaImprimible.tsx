@@ -91,40 +91,44 @@ export function RecetaImprimible({ id, onClose }: { id: string; onClose: () => v
                 )}
               </div>
 
-              <table className="mb-3 w-full text-left text-sm">
-                <thead>
-                  <tr className="border-slate-200 border-b text-slate-500 text-xs">
-                    <th className="py-1">Medicamento</th>
-                    <th className="py-1">Dosis</th>
-                    <th className="py-1">Vía</th>
-                    <th className="py-1">Frecuencia</th>
-                    <th className="py-1">Días</th>
-                    <th className="py-1">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.items.map((it) => (
-                    <tr key={it.id} className="border-slate-100 border-b align-top">
-                      <td className="py-1 pr-2">
-                        <span className="font-medium text-slate-800">{it.nombreSnapshot}</span>
-                        {it.concentracionSnapshot ? (
-                          <span className="text-slate-400"> · {it.concentracionSnapshot}</span>
-                        ) : null}
-                        {it.instruccionesAdministracion ? (
-                          <p className="text-slate-500 text-xs">{it.instruccionesAdministracion}</p>
-                        ) : null}
-                      </td>
-                      <td className="py-1 pr-2">
-                        {it.dosisCantidad} {it.dosisUnidad}
-                      </td>
-                      <td className="py-1 pr-2">{it.dosisVia}</td>
-                      <td className="py-1 pr-2">c/{it.frecuenciaHoras}h</td>
-                      <td className="py-1 pr-2">{it.duracionDias}</td>
-                      <td className="py-1">{it.totalUnidadesDispensar ?? "—"}</td>
+              <div className="mb-3 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-slate-200 border-b text-slate-500 text-xs">
+                      <th className="py-1">Medicamento</th>
+                      <th className="py-1">Dosis</th>
+                      <th className="py-1">Vía</th>
+                      <th className="py-1">Frecuencia</th>
+                      <th className="py-1">Días</th>
+                      <th className="py-1">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {r.items.map((it) => (
+                      <tr key={it.id} className="border-slate-100 border-b align-top">
+                        <td className="py-1 pr-2">
+                          <span className="font-medium text-slate-800">{it.nombreSnapshot}</span>
+                          {it.concentracionSnapshot ? (
+                            <span className="text-slate-400"> · {it.concentracionSnapshot}</span>
+                          ) : null}
+                          {it.instruccionesAdministracion ? (
+                            <p className="text-slate-500 text-xs">
+                              {it.instruccionesAdministracion}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="py-1 pr-2">
+                          {it.dosisCantidad} {it.dosisUnidad}
+                        </td>
+                        <td className="py-1 pr-2">{it.dosisVia}</td>
+                        <td className="py-1 pr-2">c/{it.frecuenciaHoras}h</td>
+                        <td className="py-1 pr-2">{it.duracionDias}</td>
+                        <td className="py-1">{it.totalUnidadesDispensar ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {r.instruccionesGeneralesTutor && (
                 <p className="mb-3 text-slate-600 text-sm">
