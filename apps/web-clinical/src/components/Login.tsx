@@ -1,7 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useState } from "react";
 import type { Session } from "../App.js";
-import { ApiError, api, setPermisos, setToken } from "../lib/api.js";
+import { ApiError, api, setPermisos, setToken, setUsuario } from "../lib/api.js";
 import { BackupCodes } from "./BackupCodes.js";
 
 const SLUG_KEY = "gaespos_clinical_slug";
@@ -67,8 +67,9 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
   function entrar(ses: SesionTenant) {
     setToken(ses.accessToken);
     setPermisos(ses.user.permissions);
+    setUsuario({ id: ses.user.id, nombre: ses.user.nombre });
     localStorage.setItem(SLUG_KEY, tenantSlug);
-    onLogin({ nombre: ses.user.nombre });
+    onLogin({ nombre: ses.user.nombre, userId: ses.user.id });
   }
 
   async function submitPassword(e: FormEvent) {

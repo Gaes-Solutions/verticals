@@ -31,6 +31,24 @@ export function loadToken(): string | null {
 }
 
 const PERMISOS_KEY = "gaespos_clinical_permisos";
+const USUARIO_KEY = "gaespos_clinical_usuario";
+
+export interface UsuarioSesion {
+  id: string;
+  nombre: string;
+}
+
+export function setUsuario(u: UsuarioSesion): void {
+  localStorage.setItem(USUARIO_KEY, JSON.stringify(u));
+}
+
+export function getUsuario(): UsuarioSesion | null {
+  try {
+    return JSON.parse(localStorage.getItem(USUARIO_KEY) ?? "null") as UsuarioSesion | null;
+  } catch {
+    return null;
+  }
+}
 
 export function setPermisos(permisos: string[]): void {
   localStorage.setItem(PERMISOS_KEY, JSON.stringify(permisos));
