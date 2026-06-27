@@ -1,5 +1,6 @@
 import {
   BedDouble,
+  CalendarCog,
   CalendarDays,
   ClipboardList,
   FolderHeart,
@@ -14,6 +15,7 @@ import { Login } from "./components/Login.js";
 import { getUsuario, loadToken, puede, setToken } from "./lib/api.js";
 import { AgendaPage } from "./pages/AgendaPage.js";
 import { CartillaPage } from "./pages/CartillaPage.js";
+import { ConfigurarAgendaPage } from "./pages/ConfigurarAgendaPage.js";
 import { ExpedienteSoapPage } from "./pages/ExpedienteSoapPage.js";
 import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
@@ -24,7 +26,14 @@ export interface Session {
   userId: string;
 }
 
-type Seccion = "agenda" | "expedientes" | "soap" | "receta" | "hospitalizacion" | "cartilla";
+type Seccion =
+  | "agenda"
+  | "expedientes"
+  | "soap"
+  | "receta"
+  | "hospitalizacion"
+  | "cartilla"
+  | "configagenda";
 
 // `perm` = permiso de lectura que exige la pantalla. La UI oculta el item si el
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
@@ -40,6 +49,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
     perm: "hospitalizacion.leer",
   },
   { key: "cartilla", label: "Cartilla / Vacunas", icon: Syringe, perm: "vacunas.leer" },
+  { key: "configagenda", label: "Configurar agenda", icon: CalendarCog, perm: "agenda.gestionar" },
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
@@ -49,6 +59,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   receta: RecetaPage,
   hospitalizacion: HospitalizacionPage,
   cartilla: CartillaPage,
+  configagenda: ConfigurarAgendaPage,
 };
 
 export function App() {
