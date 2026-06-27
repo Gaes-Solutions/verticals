@@ -1,6 +1,7 @@
 import {
   BarChart3,
   FileText,
+  HandCoins,
   Link2,
   type LucideIcon,
   Menu,
@@ -22,7 +23,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ComponentType, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { loadToken, puede, setToken } from "./lib/api.js";
@@ -30,6 +31,7 @@ import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
+import { CxcPage } from "./pages/CxcPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
@@ -62,6 +64,7 @@ type Seccion =
   | "etiquetas"
   | "ventas"
   | "cobros"
+  | "cxc"
   | "monedero"
   | "pedidos"
   | "devoluciones"
@@ -95,6 +98,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "compras", label: "Compras (OC)", icon: ShoppingBag, perm: "compras_oc.leer" },
   { key: "ventas", label: "Ventas", icon: Receipt, perm: "ventas.leer" },
   { key: "cobros", label: "Cobros / Links", icon: Link2, perm: "ventas.crear" },
+  { key: "cxc", label: "Cuentas por cobrar", icon: HandCoins, perm: "cxc.leer" },
   { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
   { key: "pedidos", label: "Pedidos online", icon: PackageCheck, perm: "ecommerce.pedidos_leer" },
   { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
@@ -112,6 +116,31 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "seguridad", label: "Seguridad", icon: ShieldCheck, perm: "configuracion.leer" },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
+
+const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
+  dashboard: DashboardPage,
+  reportes: ReportesPage,
+  productos: ProductosPage,
+  inventario: InventarioPage,
+  "inventario-iq": InventarioInsightsPage,
+  etiquetas: EtiquetasPage,
+  importador: ImportadorPage,
+  compras: ComprasPage,
+  cfdi: CfdiPage,
+  usuarios: UsuariosRolesPage,
+  seguridad: SeguridadPage,
+  ventas: VentasPage,
+  cobros: CobrosPage,
+  cxc: CxcPage,
+  monedero: MonederoPage,
+  pedidos: PedidosPage,
+  devoluciones: DevolucionesPage,
+  envios: EnviosPage,
+  resenas: ResenasPage,
+  automatizaciones: AutomatizacionesPage,
+  preguntas: PreguntasPage,
+  tienda: TiendaPage,
+};
 
 export function App() {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -158,6 +187,8 @@ export function App() {
   function abrirLink(link: string) {
     if (link.startsWith("/pedidos")) navegar("pedidos");
   }
+
+  const ActivePage = PAGE_COMPONENTS[seccion];
 
   return (
     <div className="flex h-full flex-col md:flex-row">
@@ -224,27 +255,7 @@ export function App() {
         <div className="mb-4 hidden justify-end md:flex">
           <NotificacionesBell onOpenLink={abrirLink} />
         </div>
-        {seccion === "dashboard" && <DashboardPage />}
-        {seccion === "reportes" && <ReportesPage />}
-        {seccion === "productos" && <ProductosPage />}
-        {seccion === "inventario" && <InventarioPage />}
-        {seccion === "inventario-iq" && <InventarioInsightsPage />}
-        {seccion === "etiquetas" && <EtiquetasPage />}
-        {seccion === "importador" && <ImportadorPage />}
-        {seccion === "compras" && <ComprasPage />}
-        {seccion === "cfdi" && <CfdiPage />}
-        {seccion === "usuarios" && <UsuariosRolesPage />}
-        {seccion === "seguridad" && <SeguridadPage />}
-        {seccion === "ventas" && <VentasPage />}
-        {seccion === "cobros" && <CobrosPage />}
-        {seccion === "monedero" && <MonederoPage />}
-        {seccion === "pedidos" && <PedidosPage />}
-        {seccion === "devoluciones" && <DevolucionesPage />}
-        {seccion === "envios" && <EnviosPage />}
-        {seccion === "resenas" && <ResenasPage />}
-        {seccion === "automatizaciones" && <AutomatizacionesPage />}
-        {seccion === "preguntas" && <PreguntasPage />}
-        {seccion === "tienda" && <TiendaPage />}
+        <ActivePage />
       </main>
     </div>
   );
