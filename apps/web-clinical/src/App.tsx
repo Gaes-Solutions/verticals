@@ -8,6 +8,7 @@ import {
   type LucideIcon,
   Menu,
   Pill,
+  ScanLine,
   Stethoscope,
   Syringe,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { ConfigurarAgendaPage } from "./pages/ConfigurarAgendaPage.js";
 import { ExpedienteSoapPage } from "./pages/ExpedienteSoapPage.js";
 import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
+import { ImagenologiaPage } from "./pages/ImagenologiaPage.js";
 import { LaboratorioPage } from "./pages/LaboratorioPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
 
@@ -35,6 +37,7 @@ type Seccion =
   | "receta"
   | "hospitalizacion"
   | "laboratorio"
+  | "imagenologia"
   | "cartilla"
   | "configagenda";
 
@@ -52,6 +55,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
     perm: "hospitalizacion.leer",
   },
   { key: "laboratorio", label: "Laboratorio", icon: FlaskConical, perm: "laboratorio.leer" },
+  { key: "imagenologia", label: "Imagenología", icon: ScanLine, perm: "imagenologia.leer" },
   { key: "cartilla", label: "Cartilla / Vacunas", icon: Syringe, perm: "vacunas.leer" },
   { key: "configagenda", label: "Configurar agenda", icon: CalendarCog, perm: "agenda.gestionar" },
 ];
@@ -63,6 +67,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   receta: RecetaPage,
   hospitalizacion: HospitalizacionPage,
   laboratorio: LaboratorioPage,
+  imagenologia: ImagenologiaPage,
   cartilla: CartillaPage,
   configagenda: ConfigurarAgendaPage,
 };
