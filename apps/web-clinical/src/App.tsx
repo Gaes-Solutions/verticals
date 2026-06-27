@@ -1,4 +1,5 @@
 import {
+  BedDouble,
   CalendarDays,
   ClipboardList,
   FolderHeart,
@@ -13,6 +14,7 @@ import { getUsuario, loadToken, puede, setToken } from "./lib/api.js";
 import { AgendaPage } from "./pages/AgendaPage.js";
 import { ExpedienteSoapPage } from "./pages/ExpedienteSoapPage.js";
 import { ExpedientesPage } from "./pages/ExpedientesPage.js";
+import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
 
 export interface Session {
@@ -20,7 +22,7 @@ export interface Session {
   userId: string;
 }
 
-type Seccion = "agenda" | "expedientes" | "soap" | "receta";
+type Seccion = "agenda" | "expedientes" | "soap" | "receta" | "hospitalizacion";
 
 // `perm` = permiso de lectura que exige la pantalla. La UI oculta el item si el
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
@@ -29,6 +31,12 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
   { key: "soap", label: "Consulta SOAP", icon: ClipboardList, perm: "consultas.crear" },
   { key: "receta", label: "Recetas", icon: Pill, perm: "recetas.emitir" },
+  {
+    key: "hospitalizacion",
+    label: "Hospitalización",
+    icon: BedDouble,
+    perm: "hospitalizacion.leer",
+  },
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
@@ -36,6 +44,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   expedientes: ExpedientesPage,
   soap: ExpedienteSoapPage,
   receta: RecetaPage,
+  hospitalizacion: HospitalizacionPage,
 };
 
 export function App() {
