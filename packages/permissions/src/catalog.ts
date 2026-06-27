@@ -99,6 +99,11 @@ export const PERMISSIONS = {
   LABORATORIO_CARGAR_RESULTADO: "laboratorio.cargar_resultado",
   LABORATORIO_CANCELAR: "laboratorio.cancelar",
 
+  IMAGENOLOGIA_LEER: "imagenologia.leer",
+  IMAGENOLOGIA_SOLICITAR: "imagenologia.solicitar",
+  IMAGENOLOGIA_CARGAR_RESULTADO: "imagenologia.cargar_resultado",
+  IMAGENOLOGIA_CANCELAR: "imagenologia.cancelar",
+
   CFDIS_RECIBIDOS_LEER: "cfdis_recibidos.leer",
   CFDIS_RECIBIDOS_UPLOAD: "cfdis_recibidos.upload",
   CFDIS_RECIBIDOS_CATEGORIZAR: "cfdis_recibidos.categorizar",
@@ -411,6 +416,20 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
   "laboratorio.cancelar": {
     category: "laboratorio",
     description: "Cancelar un estudio de laboratorio",
+  },
+
+  "imagenologia.leer": { category: "imagenologia", description: "Consultar estudios de imagen" },
+  "imagenologia.solicitar": {
+    category: "imagenologia",
+    description: "Solicitar estudios de imagen",
+  },
+  "imagenologia.cargar_resultado": {
+    category: "imagenologia",
+    description: "Cargar hallazgos e imágenes de un estudio",
+  },
+  "imagenologia.cancelar": {
+    category: "imagenologia",
+    description: "Cancelar un estudio de imagen",
   },
 
   "cfdis_recibidos.leer": {

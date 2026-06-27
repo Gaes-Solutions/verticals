@@ -3230,6 +3230,39 @@ model EstudioLaboratorio {
   @@map("estudios_laboratorio")
 }
 
+// Estudio de imagen (rayos X, ultrasonido, etc.): el médico lo solicita y luego
+// se cargan hallazgos, impresión diagnóstica e imágenes (`imagenes` = arreglo de
+// {url, descripcion}). Sin interpretación automática (línea roja no-IA-clínica).
+model EstudioImagen {
+  id                  String    @id @default(cuid())
+  folio               String    @unique
+  sucursalId          String    @map("sucursal_id")
+  pacienteId          String?   @map("paciente_id")
+  mascotaId           String?   @map("mascota_id")
+  medicoSolicitanteId String    @map("medico_solicitante_id")
+  consultaId          String?   @map("consulta_id")
+  modalidad           String
+  region              String?
+  nombreEstudio       String    @map("nombre_estudio")
+  prioridad           String    @default("rutina")
+  notasClinicas       String?   @map("notas_clinicas")
+  estado              String    @default("solicitado")
+  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResultado      DateTime? @map("fecha_resultado")
+  hallazgos           String?
+  impresionDiagnostica String?  @map("impresion_diagnostica")
+  imagenes            Json      @default("[]")
+  cargadoPorId        String?   @map("cargado_por_id")
+  canceladoMotivo     String?   @map("cancelado_motivo")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([mascotaId])
+  @@index([pacienteId])
+  @@index([estado])
+  @@map("estudios_imagen")
+}
+
 // ============================================================
 // HITO 3.5 — Despacho contable (Modelo 4.12)
 // CFDIs recibidos (upload manual + descarga SAT) +
