@@ -34,6 +34,38 @@ export interface VentaCreadaResult {
   cambioDado: string;
 }
 
+/** Capacidades del usuario que afectan la venta (resueltas en la ruta vía RBAC). */
+export interface VentaOpts {
+  /** Permite sobrepasar el tope de descuento configurado (ventas.aplicar_descuento_alto o dueño). */
+  permiteDescuentoAlto?: boolean;
+}
+
+/**
+ * Valida que el descuento global manual no exceda el tope configurado por el
+ * dueño (config_ventas.descuentoMaximoPct, default 100 = sin tope). Quien tiene
+ * `permiteDescuentoAlto` lo sobrepasa. Bloquea antes de calcular precios.
+ */
+async function validarTopeDescuento(
+  client: TenantClient,
+  descuentoGlobalPct: number | string | null | undefined,
+  permiteDescuentoAlto: boolean,
+): Promise<void> {
+  if (permiteDescuentoAlto || descuentoGlobalPct === null || descuentoGlobalPct === undefined) {
+    return;
+  }
+  const pct = new Decimal(String(descuentoGlobalPct));
+  if (pct.lte(ZERO)) return;
+  const cfg = await client.configVentas.findFirst();
+  const max = new Decimal(cfg ? cfg.descuentoMaximoPct.toString() : "100");
+  if (pct.gt(max)) {
+    throw new VentaError(
+      400,
+      `El descuento máximo permitido es ${max.toString()}%. Pide autorización para aplicar un descuento mayor.`,
+      { descuentoMaximoPct: max.toString(), solicitado: pct.toString() },
+    );
+  }
+}
+
 interface VarianteSnapshot {
   id: string;
   sku: string;
@@ -370,7 +402,9 @@ export async function previewVenta(
   client: TenantClient,
   usuarioId: string,
   input: VentaPreviewInput,
+  opts: VentaOpts = {},
 ): Promise<VentaPreviewResult> {
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
   const sucursal = await validarSucursalCaja(client, input.sucursalId, undefined);
   const fullInput = { ...input, pagos: [] } as unknown as VentaCreateInput;
   const ticket = await ejecutarPreviewSegura(client, usuarioId, fullInput);
@@ -409,7 +443,9 @@ export async function crearVenta(
   client: TenantClient,
   usuarioId: string,
   input: VentaCreateInput,
+  opts: VentaOpts = {},
 ): Promise<VentaCreadaResult> {
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
   const sucursal = await validarSucursalCaja(client, input.sucursalId, input.cajaId);
   const ticket = await ejecutarPreviewSegura(client, usuarioId, input);
 

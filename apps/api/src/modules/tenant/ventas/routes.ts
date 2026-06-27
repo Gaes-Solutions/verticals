@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
   type VentaListQuery,
@@ -80,8 +80,14 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.VENTAS_CREAR);
     const body = ventaCreateSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
-      const result = await crearVenta(req.tenantPrisma, req.principal.userId, body);
+      const result = await crearVenta(req.tenantPrisma, req.principal.userId, body, {
+        permiteDescuentoAlto,
+      });
       return reply.code(201).send(result);
     } catch (err) {
       if (err instanceof VentaError) {
@@ -99,8 +105,14 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
   app.post("/preview", async (req, reply) => {
     req.requirePerm(PERMISSIONS.VENTAS_CREAR);
     const body = ventaPreviewSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
-      return await previewVenta(req.tenantPrisma, req.principal.userId, body);
+      return await previewVenta(req.tenantPrisma, req.principal.userId, body, {
+        permiteDescuentoAlto,
+      });
     } catch (err) {
       if (err instanceof VentaError) {
         return reply.code(err.statusCode).send({

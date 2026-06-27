@@ -42,6 +42,7 @@ import citasRoutes from "./modules/tenant/citas/routes.js";
 import clientesB2bRoutes from "./modules/tenant/clientes-b2b/routes.js";
 import clientesRoutes from "./modules/tenant/clientes/routes.js";
 import cobrosRoutes from "./modules/tenant/cobros/routes.js";
+import configVentasRoutes from "./modules/tenant/config-ventas/routes.js";
 import consultasRoutes from "./modules/tenant/consultas/routes.js";
 import cortesRoutes from "./modules/tenant/cortes/routes.js";
 import cotizacionesRoutes from "./modules/tenant/cotizaciones/routes.js";
@@ -217,6 +218,7 @@ export async function buildApp(
       await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
       await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(seguridadRoutes, { prefix: "/seguridad" });
+      await tenantApp.register(configVentasRoutes, { prefix: "/config-ventas" });
       await tenantApp.register(cobrosRoutes, { prefix: "/cobros" });
       await tenantApp.register(monederoRoutes, { prefix: "/monedero" });
       await tenantApp.register(inventarioInsightsRoutes, { prefix: "/inventario-insights" });

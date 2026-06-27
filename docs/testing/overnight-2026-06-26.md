@@ -210,7 +210,13 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 |---|-----------|-----------|
 | A | `regalo_con_compra` (promo cross-producto) | ✅ Motor (5 tests) + UI con selector de productos. Configurable: cantidad de compra, cantidad de regalo y % de descuento al regalo; el sistema **recomienda 100% (gratis)**. Commit `2c22ba0` |
 | B | Seed demo B2B para probar el portal por navegador | ✅ `seed-b2b-demo.ts` (script `seed:b2b-demo`). Sembrado en `globoland`. Login y catálogo (10,001 productos) verificados vía API |
-| C | Tope de descuento configurable por el dueño | ⏳ En curso |
+| C | Tope de descuento configurable por el dueño | ✅ Modelo `config_ventas` + migración (default 100 = sin tope, no rompe clientes). Página **Configuración** en web-admin (dueño fija el tope, el sistema **recomienda 15%**). Enforcement en `crearVenta`/`preview`; roles con `ventas.aplicar_descuento_alto` y el dueño lo sobrepasan. POS avisa inline. 5 tests de integración |
+
+### Tope de descuento — detalle
+- **Configurable por el dueño:** web-admin → **Configuración** → "Tope de descuento manual" (0–100%). El sistema recomienda **15%**; `100 = sin tope`.
+- **Default seguro:** la columna nace en **100** (comportamiento histórico) para no capar silenciosamente a los 5 clientes en producción.
+- **Quién lo sobrepasa:** roles con `ventas.aplicar_descuento_alto` o el dueño (`*`).
+- **Dónde se aplica:** `crearVenta` y `/ventas/preview` (feedback inmediato en el POS, con aviso inline y botón Cobrar deshabilitado mientras exceda).
 
 ### Credenciales demo B2B (tenant `globoland`)
 - **Portal:** web-b2b · **tenant:** `globoland`

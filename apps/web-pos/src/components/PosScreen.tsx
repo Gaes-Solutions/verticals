@@ -43,6 +43,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   // un estimado mientras llega el preview.
   const [previewTotal, setPreviewTotal] = useState<number | null>(null);
   const [promoDescuento, setPromoDescuento] = useState(0);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const subtotalTicket = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
   const descuentoMonto = subtotalTicket * (descuentoPct / 100);
@@ -60,6 +61,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     if (ticket.length === 0) {
       setPreviewTotal(null);
       setPromoDescuento(0);
+      setPreviewError(null);
       return;
     }
     const t = setTimeout(async () => {
@@ -75,9 +77,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         });
         setPreviewTotal(Number.parseFloat(res.total));
         setPromoDescuento(Number.parseFloat(res.descuentoPromo) || 0);
-      } catch {
+        setPreviewError(null);
+      } catch (err) {
         setPreviewTotal(null);
         setPromoDescuento(0);
+        // El backend bloquea descuentos sobre el tope; mostrar el aviso al cajero.
+        setPreviewError(err instanceof ApiError && descuentoPct > 0 ? err.message : null);
       }
     }, 300);
     return () => clearTimeout(t);
@@ -384,6 +389,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 </div>
               )}
 
+              {previewError && (
+                <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-red-600 text-sm">
+                  {previewError}
+                </p>
+              )}
+
               <div className="border-t border-slate-200 pt-3">
                 {descuentoPct > 0 && (
                   <div className="mb-1 flex items-center justify-between text-sm text-slate-500">
@@ -410,7 +421,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 <button
                   type="button"
                   onClick={() => setCobrando(true)}
-                  disabled={ticket.length === 0}
+                  disabled={ticket.length === 0 || previewError !== null}
                   className="w-full rounded-lg bg-brand py-4 text-lg font-bold text-white hover:bg-brand-dark disabled:opacity-40"
                 >
                   Cobrar {money(totalFinal)}

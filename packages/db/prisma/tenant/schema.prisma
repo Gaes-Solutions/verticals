@@ -240,6 +240,19 @@ model ConfigSeguridad {
   @@map("config_seguridad")
 }
 
+// Configuración de ventas del negocio (singleton). El dueño define el tope de
+// descuento manual; default 100 (sin tope = comportamiento histórico). Roles con
+// `ventas.aplicar_descuento_alto` (o el dueño) lo sobrepasan. El sistema recomienda
+// 15% en la UI.
+model ConfigVentas {
+  id                 String   @id @default(cuid())
+  descuentoMaximoPct Decimal  @default(100) @map("descuento_maximo_pct") @db.Decimal(5, 2)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("config_ventas")
+}
+
 // Link de cobro (pago a distancia / por WhatsApp). El negocio genera un link por
 // un monto y concepto; el cliente lo abre y paga (Conekta/Stripe/mock).
 model LinkPago {

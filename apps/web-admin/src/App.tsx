@@ -12,6 +12,7 @@ import {
   QrCode,
   Receipt,
   RotateCcw,
+  Settings,
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
@@ -32,6 +33,7 @@ import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
+import { ConfiguracionPage } from "./pages/ConfiguracionPage.js";
 import { CxcPage } from "./pages/CxcPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
@@ -80,6 +82,7 @@ type Seccion =
   | "cfdi"
   | "usuarios"
   | "seguridad"
+  | "configuracion"
   | "tienda";
 
 // `perm` = permiso de lectura que exige la ruta de ese módulo. La UI oculta el
@@ -118,6 +121,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "cfdi", label: "Facturación", icon: FileText, perm: "cfdi.leer" },
   { key: "usuarios", label: "Usuarios y permisos", icon: Users, perm: "usuarios.leer" },
   { key: "seguridad", label: "Seguridad", icon: ShieldCheck, perm: "configuracion.leer" },
+  { key: "configuracion", label: "Configuración", icon: Settings, perm: "configuracion.leer" },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
 
@@ -133,6 +137,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   cfdi: CfdiPage,
   usuarios: UsuariosRolesPage,
   seguridad: SeguridadPage,
+  configuracion: ConfiguracionPage,
   ventas: VentasPage,
   cobros: CobrosPage,
   cxc: CxcPage,
