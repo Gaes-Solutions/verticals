@@ -1,5 +1,6 @@
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useEffect, useId, useState } from "react";
+import { RecetaImprimible } from "../components/RecetaImprimible.js";
 import { ApiError, api, getUsuario, puede } from "../lib/api.js";
 
 interface MascotaLite {
@@ -119,6 +120,7 @@ function RecetaDeMascota({
 }) {
   const [previas, setPrevias] = useState<RecetaLite[]>([]);
   const [recargar, setRecargar] = useState(0);
+  const [imprimirId, setImprimirId] = useState<string | null>(null);
   useEffect(() => {
     api<{ items: RecetaLite[] }>(`/t/recetas?mascotaId=${mascota.id}&pageSize=10`)
       .then((r) => setPrevias(r.items ?? []))
@@ -144,14 +146,23 @@ function RecetaDeMascota({
           <h2 className="mb-2 font-semibold text-slate-700 text-sm">Recetas previas</h2>
           <ul className="flex flex-col gap-1">
             {previas.map((r) => (
-              <li key={r.id} className="flex items-center justify-between text-sm">
+              <li key={r.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-slate-600">
                   {new Date(r.fechaEmision).toLocaleDateString("es-MX")} · {r.folio} ·{" "}
                   {r._count?.items ?? 0} medicamento(s)
                   {r.esGrupoControlado ? " · controlada" : ""}
                 </span>
-                <span className={r.estado === "emitida" ? "gx-badge-ok" : "gx-badge-info"}>
-                  {r.estado}
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setImprimirId(r.id)}
+                    className="text-brand text-xs hover:underline"
+                  >
+                    Imprimir
+                  </button>
+                  <span className={r.estado === "emitida" ? "gx-badge-ok" : "gx-badge-info"}>
+                    {r.estado}
+                  </span>
                 </span>
               </li>
             ))}
@@ -160,6 +171,7 @@ function RecetaDeMascota({
       )}
 
       <RecetaForm mascota={mascota} onEmitida={() => setRecargar((n) => n + 1)} />
+      {imprimirId && <RecetaImprimible id={imprimirId} onClose={() => setImprimirId(null)} />}
     </div>
   );
 }

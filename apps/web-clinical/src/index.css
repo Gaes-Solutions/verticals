@@ -15,3 +15,24 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   background: #f1f5f9;
 }
+
+/* Receta imprimible: al imprimir (o Guardar como PDF) solo se ve el área .receta-print. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receta-print,
+  .receta-print * {
+    visibility: visible;
+  }
+  .receta-print {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 24px;
+    box-shadow: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
