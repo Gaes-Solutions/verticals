@@ -3,6 +3,7 @@ import {
   CalendarCog,
   CalendarDays,
   ClipboardList,
+  FlaskConical,
   FolderHeart,
   type LucideIcon,
   Menu,
@@ -19,6 +20,7 @@ import { ConfigurarAgendaPage } from "./pages/ConfigurarAgendaPage.js";
 import { ExpedienteSoapPage } from "./pages/ExpedienteSoapPage.js";
 import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
+import { LaboratorioPage } from "./pages/LaboratorioPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
 
 export interface Session {
@@ -32,6 +34,7 @@ type Seccion =
   | "soap"
   | "receta"
   | "hospitalizacion"
+  | "laboratorio"
   | "cartilla"
   | "configagenda";
 
@@ -48,6 +51,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
     icon: BedDouble,
     perm: "hospitalizacion.leer",
   },
+  { key: "laboratorio", label: "Laboratorio", icon: FlaskConical, perm: "laboratorio.leer" },
   { key: "cartilla", label: "Cartilla / Vacunas", icon: Syringe, perm: "vacunas.leer" },
   { key: "configagenda", label: "Configurar agenda", icon: CalendarCog, perm: "agenda.gestionar" },
 ];
@@ -58,6 +62,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   soap: ExpedienteSoapPage,
   receta: RecetaPage,
   hospitalizacion: HospitalizacionPage,
+  laboratorio: LaboratorioPage,
   cartilla: CartillaPage,
   configagenda: ConfigurarAgendaPage,
 };
