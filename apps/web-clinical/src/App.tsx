@@ -1,23 +1,26 @@
-import { CalendarDays, type LucideIcon, Menu, Stethoscope } from "lucide-react";
+import { CalendarDays, FolderHeart, type LucideIcon, Menu, Stethoscope } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { loadToken, puede, setToken } from "./lib/api.js";
 import { AgendaPage } from "./pages/AgendaPage.js";
+import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 
 export interface Session {
   nombre: string;
 }
 
-type Seccion = "agenda";
+type Seccion = "agenda" | "expedientes";
 
 // `perm` = permiso de lectura que exige la pantalla. La UI oculta el item si el
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
 const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "agenda", label: "Agenda del día", icon: CalendarDays, perm: "citas.leer" },
+  { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   agenda: AgendaPage,
+  expedientes: ExpedientesPage,
 };
 
 export function App() {
