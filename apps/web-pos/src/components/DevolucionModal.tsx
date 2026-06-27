@@ -149,9 +149,11 @@ export function DevolucionModal({ onClose }: { onClose: () => void }) {
                         className="mb-1.5 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
                       >
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-800">{l.descripcion}</p>
+                          <p className="text-sm font-medium text-slate-800">
+                            {l.snapshotProducto?.nombreProducto ?? "—"}
+                          </p>
                           <p className="text-xs text-slate-400">
-                            {l.cantidad} vendidas · ${Number.parseFloat(l.total).toFixed(2)}
+                            {l.cantidad} vendidas · ${Number.parseFloat(l.totalLinea).toFixed(2)}
                           </p>
                         </div>
                         <input
