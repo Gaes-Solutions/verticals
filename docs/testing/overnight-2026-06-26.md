@@ -4,6 +4,36 @@ Modo: testing por navegador real (Claude in Chrome) como cada rol, sin intervenc
 Reglas: decidir con defaults, arreglar bugs claros, registrar todo. Lo ambiguo/destructivo → `BLOQUEADO`.
 
 Tenant de prueba: **globoland** (10,001 productos seed). Contraseñas de prueba fijadas con `dev.sh setpass` = `Demo!2026`.
+Rama de trabajo: **`autonomo/ventas-veterinaria`** (NO main). Cada fix → commit + push a esa rama.
+
+---
+
+## 🏁 RESUMEN FINAL (leer esto primero)
+
+**Vertical de Ventas barrida de punta a punta. 6 bugs reales arreglados + 1 feature construida, todo commiteado y pusheado a `autonomo/ventas-veterinaria`.**
+
+### 🐛 Bugs arreglados (pusheados)
+- **#1** `fix(web-pos)` Devolución y recibo mostraban `$NaN` y nombre vacío → tipos alineados al API (`totalLinea`, `snapshotProducto.nombreProducto`, `ivaTotal`, `cambioDado`).
+- **#2** `fix(web-admin)` El sidebar mostraba TODOS los módulos sin importar el rol → gating por permiso de lectura + redirección a la primera sección visible.
+- **#3** `fix(web-admin)` ProductosPage mostraba Nuevo/Editar/Archivar a rol de solo lectura → gating por `productos.crear/actualizar/archivar`.
+- **#4** `fix(web-admin)` UsuariosRolesPage: 6 acciones de escritura sin gatear → gating por `usuarios.*`/`roles.*`.
+- **#5** `fix(web-pos)` Venta con descuento 100% ($0) estaba ROTA (fallaba en silencio, mensaje falso de monedero) → mensaje "Venta sin costo" + se completa con pago $0.
+- **#6** `fix(api)` Mensaje de stock insuficiente filtraba IDs internos al cajero → mensaje amigable, IDs solo en el `extra`.
+
+### 🆕 Feature construida
+- **UI de Apartados** (`web-pos`): el backend existía sin frontend. Construí el modal completo (crear/abonar/liquidar/cancelar) con gating `apartados.*`, verificado E2E en navegador.
+
+### ✅ Probado y PASA
+8/8 flujos de venta (cajero) · Dashboard/Ventas/Reportes (dueño) · Superadmin con 2FA · RBAC negativo (API 403 + UI gateada) · B2B cotización→pedido (48 tests) · Cobros/Links · Monedero/Gift cards · Responsive móvil · Venta sin stock bloquea bien · CxC backend (23 tests) · Promociones motor (11 tests).
+
+### 🧱 NECESITA DECISIÓN DE GABY (BLOQUEADO)
+1. **UI faltante de Promociones**: el motor aplica promos en la venta (11 tests) pero NO hay pantalla para crear/gestionarlas. ¿Construyo la UI (como hice con apartados)?
+2. **UI faltante de CxC**: backend completo (23 tests) pero CERO UI; el cajero tiene `cxc.cobrar` sin dónde usarlo. ¿Construyo la UI?
+3. **Descuento 100% / venta gratis**: hoy se permite. ¿Tope de descuento o aprobación de gerente (estilo Square)?
+4. **Devoluciones no netean en reportes**: ¿"Ventas de hoy"/"más vendidos" deben ser brutos o netos de devoluciones?
+5. **Multi-pago en POS**: el cobro acepta un solo método; el modelo soporta split. ¿Exponer pago dividido?
+6. **Seed B2B**: para probar el portal web-b2b por navegador falta crear empresa+usuario B2B demo.
+7. **Gating de escritura en web-pos/web-b2b**: audité y cerré web-admin; falta el mismo barrido en las otras 2 apps.
 
 ---
 
