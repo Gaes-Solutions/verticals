@@ -186,3 +186,19 @@ Pendiente: Promociones, CxC, venta de producto sin stock.
 - **#4 Descuento 100% / tope de descuento — DECISIÓN: mantener permitido por ahora.** El descuento ya está gateado por el permiso `ventas.aplicar_descuento` (solo roles autorizados lo aplican). Un tope duro o aprobación de gerente sería una feature de configuración por tenant (campo `descuentoMaxPct` en config + enforcement en `crearVenta`/preview). Recomendación: añadirlo como "default personalizable" cuando se priorice; no se implementa ahora para no inventar política. (Referencia Square: descuentos altos requieren permiso/aprobación — ya cubierto parcialmente por el permiso.)
 - **#5 Reportes brutos vs netos de devoluciones — DECISIÓN: mantener BRUTO (estándar).** "Ventas de hoy" y "más vendidos" reflejan ventas brutas; las devoluciones se rastrean por separado (módulo Devoluciones). Es el comportamiento estándar de POS (las ventas no se "borran" al devolver; la devolución es su propio movimiento). Si se quiere una vista neta, sería una métrica adicional en Reportes, no un cambio al actual. Documentado; sin cambio de código.
 - **#6 Multi-pago (pago dividido) en el POS — EN CURSO.** El backend (`validarPagos`) ya acepta varios pagos; falta exponer en `CobroModal` agregar varios métodos que sumen el total. Se implementa en el siguiente tramo.
+
+---
+
+## 🏁 RESUMEN — Pedidos de Gaby (#1–#6) TODOS COMPLETOS
+
+| # | Pedido | Resultado | Commit |
+|---|--------|-----------|--------|
+| 1 | POS previsualiza promo antes de cobrar | ✅ Endpoint `/t/ventas/preview` + el ticket muestra "Promoción −$X" y el total real. Verificado ($2399→$2159.10). | e348b6b |
+| 2 | Tipos de promo en motor + selector UI | ✅ descuento_monto/mxn, tres_x_n, compra_x_lleva_y, escalonado_volumen. UI con selector. Verificado API+navegador. `regalo_con_compra` pendiente (cross-producto). | e06e193 |
+| 3 | Gating de escritura web-pos/web-b2b | ✅ web-pos: descuento gateado por `ventas.aplicar_descuento`. web-b2b: no aplica (backend no diferencia por rol). | eac3a55 |
+| 4 | Descuento 100% | ✅ Decisión: mantener (ya gateado por permiso); tope configurable recomendado para después. | 4cb8a57 |
+| 5 | Reportes bruto/neto devoluciones | ✅ Decisión: mantener bruto (estándar POS); documentado. | 4cb8a57 |
+| 6 | Multi-pago (pago dividido) en POS | ✅ CobroModal con varias líneas método+monto. Verificado: venta $2399 = $1200 efectivo + $1199 débito (2 pagos en DB). | fe77669 |
+
+**Rama `autonomo/ventas-veterinaria`: ~25 commits. Producción (`main`) intacta.**
+Pendiente menor para Gaby: `regalo_con_compra` (promo cross-producto), tope de descuento configurable, seed B2B para probar el portal por navegador.
