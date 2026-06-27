@@ -32,11 +32,13 @@ export function CobroModal({
 
   const montoMonedero = usarMonedero ? Math.min(saldoMonedero, total) : 0;
   const restante = Math.max(0, total - montoMonedero);
-  const cubreTodoMonedero = restante <= 0.0001;
+  const esGratis = total <= 0.0001;
+  const cubreTodoMonedero = montoMonedero > 0 && restante <= 0.0001;
+  const requierePago = !esGratis && !cubreTodoMonedero;
 
   const [recibido, setRecibido] = useState<string>(total.toFixed(2));
   const recibidoNum = Number.parseFloat(recibido) || 0;
-  const cobraEfectivo = !cubreTodoMonedero && metodo === "efectivo";
+  const cobraEfectivo = requierePago && metodo === "efectivo";
   const cambio = cobraEfectivo ? Math.max(0, recibidoNum - restante) : 0;
   const insuficiente = cobraEfectivo && recibidoNum < restante;
 
@@ -47,7 +49,9 @@ export function CobroModal({
   function confirmar() {
     const pagos: CobroResult["pagos"] = [];
     if (montoMonedero > 0) pagos.push({ metodo: "monedero", monto: montoMonedero });
-    if (!cubreTodoMonedero) pagos.push({ metodo, monto: restante });
+    if (requierePago) pagos.push({ metodo, monto: restante });
+    // Venta sin costo (descuento total): el backend exige al menos un pago, registramos $0.
+    if (pagos.length === 0) pagos.push({ metodo: "efectivo", monto: 0 });
     onConfirm({ pagos });
   }
 
@@ -81,7 +85,7 @@ export function CobroModal({
           </button>
         )}
 
-        {!cubreTodoMonedero && (
+        {requierePago && (
           <>
             {montoMonedero > 0 && (
               <p className="mb-2 text-sm text-slate-600">
@@ -111,6 +115,12 @@ export function CobroModal({
         {cubreTodoMonedero && (
           <p className="mb-4 rounded-lg bg-teal-50 px-3 py-2 text-sm text-brand">
             El monedero cubre el total de la venta.
+          </p>
+        )}
+
+        {esGratis && !cubreTodoMonedero && (
+          <p className="mb-4 rounded-lg bg-teal-50 px-3 py-2 text-sm text-brand">
+            Venta sin costo (descuento total aplicado).
           </p>
         )}
 

@@ -88,6 +88,14 @@ El backend de apartados existía sin frontend. Construí la UI completa y la ver
 - **Cancelar:** creado AP-SUC-PRINCIPAL-000002 ($2399 sin abono) → con motivo "Cliente desistió" → estado pasa a **Cancelado**; las acciones (abonar/liquidar/cancelar) desaparecen al no estar activo. El flujo de cancelar (código que no se había ejercitado) funciona sin bug.
 - **Gating verificado en ambos sentidos:** la sección "Cancelar" NO aparece para el cajero (no tiene `apartados.cancelar`, solo leer/crear/abonar/liquidar) y SÍ aparece para el dueño (`*`). Las 4 acciones de apartados quedan verificadas end-to-end.
 
+## 🧪 Casos borde del POS (fase profundización)
+
+### Bug #5 — Venta con descuento 100% ($0) rota + mensaje engañoso
+- **Causa:** en `CobroModal.tsx`, `cubreTodoMonedero = restante <= 0.0001` era `true` con total $0 aunque no hubiera monedero (el $0 venía de un descuento 100%). Resultado: (a) mostraba el mensaje falso "El monedero cubre el total de la venta", y (b) `confirmar()` enviaba `pagos: []`, pero el backend exige `pagos.min(1)` → la venta **fallaba en silencio** (el modal se quedaba abierto, sin error visible).
+- **Fix:** separar `esGratis = total <= 0.0001` de `cubreTodoMonedero = montoMonedero > 0 && restante <= 0.0001`; mensaje propio "Venta sin costo (descuento total aplicado)"; y para satisfacer el backend, registrar un pago de $0 en efectivo cuando no hay otro pago. Typecheck limpio.
+- **Verificado:** descuento 100% → mensaje correcto → Confirmar → **Venta registrada Folio SUC-PRINCIPAL-000005 $0.00**. Antes no se podía completar.
+- **⚠️ Decisión de producto (BLOQUEADO — necesita Gaby):** ¿se debe PERMITIR un descuento del 100% / venta gratis? Hoy queda permitido (el descuento ya está gateado por el permiso `ventas.aplicar_descuento`). Square/Shopify lo permiten pero suelen pedir aprobación de gerente para descuentos altos. ¿Quieres tope de descuento o aprobación para 100%?
+
 ## 🤖 Notas de automatización (no son bugs de producto)
 
 - **Login 2FA superadmin por navegador:** el TOTP (ventana 30s) caducaba por la latencia bash→navegador; varios intentos dieron "Código incorrecto". Solución fiable: generar el código con node esperando internamente al **inicio de ventana** (`timeRemaining>=27`) → da ~30s de margen → enviar inmediato. Secret en `admin_users.mfa_secret` (otplib@12.0.1). Para un humano con app autenticadora esto NO es problema; es fricción solo de automatización.
