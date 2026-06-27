@@ -88,6 +88,16 @@ El backend de apartados existía sin frontend. Construí la UI completa y la ver
 - **Cancelar:** creado AP-SUC-PRINCIPAL-000002 ($2399 sin abono) → con motivo "Cliente desistió" → estado pasa a **Cancelado**; las acciones (abonar/liquidar/cancelar) desaparecen al no estar activo. El flujo de cancelar (código que no se había ejercitado) funciona sin bug.
 - **Gating verificado en ambos sentidos:** la sección "Cancelar" NO aparece para el cajero (no tiene `apartados.cancelar`, solo leer/crear/abonar/liquidar) y SÍ aparece para el dueño (`*`). Las 4 acciones de apartados quedan verificadas end-to-end.
 
+## 🧩 Submódulos de ventas (fase profundización)
+
+| Submódulo | Resultado |
+|-----------|-----------|
+| Cobros / Links de pago (admin) | PASA. Creé cobro "Anticipo decoración fiesta" $500 → link público `localhost:3001/cobro/<token>` → aparece pendiente, total Pendiente $500 correcto, acciones Copiar/WhatsApp/Cancelar |
+| Monedero / Gift cards (admin) | PASA. Emití tarjeta GR-897D7F1C $250 → activa, Emitido total $250 / Saldo vigente $250 correctos |
+| Cobro insuficiente (POS) | OK por código: `Confirmar` se deshabilita con `insuficiente = recibido < restante` (CobroModal) |
+
+Pendiente: Promociones, CxC, venta de producto sin stock.
+
 ## 🧪 Casos borde del POS (fase profundización)
 
 ### Bug #5 — Venta con descuento 100% ($0) rota + mensaje engañoso
