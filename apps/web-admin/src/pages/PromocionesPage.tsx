@@ -179,7 +179,104 @@ const TIPOS_CREABLES: { value: string; label: string; valorLabel?: string }[] = 
   { value: "precio_especial", label: "Precio especial", valorLabel: "Precio final por unidad ($)" },
   { value: "tres_x_n", label: "NxM (ej. 3x2)" },
   { value: "compra_x_lleva_y", label: "Compra X lleva Y" },
+  { value: "regalo_con_compra", label: "Regalo con compra" },
 ];
+
+interface ProdMini {
+  id: string;
+  nombre: string;
+}
+
+function SelectorProductos({
+  titulo,
+  ayuda,
+  seleccionados,
+  onChange,
+}: {
+  titulo: string;
+  ayuda: string;
+  seleccionados: ProdMini[];
+  onChange: (next: ProdMini[]) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [resultados, setResultados] = useState<ProdMini[]>([]);
+  const [buscando, setBuscando] = useState(false);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setResultados([]);
+      return;
+    }
+    setBuscando(true);
+    const t = setTimeout(() => {
+      api<{ items: ProdMini[] }>(`/t/productos?q=${encodeURIComponent(term)}&pageSize=8`)
+        .then((r) => setResultados(r.items ?? []))
+        .catch(() => setResultados([]))
+        .finally(() => setBuscando(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  function agregar(p: ProdMini) {
+    if (!seleccionados.some((s) => s.id === p.id)) onChange([...seleccionados, p]);
+    setQ("");
+    setResultados([]);
+  }
+
+  return (
+    <div>
+      <span className="gx-label">{titulo}</span>
+      <p className="mb-1 text-slate-400 text-xs">{ayuda}</p>
+      {seleccionados.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {seleccionados.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 text-xs"
+            >
+              {p.nombre}
+              <button
+                type="button"
+                onClick={() => onChange(seleccionados.filter((s) => s.id !== p.id))}
+                className="text-slate-400 hover:text-danger"
+                aria-label={`Quitar ${p.nombre}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        className="gx-input"
+        placeholder="Buscar producto por nombre o SKU…"
+      />
+      {q.trim().length >= 2 && (
+        <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200">
+          {buscando ? (
+            <p className="px-3 py-2 text-slate-400 text-sm">Buscando…</p>
+          ) : resultados.length === 0 ? (
+            <p className="px-3 py-2 text-slate-400 text-sm">Sin resultados</p>
+          ) : (
+            resultados.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => agregar(p)}
+                className="block w-full px-3 py-2 text-left text-slate-700 text-sm hover:bg-slate-50"
+              >
+                {p.nombre}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [nombre, setNombre] = useState("");
@@ -188,6 +285,11 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [compra, setCompra] = useState("3");
   const [paga, setPaga] = useState("2");
   const [lleva, setLleva] = useState("3");
+  const [comprados, setComprados] = useState<ProdMini[]>([]);
+  const [regalos, setRegalos] = useState<ProdMini[]>([]);
+  const [cantReq, setCantReq] = useState("1");
+  const [cantRegalo, setCantRegalo] = useState("1");
+  const [descPct, setDescPct] = useState("100");
   const [inicio, setInicio] = useState(ahoraLocalInput);
   const [activar, setActivar] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,14 +299,38 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     tipo === "descuento_pct" || tipo === "descuento_monto" || tipo === "precio_especial";
   const usaNxM = tipo === "tres_x_n";
   const usaXY = tipo === "compra_x_lleva_y";
-  const valido =
-    !!nombre &&
-    (usaValor ? !!valor : usaNxM ? Number(compra) > Number(paga) : Number(lleva) > Number(compra));
+  const usaRegalo = tipo === "regalo_con_compra";
+
+  function reglaValida(): boolean {
+    if (usaValor) return !!valor;
+    if (usaNxM) return Number(compra) > Number(paga);
+    if (usaXY) return Number(lleva) > Number(compra);
+    if (usaRegalo) {
+      return comprados.length > 0 && regalos.length > 0 && Number(cantReq) > 0;
+    }
+    return false;
+  }
+  const valido = !!nombre && reglaValida();
 
   function buildAcciones(): Record<string, number> {
     if (usaNxM) return { compra: Number(compra), paga: Number(paga) };
     if (usaXY) return { compra: Number(compra), lleva: Number(lleva) };
+    if (usaRegalo) {
+      return {
+        cantidadRequerida: Number(cantReq),
+        cantidadRegalo: Number(cantRegalo),
+        descuentoPct: Number(descPct),
+      };
+    }
     return { valor: Number(valor) };
+  }
+
+  function buildProductos(): { productoId: string; rol: string }[] | undefined {
+    if (!usaRegalo) return undefined;
+    return [
+      ...comprados.map((p) => ({ productoId: p.id, rol: "comprado" })),
+      ...regalos.map((p) => ({ productoId: p.id, rol: "regalo" })),
+    ];
   }
 
   async function guardar(e: FormEvent) {
@@ -219,6 +345,7 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           acciones: buildAcciones(),
           vigenciaInicio: new Date(inicio).toISOString(),
           canales: ["todos"],
+          ...(buildProductos() ? { productos: buildProductos() } : {}),
         },
       });
       if (activar) {
@@ -262,6 +389,60 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             ))}
           </select>
         </label>
+
+        {usaRegalo && (
+          <div className="mb-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <SelectorProductos
+              titulo="Producto(s) que disparan el regalo"
+              ayuda="El cliente debe comprarlos para ganar el regalo."
+              seleccionados={comprados}
+              onChange={setComprados}
+            />
+            <SelectorProductos
+              titulo="Producto(s) de regalo"
+              ayuda="Lo que se descuenta al cumplir la compra."
+              seleccionados={regalos}
+              onChange={setRegalos}
+            />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block">
+                <span className="gx-label">Compra (cantidad)</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={cantReq}
+                  onChange={(e) => setCantReq(e.target.value)}
+                  className="gx-input"
+                />
+              </label>
+              <label className="block">
+                <span className="gx-label">Regala (cantidad)</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={cantRegalo}
+                  onChange={(e) => setCantRegalo(e.target.value)}
+                  className="gx-input"
+                />
+              </label>
+              <label className="block">
+                <span className="gx-label">Descuento al regalo (%)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={descPct}
+                  onChange={(e) => setDescPct(e.target.value)}
+                  className="gx-input"
+                />
+                <span className="text-slate-400 text-xs">Recomendado 100% (gratis)</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         <div className="mb-3 grid gap-3 sm:grid-cols-2">
           {usaValor && (

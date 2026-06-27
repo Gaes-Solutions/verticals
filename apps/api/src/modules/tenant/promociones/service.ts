@@ -39,6 +39,10 @@ export interface PromoEvaluable {
   sucursalesAplicables: string[];
   productosIncluidos: Set<string>;
   productosExcluidos: Set<string>;
+  /** Productos que disparan el regalo (rol "comprado"/"requerido"). */
+  productosComprados: Set<string>;
+  /** Productos que se regalan / descuentan al cumplir la compra (rol "regalo"). */
+  productosRegalo: Set<string>;
 }
 
 export interface PromocionAplicada {
@@ -111,6 +115,14 @@ export async function cargarPromocionesAplicables(
       productosExcluidos: new Set(
         p.productos.filter((x) => x.rol === "excluido").map((x) => x.productoId),
       ),
+      productosComprados: new Set(
+        p.productos
+          .filter((x) => x.rol === "comprado" || x.rol === "requerido")
+          .map((x) => x.productoId),
+      ),
+      productosRegalo: new Set(
+        p.productos.filter((x) => x.rol === "regalo").map((x) => x.productoId),
+      ),
     }))
     .filter((p) => promoAplicaContexto(p, ctx));
 }
@@ -134,6 +146,9 @@ function evaluarPromo(
   lineas: LineaMut[],
   varianteAProducto: Map<string, string>,
 ): { monto: Decimal; afectados: string[] } {
+  if (promo.tipo === "regalo_con_compra") {
+    return evaluarRegaloConCompra(promo, lineas, varianteAProducto);
+  }
   let monto = ZERO;
   const afectados: string[] = [];
   const elegibles = lineas.filter((l) => {
@@ -188,8 +203,6 @@ function evaluarPromo(
       }
       descLinea = linea.subtotal.mul(pct).div(100);
     }
-    // regalo_con_compra: requiere manejar un producto-regalo cruzando líneas; no
-    // soportado por este motor por-línea todavía (registrado como pendiente).
     if (descLinea.gt(ZERO)) {
       const nuevoSub = Decimal.max(linea.subtotal.minus(descLinea), ZERO);
       linea.precioUnitario = linea.cantidad.gt(ZERO) ? nuevoSub.div(linea.cantidad) : ZERO;
@@ -197,6 +210,79 @@ function evaluarPromo(
       monto = monto.plus(descLinea);
       afectados.push(linea.productoVarianteId);
     }
+  }
+  return { monto, afectados };
+}
+
+/** Aplica el descuento de regalo a una línea y devuelve el monto descontado. */
+function descontarLineaRegalo(linea: LineaMut, descLinea: Decimal): Decimal {
+  if (descLinea.lte(ZERO)) return ZERO;
+  const nuevoSub = Decimal.max(linea.subtotal.minus(descLinea), ZERO);
+  const aplicado = linea.subtotal.minus(nuevoSub);
+  linea.precioUnitario = linea.cantidad.gt(ZERO) ? nuevoSub.div(linea.cantidad) : ZERO;
+  linea.subtotal = nuevoSub;
+  return aplicado;
+}
+
+/** Unidades de regalo ganadas según la cantidad comprada de los disparadores. */
+function unidadesRegaloGanadas(
+  promo: PromoEvaluable,
+  lineas: LineaMut[],
+  productoDe: (l: LineaMut) => string | undefined,
+): Decimal {
+  const compradoQty = lineas
+    .filter((l) => {
+      const pid = productoDe(l);
+      return pid ? promo.productosComprados.has(pid) : false;
+    })
+    .reduce((acc, l) => acc.plus(l.cantidad), ZERO);
+  const cantRequerida = new Decimal(String(promo.acciones.cantidadRequerida ?? 1));
+  const cantRegalo = new Decimal(String(promo.acciones.cantidadRegalo ?? 1));
+  if (cantRequerida.lte(ZERO)) return ZERO;
+  return compradoQty.dividedToIntegerBy(cantRequerida).mul(cantRegalo);
+}
+
+/**
+ * Regalo con compra (cross-producto): por cada `cantidadRequerida` unidades de
+ * los productos "comprados" se ganan `cantidadRegalo` unidades de los productos
+ * "regalo", con `descuentoPct` de descuento sobre ellas (default 100 = gratis).
+ * Configurable por el dueño; el sistema recomienda 100% (gratis).
+ */
+function evaluarRegaloConCompra(
+  promo: PromoEvaluable,
+  lineas: LineaMut[],
+  varianteAProducto: Map<string, string>,
+): { monto: Decimal; afectados: string[] } {
+  const afectados: string[] = [];
+  if (promo.productosComprados.size === 0 || promo.productosRegalo.size === 0) {
+    return { monto: ZERO, afectados };
+  }
+  const productoDe = (l: LineaMut) => varianteAProducto.get(l.productoVarianteId);
+  const pct = Decimal.min(
+    new Decimal(String(promo.acciones.descuentoPct ?? 100)),
+    new Decimal(100),
+  );
+  if (pct.lte(ZERO)) return { monto: ZERO, afectados };
+
+  let unidadesRegalo = unidadesRegaloGanadas(promo, lineas, productoDe);
+  if (unidadesRegalo.lte(ZERO)) return { monto: ZERO, afectados };
+
+  const lineasRegalo = lineas.filter((l) => {
+    const pid = productoDe(l);
+    return pid ? promo.productosRegalo.has(pid) : false;
+  });
+
+  let monto = ZERO;
+  for (const linea of lineasRegalo) {
+    if (unidadesRegalo.lte(ZERO)) break;
+    const aplica = Decimal.min(unidadesRegalo, linea.cantidad);
+    const bruto = linea.precioUnitario.mul(aplica).mul(pct).div(100);
+    const aplicado = descontarLineaRegalo(linea, Decimal.min(bruto, linea.subtotal));
+    if (aplicado.gt(ZERO)) {
+      monto = monto.plus(aplicado);
+      afectados.push(linea.productoVarianteId);
+    }
+    unidadesRegalo = unidadesRegalo.minus(aplica);
   }
   return { monto, afectados };
 }
