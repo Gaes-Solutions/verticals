@@ -39,15 +39,49 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
   const [descuentoPct, setDescuentoPct] = useState(0);
   const [descuentoMotivo, setDescuentoMotivo] = useState("");
+  // Total con promociones automáticas (server-side); el cálculo local es solo
+  // un estimado mientras llega el preview.
+  const [previewTotal, setPreviewTotal] = useState<number | null>(null);
+  const [promoDescuento, setPromoDescuento] = useState(0);
 
   const subtotalTicket = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
   const descuentoMonto = subtotalTicket * (descuentoPct / 100);
   const total = subtotalTicket - descuentoMonto;
+  const totalFinal = previewTotal ?? total;
   const numItems = ticket.reduce((s, l) => s + l.cantidad, 0);
 
   useEffect(() => {
     searchRef.current?.focus();
   }, []);
+
+  // Previsualiza el total real (con promociones automáticas) contra el server
+  // para no cobrar de más cuando una promo aplica.
+  useEffect(() => {
+    if (ticket.length === 0) {
+      setPreviewTotal(null);
+      setPromoDescuento(0);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await api<{ total: string; descuentoPromo: string }>("/t/ventas/preview", {
+          body: {
+            sucursalId: session.sucursal.id,
+            canal: "pos",
+            ...(cliente ? { clienteId: cliente.id } : {}),
+            ...(descuentoPct > 0 ? { descuentoGlobalPct: String(descuentoPct) } : {}),
+            lineas: ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) })),
+          },
+        });
+        setPreviewTotal(Number.parseFloat(res.total));
+        setPromoDescuento(Number.parseFloat(res.descuentoPromo) || 0);
+      } catch {
+        setPreviewTotal(null);
+        setPromoDescuento(0);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [ticket, cliente, descuentoPct, session.sucursal.id]);
 
   // Búsqueda con debounce contra /t/productos?q=
   useEffect(() => {
@@ -361,9 +395,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                     <span>−{money(descuentoMonto)}</span>
                   </div>
                 )}
+                {promoDescuento > 0 && (
+                  <div className="mb-2 flex items-center justify-between text-sm text-emerald-600">
+                    <span>Promoción</span>
+                    <span>−{money(promoDescuento)}</span>
+                  </div>
+                )}
                 <div className="mb-3 flex items-center justify-between text-2xl font-bold text-slate-900">
                   <span>Total</span>
-                  <span>{money(total)}</span>
+                  <span>{money(totalFinal)}</span>
                 </div>
                 <button
                   type="button"
@@ -371,7 +411,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                   disabled={ticket.length === 0}
                   className="w-full rounded-lg bg-brand py-4 text-lg font-bold text-white hover:bg-brand-dark disabled:opacity-40"
                 >
-                  Cobrar {money(total)}
+                  Cobrar {money(totalFinal)}
                 </button>
               </div>
             </>
@@ -381,7 +421,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
       {cobrando && (
         <CobroModal
-          total={total}
+          total={totalFinal}
           saldoMonedero={cliente ? Number(cliente.saldoMonedero ?? 0) : 0}
           procesando={procesando}
           onCancel={() => setCobrando(false)}

@@ -7,7 +7,7 @@ import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "..
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
-import type { VentaCreateInput } from "./schemas.js";
+import type { VentaCreateInput, VentaPreviewInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -348,6 +348,60 @@ function totalesVenta(
     descuentoVenta: Decimal.max(descuentoLineas.plus(descuentoTicket), ZERO),
     ivaVenta: lineasCalc.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO),
     iepsVenta: lineasCalc.reduce((acc, l) => acc.plus(l.iepsTotal), ZERO),
+  };
+}
+
+export interface VentaPreviewResult {
+  subtotal: string;
+  descuentoTotal: string;
+  descuentoPromo: string;
+  ivaTotal: string;
+  iepsTotal: string;
+  total: string;
+  promosAplicadas: number;
+}
+
+/**
+ * Calcula los totales de un ticket con la MISMA lógica que la venta (pricing +
+ * promociones automáticas) pero sin pagos ni persistencia. Lo usa el POS para
+ * mostrar el total real antes de cobrar y no cobrar de más cuando hay promos.
+ */
+export async function previewVenta(
+  client: TenantClient,
+  usuarioId: string,
+  input: VentaPreviewInput,
+): Promise<VentaPreviewResult> {
+  const sucursal = await validarSucursalCaja(client, input.sucursalId, undefined);
+  const fullInput = { ...input, pagos: [] } as unknown as VentaCreateInput;
+  const ticket = await ejecutarPreviewSegura(client, usuarioId, fullInput);
+
+  const snapshots = await loadSnapshots(
+    client,
+    ticket.lineas.map((l) => l.productoVarianteId),
+  );
+  const varianteAProducto = new Map<string, string>();
+  for (const [varId, snap] of snapshots) varianteAProducto.set(varId, snap.productoId);
+
+  const promos = await cargarPromocionesAplicables(client, {
+    canal: input.canal === "mayoreo" ? "b2b" : input.canal,
+    sucursalId: sucursal.id,
+    fecha: new Date(),
+    ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+    varianteAProducto,
+  });
+  const promoResult = aplicarPromocionesATicket(ticket, promos, varianteAProducto);
+  const ticketFinal = promoResult.ticket;
+  const lineasCalc = buildLineasCalculo(ticketFinal, fullInput, snapshots);
+  const totales = totalesVenta(ticketFinal, lineasCalc);
+
+  return {
+    subtotal: totales.subtotalVenta.toString(),
+    descuentoTotal: totales.descuentoVenta.toString(),
+    descuentoPromo: promoResult.descuentoPromoTotal,
+    ivaTotal: totales.ivaVenta.toString(),
+    iepsTotal: totales.iepsVenta.toString(),
+    total: totales.totalVenta.toString(),
+    promosAplicadas: promoResult.aplicaciones.length,
   };
 }
 
