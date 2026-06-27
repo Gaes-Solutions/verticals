@@ -94,3 +94,29 @@ describe("dominio propio de la tienda", () => {
     expect(registro).toBeNull();
   });
 });
+
+describe("resolución pública host → tenant", () => {
+  const HOST_OK = "verificado.dominio-test.com";
+
+  it("404 si el host no está registrado/verificado", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/public/storefront/resolve?host=desconocido-xyz.com",
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("resuelve el slug para un host verificado (ignora el puerto)", async () => {
+    await masterPrisma.tiendaDominio.upsert({
+      where: { host: HOST_OK },
+      create: { host: HOST_OK, tenantSlug: SLUG, tipo: "propio", verificado: true },
+      update: { tenantSlug: SLUG, verificado: true },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: `/public/storefront/resolve?host=${HOST_OK}:443`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tenantSlug).toBe(SLUG);
+  });
+});

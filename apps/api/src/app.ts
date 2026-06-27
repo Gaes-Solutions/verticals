@@ -28,6 +28,7 @@ import phrTenantRoutes, {
   patientEmergencyPublicRoutes,
   patientPortalRoutes,
 } from "./modules/patient-portal/routes.js";
+import storefrontPublicRoutes from "./modules/storefront/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
@@ -180,6 +181,7 @@ export async function buildApp(
   await app.register(patientEmergencyPublicRoutes);
   await app.register(billingPublicRoutes);
   await app.register(autofacturaPublicRoutes);
+  await app.register(storefrontPublicRoutes);
   await app.register(billingAdminTenantRoutes);
   await app.register(billingWebhookRoutes);
   await app.register(conektaWebhookRoutes);
