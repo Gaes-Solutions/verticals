@@ -22,6 +22,7 @@
     "prisma:reset": "prisma migrate reset --schema=./prisma/master/schema.prisma --force",
     "seed:master": "tsx src/seed-master.ts",
     "seed:b2b-demo": "tsx src/seed-b2b-demo.ts",
+    "seed:vet-demo": "tsx src/seed-vet-demo.ts",
     "migrate": "tsx src/cli/migrate.ts"
   },
   "dependencies": {
