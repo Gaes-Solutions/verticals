@@ -23,19 +23,22 @@ Rama de trabajo: **`autonomo/ventas-veterinaria`** (NO main). Cada fix → commi
 ### 🆕 Features construidas
 - **UI de Apartados** (`web-pos`): el backend existía sin frontend. Modal completo (crear/abonar/liquidar/cancelar) con gating `apartados.*`, verificado E2E.
 - **UI de Cuentas por Cobrar / CxC** (`web-admin`): el backend existía sin frontend. Nueva página (gating `cxc.*`) con resumen Por cobrar/Vencido, alta manual, detalle con abonos, registrar abono, condonar/incobrable. Verificado E2E (creé CXC-SUC-PRINCIPAL-000001 $1500 → abono $500 → saldo $1000). Commit `461157e`.
-- **UI de Promociones** (`web-admin`): ⏳ PENDIENTE — dominio complejo (10 tipos con `acciones`/`condiciones` de forma libre); se construye en el siguiente tramo el subconjunto común (descuento %/monto) tras estudiar el motor, para no crear promos que no apliquen.
+- **UI de Promociones** (`web-admin`): el backend existía sin UI de gestión. Nueva página (gating `promociones.gestionar`) con lista (tipo/vigencia/usos/estado), activar/pausar, y alta de **descuento %** sobre todo el catálogo. Verificado E2E: promo 10% creada+activada se aplica sola en la venta ($2399 → $2159.10). Commit `86bd7fe`.
 
 ### ✅ Probado y PASA
 8/8 flujos de venta (cajero) · Dashboard/Ventas/Reportes (dueño) · Superadmin con 2FA · RBAC negativo (API 403 + UI gateada) · B2B cotización→pedido (48 tests) · Cobros/Links · Monedero/Gift cards · Responsive móvil · Venta sin stock bloquea bien · CxC backend (23 tests) · Promociones motor (11 tests).
 
 ### 🧱 NECESITA DECISIÓN DE GABY (BLOQUEADO)
-1. **UI faltante de Promociones**: el motor aplica promos en la venta (11 tests) pero NO hay pantalla para crear/gestionarlas. ¿Construyo la UI (como hice con apartados)?
-2. **UI faltante de CxC**: backend completo (23 tests) pero CERO UI; el cajero tiene `cxc.cobrar` sin dónde usarlo. ¿Construyo la UI?
+1. **POS no previsualiza promos automáticas**: el cobro cobró $2399 (total del front) pero la venta se registró en $2159.10 (con la promo 10% server-side) → el cajero cobra de más. Hay que previsualizar la promo en el ticket/cobro ANTES de cobrar para que el monto cobrado = el registrado. (Surgió al construir la UI de Promociones.)
+2. **Tipos de promo no implementados en el motor**: `evaluarPromo` solo aplica `descuento_pct`, `happy_hour`, `precio_especial`, `dos_x_uno`. Están en el schema pero el motor NO los aplica: `descuento_monto`, `tres_x_n`, `compra_x_lleva_y`, `regalo_con_compra`, `escalonado_volumen`, `mxn`. Por eso la UI de alta se acotó a `descuento_pct`. ¿Implementar los demás en el motor?
 3. **Descuento 100% / venta gratis**: hoy se permite. ¿Tope de descuento o aprobación de gerente (estilo Square)?
 4. **Devoluciones no netean en reportes**: ¿"Ventas de hoy"/"más vendidos" deben ser brutos o netos de devoluciones?
 5. **Multi-pago en POS**: el cobro acepta un solo método; el modelo soporta split. ¿Exponer pago dividido?
 6. **Seed B2B**: para probar el portal web-b2b por navegador falta crear empresa+usuario B2B demo.
 7. **Gating de escritura en web-pos/web-b2b**: audité y cerré web-admin; falta el mismo barrido en las otras 2 apps.
+
+### ✅ UIs faltantes — YA CONSTRUIDAS
+Apartados (web-pos), CxC (web-admin) y Promociones (web-admin): los 3 motores que tenían backend sin frontend ahora tienen pantalla, gateadas por permiso y verificadas E2E.
 
 ---
 
