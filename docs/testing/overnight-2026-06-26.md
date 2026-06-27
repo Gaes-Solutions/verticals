@@ -82,7 +82,11 @@ El backend de apartados existía sin frontend. Construí la UI completa y la ver
 - **Funcionalidad:** dos pestañas — **Nuevo apartado** (búsqueda de producto reusando `/t/productos`, líneas con +/−, búsqueda de cliente `/t/clientes`, vigencia, pena %, abono inicial) y **Activos** (lista con saldo → detalle con líneas/abonos/total/pagado/saldo → registrar abono, liquidar, cancelar).
 - **Gating:** cada acción condicionada por `puede("apartados.crear|abonar|liquidar|cancelar")`.
 - **Verificado en navegador:** creé AP-SUC-PRINCIPAL-000001 ($2399, abono inicial $1000 → saldo $1399), registré abono $1399 → saldo $0, liquidé → estado **Liquidado**. Math correcto, sin NaN (usa `snapshotProducto.nombreProducto` + `totalLinea`). Typecheck limpio.
-- **Estado:** sin commit (working tree), para revisión de Gaby.
+- **Estado:** commiteado y pusheado a la rama `autonomo/ventas-veterinaria` (commit feat).
+
+### Validación adicional de apartados (cancelar + gating)
+- **Cancelar:** creado AP-SUC-PRINCIPAL-000002 ($2399 sin abono) → con motivo "Cliente desistió" → estado pasa a **Cancelado**; las acciones (abonar/liquidar/cancelar) desaparecen al no estar activo. El flujo de cancelar (código que no se había ejercitado) funciona sin bug.
+- **Gating verificado en ambos sentidos:** la sección "Cancelar" NO aparece para el cajero (no tiene `apartados.cancelar`, solo leer/crear/abonar/liquidar) y SÍ aparece para el dueño (`*`). Las 4 acciones de apartados quedan verificadas end-to-end.
 
 ## 🤖 Notas de automatización (no son bugs de producto)
 
