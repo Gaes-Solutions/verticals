@@ -20,8 +20,10 @@ Rama de trabajo: **`autonomo/ventas-veterinaria`** (NO main). Cada fix → commi
 - **#5** `fix(web-pos)` Venta con descuento 100% ($0) estaba ROTA (fallaba en silencio, mensaje falso de monedero) → mensaje "Venta sin costo" + se completa con pago $0.
 - **#6** `fix(api)` Mensaje de stock insuficiente filtraba IDs internos al cajero → mensaje amigable, IDs solo en el `extra`.
 
-### 🆕 Feature construida
-- **UI de Apartados** (`web-pos`): el backend existía sin frontend. Construí el modal completo (crear/abonar/liquidar/cancelar) con gating `apartados.*`, verificado E2E en navegador.
+### 🆕 Features construidas
+- **UI de Apartados** (`web-pos`): el backend existía sin frontend. Modal completo (crear/abonar/liquidar/cancelar) con gating `apartados.*`, verificado E2E.
+- **UI de Cuentas por Cobrar / CxC** (`web-admin`): el backend existía sin frontend. Nueva página (gating `cxc.*`) con resumen Por cobrar/Vencido, alta manual, detalle con abonos, registrar abono, condonar/incobrable. Verificado E2E (creé CXC-SUC-PRINCIPAL-000001 $1500 → abono $500 → saldo $1000). Commit `461157e`.
+- **UI de Promociones** (`web-admin`): ⏳ PENDIENTE — dominio complejo (10 tipos con `acciones`/`condiciones` de forma libre); se construye en el siguiente tramo el subconjunto común (descuento %/monto) tras estudiar el motor, para no crear promos que no apliquen.
 
 ### ✅ Probado y PASA
 8/8 flujos de venta (cajero) · Dashboard/Ventas/Reportes (dueño) · Superadmin con 2FA · RBAC negativo (API 403 + UI gateada) · B2B cotización→pedido (48 tests) · Cobros/Links · Monedero/Gift cards · Responsive móvil · Venta sin stock bloquea bien · CxC backend (23 tests) · Promociones motor (11 tests).
