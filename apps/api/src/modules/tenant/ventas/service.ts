@@ -7,7 +7,7 @@ import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "..
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
-import type { VentaCreateInput, VentaPreviewInput } from "./schemas.js";
+import type { VentaCobrarInput, VentaCreateInput, VentaPreviewInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -737,6 +737,67 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
     total: p.totales.totalVenta.toString(),
     totalCobrado: p.totales.totalCobrado.toString(),
     cambioDado: p.totales.cambio.toString(),
+  };
+}
+
+/**
+ * Cobra una venta en borrador (la que genera el alta hospitalaria, un apartado o
+ * una cotización) finalizándola hacia una caja con apertura abierta. Registra los
+ * pagos y la marca `cobrada` para que entre al corte X/Z igual que cualquier venta
+ * del POS — reutiliza la misma validación de pagos y de caja.
+ */
+export async function cobrarVenta(
+  client: TenantClient,
+  ventaId: string,
+  input: VentaCobrarInput,
+): Promise<VentaCreadaResult> {
+  const venta = await client.venta.findUnique({ where: { id: ventaId } });
+  if (!venta) throw new VentaError(404, "Venta no encontrada");
+  if (venta.estado !== "borrador") {
+    throw new VentaError(409, `La venta ya está ${venta.estado}`, { estado: venta.estado });
+  }
+  await validarSucursalCaja(client, venta.sucursalId, input.cajaId);
+
+  const total = new Decimal(venta.total.toString());
+  const { totalCobrado, cambio } = validarPagos(
+    total,
+    input.pagos,
+    venta.clienteId ?? undefined,
+    venta.clienteB2bId ?? undefined,
+  );
+
+  const actualizada = await client.$transaction(async (tx) => {
+    for (const p of input.pagos) {
+      await tx.ventaPago.create({
+        data: {
+          ventaId,
+          metodo: p.metodo,
+          monto: p.monto,
+          ...(p.referencia ? { referencia: p.referencia } : {}),
+          ...(p.autorizacion ? { autorizacion: p.autorizacion } : {}),
+          ...(p.terminalReferencia ? { terminalReferencia: p.terminalReferencia } : {}),
+          ...(p.ultimosCuatro ? { ultimosCuatro: p.ultimosCuatro } : {}),
+        },
+      });
+    }
+    return tx.venta.update({
+      where: { id: ventaId },
+      data: {
+        estado: "cobrada",
+        cajaId: input.cajaId,
+        cobradaAt: new Date(),
+        totalCobrado: totalCobrado.toFixed(4),
+        cambioDado: cambio.toFixed(4),
+      },
+    });
+  });
+
+  return {
+    ventaId: actualizada.id,
+    folio: actualizada.folio,
+    total: actualizada.total.toString(),
+    totalCobrado: actualizada.totalCobrado.toString(),
+    cambioDado: actualizada.cambioDado.toString(),
   };
 }
 

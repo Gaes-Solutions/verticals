@@ -3,12 +3,13 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   type VentaListQuery,
   ventaCancelarSchema,
+  ventaCobrarSchema,
   ventaCreateSchema,
   ventaIdParamSchema,
   ventaListQuerySchema,
   ventaPreviewSchema,
 } from "./schemas.js";
-import { VentaError, cancelarVenta, crearVenta, previewVenta } from "./service.js";
+import { VentaError, cancelarVenta, cobrarVenta, crearVenta, previewVenta } from "./service.js";
 
 function buildVentaWhere(q: VentaListQuery): Record<string, unknown> {
   const where: Record<string, unknown> = {};
@@ -113,6 +114,25 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
       return await previewVenta(req.tenantPrisma, req.principal.userId, body, {
         permiteDescuentoAlto,
       });
+    } catch (err) {
+      if (err instanceof VentaError) {
+        return reply.code(err.statusCode).send({
+          statusCode: err.statusCode,
+          error: err.statusCode >= 500 ? "Internal" : "Bad Request",
+          message: err.message,
+          ...(err.extra ?? {}),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/:id/cobrar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    const { id } = ventaIdParamSchema.parse(req.params);
+    const body = ventaCobrarSchema.parse(req.body);
+    try {
+      return await cobrarVenta(req.tenantPrisma, id, body);
     } catch (err) {
       if (err instanceof VentaError) {
         return reply.code(err.statusCode).send({

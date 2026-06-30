@@ -72,6 +72,27 @@ export const ventaCancelarSchema = z.object({
   motivo: z.string().min(3).max(500),
 });
 
+// Cobro de una venta en borrador (ej. la que genera el alta hospitalaria). Solo
+// métodos directos: fiado/monedero/b2b requieren el pipeline de saldo del POS.
+const cobroPagoSchema = z.object({
+  metodo: z.enum(["efectivo", "tarjeta_debito", "tarjeta_credito", "transferencia", "otro"]),
+  monto: positiveDecimalString,
+  referencia: z.string().max(120).optional(),
+  autorizacion: z.string().max(60).optional(),
+  terminalReferencia: z.string().max(60).optional(),
+  ultimosCuatro: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional(),
+});
+
+export const ventaCobrarSchema = z.object({
+  cajaId: z.string().min(1),
+  pagos: z.array(cobroPagoSchema).min(1),
+});
+
+export type VentaCobrarInput = z.infer<typeof ventaCobrarSchema>;
+
 export const ventaIdParamSchema = z.object({ id: z.string().min(1) });
 
 export const ventaListQuerySchema = z.object({
