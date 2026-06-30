@@ -84,6 +84,7 @@ export function AgendaPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accionando, setAccionando] = useState<string | null>(null);
+  const [checkinCita, setCheckinCita] = useState<Cita | null>(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -153,13 +154,25 @@ export function AgendaPage() {
               cita={c}
               ocupada={accionando === c.id}
               onConfirmar={() => transicion(c.id, "confirmar")}
-              onCheckin={() => transicion(c.id, "checkin", {})}
+              onCheckin={() => setCheckinCita(c)}
               onIniciar={() => transicion(c.id, "iniciar-consulta")}
               onNoAsistio={() => transicion(c.id, "no-asistio")}
               onCancelar={() => cancelar(c.id)}
             />
           ))}
         </div>
+      )}
+
+      {checkinCita && (
+        <CheckinModal
+          cita={checkinCita}
+          onClose={() => setCheckinCita(null)}
+          onConfirm={(body) => {
+            const id = checkinCita.id;
+            setCheckinCita(null);
+            transicion(id, "checkin", body);
+          }}
+        />
       )}
     </div>
   );
@@ -281,6 +294,81 @@ function CitaCard({
         </div>
       </div>
       {acciones.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{acciones}</div>}
+    </div>
+  );
+}
+
+function CheckinModal({
+  cita,
+  onClose,
+  onConfirm,
+}: {
+  cita: Cita;
+  onClose: () => void;
+  onConfirm: (body: Record<string, string>) => void;
+}) {
+  const [peso, setPeso] = useState("");
+  const [temp, setTemp] = useState("");
+  const [notas, setNotas] = useState("");
+  const s = sujeto(cita);
+
+  function confirmar() {
+    const body: Record<string, string> = {};
+    if (peso.trim()) body.pesoCheckinKg = peso.trim();
+    if (temp.trim()) body.temperaturaCheckinC = temp.trim();
+    if (notas.trim()) body.notasRecepcion = notas.trim();
+    onConfirm(body);
+  }
+
+  return (
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel">
+        <h2 className="mb-1 font-bold text-lg text-slate-800">Check-in</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          {s.nombre} · {hora(cita.fechaProgramada)}
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="gx-label">Peso (kg)</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={peso}
+              onChange={(e) => setPeso(e.target.value)}
+              className="gx-input"
+            />
+          </label>
+          <label className="block">
+            <span className="gx-label">Temperatura (°C)</span>
+            <input
+              type="number"
+              step="0.1"
+              value={temp}
+              onChange={(e) => setTemp(e.target.value)}
+              className="gx-input"
+            />
+          </label>
+        </div>
+        <label className="mb-4 block">
+          <span className="gx-label">Notas de recepción</span>
+          <textarea
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            rows={2}
+            placeholder="Observaciones al llegar (opcional)"
+            className="gx-input"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
+            Cancelar
+          </button>
+          <button type="button" onClick={confirmar} className="gx-btn-primary">
+            Confirmar check-in
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
