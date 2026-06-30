@@ -21,6 +21,14 @@ const configSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   FLOWS_RUN_INTERVAL_MIN: z.coerce.number().int().positive().default(360),
+  RECORDATORIOS_SCHEDULER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  RECORDATORIOS_RUN_INTERVAL_MIN: z.coerce.number().int().positive().default(60),
+  // Base pública del API para armar el link de confirmación de citas que se
+  // manda al tutor (anti-no-show). En prod = dominio del API.
+  PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
 });
 
 export type Config = z.infer<typeof configSchema>;

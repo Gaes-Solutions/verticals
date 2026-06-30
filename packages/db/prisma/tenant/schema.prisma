@@ -253,6 +253,21 @@ model ConfigVentas {
   @@map("config_ventas")
 }
 
+// Recordatorios automáticos configurables por el dueño (default ON + valores
+// recomendados por el sistema). Singleton por tenant. V1: citas (anti-no-show);
+// vacunas se suma en una iteración posterior reusando este mismo registro.
+model ConfigRecordatorios {
+  id              String   @id @default(cuid())
+  citasActivo     Boolean  @default(true) @map("citas_activo")
+  citasHorasAntes Int      @default(24) @map("citas_horas_antes")
+  citasCanal      String   @default("whatsapp") @map("citas_canal")
+  citasPlantilla  String?  @map("citas_plantilla")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("config_recordatorios")
+}
+
 // Link de cobro (pago a distancia / por WhatsApp). El negocio genera un link por
 // un monto y concepto; el cliente lo abre y paga (Conekta/Stripe/mock).
 model LinkPago {
@@ -2572,6 +2587,9 @@ model Cita {
   canceladoAt               DateTime?  @map("cancelado_at")
   canceladoPorId            String?    @map("cancelado_por_id")
   canceladoMotivo           String?    @map("cancelado_motivo")
+  recordatorioEnviadoAt     DateTime?  @map("recordatorio_enviado_at")
+  recordatorioCanal         String?    @map("recordatorio_canal")
+  confirmacionToken         String?    @unique @map("confirmacion_token")
   createdAt                 DateTime   @default(now()) @map("created_at")
   updatedAt                 DateTime   @updatedAt @map("updated_at")
 

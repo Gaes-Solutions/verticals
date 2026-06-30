@@ -75,6 +75,7 @@ import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
 import recetasRoutes from "./modules/tenant/recetas/routes.js";
+import recordatoriosRoutes, { citasPublicRoutes } from "./modules/tenant/recordatorios/routes.js";
 import reportesRoutes from "./modules/tenant/reportes/routes.js";
 import resenasRoutes from "./modules/tenant/resenas/routes.js";
 import rolesRoutes from "./modules/tenant/roles/routes.js";
@@ -183,6 +184,7 @@ export async function buildApp(
   await app.register(patientEmergencyPublicRoutes);
   await app.register(billingPublicRoutes);
   await app.register(autofacturaPublicRoutes);
+  await app.register(citasPublicRoutes);
   await app.register(storefrontPublicRoutes);
   await app.register(billingAdminTenantRoutes);
   await app.register(billingWebhookRoutes);
@@ -223,6 +225,7 @@ export async function buildApp(
       await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(seguridadRoutes, { prefix: "/seguridad" });
       await tenantApp.register(configVentasRoutes, { prefix: "/config-ventas" });
+      await tenantApp.register(recordatoriosRoutes, { prefix: "/recordatorios" });
       await tenantApp.register(cobrosRoutes, { prefix: "/cobros" });
       await tenantApp.register(monederoRoutes, { prefix: "/monedero" });
       await tenantApp.register(inventarioInsightsRoutes, { prefix: "/inventario-insights" });
