@@ -479,8 +479,19 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
   );
 }
 
+interface AltaResultado {
+  hospitalizacionId: string;
+  camaLiberadaId: string;
+  ventaBorradorId: string | null;
+  cargosFacturados: number;
+  montoTotal: string;
+}
+
 function DetalleHosp({ id, onClose }: { id: string; onClose: () => void }) {
   const [h, setH] = useState<HospDetalle | null>(null);
+  const [dandoAlta, setDandoAlta] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cobro, setCobro] = useState<{ ventaId: string; monto: string } | null>(null);
 
   const cargar = useCallback(() => {
     api<HospDetalle>(`/t/hospitalizaciones/${id}`)
@@ -492,11 +503,36 @@ function DetalleHosp({ id, onClose }: { id: string; onClose: () => void }) {
   async function alta() {
     const motivoAlta = window.prompt("Motivo del alta:");
     if (!motivoAlta || motivoAlta.trim().length < 1) return;
-    await api(`/t/hospitalizaciones/${id}/alta`, {
-      method: "POST",
-      body: { motivoAlta: motivoAlta.trim(), generarVenta: true },
-    }).catch(() => undefined);
-    onClose();
+    setDandoAlta(true);
+    setError(null);
+    try {
+      const r = await api<AltaResultado>(`/t/hospitalizaciones/${id}/alta`, {
+        method: "POST",
+        body: { motivoAlta: motivoAlta.trim(), generarVenta: true },
+      });
+      // Si quedó venta de cargos por cobrar, abrir el cobro aquí mismo (reusa la
+      // caja/corte del POS). Si no hubo cargos, el alta ya cerró todo.
+      if (r.ventaBorradorId && puede("ventas.crear")) {
+        setCobro({ ventaId: r.ventaBorradorId, monto: r.montoTotal });
+      } else {
+        onClose();
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo dar de alta");
+    } finally {
+      setDandoAlta(false);
+    }
+  }
+
+  if (cobro) {
+    return (
+      <CobroAltaModal
+        ventaId={cobro.ventaId}
+        montoTotal={cobro.monto}
+        paciente={h?.mascota?.nombre ?? null}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
@@ -522,13 +558,255 @@ function DetalleHosp({ id, onClose }: { id: string; onClose: () => void }) {
             <MedicacionSeccion hosp={h} onChange={cargar} />
             <CargosSeccion hosp={h} onChange={cargar} />
 
+            {error && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-red-600 text-sm">{error}</p>
+            )}
             {h.estado === "activa" && puede("hospitalizacion.alta") && (
-              <button type="button" onClick={alta} className="mt-4 w-full gx-btn-primary">
-                Dar de alta (genera venta de cargos)
+              <button
+                type="button"
+                onClick={alta}
+                disabled={dandoAlta}
+                className="mt-4 w-full gx-btn-primary"
+              >
+                {dandoAlta ? "Dando de alta…" : "Dar de alta y cobrar"}
               </button>
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface CajaLite {
+  id: string;
+  codigo: string;
+  nombre?: string | null;
+  sucursalId: string;
+}
+interface PagoLinea {
+  metodo: "efectivo" | "tarjeta_debito" | "tarjeta_credito" | "transferencia" | "otro";
+  monto: string;
+}
+const METODO_COBRO: ReadonlyArray<readonly [PagoLinea["metodo"], string]> = [
+  ["efectivo", "Efectivo"],
+  ["tarjeta_debito", "Tarjeta débito"],
+  ["tarjeta_credito", "Tarjeta crédito"],
+  ["transferencia", "Transferencia"],
+  ["otro", "Otro"],
+];
+
+// Cobro de la venta de cargos generada por el alta. Reusa la MISMA caja/corte que
+// el POS (POST /t/ventas/:id/cobrar) — no duplica la lógica de caja por vertical.
+function CobroAltaModal({
+  ventaId,
+  montoTotal,
+  paciente,
+  onClose,
+}: {
+  ventaId: string;
+  montoTotal: string;
+  paciente: string | null;
+  onClose: () => void;
+}) {
+  const total = Number(montoTotal);
+  const [cajas, setCajas] = useState<CajaLite[]>([]);
+  const [cajaId, setCajaId] = useState("");
+  const [cajaAbierta, setCajaAbierta] = useState<boolean | null>(null);
+  const [pagos, setPagos] = useState<PagoLinea[]>([{ metodo: "efectivo", monto: montoTotal }]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [listo, setListo] = useState(false);
+
+  useEffect(() => {
+    api<CajaLite[]>("/t/cajas")
+      .then((cs) => {
+        setCajas(cs);
+        if (cs[0]) setCajaId(cs[0].id);
+      })
+      .catch(() => setCajas([]));
+  }, []);
+
+  // Saber si la caja elegida tiene apertura activa (si no, hay que abrirla antes).
+  useEffect(() => {
+    if (!cajaId) return;
+    setCajaAbierta(null);
+    api(`/t/cajas/${cajaId}/apertura-actual`)
+      .then(() => setCajaAbierta(true))
+      .catch(() => setCajaAbierta(false));
+  }, [cajaId]);
+
+  const pagado = pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+  const faltante = Math.max(0, total - pagado);
+  const cambio = Math.max(0, pagado - total);
+
+  function setPago(i: number, patch: Partial<PagoLinea>) {
+    setPagos((ps) => ps.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+
+  async function abrirCaja() {
+    if (!cajaId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/t/cajas/${cajaId}/aperturar`, { body: { cajaId, montoInicial: "0" } });
+      setCajaAbierta(true);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo abrir la caja");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cobrar() {
+    if (!cajaId || faltante > 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/t/ventas/${ventaId}/cobrar`, {
+        body: {
+          cajaId,
+          pagos: pagos
+            .filter((p) => Number(p.monto) > 0)
+            .map((p) => ({ metodo: p.metodo, monto: p.monto })),
+        },
+      });
+      setListo(true);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo cobrar");
+      setBusy(false);
+    }
+  }
+
+  if (listo) {
+    return (
+      <div className="gx-modal-overlay">
+        <div className="gx-modal-panel text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-3xl">
+            ✓
+          </div>
+          <h2 className="font-bold text-lg text-slate-800">Cobro registrado</h2>
+          <p className="mt-1 text-slate-500 text-sm">
+            ${total.toFixed(2)} cobrados{cambio > 0 ? ` · cambio $${cambio.toFixed(2)}` : ""}
+          </p>
+          <button type="button" onClick={onClose} className="mt-4 w-full gx-btn-primary">
+            Listo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-h-[90vh] overflow-y-auto">
+        <h2 className="mb-1 font-bold text-lg text-slate-800">Cobro al alta</h2>
+        <p className="mb-3 text-slate-500 text-sm">
+          {paciente ? `${paciente} · ` : ""}Total de cargos:{" "}
+          <span className="font-semibold text-slate-700">${total.toFixed(2)}</span>
+        </p>
+
+        <label className="mb-3 block">
+          <span className="gx-label">Caja</span>
+          <select value={cajaId} onChange={(e) => setCajaId(e.target.value)} className="gx-input">
+            {cajas.length === 0 && <option value="">Sin cajas configuradas</option>}
+            {cajas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.codigo}
+                {c.nombre ? ` · ${c.nombre}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {cajaAbierta === false && (
+          <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-amber-700 text-sm">
+            <p className="mb-2">Esta caja no tiene turno abierto.</p>
+            {puede("caja.abrir") ? (
+              <button
+                type="button"
+                onClick={abrirCaja}
+                disabled={busy}
+                className="gx-btn-secondary"
+              >
+                Abrir caja (monto inicial $0)
+              </button>
+            ) : (
+              <span>Pide a tu encargado que abra la caja.</span>
+            )}
+          </div>
+        )}
+
+        <div className="mb-3">
+          <span className="gx-label">Pagos</span>
+          <div className="flex flex-col gap-2">
+            {pagos.map((p, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: líneas de pago efímeras sin id
+              <div key={i} className="flex gap-2">
+                <select
+                  value={p.metodo}
+                  onChange={(e) => setPago(i, { metodo: e.target.value as PagoLinea["metodo"] })}
+                  className="flex-1 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                >
+                  {METODO_COBRO.map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={p.monto}
+                  onChange={(e) => setPago(i, { monto: e.target.value })}
+                  className="w-28 rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                />
+                {pagos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setPagos((ps) => ps.filter((_, idx) => idx !== i))}
+                    className="px-2 text-slate-400 hover:text-red-500"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPagos((ps) => [...ps, { metodo: "efectivo", monto: "" }])}
+            className="mt-2 text-brand text-sm"
+          >
+            + otro método
+          </button>
+        </div>
+
+        <div className="mb-3 flex justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+          <span className="text-slate-500">{faltante > 0 ? "Faltante" : "Cambio"}</span>
+          <span className={`font-semibold ${faltante > 0 ? "text-red-600" : "text-emerald-600"}`}>
+            ${(faltante > 0 ? faltante : cambio).toFixed(2)}
+          </span>
+        </div>
+
+        {error && (
+          <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-red-600 text-sm">{error}</p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
+            Cobrar después
+          </button>
+          <button
+            type="button"
+            onClick={cobrar}
+            disabled={busy || !cajaId || cajaAbierta !== true || faltante > 0}
+            className="gx-btn-primary"
+          >
+            {busy ? "Cobrando…" : `Cobrar $${total.toFixed(2)}`}
+          </button>
+        </div>
       </div>
     </div>
   );
