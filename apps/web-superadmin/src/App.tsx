@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { esSuperadmin, loadToken, setToken } from "./lib/api.js";
 import { AuditPage } from "./pages/AuditPage.js";
+import { CatalogoPage } from "./pages/CatalogoPage.js";
 import { ClientesPage } from "./pages/ClientesPage.js";
 import { CobranzaPage } from "./pages/CobranzaPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
@@ -27,6 +28,7 @@ type Seccion =
   | "facturas"
   | "suscripciones"
   | "partners"
+  | "catalogo"
   | "audit"
   | "equipo";
 
@@ -46,6 +48,7 @@ const NAV: NavItem[] = [
   { key: "facturas", label: "Facturas", icon: "🧾" },
   { key: "suscripciones", label: "Suscripciones", icon: "🔁" },
   { key: "partners", label: "Partners", icon: "🤝" },
+  { key: "catalogo", label: "Planes y cupones", icon: "🏷️" },
   { key: "audit", label: "Auditoría", icon: "📜" },
   { key: "equipo", label: "Equipo", icon: "👥", soloSuper: true },
 ];
@@ -159,6 +162,7 @@ export function App() {
         {seccion === "facturas" && <FacturasPage />}
         {seccion === "suscripciones" && <SuscripcionesPage />}
         {seccion === "partners" && <PartnersPage />}
+        {seccion === "catalogo" && <CatalogoPage />}
         {seccion === "audit" && <AuditPage />}
         {seccion === "equipo" && esSuperadmin() && <EquipoPage />}
       </main>

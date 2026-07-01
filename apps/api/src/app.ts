@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
 import adminAuditRoutes from "./modules/admin/audit-routes.js";
 import adminBillingOpsRoutes from "./modules/admin/billing-ops-routes.js";
+import adminCatalogoRoutes from "./modules/admin/catalogo-routes.js";
 import adminMetricsRoutes from "./modules/admin/metrics-routes.js";
 import adminRolesPlantillaRoutes from "./modules/admin/roles-plantilla-routes.js";
 import adminTeamRoutes from "./modules/admin/team-routes.js";
@@ -170,6 +171,7 @@ export async function buildApp(
   await app.register(adminTeamRoutes, { prefix: "/admin/team" });
   await app.register(adminTenantsRoutes, { prefix: "/admin/tenants" });
   await app.register(adminRolesPlantillaRoutes, { prefix: "/admin/roles-plantilla" });
+  await app.register(adminCatalogoRoutes, { prefix: "/admin/catalogo" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);
