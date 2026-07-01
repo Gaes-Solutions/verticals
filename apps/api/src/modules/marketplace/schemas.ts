@@ -77,6 +77,7 @@ export const pacienteRegistroSchema = z.object({
 
 export const pacienteConfirmarSchema = z.object({
   email: z.string().email().toLowerCase(),
+  codigo: z.string().regex(/^\d{4,8}$/),
 });
 
 export const crearResenaPublicaSchema = z.object({

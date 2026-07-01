@@ -597,6 +597,8 @@ model PacienteMaster {
   heightCm         Decimal?           @map("height_cm") @db.Decimal(6, 2)
   metadata         Json?
   telefono         String?
+  otpCodigo        String?            @map("otp_codigo")
+  otpExpiraAt      DateTime?          @map("otp_expira_at")
   otpVerificadoAt  DateTime?          @map("otp_verificado_at")
   archivedAt       DateTime?          @map("archived_at")
   deletedAt        DateTime?          @map("deleted_at")

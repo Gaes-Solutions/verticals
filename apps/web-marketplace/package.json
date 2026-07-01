@@ -1,0 +1,30 @@
+{
+  "name": "@gaespos/web-marketplace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portal público del marketplace de citas — el paciente busca profesional (médico/vet), ve perfil y reseñas, y reserva cita. SPA Vite+React conectada a la API GaesSoft.",
+  "scripts": {
+    "dev": "vite --port 5178",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 5178",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.469.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "@gaespos/ui": "workspace:*"
+  }
+}

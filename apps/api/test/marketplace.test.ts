@@ -32,6 +32,8 @@ let professionalId: string;
 let slugSeo: string;
 let reviewLimpiaId: string;
 let reviewSpamId: string;
+let otpOk = "";
+let otpSpam = "";
 
 function authMedico() {
   return { authorization: `Bearer ${medicoToken}` };
@@ -283,11 +285,20 @@ describe("reservas (bookings desde el portal)", () => {
       },
     });
     expect(reg.statusCode).toBe(201);
-    pacienteMasterId = (reg.json() as { id: string }).id;
+    const regBody = reg.json() as { id: string; otpDev?: string };
+    pacienteMasterId = regBody.id;
+    expect(regBody.otpDev).toMatch(/^\d{6}$/);
+    // Con código incorrecto → 401.
+    const malo = await app.inject({
+      method: "POST",
+      url: "/marketplace/pacientes/confirmar",
+      payload: { email: PACIENTE_BOOKING, codigo: "000000" },
+    });
+    expect(malo.statusCode).toBe(401);
     const conf = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/confirmar",
-      payload: { email: PACIENTE_BOOKING },
+      payload: { email: PACIENTE_BOOKING, codigo: regBody.otpDev },
     });
     expect(conf.statusCode).toBe(200);
     expect((conf.json() as { verificado: boolean }).verificado).toBe(true);
@@ -408,11 +419,12 @@ describe("búsqueda y perfil público", () => {
 
 describe("reseñas verificadas", () => {
   it("paciente no verificado no puede reseñar → 403", async () => {
-    await app.inject({
+    const reg = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/registro",
       payload: { email: PACIENTE_OK, nombre: "Ana López" },
     });
+    otpOk = (reg.json() as { otpDev: string }).otpDev;
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/resenas`,
@@ -425,7 +437,7 @@ describe("reseñas verificadas", () => {
     await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/confirmar",
-      payload: { email: PACIENTE_OK },
+      payload: { email: PACIENTE_OK, codigo: otpOk },
     });
     const res = await app.inject({
       method: "POST",
@@ -453,15 +465,16 @@ describe("reseñas verificadas", () => {
   });
 
   it("reseña con lenguaje ofensivo queda en revisión humana (no pública)", async () => {
-    await app.inject({
+    const reg = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/registro",
       payload: { email: PACIENTE_SPAM, nombre: "Beto Spam" },
     });
+    otpSpam = (reg.json() as { otpDev: string }).otpDev;
     await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/confirmar",
-      payload: { email: PACIENTE_SPAM },
+      payload: { email: PACIENTE_SPAM, codigo: otpSpam },
     });
     const res = await app.inject({
       method: "POST",

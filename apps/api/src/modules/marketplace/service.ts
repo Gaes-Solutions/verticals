@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type {
   MasterPrismaClient,
   PacienteMaster,
@@ -475,6 +476,13 @@ export async function obtenerPerfilPublico(
   return prof;
 }
 
+const OTP_TTL_MIN = 10;
+
+/**
+ * Registra (o actualiza) al paciente y genera un OTP de 6 dígitos con caducidad.
+ * Devuelve el paciente y el código para que la ruta lo envíe por correo (y lo
+ * exponga como `otpDev` solo fuera de producción).
+ */
 export async function registrarPacienteMaster(
   master: MasterPrismaClient,
   input: {
@@ -483,21 +491,22 @@ export async function registrarPacienteMaster(
     apellidos?: string | undefined;
     telefono?: string | undefined;
   },
-): Promise<PacienteMaster> {
-  return master.pacienteMaster.upsert({
+): Promise<{ paciente: PacienteMaster; codigo: string }> {
+  const codigo = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const otpExpiraAt = new Date(Date.now() + OTP_TTL_MIN * 60_000);
+  const datos = {
+    nombre: input.nombre,
+    otpCodigo: codigo,
+    otpExpiraAt,
+    ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
+    ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
+  };
+  const paciente = await master.pacienteMaster.upsert({
     where: { email: input.email },
-    create: {
-      email: input.email,
-      nombre: input.nombre,
-      ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
-      ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
-    },
-    update: {
-      nombre: input.nombre,
-      ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
-      ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
-    },
+    create: { email: input.email, ...datos },
+    update: datos,
   });
+  return { paciente, codigo };
 }
 
 /**
@@ -508,13 +517,23 @@ export async function registrarPacienteMaster(
 export async function confirmarPacienteMaster(
   master: MasterPrismaClient,
   email: string,
+  codigo: string,
 ): Promise<PacienteMaster> {
   const paciente = await master.pacienteMaster.findUnique({ where: { email } });
   if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
-  if (paciente.otpVerificadoAt) return paciente;
+  if (paciente.otpVerificadoAt && !paciente.otpCodigo) return paciente;
+  if (!paciente.otpCodigo || !paciente.otpExpiraAt) {
+    throw new MarketplaceError(409, "No hay un código pendiente; solicita uno nuevo");
+  }
+  if (paciente.otpExpiraAt.getTime() < Date.now()) {
+    throw new MarketplaceError(410, "El código expiró; solicita uno nuevo");
+  }
+  if (paciente.otpCodigo !== codigo) {
+    throw new MarketplaceError(401, "Código incorrecto");
+  }
   return master.pacienteMaster.update({
     where: { email },
-    data: { otpVerificadoAt: new Date() },
+    data: { otpVerificadoAt: new Date(), otpCodigo: null, otpExpiraAt: null },
   });
 }
 

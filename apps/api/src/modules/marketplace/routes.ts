@@ -1,5 +1,6 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { loadConfig } from "../../config.js";
 import {
   busquedaQuerySchema,
   crearResenaPublicaSchema,
@@ -325,22 +326,46 @@ export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/marketplace/pacientes/registro", async (req, reply) => {
-    const body = pacienteRegistroSchema.parse(req.body);
-    const paciente = await registrarPacienteMaster(app.masterPrisma, body);
-    return reply.code(201).send({ id: paciente.id, email: paciente.email });
-  });
+  app.post(
+    "/marketplace/pacientes/registro",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = pacienteRegistroSchema.parse(req.body);
+      const { paciente, codigo } = await registrarPacienteMaster(app.masterPrisma, body);
+      // Envía el código por correo (best-effort: no bloquea el registro si falla).
+      try {
+        await app.emailProviderFactory().enviar({
+          para: paciente.email ?? body.email,
+          asunto: "Tu código de verificación — GaesSalud",
+          html: `<p>Hola ${paciente.nombre},</p><p>Tu código para reservar es: <strong style="font-size:20px">${codigo}</strong></p><p>Vence en 10 minutos.</p>`,
+          texto: `Tu código de verificación es ${codigo} (vence en 10 minutos).`,
+        });
+      } catch (err) {
+        app.log.warn({ err }, "no se pudo enviar OTP del marketplace por correo");
+      }
+      const esProd = loadConfig().NODE_ENV === "production";
+      return reply.code(201).send({
+        id: paciente.id,
+        email: paciente.email,
+        ...(esProd ? {} : { otpDev: codigo }),
+      });
+    },
+  );
 
-  app.post("/marketplace/pacientes/confirmar", async (req, reply) => {
-    const body = pacienteConfirmarSchema.parse(req.body);
-    try {
-      const paciente = await confirmarPacienteMaster(app.masterPrisma, body.email);
-      return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt) };
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+  app.post(
+    "/marketplace/pacientes/confirmar",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = pacienteConfirmarSchema.parse(req.body);
+      try {
+        const paciente = await confirmarPacienteMaster(app.masterPrisma, body.email, body.codigo);
+        return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt) };
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
 
   app.post("/marketplace/profesionales/:id/resenas", async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
