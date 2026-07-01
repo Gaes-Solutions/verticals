@@ -11,6 +11,7 @@ import {
   ScanLine,
   Stethoscope,
   Syringe,
+  UserRound,
 } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
@@ -23,6 +24,7 @@ import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
 import { ImagenologiaPage } from "./pages/ImagenologiaPage.js";
 import { LaboratorioPage } from "./pages/LaboratorioPage.js";
+import { PacientesPage } from "./pages/PacientesPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
 
 export interface Session {
@@ -32,6 +34,7 @@ export interface Session {
 
 type Seccion =
   | "agenda"
+  | "pacientes"
   | "expedientes"
   | "soap"
   | "receta"
@@ -45,6 +48,7 @@ type Seccion =
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
 const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "agenda", label: "Agenda del día", icon: CalendarDays, perm: "citas.leer" },
+  { key: "pacientes", label: "Pacientes", icon: UserRound, perm: "pacientes.leer" },
   { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
   { key: "soap", label: "Consulta SOAP", icon: ClipboardList, perm: "consultas.crear" },
   { key: "receta", label: "Recetas", icon: Pill, perm: "recetas.emitir" },
@@ -62,6 +66,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   agenda: AgendaPage,
+  pacientes: PacientesPage,
   expedientes: ExpedientesPage,
   soap: ExpedienteSoapPage,
   receta: RecetaPage,
