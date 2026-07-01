@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Star, Video } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { navegar } from "../App.js";
 import { ApiError, type PacienteSesion, api } from "../lib/api.js";
@@ -13,6 +13,7 @@ interface Reserva {
   motivo?: string | null;
   status: BookingStatus;
   motivoRechazo?: string | null;
+  salaVideoUrl?: string | null;
   professional?: { nombrePublico: string; slugSeo: string } | null;
 }
 
@@ -102,7 +103,19 @@ export function MisReservasPage({
                 <span className={STATUS[r.status].badge}>{STATUS[r.status].label}</span>
               </div>
               {(r.status === "confirmada" || r.status === "completada") && (
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  {r.status === "confirmada" && r.salaVideoUrl ? (
+                    <a
+                      href={r.salaVideoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 font-medium text-sm text-white"
+                    >
+                      <Video size={15} /> Entrar a la videollamada
+                    </a>
+                  ) : (
+                    <span />
+                  )}
                   <button
                     type="button"
                     onClick={() => setResenar(r)}

@@ -226,7 +226,10 @@ const marketplaceTenantRoutes: FastifyPluginAsync = async (app) => {
       const tenantId = await resolverTenantId(app, req.tenantSlug);
       // Si la reserva no trae médico, se usa el usuario en sesión.
       const medico = body.medicoUsuarioId ?? req.principal.userId;
-      return await confirmarReserva(app.masterPrisma, req.tenantPrisma, tenantId, id, medico);
+      const video = app.telemedicineProviderFactory();
+      return await confirmarReserva(app.masterPrisma, req.tenantPrisma, tenantId, id, medico, (o) =>
+        video.crearSala(o),
+      );
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;

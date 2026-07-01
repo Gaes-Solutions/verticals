@@ -801,7 +801,14 @@ export async function confirmarReserva(
   tenantId: string,
   bookingId: string,
   medicoUsuarioIdOverride?: string,
-): Promise<{ bookingId: string; citaId: string; folio: string; pacienteId: string }> {
+  crearSalaVideo?: (opts: { nombre: string }) => Promise<{ url: string; proveedor: string }>,
+): Promise<{
+  bookingId: string;
+  citaId: string;
+  folio: string;
+  pacienteId: string;
+  salaVideoUrl: string | null;
+}> {
   const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
   if (!booking || booking.tenantId !== tenantId) {
     throw new MarketplaceError(404, "Reserva no encontrada");
@@ -816,6 +823,12 @@ export async function confirmarReserva(
   const sucursal = await tenant.sucursal.findFirst({ select: { id: true, codigo: true } });
   if (!sucursal) throw new MarketplaceError(400, "El tenant no tiene sucursal configurada");
 
+  // Telemedicina: crea la sala de video (best-effort, no bloquea la confirmación).
+  let sala: { url: string; proveedor: string } | null = null;
+  if (booking.modalidad === "telemedicina" && crearSalaVideo) {
+    sala = await crearSalaVideo({ nombre: `cita-${bookingId}` }).catch(() => null);
+  }
+
   const pacienteId = await upsertPacienteLocal(tenant, booking);
   const cita = await tenant.$transaction(async (tx) => {
     const folio = await nextCitaFolio(tx, sucursal.id, sucursal.codigo);
@@ -828,6 +841,7 @@ export async function confirmarReserva(
         fechaProgramada: booking.fechaHora,
         estado: "confirmada",
         motivoTexto: booking.motivo ?? "Cita agendada en línea",
+        ...(sala ? { consultorioRoom: sala.url } : {}),
       },
       select: { id: true, folio: true },
     });
@@ -835,9 +849,20 @@ export async function confirmarReserva(
 
   await master.publicBooking.update({
     where: { id: bookingId },
-    data: { status: "confirmada", confirmadaAt: new Date(), citaIdLocal: cita.id },
+    data: {
+      status: "confirmada",
+      confirmadaAt: new Date(),
+      citaIdLocal: cita.id,
+      ...(sala ? { salaVideoUrl: sala.url, salaVideoProveedor: sala.proveedor } : {}),
+    },
   });
-  return { bookingId, citaId: cita.id, folio: cita.folio, pacienteId };
+  return {
+    bookingId,
+    citaId: cita.id,
+    folio: cita.folio,
+    pacienteId,
+    salaVideoUrl: sala?.url ?? null,
+  };
 }
 
 export async function rechazarReserva(

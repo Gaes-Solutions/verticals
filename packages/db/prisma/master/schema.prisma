@@ -896,6 +896,8 @@ model PublicBooking {
   motivo           String?
   status           BookingStatus    @default(pendiente)
   citaIdLocal      String?          @map("cita_id_local")
+  salaVideoUrl     String?          @map("sala_video_url")
+  salaVideoProveedor String?        @map("sala_video_proveedor")
   confirmadaAt     DateTime?        @map("confirmada_at")
   rechazadaAt      DateTime?        @map("rechazada_at")
   motivoRechazo    String?          @map("motivo_rechazo")

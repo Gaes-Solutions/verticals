@@ -104,6 +104,7 @@ import pagosPlugin, { type PagoProviderFactory } from "./plugins/pagos.js";
 import paqueteriasPlugin, { type ShippingProviderFactory } from "./plugins/paqueterias.js";
 import recargasPlugin, { type RecargaProviderFactory } from "./plugins/recargas.js";
 import securityPlugin from "./plugins/security.js";
+import telemedicinePlugin, { type TelemedicineProviderFactory } from "./plugins/telemedicine.js";
 import tenantContextPlugin from "./plugins/tenant-context.js";
 
 export interface BuildAppOptions {
@@ -114,6 +115,7 @@ export interface BuildAppOptions {
   shippingProviderFactory?: ShippingProviderFactory;
   emailProviderFactory?: EmailProviderFactory;
   mensajeriaProviderFactory?: MensajeriaProviderFactory;
+  telemedicineProviderFactory?: TelemedicineProviderFactory;
 }
 
 export async function buildApp(
@@ -163,6 +165,10 @@ export async function buildApp(
   await app.register(
     mensajeriaPlugin,
     opts.mensajeriaProviderFactory ? { factory: opts.mensajeriaProviderFactory } : {},
+  );
+  await app.register(
+    telemedicinePlugin,
+    opts.telemedicineProviderFactory ? { factory: opts.telemedicineProviderFactory } : {},
   );
 
   await app.register(healthRoutes);

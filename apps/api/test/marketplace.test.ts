@@ -360,6 +360,32 @@ describe("reservas (bookings desde el portal)", () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it("confirmar una reserva de telemedicina crea la sala de video", async () => {
+    const reserva = await app.inject({
+      method: "POST",
+      url: `/marketplace/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        modalidad: "telemedicina",
+        motivo: "Consulta a distancia",
+      },
+    });
+    const teleId = (reserva.json() as { id: string }).id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/marketplace/reservas/${teleId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { salaVideoUrl: string | null };
+    expect(r.salaVideoUrl).toMatch(/^https:\/\//);
+    const booking = await masterPrisma.publicBooking.findUnique({ where: { id: teleId } });
+    expect(booking?.salaVideoUrl).toBe(r.salaVideoUrl);
+    expect(booking?.salaVideoProveedor).toBe("mock");
+  });
+
   it("rechazar una reserva pendiente la marca rechazada", async () => {
     const reserva = await app.inject({
       method: "POST",

@@ -13,6 +13,7 @@ interface Reserva {
   motivo?: string | null;
   status: BookingStatus;
   motivoRechazo?: string | null;
+  salaVideoUrl?: string | null;
   professional?: { nombrePublico: string } | null;
 }
 
@@ -178,6 +179,16 @@ function ReservaCard({
           </p>
           {r.status === "rechazada" && r.motivoRechazo && (
             <p className="mt-0.5 text-red-500 text-xs">Rechazo: {r.motivoRechazo}</p>
+          )}
+          {r.status === "confirmada" && r.salaVideoUrl && (
+            <a
+              href={r.salaVideoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block text-brand text-xs hover:underline"
+            >
+              🎥 Entrar a la videollamada
+            </a>
           )}
         </div>
         <span className={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</span>
