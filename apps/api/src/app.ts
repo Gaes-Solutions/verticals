@@ -8,6 +8,7 @@ import adminObservabilidadRoutes from "./modules/admin/observabilidad-routes.js"
 import adminRolesPlantillaRoutes from "./modules/admin/roles-plantilla-routes.js";
 import adminTeamRoutes from "./modules/admin/team-routes.js";
 import adminTenantsRoutes from "./modules/admin/tenants-routes.js";
+import adminTicketsRoutes from "./modules/admin/tickets-routes.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import autofacturaPublicRoutes from "./modules/autofactura/routes.js";
@@ -174,6 +175,7 @@ export async function buildApp(
   await app.register(adminRolesPlantillaRoutes, { prefix: "/admin/roles-plantilla" });
   await app.register(adminCatalogoRoutes, { prefix: "/admin/catalogo" });
   await app.register(adminObservabilidadRoutes, { prefix: "/admin/observabilidad" });
+  await app.register(adminTicketsRoutes, { prefix: "/admin/tickets" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);

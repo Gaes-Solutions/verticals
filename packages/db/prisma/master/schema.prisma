@@ -54,43 +54,44 @@ model Plan {
 
 // Tenant = una cuenta SaaS (un negocio cliente)
 model Tenant {
-  id                       String           @id @default(cuid())
-  slug                     String           @unique
-  name                     String
-  legalName                String?          @map("legal_name")
-  commercialName           String?          @map("commercial_name")
-  rfc                      String?
-  vertical                 TenantVertical?
-  verticalSubtype          String?          @map("vertical_subtype")
-  country                  String           @default("MX")
-  currencyDefault          String           @default("MXN") @map("currency_default")
-  languageDefault          String           @default("es-MX") @map("language_default")
-  timezone                 String           @default("America/Mexico_City")
-  schemaName               String           @unique @map("schema_name")
-  status                   TenantStatus     @default(trial)
-  planId                   String           @map("plan_id")
-  parentTenantId           String?          @map("parent_tenant_id")
-  partnerId                String?          @map("partner_id")
-  partnerAttributedUntil   DateTime?        @map("partner_attributed_until")
-  trialEndsAt              DateTime?        @map("trial_ends_at")
-  onboardingCompletedAt    DateTime?        @map("onboarding_completed_at")
-  healthScore              Int?             @map("health_score")
-  healthScoreUpdatedAt     DateTime?        @map("health_score_updated_at")
-  metadata                 Json?
-  deletedAt                DateTime?        @map("deleted_at")
-  createdAt                DateTime         @default(now()) @map("created_at")
-  updatedAt                DateTime         @updatedAt @map("updated_at")
+  id                     String          @id @default(cuid())
+  slug                   String          @unique
+  name                   String
+  legalName              String?         @map("legal_name")
+  commercialName         String?         @map("commercial_name")
+  rfc                    String?
+  vertical               TenantVertical?
+  verticalSubtype        String?         @map("vertical_subtype")
+  country                String          @default("MX")
+  currencyDefault        String          @default("MXN") @map("currency_default")
+  languageDefault        String          @default("es-MX") @map("language_default")
+  timezone               String          @default("America/Mexico_City")
+  schemaName             String          @unique @map("schema_name")
+  status                 TenantStatus    @default(trial)
+  planId                 String          @map("plan_id")
+  parentTenantId         String?         @map("parent_tenant_id")
+  partnerId              String?         @map("partner_id")
+  partnerAttributedUntil DateTime?       @map("partner_attributed_until")
+  trialEndsAt            DateTime?       @map("trial_ends_at")
+  onboardingCompletedAt  DateTime?       @map("onboarding_completed_at")
+  healthScore            Int?            @map("health_score")
+  healthScoreUpdatedAt   DateTime?       @map("health_score_updated_at")
+  metadata               Json?
+  deletedAt              DateTime?       @map("deleted_at")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
 
-  plan          Plan                  @relation(fields: [planId], references: [id])
-  parentTenant  Tenant?               @relation("TenantPadreHijo", fields: [parentTenantId], references: [id])
-  childTenants  Tenant[]              @relation("TenantPadreHijo")
-  partner       Partner?              @relation(fields: [partnerId], references: [id], onDelete: SetNull)
-  subscriptions Subscription[]
-  invoices      Invoice[]
-  paymentMethods PaymentMethod[]
+  plan              Plan                  @relation(fields: [planId], references: [id])
+  parentTenant      Tenant?               @relation("TenantPadreHijo", fields: [parentTenantId], references: [id])
+  childTenants      Tenant[]              @relation("TenantPadreHijo")
+  partner           Partner?              @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  subscriptions     Subscription[]
+  invoices          Invoice[]
+  paymentMethods    PaymentMethod[]
   couponRedemptions CouponRedemption[]
-  adminUsers    TenantUserAdmin[]
-  settingsMaster TenantSettingsMaster?
+  adminUsers        TenantUserAdmin[]
+  supportTickets    SupportTicket[]
+  settingsMaster    TenantSettingsMaster?
 
   @@unique([rfc, country])
   @@index([status])
@@ -127,20 +128,21 @@ enum TenantVertical {
 // de cada tenant (que viven en el schema del tenant — análisis 4.6).
 // Ver análisis 4.4 (soporte/audit) y flujo 10 (superadmin).
 model AdminUser {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  name         String
-  role         AdminRole  @default(superadmin)
-  active       Boolean    @default(true)
-  mfaSecret    String?    @map("mfa_secret")
-  mfaVerifiedAt DateTime? @map("mfa_verified_at")
-  mfaBackupCodes String[] @default([]) @map("mfa_backup_codes")
-  lastLoginAt  DateTime?  @map("last_login_at")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  name           String
+  role           AdminRole @default(superadmin)
+  active         Boolean   @default(true)
+  mfaSecret      String?   @map("mfa_secret")
+  mfaVerifiedAt  DateTime? @map("mfa_verified_at")
+  mfaBackupCodes String[]  @default([]) @map("mfa_backup_codes")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
+  refreshTokens   RefreshToken[]
+  assignedTickets SupportTicket[]
 
   @@index([active])
   @@map("admin_users")
@@ -265,27 +267,27 @@ enum PayoutMetodo {
 }
 
 model Partner {
-  id                       String        @id @default(cuid())
-  codigo                   String        @unique
-  razonSocial              String        @map("razon_social")
-  rfc                      String?       @unique
-  emailContacto            String        @unique @map("email_contacto")
-  telefonoContacto         String?       @map("telefono_contacto")
-  tipo                     PartnerTipo
-  nivel                    PartnerNivel  @default(bronze)
-  comisionPctOverride      Decimal?      @map("comision_pct_override") @db.Decimal(5, 2)
-  estado                   PartnerEstado @default(invitado)
-  termsAcceptedAt          DateTime?     @map("terms_accepted_at")
-  isAcceptingNewReferrals  Boolean       @default(true) @map("is_accepting_new_referrals")
-  bankAccount              Json?         @map("bank_account")
-  ciudad                   String?
-  estadoMx                 String?       @map("estado_mx")
-  paginaWeb                String?       @map("pagina_web")
-  notasInternas            String?       @map("notas_internas")
-  fechaIngreso             DateTime?     @map("fecha_ingreso")
-  fechaTerminacion         DateTime?     @map("fecha_terminacion")
-  createdAt                DateTime      @default(now()) @map("created_at")
-  updatedAt                DateTime      @updatedAt @map("updated_at")
+  id                      String        @id @default(cuid())
+  codigo                  String        @unique
+  razonSocial             String        @map("razon_social")
+  rfc                     String?       @unique
+  emailContacto           String        @unique @map("email_contacto")
+  telefonoContacto        String?       @map("telefono_contacto")
+  tipo                    PartnerTipo
+  nivel                   PartnerNivel  @default(bronze)
+  comisionPctOverride     Decimal?      @map("comision_pct_override") @db.Decimal(5, 2)
+  estado                  PartnerEstado @default(invitado)
+  termsAcceptedAt         DateTime?     @map("terms_accepted_at")
+  isAcceptingNewReferrals Boolean       @default(true) @map("is_accepting_new_referrals")
+  bankAccount             Json?         @map("bank_account")
+  ciudad                  String?
+  estadoMx                String?       @map("estado_mx")
+  paginaWeb               String?       @map("pagina_web")
+  notasInternas           String?       @map("notas_internas")
+  fechaIngreso            DateTime?     @map("fecha_ingreso")
+  fechaTerminacion        DateTime?     @map("fecha_terminacion")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
 
   branding     PartnerBranding?
   links        PartnerLink[]
@@ -435,14 +437,14 @@ model Payout {
 }
 
 model PartnerInvitacion {
-  id            String    @id @default(cuid())
-  partnerId     String    @map("partner_id")
-  token         String    @unique
-  expiresAt     DateTime  @map("expires_at")
-  acceptedAt    DateTime? @map("accepted_at")
-  enviadaA      String    @map("enviada_a")
-  enviadaPorId  String?   @map("enviada_por_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  id           String    @id @default(cuid())
+  partnerId    String    @map("partner_id")
+  token        String    @unique
+  expiresAt    DateTime  @map("expires_at")
+  acceptedAt   DateTime? @map("accepted_at")
+  enviadaA     String    @map("enviada_a")
+  enviadaPorId String?   @map("enviada_por_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
@@ -482,7 +484,9 @@ enum ReviewModeracionStatus {
   denunciado_medico
 }
 
-/** Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR). */
+/**
+ * Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR).
+ */
 enum PatientSexAtBirth {
   male
   female
@@ -565,39 +569,39 @@ enum PhrAuditAction {
  * Cifrado at-rest de campos sensibles diferido a hito de hardening.
  */
 model PacienteMaster {
-  id               String             @id @default(cuid())
-  phoneE164        String?            @unique @map("phone_e164")
-  email            String?            @unique
-  nombre           String
-  apellidos        String?
-  preferredName    String?            @map("preferred_name")
-  birthDate        DateTime?          @map("birth_date") @db.Date
-  sexAtBirth       PatientSexAtBirth? @map("sex_at_birth")
-  genderIdentity   String?            @map("gender_identity")
-  rfc              String?
-  curp             String?
-  country          String             @default("MX")
-  address          Json?
-  bloodType        String?            @map("blood_type")
-  languagePreferred String            @default("es-MX") @map("language_preferred")
-  weightKg         Decimal?           @map("weight_kg") @db.Decimal(6, 2)
-  heightCm         Decimal?           @map("height_cm") @db.Decimal(6, 2)
-  metadata         Json?
-  telefono         String?
-  otpVerificadoAt  DateTime?          @map("otp_verificado_at")
-  archivedAt       DateTime?          @map("archived_at")
-  deletedAt        DateTime?          @map("deleted_at")
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
+  id                String             @id @default(cuid())
+  phoneE164         String?            @unique @map("phone_e164")
+  email             String?            @unique
+  nombre            String
+  apellidos         String?
+  preferredName     String?            @map("preferred_name")
+  birthDate         DateTime?          @map("birth_date") @db.Date
+  sexAtBirth        PatientSexAtBirth? @map("sex_at_birth")
+  genderIdentity    String?            @map("gender_identity")
+  rfc               String?
+  curp              String?
+  country           String             @default("MX")
+  address           Json?
+  bloodType         String?            @map("blood_type")
+  languagePreferred String             @default("es-MX") @map("language_preferred")
+  weightKg          Decimal?           @map("weight_kg") @db.Decimal(6, 2)
+  heightCm          Decimal?           @map("height_cm") @db.Decimal(6, 2)
+  metadata          Json?
+  telefono          String?
+  otpVerificadoAt   DateTime?          @map("otp_verificado_at")
+  archivedAt        DateTime?          @map("archived_at")
+  deletedAt         DateTime?          @map("deleted_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
-  reviews     PublicReview[]
-  logins      PatientLogin[]
-  records     PatientRecord[]
-  consents    PatientConsent[]
-  emergencyQr PatientEmergencyQr?
-  auditLogs   PatientAuditLog[]
-  dependientes PatientFamily[] @relation("dependiente")
-  tutorias    PatientFamily[] @relation("tutor")
+  reviews      PublicReview[]
+  logins       PatientLogin[]
+  records      PatientRecord[]
+  consents     PatientConsent[]
+  emergencyQr  PatientEmergencyQr?
+  auditLogs    PatientAuditLog[]
+  dependientes PatientFamily[]     @relation("dependiente")
+  tutorias     PatientFamily[]     @relation("tutor")
 
   @@index([email])
   @@index([phoneE164])
@@ -607,18 +611,18 @@ model PacienteMaster {
 }
 
 model PatientLogin {
-  id               String    @id @default(cuid())
-  patientId        String    @map("patient_id")
-  deviceFingerprint String   @map("device_fingerprint")
-  deviceName       String?   @map("device_name")
+  id                 String    @id @default(cuid())
+  patientId          String    @map("patient_id")
+  deviceFingerprint  String    @map("device_fingerprint")
+  deviceName         String?   @map("device_name")
   deviceTrustedUntil DateTime? @map("device_trusted_until")
-  lastOtpSentAt    DateTime? @map("last_otp_sent_at")
-  otpMethod        String?   @map("otp_method")
-  lastLoginAt      DateTime? @map("last_login_at")
-  lastLoginIp      String?   @map("last_login_ip")
-  revokedAt        DateTime? @map("revoked_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  lastOtpSentAt      DateTime? @map("last_otp_sent_at")
+  otpMethod          String?   @map("otp_method")
+  lastLoginAt        DateTime? @map("last_login_at")
+  lastLoginIp        String?   @map("last_login_ip")
+  revokedAt          DateTime? @map("revoked_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
@@ -646,18 +650,18 @@ model PatientAuthChallenge {
 }
 
 model PatientFamily {
-  id                          String                @id @default(cuid())
-  dependienteId               String                @map("dependiente_id")
-  tutorId                     String                @map("tutor_id")
-  relationshipType            FamilyRelationship    @map("relationship_type")
-  permissionScope             FamilyPermissionScope @default(view_only) @map("permission_scope")
-  permissionDetails           Json?                 @map("permission_details")
-  consentStatus               FamilyConsentStatus   @default(pending) @map("consent_status")
-  consentRequiredFromDependent Boolean              @default(false) @map("consent_required_from_dependent")
-  consentAcceptedAt           DateTime?             @map("consent_accepted_at")
-  validUntil                  DateTime?             @map("valid_until")
-  createdAt                   DateTime              @default(now()) @map("created_at")
-  updatedAt                   DateTime              @updatedAt @map("updated_at")
+  id                           String                @id @default(cuid())
+  dependienteId                String                @map("dependiente_id")
+  tutorId                      String                @map("tutor_id")
+  relationshipType             FamilyRelationship    @map("relationship_type")
+  permissionScope              FamilyPermissionScope @default(view_only) @map("permission_scope")
+  permissionDetails            Json?                 @map("permission_details")
+  consentStatus                FamilyConsentStatus   @default(pending) @map("consent_status")
+  consentRequiredFromDependent Boolean               @default(false) @map("consent_required_from_dependent")
+  consentAcceptedAt            DateTime?             @map("consent_accepted_at")
+  validUntil                   DateTime?             @map("valid_until")
+  createdAt                    DateTime              @default(now()) @map("created_at")
+  updatedAt                    DateTime              @updatedAt @map("updated_at")
 
   dependiente PacienteMaster @relation("dependiente", fields: [dependienteId], references: [id], onDelete: Cascade)
   tutor       PacienteMaster @relation("tutor", fields: [tutorId], references: [id], onDelete: Cascade)
@@ -696,21 +700,21 @@ model PatientConsent {
  * (tenant) con consent; el portal del paciente lo lee cross-tenant.
  */
 model PatientRecord {
-  id                String              @id @default(cuid())
-  patientId         String              @map("patient_id")
-  tenantId          String              @map("tenant_id")
-  createdByUserId   String?             @map("created_by_user_id")
-  resourceType      FhirResourceType    @map("resource_type")
-  resourceSubtype   String?             @map("resource_subtype")
-  effectiveDate     DateTime            @map("effective_date")
-  status            PatientRecordStatus @default(final)
-  data              Json
-  summaryText       String?             @map("summary_text")
-  isCritical        Boolean             @default(false) @map("is_critical")
-  isVisibleToPatient Boolean            @default(true) @map("is_visible_to_patient")
-  parentRecordId    String?             @map("parent_record_id")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  id                 String              @id @default(cuid())
+  patientId          String              @map("patient_id")
+  tenantId           String              @map("tenant_id")
+  createdByUserId    String?             @map("created_by_user_id")
+  resourceType       FhirResourceType    @map("resource_type")
+  resourceSubtype    String?             @map("resource_subtype")
+  effectiveDate      DateTime            @map("effective_date")
+  status             PatientRecordStatus @default(final)
+  data               Json
+  summaryText        String?             @map("summary_text")
+  isCritical         Boolean             @default(false) @map("is_critical")
+  isVisibleToPatient Boolean             @default(true) @map("is_visible_to_patient")
+  parentRecordId     String?             @map("parent_record_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
 
   patient PacienteMaster @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
@@ -859,18 +863,18 @@ model PublicReview {
 }
 
 model PublicProfessionalSearchIndex {
-  professionalId     String   @id @map("professional_id")
-  searchText         String   @map("search_text")
+  professionalId     String          @id @map("professional_id")
+  searchText         String          @map("search_text")
   ciudad             String?
   estado             String?
   tipo               ProfesionalTipo
-  scoreRanking       Decimal  @default(0) @map("score_ranking") @db.Decimal(8, 4)
-  aceptaTelemedicina Boolean  @default(false) @map("acepta_telemedicina")
-  aceptaMismoDia     Boolean  @default(false) @map("acepta_mismo_dia")
-  idiomas            Json     @default("[]")
-  atiendeNinos       Boolean  @default(true) @map("atiende_ninos")
-  atiendeAdultos     Boolean  @default(true) @map("atiende_adultos")
-  refreshedAt        DateTime @default(now()) @map("refreshed_at")
+  scoreRanking       Decimal         @default(0) @map("score_ranking") @db.Decimal(8, 4)
+  aceptaTelemedicina Boolean         @default(false) @map("acepta_telemedicina")
+  aceptaMismoDia     Boolean         @default(false) @map("acepta_mismo_dia")
+  idiomas            Json            @default("[]")
+  atiendeNinos       Boolean         @default(true) @map("atiende_ninos")
+  atiendeAdultos     Boolean         @default(true) @map("atiende_adultos")
+  refreshedAt        DateTime        @default(now()) @map("refreshed_at")
 
   professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 
@@ -954,7 +958,9 @@ enum AdminTenantRole {
   @@map("admin_tenant_role")
 }
 
-/** Características y límites por plan (gating dinámico sin código duro). */
+/**
+ * Características y límites por plan (gating dinámico sin código duro).
+ */
 model PlanFeature {
   id         String   @id @default(cuid())
   planId     String   @map("plan_id")
@@ -969,16 +975,18 @@ model PlanFeature {
   @@map("plan_features")
 }
 
-/** Precio por (moneda, intervalo) — multi-currency desde día 1. */
+/**
+ * Precio por (moneda, intervalo) — multi-currency desde día 1.
+ */
 model PlanPrice {
-  id           String               @id @default(cuid())
-  planId       String               @map("plan_id")
-  currency     String
-  interval     SubscriptionInterval
-  unitAmount   Int                  @map("unit_amount")
-  taxBehavior  String               @default("inclusive") @map("tax_behavior")
-  isActive     Boolean              @default(true) @map("is_active")
-  createdAt    DateTime             @default(now()) @map("created_at")
+  id          String               @id @default(cuid())
+  planId      String               @map("plan_id")
+  currency    String
+  interval    SubscriptionInterval
+  unitAmount  Int                  @map("unit_amount")
+  taxBehavior String               @default("inclusive") @map("tax_behavior")
+  isActive    Boolean              @default(true) @map("is_active")
+  createdAt   DateTime             @default(now()) @map("created_at")
 
   plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
@@ -987,28 +995,28 @@ model PlanPrice {
 }
 
 model Subscription {
-  id                       String               @id @default(cuid())
-  tenantId                 String               @map("tenant_id")
-  planId                   String               @map("plan_id")
-  status                   SubscriptionStatus   @default(trialing)
-  currency                 String
-  interval                 SubscriptionInterval @default(monthly)
-  currentPeriodStart       DateTime             @map("current_period_start")
-  currentPeriodEnd         DateTime             @map("current_period_end")
-  trialStart               DateTime?            @map("trial_start")
-  trialEnd                 DateTime?            @map("trial_end")
-  canceledAt               DateTime?            @map("canceled_at")
-  cancelAtPeriodEnd        Boolean              @default(false) @map("cancel_at_period_end")
-  pauseCollectionUntil     DateTime?            @map("pause_collection_until")
-  discountCouponId         String?              @map("discount_coupon_id")
-  externalSubscriptionId   String?              @map("external_subscription_id")
-  externalProvider         String?              @map("external_provider")
-  createdAt                DateTime             @default(now()) @map("created_at")
-  updatedAt                DateTime             @updatedAt @map("updated_at")
+  id                     String               @id @default(cuid())
+  tenantId               String               @map("tenant_id")
+  planId                 String               @map("plan_id")
+  status                 SubscriptionStatus   @default(trialing)
+  currency               String
+  interval               SubscriptionInterval @default(monthly)
+  currentPeriodStart     DateTime             @map("current_period_start")
+  currentPeriodEnd       DateTime             @map("current_period_end")
+  trialStart             DateTime?            @map("trial_start")
+  trialEnd               DateTime?            @map("trial_end")
+  canceledAt             DateTime?            @map("canceled_at")
+  cancelAtPeriodEnd      Boolean              @default(false) @map("cancel_at_period_end")
+  pauseCollectionUntil   DateTime?            @map("pause_collection_until")
+  discountCouponId       String?              @map("discount_coupon_id")
+  externalSubscriptionId String?              @map("external_subscription_id")
+  externalProvider       String?              @map("external_provider")
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
 
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  plan              Plan                @relation(fields: [planId], references: [id])
-  discountCoupon    Coupon?             @relation(fields: [discountCouponId], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan              Plan               @relation(fields: [planId], references: [id])
+  discountCoupon    Coupon?            @relation(fields: [discountCouponId], references: [id])
   items             SubscriptionItem[]
   invoices          Invoice[]
   couponRedemptions CouponRedemption[]
@@ -1019,15 +1027,15 @@ model Subscription {
 }
 
 model SubscriptionItem {
-  id              String   @id @default(cuid())
-  subscriptionId  String   @map("subscription_id")
-  type            String
-  quantity        Int      @default(1)
-  unitAmount      Int      @map("unit_amount")
-  externalItemId  String?  @map("external_item_id")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  subscriptionId String   @map("subscription_id")
+  type           String
+  quantity       Int      @default(1)
+  unitAmount     Int      @map("unit_amount")
+  externalItemId String?  @map("external_item_id")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   invoiceItems InvoiceItem[]
 
   @@index([subscriptionId])
@@ -1057,8 +1065,8 @@ model Invoice {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription?    @relation(fields: [subscriptionId], references: [id])
   items        InvoiceItem[]
   payments     InvoicePayment[]
 
@@ -1068,34 +1076,34 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id                  String   @id @default(cuid())
-  invoiceId           String   @map("invoice_id")
-  description         String
-  quantity            Int      @default(1)
-  unitAmount          Int      @map("unit_amount")
-  amount              Int
-  taxRate             Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
-  subscriptionItemId  String?  @map("subscription_item_id")
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  invoiceId          String   @map("invoice_id")
+  description        String
+  quantity           Int      @default(1)
+  unitAmount         Int      @map("unit_amount")
+  amount             Int
+  taxRate            Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  subscriptionItemId String?  @map("subscription_item_id")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  invoice           Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  subscriptionItem  SubscriptionItem? @relation(fields: [subscriptionItemId], references: [id])
+  invoice          Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  subscriptionItem SubscriptionItem? @relation(fields: [subscriptionItemId], references: [id])
 
   @@index([invoiceId])
   @@map("invoice_items")
 }
 
 model InvoicePayment {
-  id                 String               @id @default(cuid())
-  invoiceId          String               @map("invoice_id")
-  amount             Int
-  currency           String
-  paymentMethodId    String?              @map("payment_method_id")
-  status             InvoicePaymentStatus @default(pending)
-  externalChargeId   String?              @map("external_charge_id")
-  failureReason      String?              @map("failure_reason")
-  paidAt             DateTime?            @map("paid_at")
-  createdAt          DateTime             @default(now()) @map("created_at")
+  id               String               @id @default(cuid())
+  invoiceId        String               @map("invoice_id")
+  amount           Int
+  currency         String
+  paymentMethodId  String?              @map("payment_method_id")
+  status           InvoicePaymentStatus @default(pending)
+  externalChargeId String?              @map("external_charge_id")
+  failureReason    String?              @map("failure_reason")
+  paidAt           DateTime?            @map("paid_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
 
   invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
@@ -1106,17 +1114,17 @@ model InvoicePayment {
 }
 
 model PaymentMethod {
-  id                String            @id @default(cuid())
-  tenantId          String            @map("tenant_id")
-  type              PaymentMethodType
-  isDefault         Boolean           @default(false) @map("is_default")
-  externalMethodId  String?           @map("external_method_id")
-  last4             String?
-  brand             String?
-  expMonth          Int?              @map("exp_month")
-  expYear           Int?              @map("exp_year")
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
+  id               String            @id @default(cuid())
+  tenantId         String            @map("tenant_id")
+  type             PaymentMethodType
+  isDefault        Boolean           @default(false) @map("is_default")
+  externalMethodId String?           @map("external_method_id")
+  last4            String?
+  brand            String?
+  expMonth         Int?              @map("exp_month")
+  expYear          Int?              @map("exp_year")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   payments InvoicePayment[]
@@ -1126,23 +1134,23 @@ model PaymentMethod {
 }
 
 model Coupon {
-  id                  String              @id @default(cuid())
-  code                String              @unique
-  name                String
-  partnerId           String?             @map("partner_id")
-  discountType        CouponDiscountType  @map("discount_type")
-  discountValue       Int                 @map("discount_value")
-  currency            String?
-  duration            CouponDuration      @default(once)
-  durationInMonths    Int?                @map("duration_in_months")
-  maxRedemptions      Int?                @map("max_redemptions")
-  timesRedeemed       Int                 @default(0) @map("times_redeemed")
-  applicablePlanIds   Json                @default("[]") @map("applicable_plan_ids")
-  validFrom           DateTime?           @map("valid_from")
-  validUntil          DateTime?           @map("valid_until")
-  isActive            Boolean             @default(true) @map("is_active")
-  createdAt           DateTime            @default(now()) @map("created_at")
-  updatedAt           DateTime            @updatedAt @map("updated_at")
+  id                String             @id @default(cuid())
+  code              String             @unique
+  name              String
+  partnerId         String?            @map("partner_id")
+  discountType      CouponDiscountType @map("discount_type")
+  discountValue     Int                @map("discount_value")
+  currency          String?
+  duration          CouponDuration     @default(once)
+  durationInMonths  Int?               @map("duration_in_months")
+  maxRedemptions    Int?               @map("max_redemptions")
+  timesRedeemed     Int                @default(0) @map("times_redeemed")
+  applicablePlanIds Json               @default("[]") @map("applicable_plan_ids")
+  validFrom         DateTime?          @map("valid_from")
+  validUntil        DateTime?          @map("valid_until")
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   partner       Partner?           @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   redemptions   CouponRedemption[]
@@ -1195,18 +1203,92 @@ model TenantUserAdmin {
 }
 
 model TenantSettingsMaster {
-  id                       String   @id @default(cuid())
-  tenantId                 String   @unique @map("tenant_id")
-  billingEmail             String   @map("billing_email")
-  billingAddress           Json?    @map("billing_address")
-  taxData                  Json?    @map("tax_data")
-  notificationPreferences  Json?    @map("notification_preferences")
-  autoChargeEnabled        Boolean  @default(true) @map("auto_charge_enabled")
-  dunningPolicy            String   @default("default") @map("dunning_policy")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  id                      String   @id @default(cuid())
+  tenantId                String   @unique @map("tenant_id")
+  billingEmail            String   @map("billing_email")
+  billingAddress          Json?    @map("billing_address")
+  taxData                 Json?    @map("tax_data")
+  notificationPreferences Json?    @map("notification_preferences")
+  autoChargeEnabled       Boolean  @default(true) @map("auto_charge_enabled")
+  dunningPolicy           String   @default("default") @map("dunning_policy")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("tenant_settings_master")
+}
+
+enum TicketStatus {
+  open
+  pending
+  resolved
+  closed
+
+  @@map("ticket_status")
+}
+
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+
+  @@map("ticket_priority")
+}
+
+enum TicketCategory {
+  billing
+  technical
+  onboarding
+  account
+  other
+
+  @@map("ticket_category")
+}
+
+enum TicketAuthorType {
+  admin
+  tenant
+  system
+
+  @@map("ticket_author_type")
+}
+
+model SupportTicket {
+  id             String         @id @default(cuid())
+  tenantId       String?        @map("tenant_id")
+  subject        String
+  status         TicketStatus   @default(open)
+  priority       TicketPriority @default(normal)
+  category       TicketCategory @default(other)
+  assignedToId   String?        @map("assigned_to_id")
+  createdByEmail String         @map("created_by_email")
+  lastMessageAt  DateTime       @default(now()) @map("last_message_at")
+  closedAt       DateTime?      @map("closed_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  tenant     Tenant?                @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  assignedTo AdminUser?             @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages   SupportTicketMessage[]
+
+  @@index([status])
+  @@index([tenantId])
+  @@map("support_ticket")
+}
+
+model SupportTicketMessage {
+  id           String           @id @default(cuid())
+  ticketId     String           @map("ticket_id")
+  authorType   TicketAuthorType @map("author_type")
+  authorEmail  String           @map("author_email")
+  body         String
+  internalNote Boolean          @default(false) @map("internal_note")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("support_ticket_message")
 }

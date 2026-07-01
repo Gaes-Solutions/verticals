@@ -12,6 +12,7 @@ import { ObservabilidadPage } from "./pages/ObservabilidadPage.js";
 import { PartnersPage } from "./pages/PartnersPage.js";
 import { RolesPredefinidosPage } from "./pages/RolesPredefinidosPage.js";
 import { SuscripcionesPage } from "./pages/SuscripcionesPage.js";
+import { TicketsPage } from "./pages/TicketsPage.js";
 import { UsoHoyPage } from "./pages/UsoHoyPage.js";
 
 export interface AdminSession {
@@ -31,6 +32,7 @@ type Seccion =
   | "partners"
   | "catalogo"
   | "observabilidad"
+  | "soporte"
   | "audit"
   | "equipo";
 
@@ -52,6 +54,7 @@ const NAV: NavItem[] = [
   { key: "partners", label: "Partners", icon: "🤝" },
   { key: "catalogo", label: "Planes y cupones", icon: "🏷️" },
   { key: "observabilidad", label: "Observabilidad", icon: "🩺" },
+  { key: "soporte", label: "Soporte", icon: "🎫" },
   { key: "audit", label: "Auditoría", icon: "📜" },
   { key: "equipo", label: "Equipo", icon: "👥", soloSuper: true },
 ];
@@ -167,6 +170,7 @@ export function App() {
         {seccion === "partners" && <PartnersPage />}
         {seccion === "catalogo" && <CatalogoPage />}
         {seccion === "observabilidad" && <ObservabilidadPage />}
+        {seccion === "soporte" && <TicketsPage />}
         {seccion === "audit" && <AuditPage />}
         {seccion === "equipo" && esSuperadmin() && <EquipoPage />}
       </main>
