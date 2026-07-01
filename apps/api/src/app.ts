@@ -4,6 +4,7 @@ import adminAuditRoutes from "./modules/admin/audit-routes.js";
 import adminBillingOpsRoutes from "./modules/admin/billing-ops-routes.js";
 import adminCatalogoRoutes from "./modules/admin/catalogo-routes.js";
 import adminMetricsRoutes from "./modules/admin/metrics-routes.js";
+import adminObservabilidadRoutes from "./modules/admin/observabilidad-routes.js";
 import adminRolesPlantillaRoutes from "./modules/admin/roles-plantilla-routes.js";
 import adminTeamRoutes from "./modules/admin/team-routes.js";
 import adminTenantsRoutes from "./modules/admin/tenants-routes.js";
@@ -172,6 +173,7 @@ export async function buildApp(
   await app.register(adminTenantsRoutes, { prefix: "/admin/tenants" });
   await app.register(adminRolesPlantillaRoutes, { prefix: "/admin/roles-plantilla" });
   await app.register(adminCatalogoRoutes, { prefix: "/admin/catalogo" });
+  await app.register(adminObservabilidadRoutes, { prefix: "/admin/observabilidad" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);

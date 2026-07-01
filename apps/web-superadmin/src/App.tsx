@@ -8,6 +8,7 @@ import { CobranzaPage } from "./pages/CobranzaPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { EquipoPage } from "./pages/EquipoPage.js";
 import { FacturasPage } from "./pages/FacturasPage.js";
+import { ObservabilidadPage } from "./pages/ObservabilidadPage.js";
 import { PartnersPage } from "./pages/PartnersPage.js";
 import { RolesPredefinidosPage } from "./pages/RolesPredefinidosPage.js";
 import { SuscripcionesPage } from "./pages/SuscripcionesPage.js";
@@ -29,6 +30,7 @@ type Seccion =
   | "suscripciones"
   | "partners"
   | "catalogo"
+  | "observabilidad"
   | "audit"
   | "equipo";
 
@@ -49,6 +51,7 @@ const NAV: NavItem[] = [
   { key: "suscripciones", label: "Suscripciones", icon: "🔁" },
   { key: "partners", label: "Partners", icon: "🤝" },
   { key: "catalogo", label: "Planes y cupones", icon: "🏷️" },
+  { key: "observabilidad", label: "Observabilidad", icon: "🩺" },
   { key: "audit", label: "Auditoría", icon: "📜" },
   { key: "equipo", label: "Equipo", icon: "👥", soloSuper: true },
 ];
@@ -163,6 +166,7 @@ export function App() {
         {seccion === "suscripciones" && <SuscripcionesPage />}
         {seccion === "partners" && <PartnersPage />}
         {seccion === "catalogo" && <CatalogoPage />}
+        {seccion === "observabilidad" && <ObservabilidadPage />}
         {seccion === "audit" && <AuditPage />}
         {seccion === "equipo" && esSuperadmin() && <EquipoPage />}
       </main>
