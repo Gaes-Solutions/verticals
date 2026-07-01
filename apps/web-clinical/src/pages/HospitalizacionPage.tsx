@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { MascotaBuscador, type MascotaLite } from "../components/MascotaBuscador.js";
+import { nombrePaciente } from "../components/PacienteBuscador.js";
+import { type Sujeto, SujetoBuscador } from "../components/SujetoBuscador.js";
 import { ApiError, api, getUsuario, puede } from "../lib/api.js";
 
 const CAMA_TIPOS = [
@@ -92,6 +93,12 @@ interface HospLite {
   motivoIngreso: string;
   cama?: { codigo: string; tipo: string } | null;
   mascota?: { nombre: string; especie: string; numeroExpediente: string } | null;
+  paciente?: {
+    nombre: string;
+    apellidoPaterno?: string | null;
+    apellidoMaterno?: string | null;
+    numeroExpediente: string;
+  } | null;
   medicoResponsable?: { nombre: string } | null;
 }
 interface HospDetalle extends HospLite {
@@ -99,6 +106,13 @@ interface HospDetalle extends HospLite {
   medicacionesProgramadas: Medicacion[];
   cargos: Cargo[];
   signosVitales: Signo[];
+}
+
+// Nombre del sujeto hospitalizado (mascota 🐾 o paciente humano 👤).
+function nombreHosp(h: { mascota?: HospLite["mascota"]; paciente?: HospLite["paciente"] }): string {
+  if (h.mascota) return `🐾 ${h.mascota.nombre}`;
+  if (h.paciente) return `👤 ${nombrePaciente(h.paciente)}`;
+  return "—";
 }
 
 async function primeraSucursal(): Promise<string | null> {
@@ -332,7 +346,7 @@ function IngresosTab() {
           >
             <div className="flex items-center justify-between">
               <span className="font-medium text-slate-800">
-                {h.mascota?.nombre ?? "—"} <span className="text-slate-400 text-xs">{h.folio}</span>
+                {nombreHosp(h)} <span className="text-slate-400 text-xs">{h.folio}</span>
               </span>
               <span className="gx-badge-warn">{h.cama?.codigo ?? "sin cama"}</span>
             </div>
@@ -372,7 +386,7 @@ function IngresosTab() {
 }
 
 function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [mascota, setMascota] = useState<MascotaLite | null>(null);
+  const [sujeto, setSujeto] = useState<Sujeto | null>(null);
   const [camas, setCamas] = useState<Cama[]>([]);
   const [camaId, setCamaId] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -389,7 +403,7 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
     setBusy(true);
     setError(null);
     const medicoResponsableId = getUsuario()?.id;
-    if (!mascota || !camaId || !medicoResponsableId) {
+    if (!sujeto || !camaId || !medicoResponsableId) {
       setError("Selecciona paciente y cama.");
       setBusy(false);
       return;
@@ -405,7 +419,7 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
         body: {
           sucursalId,
           camaId,
-          mascotaId: mascota.id,
+          [sujeto.tipo === "mascota" ? "mascotaId" : "pacienteId"]: sujeto.id,
           medicoResponsableId,
           motivoIngreso: motivo,
         },
@@ -421,12 +435,14 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
     <div className="gx-modal-overlay">
       <div className="gx-modal-panel">
         <h2 className="mb-3 font-bold text-lg text-slate-800">Nuevo ingreso</h2>
-        {mascota ? (
+        {sujeto ? (
           <div className="mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
-            <span className="font-medium">{mascota.nombre}</span>
+            <span className="font-medium">
+              {sujeto.tipo === "mascota" ? "🐾" : "👤"} {sujeto.nombre}
+            </span>
             <button
               type="button"
-              onClick={() => setMascota(null)}
+              onClick={() => setSujeto(null)}
               className="text-slate-400 text-xs"
             >
               cambiar
@@ -434,7 +450,7 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
           </div>
         ) : (
           <div className="mb-3">
-            <MascotaBuscador onSelect={setMascota} />
+            <SujetoBuscador onSelect={setSujeto} />
           </div>
         )}
         <label className="mb-3 block">
@@ -468,7 +484,7 @@ function NuevoIngresoModal({ onClose, onDone }: { onClose: () => void; onDone: (
           <button
             type="button"
             onClick={guardar}
-            disabled={busy || !mascota || !camaId || !motivo}
+            disabled={busy || !sujeto || !camaId || !motivo}
             className="gx-btn-primary"
           >
             {busy ? "Ingresando…" : "Ingresar"}
@@ -529,7 +545,7 @@ function DetalleHosp({ id, onClose }: { id: string; onClose: () => void }) {
       <CobroAltaModal
         ventaId={cobro.ventaId}
         montoTotal={cobro.monto}
-        paciente={h?.mascota?.nombre ?? null}
+        paciente={h ? nombreHosp(h) : null}
         onClose={onClose}
       />
     );
@@ -544,7 +560,7 @@ function DetalleHosp({ id, onClose }: { id: string; onClose: () => void }) {
           <>
             <div className="mb-3 flex items-start justify-between">
               <div>
-                <h2 className="font-bold text-lg text-slate-800">{h.mascota?.nombre ?? "—"}</h2>
+                <h2 className="font-bold text-lg text-slate-800">{nombreHosp(h)}</h2>
                 <p className="text-slate-500 text-sm">
                   {h.folio} · cama {h.cama?.codigo ?? "—"} · {h.motivoIngreso}
                 </p>

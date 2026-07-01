@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MascotaBuscador, type MascotaLite } from "../components/MascotaBuscador.js";
+import { type Sujeto, SujetoBuscador } from "../components/SujetoBuscador.js";
 import { ApiError, api, puede } from "../lib/api.js";
 
 const MODALIDADES = [
@@ -49,41 +49,42 @@ async function primeraSucursal(): Promise<string | null> {
 }
 
 export function ImagenologiaPage() {
-  const [mascota, setMascota] = useState<MascotaLite | null>(null);
+  const [sujeto, setSujeto] = useState<Sujeto | null>(null);
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 font-bold text-2xl text-slate-800">Imagenología</h1>
       <p className="mb-4 text-slate-500 text-sm">Solicitud y resultados de estudios de imagen</p>
-      {!mascota ? (
-        <div className="rounded-xl bg-white p-4 shadow-sm">
-          <MascotaBuscador onSelect={setMascota} />
-        </div>
+      {!sujeto ? (
+        <SujetoBuscador onSelect={setSujeto} />
       ) : (
-        <Estudios mascota={mascota} onCambiar={() => setMascota(null)} />
+        <Estudios sujeto={sujeto} onCambiar={() => setSujeto(null)} />
       )}
     </div>
   );
 }
 
-function Estudios({ mascota, onCambiar }: { mascota: MascotaLite; onCambiar: () => void }) {
+function Estudios({ sujeto, onCambiar }: { sujeto: Sujeto; onCambiar: () => void }) {
   const [items, setItems] = useState<Estudio[]>([]);
   const [solicitar, setSolicitar] = useState(false);
   const [detalle, setDetalle] = useState<string | null>(null);
+  const filtro = sujeto.tipo === "mascota" ? "mascotaId" : "pacienteId";
 
   const cargar = useCallback(() => {
-    api<{ items: Estudio[] }>(`/t/imagenologia?mascotaId=${mascota.id}&pageSize=50`)
+    api<{ items: Estudio[] }>(`/t/imagenologia?${filtro}=${sujeto.id}&pageSize=50`)
       .then((r) => setItems(r.items ?? []))
       .catch(() => setItems([]));
-  }, [mascota.id]);
+  }, [sujeto.id, filtro]);
   useEffect(() => cargar(), [cargar]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm">
         <div>
-          <p className="font-bold text-slate-800">{mascota.nombre}</p>
+          <p className="font-bold text-slate-800">
+            {sujeto.tipo === "mascota" ? "🐾" : "👤"} {sujeto.nombre}
+          </p>
           <p className="text-slate-500 text-sm capitalize">
-            {mascota.especie} · {mascota.numeroExpediente}
+            {sujeto.subtitulo} · {sujeto.numeroExpediente}
           </p>
         </div>
         <div className="flex gap-2">
@@ -130,7 +131,7 @@ function Estudios({ mascota, onCambiar }: { mascota: MascotaLite; onCambiar: () 
 
       {solicitar && (
         <SolicitarModal
-          mascotaId={mascota.id}
+          sujeto={sujeto}
           onClose={() => setSolicitar(false)}
           onDone={() => {
             setSolicitar(false);
@@ -152,11 +153,11 @@ function Estudios({ mascota, onCambiar }: { mascota: MascotaLite; onCambiar: () 
 }
 
 function SolicitarModal({
-  mascotaId,
+  sujeto,
   onClose,
   onDone,
 }: {
-  mascotaId: string;
+  sujeto: Sujeto;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -187,7 +188,7 @@ function SolicitarModal({
       await api("/t/imagenologia", {
         body: {
           sucursalId,
-          mascotaId,
+          [sujeto.tipo === "mascota" ? "mascotaId" : "pacienteId"]: sujeto.id,
           modalidad,
           ...(region ? { region } : {}),
           nombreEstudio: nombre,
