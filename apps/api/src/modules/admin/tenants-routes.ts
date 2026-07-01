@@ -22,6 +22,15 @@ const crearSchema = z.object({
   ownerPassword: z.string().min(8).max(200).optional(),
 });
 
+const slugParamSchema = z.object({ slug: z.string().min(1) });
+
+const estadoSchema = z.object({
+  status: z.enum(["active", "suspended", "cancelled", "archived"]),
+  motivo: z.string().max(500).optional(),
+});
+
+const cambiarPlanSchema = z.object({ planCode: z.string().min(2).max(40) });
+
 /**
  * Alta y listado de clientes (tenants) desde el panel de plataforma. Crear hace
  * el onboarding completo (schema + migraciones + defaults + usuario dueño listo
@@ -133,6 +142,64 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
         message: err instanceof Error ? err.message : "No se pudo crear el cliente",
       });
     }
+  });
+
+  // Suspender / reactivar / cancelar / archivar un cliente.
+  app.patch("/:slug/estado", async (req, reply) => {
+    if (!requireSuperadmin(req, reply)) return;
+    const { slug } = slugParamSchema.parse(req.params);
+    const body = estadoSchema.parse(req.body);
+    const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });
+    }
+    await app.masterPrisma.tenant.update({ where: { slug }, data: { status: body.status } });
+    await writeAudit(app.masterPrisma, {
+      actor: actorDe(req),
+      action: `tenant.${body.status}`,
+      resource: "tenant",
+      resourceId: slug,
+      metadata: { ...(body.motivo ? { motivo: body.motivo } : {}) },
+      ipAddress: req.ip,
+    });
+    return { slug, status: body.status };
+  });
+
+  // Cambiar el plan del cliente (tenant + su suscripción vigente).
+  app.patch("/:slug/plan", async (req, reply) => {
+    if (!requireSuperadmin(req, reply)) return;
+    const { slug } = slugParamSchema.parse(req.params);
+    const body = cambiarPlanSchema.parse(req.body);
+    const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
+    if (!tenant) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });
+    }
+    const plan = await app.masterPrisma.plan.findUnique({ where: { code: body.planCode } });
+    if (!plan || !plan.active) {
+      return reply
+        .code(400)
+        .send({ statusCode: 400, error: "Bad Request", message: "Plan no encontrado o inactivo" });
+    }
+    await app.masterPrisma.$transaction(async (tx) => {
+      await tx.tenant.update({ where: { slug }, data: { planId: plan.id } });
+      await tx.subscription.updateMany({
+        where: { tenantId: tenant.id, status: { not: "canceled" } },
+        data: { planId: plan.id },
+      });
+    });
+    await writeAudit(app.masterPrisma, {
+      actor: actorDe(req),
+      action: "tenant.plan_changed",
+      resource: "tenant",
+      resourceId: slug,
+      metadata: { plan: plan.code },
+      ipAddress: req.ip,
+    });
+    return { slug, plan: plan.code, planNombre: plan.name };
   });
 };
 

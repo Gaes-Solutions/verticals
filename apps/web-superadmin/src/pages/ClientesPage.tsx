@@ -30,15 +30,28 @@ const STATUS_BADGE: Record<string, string> = {
   trial: "gx-badge-warn",
   active: "gx-badge-ok",
   past_due: "gx-badge-warn",
-  suspended: "gx-badge-warn",
+  suspended: "gx-badge-danger",
+  unpaid: "gx-badge-danger",
   cancelled: "gx-badge-info",
+  archived: "gx-badge",
+};
+const STATUS_LABEL: Record<string, string> = {
+  trial: "Prueba",
+  active: "Activo",
+  past_due: "Vencido",
+  suspended: "Suspendido",
+  unpaid: "Impago",
+  cancelled: "Cancelado",
+  archived: "Archivado",
 };
 
 export function ClientesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [nuevo, setNuevo] = useState(false);
   const [credenciales, setCredenciales] = useState<Credenciales | null>(null);
+  const [gestionar, setGestionar] = useState<Tenant | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const puedeGestionar = esSuperadmin();
 
   const cargar = useCallback(() => {
     api<Tenant[]>("/admin/tenants")
@@ -73,12 +86,13 @@ export function ClientesPage() {
               <th className="gx-th">Plan</th>
               <th className="gx-th">Estado</th>
               <th className="gx-th">Alta</th>
+              {puedeGestionar && <th className="gx-th" />}
             </tr>
           </thead>
           <tbody>
             {tenants.length === 0 ? (
               <tr>
-                <td className="gx-td text-slate-400" colSpan={5}>
+                <td className="gx-td text-slate-400" colSpan={puedeGestionar ? 6 : 5}>
                   Aún no hay clientes. Crea el primero con “+ Crear cliente”.
                 </td>
               </tr>
@@ -91,11 +105,24 @@ export function ClientesPage() {
                     <span className="gx-badge-info">{t.planNombre}</span>
                   </td>
                   <td className="gx-td">
-                    <span className={STATUS_BADGE[t.status] ?? "gx-badge-info"}>{t.status}</span>
+                    <span className={STATUS_BADGE[t.status] ?? "gx-badge-info"}>
+                      {STATUS_LABEL[t.status] ?? t.status}
+                    </span>
                   </td>
                   <td className="gx-td text-slate-500">
                     {new Date(t.createdAt).toLocaleDateString("es-MX")}
                   </td>
+                  {puedeGestionar && (
+                    <td className="gx-td text-right">
+                      <button
+                        type="button"
+                        onClick={() => setGestionar(t)}
+                        className="font-semibold text-brand text-sm hover:underline"
+                      >
+                        Gestionar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -117,6 +144,146 @@ export function ClientesPage() {
       {credenciales && (
         <CredencialesModal cred={credenciales} onClose={() => setCredenciales(null)} />
       )}
+      {gestionar && (
+        <GestionarClienteModal
+          tenant={gestionar}
+          onClose={() => setGestionar(null)}
+          onDone={() => {
+            setGestionar(null);
+            setError(null);
+            cargar();
+          }}
+          onError={setError}
+        />
+      )}
+    </div>
+  );
+}
+
+function GestionarClienteModal({
+  tenant,
+  onClose,
+  onDone,
+  onError,
+}: {
+  tenant: Tenant;
+  onClose: () => void;
+  onDone: () => void;
+  onError: (m: string) => void;
+}) {
+  const [planes, setPlanes] = useState<Plan[]>([]);
+  const [planCode, setPlanCode] = useState(tenant.plan);
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<Plan[]>("/admin/tenants/planes")
+      .then(setPlanes)
+      .catch(() => setPlanes([]));
+  }, []);
+
+  async function accion<T>(fn: () => Promise<T>) {
+    setGuardando(true);
+    setErr(null);
+    try {
+      await fn();
+      onDone();
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : "Error";
+      setErr(m);
+      onError(m);
+      setGuardando(false);
+    }
+  }
+
+  const cambiarPlan = () =>
+    accion(() =>
+      api(`/admin/tenants/${tenant.slug}/plan`, { method: "PATCH", body: { planCode } }),
+    );
+  const cambiarEstado = (status: string) =>
+    accion(() =>
+      api(`/admin/tenants/${tenant.slug}/estado`, { method: "PATCH", body: { status } }),
+    );
+
+  const activo = tenant.status === "active" || tenant.status === "trial";
+
+  return (
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel">
+        <h2 className="mb-1 font-bold text-lg text-slate-800">Gestionar cliente</h2>
+        <p className="mb-4 text-slate-500 text-sm">
+          {tenant.name} · {tenant.slug} ·{" "}
+          <span className={STATUS_BADGE[tenant.status] ?? "gx-badge-info"}>
+            {STATUS_LABEL[tenant.status] ?? tenant.status}
+          </span>
+        </p>
+
+        <div className="mb-4">
+          <span className="gx-label">Plan</span>
+          <div className="flex gap-2">
+            <select
+              value={planCode}
+              onChange={(e) => setPlanCode(e.target.value)}
+              className="gx-input"
+            >
+              {planes.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={cambiarPlan}
+              disabled={guardando || planCode === tenant.plan}
+              className="gx-btn-secondary whitespace-nowrap"
+            >
+              Cambiar plan
+            </button>
+          </div>
+        </div>
+
+        <hr className="my-4 border-slate-200" />
+        <span className="gx-label">Estado del cliente</span>
+        <div className="flex flex-wrap gap-2">
+          {activo ? (
+            <button
+              type="button"
+              onClick={() => cambiarEstado("suspended")}
+              disabled={guardando}
+              className="gx-btn-danger"
+            >
+              Suspender
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => cambiarEstado("active")}
+              disabled={guardando}
+              className="gx-btn-primary"
+            >
+              Reactivar
+            </button>
+          )}
+          {tenant.status !== "cancelled" && (
+            <button
+              type="button"
+              onClick={() => cambiarEstado("cancelled")}
+              disabled={guardando}
+              className="gx-btn-ghost"
+            >
+              Cancelar cuenta
+            </button>
+          )}
+        </div>
+
+        {err && <p className="mt-4 text-danger text-sm">{err}</p>}
+        <div className="mt-5 flex justify-end">
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
+            Cerrar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
