@@ -120,6 +120,36 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
     });
     return updated;
   });
+
+  // Reprograma el próximo reintento de cobro de una factura abierta (dunning).
+  app.post("/invoices/:id/reintentar", async (req, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    const { fecha } = z.object({ fecha: z.string().datetime().optional() }).parse(req.body ?? {});
+    const invoice = await app.masterPrisma.invoice.findUnique({ where: { id } });
+    if (!invoice) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Factura no encontrada" });
+    }
+    if (invoice.status !== "open") {
+      return reply.code(409).send({
+        statusCode: 409,
+        error: "Conflict",
+        message: "Solo se puede reprogramar el cobro de una factura abierta",
+      });
+    }
+    const nextRetryAt = fecha ? new Date(fecha) : new Date();
+    const updated = await app.masterPrisma.invoice.update({ where: { id }, data: { nextRetryAt } });
+    await writeAudit(app.masterPrisma, {
+      actor: req.user.kind === "admin" ? req.user.email : "?",
+      action: "billing.invoice_retry_scheduled",
+      resource: "invoice",
+      resourceId: id,
+      metadata: { nextRetryAt: nextRetryAt.toISOString() },
+      ipAddress: req.ip,
+    });
+    return updated;
+  });
 };
 
 export default adminBillingOpsRoutes;

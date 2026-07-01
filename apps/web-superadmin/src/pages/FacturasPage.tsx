@@ -43,6 +43,16 @@ export function FacturasPage() {
 
   useEffect(() => cargar(), [cargar]);
 
+  async function reprogramar(inv: Invoice) {
+    setError(null);
+    try {
+      await api(`/admin/billing-ops/invoices/${inv.id}/reintentar`, { body: {} });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Error");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -88,6 +98,15 @@ export function FacturasPage() {
                   ${Number(inv.total).toLocaleString("es-MX")} {inv.currency}
                 </td>
                 <td className="gx-td text-right">
+                  {inv.status === "open" && (
+                    <button
+                      type="button"
+                      onClick={() => reprogramar(inv)}
+                      className="mr-3 font-semibold text-brand text-sm hover:underline"
+                    >
+                      Reprogramar cobro
+                    </button>
+                  )}
                   {inv.status !== "paid" && inv.status !== "void" && (
                     <button
                       type="button"

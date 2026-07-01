@@ -103,4 +103,53 @@ describe("ciclo de vida de tenants", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("detalle: métodos de pago vacíos y dunning por defecto", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/admin/tenants/${SLUG}/detalle`,
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    const d = res.json() as { paymentMethods: unknown[]; dunningPolicy: string };
+    expect(Array.isArray(d.paymentMethods)).toBe(true);
+    expect(d.paymentMethods).toHaveLength(0);
+    expect(d.dunningPolicy).toBe("default");
+  });
+
+  it("cambia la política de dunning y se refleja en el detalle", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/admin/tenants/${SLUG}/dunning`,
+      headers: auth(),
+      payload: { policy: "agresiva" },
+    });
+    expect(res.statusCode).toBe(200);
+    const det = await app.inject({
+      method: "GET",
+      url: `/admin/tenants/${SLUG}/detalle`,
+      headers: auth(),
+    });
+    expect((det.json() as { dunningPolicy: string }).dunningPolicy).toBe("agresiva");
+  });
+
+  it("política de dunning inválida → 400", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/admin/tenants/${SLUG}/dunning`,
+      headers: auth(),
+      payload: { policy: "loquesea" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("reprogramar cobro de factura inexistente → 404", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/billing-ops/invoices/inv-no-existe/reintentar",
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
+  });
 });

@@ -31,6 +31,10 @@ const estadoSchema = z.object({
 
 const cambiarPlanSchema = z.object({ planCode: z.string().min(2).max(40) });
 
+const dunningSchema = z.object({
+  policy: z.enum(["default", "agresiva", "suave", "ninguna"]),
+});
+
 /**
  * Alta y listado de clientes (tenants) desde el panel de plataforma. Crear hace
  * el onboarding completo (schema + migraciones + defaults + usuario dueño listo
@@ -200,6 +204,91 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
       ipAddress: req.ip,
     });
     return { slug, plan: plan.code, planNombre: plan.name };
+  });
+
+  // Detalle de facturación del cliente: métodos de pago y política de cobranza.
+  app.get("/:slug/detalle", async (req, reply) => {
+    const { slug } = slugParamSchema.parse(req.params);
+    const tenant = await app.masterPrisma.tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!tenant) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });
+    }
+    const [paymentMethods, settings] = await Promise.all([
+      app.masterPrisma.paymentMethod.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          type: true,
+          isDefault: true,
+          last4: true,
+          brand: true,
+          expMonth: true,
+          expYear: true,
+        },
+      }),
+      app.masterPrisma.tenantSettingsMaster.findUnique({
+        where: { tenantId: tenant.id },
+        select: { dunningPolicy: true, autoChargeEnabled: true },
+      }),
+    ]);
+    return {
+      paymentMethods,
+      dunningPolicy: settings?.dunningPolicy ?? "default",
+      autoChargeEnabled: settings?.autoChargeEnabled ?? true,
+    };
+  });
+
+  // Política de reintentos de cobro (dunning) del cliente.
+  app.patch("/:slug/dunning", async (req, reply) => {
+    if (!requireSuperadmin(req, reply)) return;
+    const { slug } = slugParamSchema.parse(req.params);
+    const body = dunningSchema.parse(req.body);
+    const tenant = await app.masterPrisma.tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!tenant) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });
+    }
+    const existing = await app.masterPrisma.tenantSettingsMaster.findUnique({
+      where: { tenantId: tenant.id },
+      select: { id: true },
+    });
+    if (existing) {
+      await app.masterPrisma.tenantSettingsMaster.update({
+        where: { tenantId: tenant.id },
+        data: { dunningPolicy: body.policy },
+      });
+    } else {
+      const admin = await app.masterPrisma.tenantUserAdmin.findFirst({
+        where: { tenantId: tenant.id },
+        select: { email: true },
+      });
+      await app.masterPrisma.tenantSettingsMaster.create({
+        data: {
+          tenantId: tenant.id,
+          billingEmail: admin?.email ?? `${slug}@sin-correo.local`,
+          dunningPolicy: body.policy,
+        },
+      });
+    }
+    await writeAudit(app.masterPrisma, {
+      actor: actorDe(req),
+      action: "tenant.dunning_updated",
+      resource: "tenant",
+      resourceId: slug,
+      metadata: { policy: body.policy },
+      ipAddress: req.ip,
+    });
+    return { slug, dunningPolicy: body.policy };
   });
 };
 

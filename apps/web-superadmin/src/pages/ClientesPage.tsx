@@ -45,6 +45,30 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archivado",
 };
 
+interface PaymentMethod {
+  id: string;
+  type: string;
+  isDefault: boolean;
+  last4: string | null;
+  brand: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+const PM_TIPO: Record<string, string> = {
+  card: "Tarjeta",
+  oxxo: "OXXO",
+  spei: "SPEI",
+  manual: "Manual",
+};
+
+const DUNNING: Record<string, string> = {
+  default: "Estándar",
+  agresiva: "Agresiva (más reintentos)",
+  suave: "Suave (menos reintentos)",
+  ninguna: "Sin reintentos",
+};
+
 export function ClientesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [nuevo, setNuevo] = useState(false);
@@ -173,6 +197,8 @@ function GestionarClienteModal({
 }) {
   const [planes, setPlanes] = useState<Plan[]>([]);
   const [planCode, setPlanCode] = useState(tenant.plan);
+  const [metodos, setMetodos] = useState<PaymentMethod[]>([]);
+  const [dunning, setDunning] = useState("default");
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -180,7 +206,15 @@ function GestionarClienteModal({
     api<Plan[]>("/admin/tenants/planes")
       .then(setPlanes)
       .catch(() => setPlanes([]));
-  }, []);
+    api<{ paymentMethods: PaymentMethod[]; dunningPolicy: string }>(
+      `/admin/tenants/${tenant.slug}/detalle`,
+    )
+      .then((d) => {
+        setMetodos(d.paymentMethods);
+        setDunning(d.dunningPolicy);
+      })
+      .catch(() => undefined);
+  }, [tenant.slug]);
 
   async function accion<T>(fn: () => Promise<T>) {
     setGuardando(true);
@@ -203,6 +237,10 @@ function GestionarClienteModal({
   const cambiarEstado = (status: string) =>
     accion(() =>
       api(`/admin/tenants/${tenant.slug}/estado`, { method: "PATCH", body: { status } }),
+    );
+  const guardarDunning = () =>
+    accion(() =>
+      api(`/admin/tenants/${tenant.slug}/dunning`, { method: "PATCH", body: { policy: dunning } }),
     );
 
   const activo = tenant.status === "active" || tenant.status === "trial";
@@ -275,6 +313,48 @@ function GestionarClienteModal({
               Cancelar cuenta
             </button>
           )}
+        </div>
+
+        <hr className="my-4 border-slate-200" />
+        <span className="gx-label">Métodos de pago</span>
+        {metodos.length === 0 ? (
+          <p className="text-slate-400 text-sm">Sin métodos de pago registrados.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {metodos.map((m) => (
+              <li key={m.id} className="flex items-center gap-2 text-slate-700">
+                <span className="font-medium">{PM_TIPO[m.type] ?? m.type}</span>
+                {m.brand && <span>{m.brand}</span>}
+                {m.last4 && <span className="text-slate-500">•••• {m.last4}</span>}
+                {m.expMonth && m.expYear && (
+                  <span className="text-slate-400">
+                    {String(m.expMonth).padStart(2, "0")}/{m.expYear}
+                  </span>
+                )}
+                {m.isDefault && <span className="gx-badge-info">Predet.</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <hr className="my-4 border-slate-200" />
+        <span className="gx-label">Cobranza (reintentos)</span>
+        <div className="flex gap-2">
+          <select value={dunning} onChange={(e) => setDunning(e.target.value)} className="gx-input">
+            {Object.entries(DUNNING).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={guardarDunning}
+            disabled={guardando}
+            className="gx-btn-secondary whitespace-nowrap"
+          >
+            Guardar política
+          </button>
         </div>
 
         {err && <p className="mt-4 text-danger text-sm">{err}</p>}
