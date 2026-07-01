@@ -22,30 +22,45 @@ export interface RecordatoriosConfig {
   citasHorasAntes: number;
   citasCanal: CanalRecordatorio;
   citasPlantilla: string;
+  vacunasActivo: boolean;
+  vacunasDiasAntes: number;
+  vacunasCanal: CanalRecordatorio;
+  vacunasPlantilla: string;
 }
 
-// Plantilla recomendada por el sistema (el dueño puede sobreescribirla). Usa
-// {{var}} (mismo render que campañas). Incluye el link de confirmación.
+// Plantillas recomendadas por el sistema (el dueño puede sobreescribirlas). Usan
+// {{var}} (mismo render que campañas). La de cita incluye el link de confirmación.
 export const PLANTILLA_CITA_DEFAULT =
   "Hola 👋 Te recordamos la cita de {{sujeto}} en {{clinica}} el {{fecha}} a las {{hora}}. " +
   "Confirma o reagenda aquí: {{link}}";
+export const PLANTILLA_VACUNA_DEFAULT =
+  "Hola 👋 A {{sujeto}} le toca su vacuna {{vacuna}} el {{fecha}}. " +
+  "Agenda su cita en {{clinica}} 🐾";
 
 const CANALES: ReadonlyArray<CanalRecordatorio> = ["whatsapp", "sms", "email"];
+function canalValido(c: string): CanalRecordatorio {
+  return CANALES.includes(c as CanalRecordatorio) ? (c as CanalRecordatorio) : "whatsapp";
+}
 
 function normalizaConfig(row: {
   citasActivo: boolean;
   citasHorasAntes: number;
   citasCanal: string;
   citasPlantilla: string | null;
+  vacunasActivo: boolean;
+  vacunasDiasAntes: number;
+  vacunasCanal: string;
+  vacunasPlantilla: string | null;
 }): RecordatoriosConfig {
-  const canal = CANALES.includes(row.citasCanal as CanalRecordatorio)
-    ? (row.citasCanal as CanalRecordatorio)
-    : "whatsapp";
   return {
     citasActivo: row.citasActivo,
     citasHorasAntes: row.citasHorasAntes,
-    citasCanal: canal,
+    citasCanal: canalValido(row.citasCanal),
     citasPlantilla: row.citasPlantilla ?? PLANTILLA_CITA_DEFAULT,
+    vacunasActivo: row.vacunasActivo,
+    vacunasDiasAntes: row.vacunasDiasAntes,
+    vacunasCanal: canalValido(row.vacunasCanal),
+    vacunasPlantilla: row.vacunasPlantilla ?? PLANTILLA_VACUNA_DEFAULT,
   };
 }
 
@@ -62,6 +77,10 @@ export interface ConfigRecordatoriosUpdate {
   citasHorasAntes?: number | undefined;
   citasCanal?: CanalRecordatorio | undefined;
   citasPlantilla?: string | null | undefined;
+  vacunasActivo?: boolean | undefined;
+  vacunasDiasAntes?: number | undefined;
+  vacunasCanal?: CanalRecordatorio | undefined;
+  vacunasPlantilla?: string | null | undefined;
 }
 
 export async function updateConfigRecordatorios(
@@ -76,6 +95,12 @@ export async function updateConfigRecordatorios(
     // "" desde la UI = volver a la plantilla recomendada (guardamos null).
     ...(input.citasPlantilla !== undefined
       ? { citasPlantilla: input.citasPlantilla ? input.citasPlantilla : null }
+      : {}),
+    ...(input.vacunasActivo !== undefined ? { vacunasActivo: input.vacunasActivo } : {}),
+    ...(input.vacunasDiasAntes !== undefined ? { vacunasDiasAntes: input.vacunasDiasAntes } : {}),
+    ...(input.vacunasCanal !== undefined ? { vacunasCanal: input.vacunasCanal } : {}),
+    ...(input.vacunasPlantilla !== undefined
+      ? { vacunasPlantilla: input.vacunasPlantilla ? input.vacunasPlantilla : null }
       : {}),
   };
   const row = actual
@@ -261,6 +286,177 @@ async function procesarCita(
         titulo: "Recordatorio de cita enviado",
         cuerpo: contenido,
         metadata: { citaId: cita.id, canal: cfg.citasCanal, destino },
+      },
+    });
+  }
+  return "enviada";
+}
+
+// ───────────────────── Recordatorios de próxima vacuna ───────────────────────
+
+interface VacunacionParaRecordatorio {
+  id: string;
+  fechaAplicacion: Date;
+  proximaAplicacionFecha: Date | null;
+  vacunaCatalogoId: string;
+  mascotaId: string | null;
+  pacienteId: string | null;
+  vacuna: { nombreComercial: string } | null;
+  mascota: {
+    nombre: string;
+    tutorClienteId: string | null;
+    tutor: { telefonoPrincipal: string | null; emailPrincipal: string | null } | null;
+  } | null;
+  paciente: {
+    nombre: string;
+    tutorClienteId: string | null;
+    telefonoPrincipal: string | null;
+    emailPrincipal: string | null;
+  } | null;
+}
+
+// El tutor/mascota puede reutilizar los mismos helpers de contacto que las citas.
+function contactoVacuna(v: VacunacionParaRecordatorio): {
+  tel: string | null;
+  mail: string | null;
+} {
+  return {
+    tel: v.mascota?.tutor?.telefonoPrincipal ?? v.paciente?.telefonoPrincipal ?? null,
+    mail: v.mascota?.tutor?.emailPrincipal ?? v.paciente?.emailPrincipal ?? null,
+  };
+}
+
+/**
+ * Manda el recordatorio de la PRÓXIMA vacuna a los sujetos cuya siguiente dosis
+ * cae dentro de la ventana `vacunasDiasAntes` (incluye vencidas). Solo la
+ * vacunación vigente por (sujeto, vacuna): si ya hay una posterior, esa dosis se
+ * considera cumplida y se marca sin enviar. Idempotente por
+ * `recordatorioProximaEnviadoAt`.
+ */
+export async function enviarRecordatoriosVacunas(
+  prisma: TenantClient,
+  providers: RecordatorioProviders,
+  opts: { clinicaNombre: string; ahora?: Date },
+): Promise<EnviarRecordatoriosResult> {
+  const cfg = await getConfigRecordatorios(prisma);
+  const res: EnviarRecordatoriosResult = {
+    evaluadas: 0,
+    enviadas: 0,
+    omitidasSinContacto: 0,
+    fallidas: 0,
+  };
+  if (!cfg.vacunasActivo) return res;
+
+  const ahora = opts.ahora ?? new Date();
+  const limite = new Date(ahora.getTime() + cfg.vacunasDiasAntes * 86_400_000);
+  const vacunaciones = await prisma.vacunacion.findMany({
+    where: {
+      recordatorioProximaEnviadoAt: null,
+      proximaAplicacionFecha: { not: null, lte: limite },
+    },
+    select: {
+      id: true,
+      fechaAplicacion: true,
+      proximaAplicacionFecha: true,
+      vacunaCatalogoId: true,
+      mascotaId: true,
+      pacienteId: true,
+      vacuna: { select: { nombreComercial: true } },
+      mascota: {
+        select: {
+          nombre: true,
+          tutorClienteId: true,
+          tutor: { select: { telefonoPrincipal: true, emailPrincipal: true } },
+        },
+      },
+      paciente: {
+        select: {
+          nombre: true,
+          tutorClienteId: true,
+          telefonoPrincipal: true,
+          emailPrincipal: true,
+        },
+      },
+    },
+    orderBy: { proximaAplicacionFecha: "asc" },
+  });
+  res.evaluadas = vacunaciones.length;
+
+  for (const v of vacunaciones) {
+    const r = await procesarVacuna(prisma, providers, cfg, opts.clinicaNombre, v);
+    if (r === "enviada") res.enviadas += 1;
+    else if (r === "omitida") res.omitidasSinContacto += 1;
+    else if (r === "fallida") res.fallidas += 1;
+    // "superada" no cuenta: es una dosis ya cumplida por una aplicación posterior.
+  }
+  return res;
+}
+
+async function procesarVacuna(
+  prisma: TenantClient,
+  providers: RecordatorioProviders,
+  cfg: RecordatoriosConfig,
+  clinicaNombre: string,
+  v: VacunacionParaRecordatorio,
+): Promise<"enviada" | "omitida" | "fallida" | "superada"> {
+  // ¿Hay una aplicación posterior de la misma vacuna al mismo sujeto? Entonces
+  // esta "próxima dosis" ya se cumplió: la marcamos para no re-evaluarla.
+  const posterior = await prisma.vacunacion.findFirst({
+    where: {
+      vacunaCatalogoId: v.vacunaCatalogoId,
+      fechaAplicacion: { gt: v.fechaAplicacion },
+      ...(v.mascotaId ? { mascotaId: v.mascotaId } : {}),
+      ...(v.pacienteId ? { pacienteId: v.pacienteId } : {}),
+    },
+    select: { id: true },
+  });
+  if (posterior) {
+    await prisma.vacunacion.update({
+      where: { id: v.id },
+      data: { recordatorioProximaEnviadoAt: new Date() },
+    });
+    return "superada";
+  }
+
+  const { tel, mail } = contactoVacuna(v);
+  const destino = cfg.vacunasCanal === "email" ? mail : tel;
+  if (!destino) return "omitida";
+
+  const proxima = v.proximaAplicacionFecha ?? new Date();
+  const variables = {
+    sujeto: v.mascota?.nombre ?? v.paciente?.nombre ?? "tu mascota",
+    vacuna: v.vacuna?.nombreComercial ?? "de refuerzo",
+    clinica: clinicaNombre || "la clínica",
+    fecha: fmtFecha(proxima),
+  };
+  const contenido = renderHandlebars(cfg.vacunasPlantilla, variables);
+
+  try {
+    await despachar(
+      providers,
+      cfg.vacunasCanal,
+      destino,
+      contenido,
+      `Recordatorio de vacuna — ${variables.sujeto}`,
+    );
+  } catch {
+    return "fallida";
+  }
+
+  await prisma.vacunacion.update({
+    where: { id: v.id },
+    data: { recordatorioProximaEnviadoAt: new Date() },
+  });
+  const clienteId = v.mascota?.tutorClienteId ?? v.paciente?.tutorClienteId ?? null;
+  if (clienteId) {
+    await prisma.notificacion.create({
+      data: {
+        destinatarioTipo: "cliente",
+        clienteId,
+        tipo: "recordatorio_vacuna",
+        titulo: "Recordatorio de vacuna enviado",
+        cuerpo: contenido,
+        metadata: { vacunacionId: v.id, canal: cfg.vacunasCanal, destino },
       },
     });
   }

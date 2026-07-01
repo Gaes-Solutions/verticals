@@ -257,13 +257,17 @@ model ConfigVentas {
 // recomendados por el sistema). Singleton por tenant. V1: citas (anti-no-show);
 // vacunas se suma en una iteración posterior reusando este mismo registro.
 model ConfigRecordatorios {
-  id              String   @id @default(cuid())
-  citasActivo     Boolean  @default(true) @map("citas_activo")
-  citasHorasAntes Int      @default(24) @map("citas_horas_antes")
-  citasCanal      String   @default("whatsapp") @map("citas_canal")
-  citasPlantilla  String?  @map("citas_plantilla")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(cuid())
+  citasActivo      Boolean  @default(true) @map("citas_activo")
+  citasHorasAntes  Int      @default(24) @map("citas_horas_antes")
+  citasCanal       String   @default("whatsapp") @map("citas_canal")
+  citasPlantilla   String?  @map("citas_plantilla")
+  vacunasActivo    Boolean  @default(true) @map("vacunas_activo")
+  vacunasDiasAntes Int      @default(7) @map("vacunas_dias_antes")
+  vacunasCanal     String   @default("whatsapp") @map("vacunas_canal")
+  vacunasPlantilla String?  @map("vacunas_plantilla")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("config_recordatorios")
 }
@@ -2962,6 +2966,7 @@ model Vacunacion {
   dosisAplicada            String?   @map("dosis_aplicada")
   reaccionAdversaObservada String?   @map("reaccion_adversa_observada")
   proximaAplicacionFecha   DateTime? @map("proxima_aplicacion_fecha")
+  recordatorioProximaEnviadoAt DateTime? @map("recordatorio_proxima_enviado_at")
   notas                    String?
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")

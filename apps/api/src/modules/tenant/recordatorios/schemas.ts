@@ -5,6 +5,10 @@ export const configRecordatoriosUpdateSchema = z.object({
   citasHorasAntes: z.number().int().min(1).max(168).optional(),
   citasCanal: z.enum(["whatsapp", "sms", "email"]).optional(),
   citasPlantilla: z.string().max(1000).nullable().optional(),
+  vacunasActivo: z.boolean().optional(),
+  vacunasDiasAntes: z.number().int().min(1).max(90).optional(),
+  vacunasCanal: z.enum(["whatsapp", "sms", "email"]).optional(),
+  vacunasPlantilla: z.string().max(1000).nullable().optional(),
 });
 
 export type ConfigRecordatoriosUpdateInput = z.infer<typeof configRecordatoriosUpdateSchema>;

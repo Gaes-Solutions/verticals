@@ -62,17 +62,47 @@ export function ConfigurarAgendaPage() {
   );
 }
 
+type Canal = "whatsapp" | "sms" | "email";
 interface RecordatoriosCfg {
   citasActivo: boolean;
   citasHorasAntes: number;
-  citasCanal: "whatsapp" | "sms" | "email";
+  citasCanal: Canal;
   citasPlantilla: string;
+  vacunasActivo: boolean;
+  vacunasDiasAntes: number;
+  vacunasCanal: Canal;
+  vacunasPlantilla: string;
 }
-const CANAL_LABEL: Record<RecordatoriosCfg["citasCanal"], string> = {
+const CANAL_LABEL: Record<Canal, string> = {
   whatsapp: "WhatsApp",
   sms: "SMS",
   email: "Correo",
 };
+
+function CanalSelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: Canal;
+  disabled: boolean;
+  onChange: (c: Canal) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as Canal)}
+      className="gx-input"
+    >
+      {(["whatsapp", "sms", "email"] as const).map((c) => (
+        <option key={c} value={c}>
+          {CANAL_LABEL[c]}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function RecordatoriosConfig({ gestiona }: { gestiona: boolean }) {
   const [cfg, setCfg] = useState<RecordatoriosCfg | null>(null);
@@ -93,12 +123,7 @@ function RecordatoriosConfig({ gestiona }: { gestiona: boolean }) {
     try {
       const upd = await api<RecordatoriosCfg>("/t/recordatorios/config", {
         method: "PATCH",
-        body: {
-          citasActivo: cfg.citasActivo,
-          citasHorasAntes: cfg.citasHorasAntes,
-          citasCanal: cfg.citasCanal,
-          citasPlantilla: cfg.citasPlantilla,
-        },
+        body: cfg,
       });
       setCfg(upd);
       setMsg("Guardado.");
@@ -109,15 +134,15 @@ function RecordatoriosConfig({ gestiona }: { gestiona: boolean }) {
     }
   }
 
-  async function enviarAhora() {
+  async function enviarAhora(path: string, sujeto: string) {
     setMsg(null);
     try {
       const r = await api<{ evaluadas: number; enviadas: number; omitidasSinContacto: number }>(
-        "/t/recordatorios/enviar",
+        path,
         { method: "POST" },
       );
       setMsg(
-        `Barrido: ${r.enviadas} enviado(s), ${r.omitidasSinContacto} sin contacto, de ${r.evaluadas} cita(s) próximas.`,
+        `Barrido: ${r.enviadas} enviado(s), ${r.omitidasSinContacto} sin contacto, de ${r.evaluadas} ${sujeto}.`,
       );
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : "No se pudo enviar");
@@ -127,90 +152,161 @@ function RecordatoriosConfig({ gestiona }: { gestiona: boolean }) {
   if (!cfg) {
     return (
       <section className="rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-semibold text-slate-800">Recordatorios de citas</h2>
+        <h2 className="mb-1 font-semibold text-slate-800">Recordatorios</h2>
         <p className="text-slate-400 text-sm">Cargando…</p>
       </section>
     );
   }
 
   return (
-    <section className="rounded-xl bg-white p-5 shadow-sm">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-slate-800">Recordatorios de citas</h2>
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={cfg.citasActivo}
+    <section className="space-y-6">
+      {/* ---- Citas ---- */}
+      <div className="rounded-xl bg-white p-5 shadow-sm">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h2 className="font-semibold text-slate-800">Recordatorios de citas</h2>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={cfg.citasActivo}
+              disabled={!gestiona}
+              onChange={(e) => setCfg({ ...cfg, citasActivo: e.target.checked })}
+              className="h-4 w-4 accent-brand"
+            />
+            <span className="text-slate-600">{cfg.citasActivo ? "Activos" : "Apagados"}</span>
+          </label>
+        </div>
+        <p className="mb-4 text-slate-500 text-sm">
+          Avisamos al tutor antes de su cita con un link para confirmar o reagendar. Reduce las
+          inasistencias.{" "}
+          <span className="text-slate-400">Recomendado: activo, 24 h antes, por WhatsApp.</span>
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="gx-label">Anticipación (horas antes)</span>
+            <input
+              type="number"
+              min={1}
+              max={168}
+              value={cfg.citasHorasAntes}
+              disabled={!gestiona}
+              onChange={(e) =>
+                setCfg({ ...cfg, citasHorasAntes: Number.parseInt(e.target.value, 10) || 24 })
+              }
+              className="gx-input"
+            />
+          </label>
+          <div className="block">
+            <span className="gx-label">Canal de envío</span>
+            <CanalSelect
+              value={cfg.citasCanal}
+              disabled={!gestiona}
+              onChange={(c) => setCfg({ ...cfg, citasCanal: c })}
+            />
+          </div>
+        </div>
+        <label className="mt-3 block">
+          <span className="gx-label">Mensaje</span>
+          <textarea
+            value={cfg.citasPlantilla}
             disabled={!gestiona}
-            onChange={(e) => setCfg({ ...cfg, citasActivo: e.target.checked })}
-            className="h-4 w-4 accent-brand"
-          />
-          <span className="text-slate-600">{cfg.citasActivo ? "Activos" : "Apagados"}</span>
-        </label>
-      </div>
-      <p className="mb-4 text-slate-500 text-sm">
-        Avisamos al tutor antes de su cita con un link para confirmar o reagendar. Reduce las
-        inasistencias.{" "}
-        <span className="text-slate-400">Recomendado: activo, 24 h antes, por WhatsApp.</span>
-      </p>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="gx-label">Anticipación (horas antes)</span>
-          <input
-            type="number"
-            min={1}
-            max={168}
-            value={cfg.citasHorasAntes}
-            disabled={!gestiona}
-            onChange={(e) =>
-              setCfg({ ...cfg, citasHorasAntes: Number.parseInt(e.target.value, 10) || 24 })
-            }
+            onChange={(e) => setCfg({ ...cfg, citasPlantilla: e.target.value })}
+            rows={3}
             className="gx-input"
           />
+          <span className="mt-1 block text-slate-400 text-xs">
+            Variables: {"{{sujeto}}"} {"{{clinica}}"} {"{{fecha}}"} {"{{hora}}"} {"{{link}}"}
+          </span>
         </label>
-        <label className="block">
-          <span className="gx-label">Canal de envío</span>
-          <select
-            value={cfg.citasCanal}
-            disabled={!gestiona}
-            onChange={(e) =>
-              setCfg({ ...cfg, citasCanal: e.target.value as RecordatoriosCfg["citasCanal"] })
-            }
-            className="gx-input"
-          >
-            {(["whatsapp", "sms", "email"] as const).map((c) => (
-              <option key={c} value={c}>
-                {CANAL_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </label>
+        {gestiona && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => enviarAhora("/t/recordatorios/enviar", "cita(s) próximas")}
+              className="gx-btn-secondary"
+            >
+              Enviar ahora
+            </button>
+          </div>
+        )}
       </div>
 
-      <label className="mt-3 block">
-        <span className="gx-label">Mensaje</span>
-        <textarea
-          value={cfg.citasPlantilla}
-          disabled={!gestiona}
-          onChange={(e) => setCfg({ ...cfg, citasPlantilla: e.target.value })}
-          rows={3}
-          className="gx-input"
-        />
-        <span className="mt-1 block text-slate-400 text-xs">
-          Variables: {"{{sujeto}}"} {"{{clinica}}"} {"{{fecha}}"} {"{{hora}}"} {"{{link}}"}
-        </span>
-      </label>
+      {/* ---- Vacunas ---- */}
+      <div className="rounded-xl bg-white p-5 shadow-sm">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h2 className="font-semibold text-slate-800">Recordatorios de vacunas</h2>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={cfg.vacunasActivo}
+              disabled={!gestiona}
+              onChange={(e) => setCfg({ ...cfg, vacunasActivo: e.target.checked })}
+              className="h-4 w-4 accent-brand"
+            />
+            <span className="text-slate-600">{cfg.vacunasActivo ? "Activos" : "Apagados"}</span>
+          </label>
+        </div>
+        <p className="mb-4 text-slate-500 text-sm">
+          Avisamos al tutor cuando se acerca la próxima dosis de su mascota. Evita que se venzan las
+          vacunas.{" "}
+          <span className="text-slate-400">Recomendado: activo, 7 días antes, por WhatsApp.</span>
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="gx-label">Anticipación (días antes)</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={cfg.vacunasDiasAntes}
+              disabled={!gestiona}
+              onChange={(e) =>
+                setCfg({ ...cfg, vacunasDiasAntes: Number.parseInt(e.target.value, 10) || 7 })
+              }
+              className="gx-input"
+            />
+          </label>
+          <div className="block">
+            <span className="gx-label">Canal de envío</span>
+            <CanalSelect
+              value={cfg.vacunasCanal}
+              disabled={!gestiona}
+              onChange={(c) => setCfg({ ...cfg, vacunasCanal: c })}
+            />
+          </div>
+        </div>
+        <label className="mt-3 block">
+          <span className="gx-label">Mensaje</span>
+          <textarea
+            value={cfg.vacunasPlantilla}
+            disabled={!gestiona}
+            onChange={(e) => setCfg({ ...cfg, vacunasPlantilla: e.target.value })}
+            rows={3}
+            className="gx-input"
+          />
+          <span className="mt-1 block text-slate-400 text-xs">
+            Variables: {"{{sujeto}}"} {"{{vacuna}}"} {"{{fecha}}"} {"{{clinica}}"}
+          </span>
+        </label>
+        {gestiona && (
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => enviarAhora("/t/recordatorios/enviar-vacunas", "vacuna(s) por vencer")}
+              className="gx-btn-secondary"
+            >
+              Enviar ahora
+            </button>
+          </div>
+        )}
+      </div>
 
-      {msg && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-slate-600 text-sm">{msg}</p>}
-
+      {msg && (
+        <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-600 text-sm shadow-sm">{msg}</p>
+      )}
       {gestiona && (
-        <div className="mt-3 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={enviarAhora} className="gx-btn-secondary">
-            Enviar ahora
-          </button>
+        <div className="flex justify-end">
           <button type="button" onClick={guardar} disabled={guardando} className="gx-btn-primary">
-            {guardando ? "Guardando…" : "Guardar"}
+            {guardando ? "Guardando…" : "Guardar configuración"}
           </button>
         </div>
       )}

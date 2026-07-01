@@ -13,6 +13,7 @@ import {
   citaPublicaPorToken,
   confirmarCitaPublica,
   enviarRecordatoriosCitas,
+  enviarRecordatoriosVacunas,
   getConfigRecordatorios,
   updateConfigRecordatorios,
 } from "./service.js";
@@ -57,6 +58,20 @@ const recordatoriosRoutes: FastifyPluginAsync = async (app) => {
         clinicaNombre: "",
         baseUrl: config.PUBLIC_BASE_URL,
       },
+    );
+  });
+
+  app.post("/enviar-vacunas", async (req) => {
+    req.requirePerm(PERMISSIONS.AGENDA_GESTIONAR);
+    const factory = app.mensajeriaProviderFactory;
+    return enviarRecordatoriosVacunas(
+      req.tenantPrisma,
+      {
+        whatsapp: factory("whatsapp"),
+        sms: factory("sms"),
+        email: app.emailProviderFactory(),
+      },
+      { clinicaNombre: "" },
     );
   });
 };

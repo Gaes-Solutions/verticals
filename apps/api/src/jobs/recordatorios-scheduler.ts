@@ -3,13 +3,14 @@ import type { FastifyBaseLogger } from "fastify";
 import {
   type RecordatorioProviders,
   enviarRecordatoriosCitas,
+  enviarRecordatoriosVacunas,
 } from "../modules/tenant/recordatorios/service.js";
 import type { EmailProviderFactory } from "../plugins/email.js";
 import type { MensajeriaProviderFactory } from "../plugins/mensajeria.js";
 
 const TENANT_STATUS_ACTIVOS = ["trial", "active", "past_due"] as const;
 
-/** Manda los recordatorios de citas próximas de cada tenant activo. */
+/** Manda los recordatorios de citas y vacunas próximas de cada tenant activo. */
 export async function runRecordatoriosTodosLosTenants(
   log: FastifyBaseLogger,
   providers: RecordatorioProviders,
@@ -23,14 +24,23 @@ export async function runRecordatoriosTodosLosTenants(
   let enviadas = 0;
   for (const t of tenants) {
     try {
-      const res = await enviarRecordatoriosCitas(getTenantClient(t.slug), providers, {
+      const client = getTenantClient(t.slug);
+      const citas = await enviarRecordatoriosCitas(client, providers, {
         tenantSlug: t.slug,
         clinicaNombre: t.name,
         baseUrl,
       });
-      enviadas += res.enviadas;
-      if (res.enviadas > 0 || res.fallidas > 0) {
-        log.info({ tenant: t.slug, ...res }, "recordatorios de citas enviados");
+      const vacunas = await enviarRecordatoriosVacunas(client, providers, {
+        clinicaNombre: t.name,
+      });
+      enviadas += citas.enviadas + vacunas.enviadas;
+      if (
+        citas.enviadas > 0 ||
+        citas.fallidas > 0 ||
+        vacunas.enviadas > 0 ||
+        vacunas.fallidas > 0
+      ) {
+        log.info({ tenant: t.slug, citas, vacunas }, "recordatorios enviados");
       }
     } catch (err) {
       log.error({ err, tenant: t.slug }, "fallo al enviar recordatorios del tenant");
