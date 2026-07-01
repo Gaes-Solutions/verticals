@@ -452,7 +452,7 @@ model PartnerInvitacion {
 }
 
 // ============================================================
-// HITO 4.3 — Portal Doctoralia (Modelo 4.17, master DB cross-tenant)
+// HITO 4.3 — Portal / marketplace de citas (Modelo 4.17, master DB cross-tenant)
 // Perfiles médicos publicables + búsqueda + reseñas portables al médico.
 // Reservas portal→tenant y telemedicina Daily.co diferidos a 4.3 fase 2.
 // ============================================================
@@ -574,7 +574,7 @@ enum PhrAuditAction {
 
 /**
  * Paciente del PHR cross-tenant. Identidad principal = phoneE164 (WhatsApp, ref.
- * Apple Health/Doctoralia). email opcional sigue sirviendo a reseñas Doctoralia.
+ * Apple Health, etc.). email opcional sigue sirviendo a las reseñas del marketplace.
  * Cifrado at-rest de campos sensibles diferido a hito de hardening.
  */
 model PacienteMaster {
@@ -874,7 +874,7 @@ model PublicReview {
 }
 
 /**
- * Reserva de cita hecha desde el portal público (Doctoralia). Vive en master
+ * Reserva de cita hecha desde el portal público (marketplace). Vive en master
  * porque el paciente es cross-tenant; al confirmarla, el tenant del profesional
  * crea una Cita local y guarda su id en `citaIdLocal`. Snapshot de contacto para
  * no depender del paciente master en el tenant.

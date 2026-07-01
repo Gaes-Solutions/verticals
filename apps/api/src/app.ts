@@ -17,11 +17,11 @@ import {
   billingWebhookRoutes,
 } from "./modules/billing/routes.js";
 import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
-import doctoraliaTenantRoutes, {
-  doctoraliaAdminRoutes,
-  doctoraliaPublicRoutes,
-} from "./modules/doctoralia/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import marketplaceTenantRoutes, {
+  marketplaceAdminRoutes,
+  marketplacePublicRoutes,
+} from "./modules/marketplace/routes.js";
 import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
 import phrTenantRoutes, {
   patientAuthRoutes,
@@ -177,8 +177,8 @@ export async function buildApp(
   await app.register(adminRolesPlantillaRoutes, { prefix: "/admin/roles-plantilla" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(partnersPublicRoutes);
-  await app.register(doctoraliaAdminRoutes);
-  await app.register(doctoraliaPublicRoutes);
+  await app.register(marketplaceAdminRoutes);
+  await app.register(marketplacePublicRoutes);
   await app.register(patientAuthRoutes, { prefix: "/auth/patient" });
   await app.register(patientPortalRoutes, { prefix: "/patient-portal" });
   await app.register(patientEmergencyPublicRoutes);
@@ -259,7 +259,7 @@ export async function buildApp(
       await tenantApp.register(segmentosRoutes, { prefix: "/segmentos" });
       await tenantApp.register(campanasRoutes, { prefix: "/campanas" });
       await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
-      await tenantApp.register(doctoraliaTenantRoutes, { prefix: "/doctoralia" });
+      await tenantApp.register(marketplaceTenantRoutes, { prefix: "/marketplace" });
       await tenantApp.register(phrTenantRoutes, { prefix: "/phr" });
       await tenantApp.register(syncRoutes, { prefix: "/sync" });
     },

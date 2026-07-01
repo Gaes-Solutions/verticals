@@ -58,7 +58,7 @@ export function ReservasPage() {
   const cargar = useCallback(() => {
     setCargando(true);
     const qs = filtro ? `?status=${filtro}` : "";
-    api<Reserva[]>(`/t/doctoralia/reservas${qs}`)
+    api<Reserva[]>(`/t/marketplace/reservas${qs}`)
       .then((r) => setItems(r ?? []))
       .catch(() => setItems([]))
       .finally(() => setCargando(false));
@@ -69,7 +69,7 @@ export function ReservasPage() {
     setOcupada(id);
     setMsg(null);
     try {
-      const r = await api<{ folio: string }>(`/t/doctoralia/reservas/${id}/confirmar`, {
+      const r = await api<{ folio: string }>(`/t/marketplace/reservas/${id}/confirmar`, {
         method: "POST",
         body: {},
       });
@@ -88,7 +88,7 @@ export function ReservasPage() {
     setOcupada(id);
     setMsg(null);
     try {
-      await api(`/t/doctoralia/reservas/${id}/rechazar`, {
+      await api(`/t/marketplace/reservas/${id}/rechazar`, {
         method: "POST",
         body: { motivo: motivo.trim() },
       });

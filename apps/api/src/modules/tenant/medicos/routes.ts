@@ -22,7 +22,7 @@ const medicoUpsertSchema = z.object({
   aceptaSeguros: z.array(z.string()).optional(),
   firmaElectronicaUrl: z.string().url().max(500).optional(),
   aceptaTelemedicina: z.boolean().optional(),
-  isPerfilPublicoDoctoralia: z.boolean().optional(),
+  isPerfilPublicoMarketplace: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -49,8 +49,8 @@ function buildMedicoUpsertData(body: MedicoUpsertBody): Record<string, unknown> 
     ...(body.aceptaTelemedicina !== undefined
       ? { aceptaTelemedicina: body.aceptaTelemedicina }
       : {}),
-    ...(body.isPerfilPublicoDoctoralia !== undefined
-      ? { isPerfilPublicoDoctoralia: body.isPerfilPublicoDoctoralia }
+    ...(body.isPerfilPublicoMarketplace !== undefined
+      ? { isPerfilPublicoMarketplace: body.isPerfilPublicoMarketplace }
       : {}),
     ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
   };

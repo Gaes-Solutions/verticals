@@ -8,14 +8,14 @@ import type {
 } from "@gaespos/db";
 import Decimal from "decimal.js";
 
-export class DoctoraliaError extends Error {
+export class MarketplaceError extends Error {
   constructor(
     public readonly statusCode: number,
     message: string,
     public readonly extra?: Record<string, unknown>,
   ) {
     super(message);
-    this.name = "DoctoraliaError";
+    this.name = "MarketplaceError";
   }
 }
 
@@ -183,9 +183,9 @@ async function getProfesionalDelTenant(
   tenantId: string,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   if (prof.tenantIdPrincipal !== tenantId) {
-    throw new DoctoraliaError(403, "El perfil no pertenece a este tenant");
+    throw new MarketplaceError(403, "El perfil no pertenece a este tenant");
   }
   return prof;
 }
@@ -197,10 +197,10 @@ export async function enviarPerfilARevision(
 ): Promise<PublicProfessional> {
   const prof = await getProfesionalDelTenant(master, professionalId, tenantId);
   if (!prof.cedulaProfesional) {
-    throw new DoctoraliaError(409, "No se puede enviar a revisión sin cédula profesional");
+    throw new MarketplaceError(409, "No se puede enviar a revisión sin cédula profesional");
   }
   if (prof.status !== "borrador" && prof.status !== "suspendido") {
-    throw new DoctoraliaError(409, `No se puede enviar a revisión desde estado ${prof.status}`);
+    throw new MarketplaceError(409, `No se puede enviar a revisión desde estado ${prof.status}`);
   }
   return master.publicProfessional.update({
     where: { id: professionalId },
@@ -221,9 +221,12 @@ export async function validarPerfilPorAdmin(
   input: ValidarAdminInput,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   if (prof.status !== "en_revision") {
-    throw new DoctoraliaError(409, `Solo se valida un perfil en_revision (actual: ${prof.status})`);
+    throw new MarketplaceError(
+      409,
+      `Solo se valida un perfil en_revision (actual: ${prof.status})`,
+    );
   }
   const now = new Date();
   if (!input.aprobar) {
@@ -249,7 +252,7 @@ export async function suspenderPerfil(
   professionalId: string,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   await master.publicProfessionalSearchIndex
     .delete({ where: { professionalId } })
     .catch(() => undefined);
@@ -318,7 +321,7 @@ export async function refreshSearchIndex(
     where: { id: professionalId },
     include: { ubicaciones: { where: { activa: true } } },
   });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
 
   if (prof.status !== "publicado") {
     await master.publicProfessionalSearchIndex
@@ -467,7 +470,7 @@ export async function obtenerPerfilPublico(
     },
   });
   if (!prof || prof.status !== "publicado") {
-    throw new DoctoraliaError(404, "Profesional no encontrado");
+    throw new MarketplaceError(404, "Profesional no encontrado");
   }
   return prof;
 }
@@ -507,7 +510,7 @@ export async function confirmarPacienteMaster(
   email: string,
 ): Promise<PacienteMaster> {
   const paciente = await master.pacienteMaster.findUnique({ where: { email } });
-  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
   if (paciente.otpVerificadoAt) return paciente;
   return master.pacienteMaster.update({
     where: { email },
@@ -553,21 +556,21 @@ export async function crearResena(
     select: { id: true, status: true },
   });
   if (!prof || prof.status !== "publicado") {
-    throw new DoctoraliaError(404, "Profesional no disponible para reseñas");
+    throw new MarketplaceError(404, "Profesional no disponible para reseñas");
   }
   const paciente = await master.pacienteMaster.findUnique({
     where: { email: input.pacienteEmail },
   });
-  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
   if (!paciente.otpVerificadoAt) {
-    throw new DoctoraliaError(403, "El paciente debe verificar su identidad antes de reseñar");
+    throw new MarketplaceError(403, "El paciente debe verificar su identidad antes de reseñar");
   }
 
   const existente = await master.publicReview.findFirst({
     where: { professionalId: input.professionalId, pacienteMasterId: paciente.id },
   });
   if (existente) {
-    throw new DoctoraliaError(409, "El paciente ya reseñó a este profesional");
+    throw new MarketplaceError(409, "El paciente ya reseñó a este profesional");
   }
 
   const moderacion = moderarTextoResena(input.comentario);
@@ -606,9 +609,9 @@ async function getReviewDelProfesional(
   professionalId: string,
 ): Promise<PublicReview> {
   const review = await master.publicReview.findUnique({ where: { id: reviewId } });
-  if (!review) throw new DoctoraliaError(404, "Reseña no encontrada");
+  if (!review) throw new MarketplaceError(404, "Reseña no encontrada");
   if (review.professionalId !== professionalId) {
-    throw new DoctoraliaError(403, "La reseña no pertenece a este profesional");
+    throw new MarketplaceError(403, "La reseña no pertenece a este profesional");
   }
   return review;
 }
@@ -621,7 +624,7 @@ export async function responderResena(
 ): Promise<PublicReview> {
   const review = await getReviewDelProfesional(master, reviewId, professionalId);
   if (review.moderacionStatus !== "publicado") {
-    throw new DoctoraliaError(409, "Solo se puede responder una reseña publicada");
+    throw new MarketplaceError(409, "Solo se puede responder una reseña publicada");
   }
   return master.publicReview.update({
     where: { id: reviewId },
@@ -655,7 +658,7 @@ export async function moderarResenaAdmin(
   aprobar: boolean,
 ): Promise<PublicReview> {
   const review = await master.publicReview.findUnique({ where: { id: reviewId } });
-  if (!review) throw new DoctoraliaError(404, "Reseña no encontrada");
+  if (!review) throw new MarketplaceError(404, "Reseña no encontrada");
   const updated = await master.publicReview.update({
     where: { id: reviewId },
     data: aprobar
@@ -687,17 +690,17 @@ export async function reservarCita(master: MasterPrismaClient, input: ReservarCi
     where: { id: input.professionalId },
   });
   if (!prof || prof.status !== "publicado") {
-    throw new DoctoraliaError(404, "Profesional no encontrado");
+    throw new MarketplaceError(404, "Profesional no encontrado");
   }
   const paciente = await master.pacienteMaster.findUnique({
     where: { id: input.pacienteMasterId },
   });
-  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
   if (!paciente.otpVerificadoAt) {
-    throw new DoctoraliaError(403, "El paciente debe verificar su cuenta antes de reservar");
+    throw new MarketplaceError(403, "El paciente debe verificar su cuenta antes de reservar");
   }
   if (input.modalidad === "telemedicina" && !prof.aceptaTelemedicina) {
-    throw new DoctoraliaError(409, "Este profesional no ofrece telemedicina");
+    throw new MarketplaceError(409, "Este profesional no ofrece telemedicina");
   }
   return master.publicBooking.create({
     data: {
@@ -782,17 +785,17 @@ export async function confirmarReserva(
 ): Promise<{ bookingId: string; citaId: string; folio: string; pacienteId: string }> {
   const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
   if (!booking || booking.tenantId !== tenantId) {
-    throw new DoctoraliaError(404, "Reserva no encontrada");
+    throw new MarketplaceError(404, "Reserva no encontrada");
   }
   if (booking.status !== "pendiente") {
-    throw new DoctoraliaError(409, `La reserva ya está "${booking.status}"`);
+    throw new MarketplaceError(409, `La reserva ya está "${booking.status}"`);
   }
   const medicoUsuarioId = medicoUsuarioIdOverride ?? booking.medicoIdLocal;
   if (!medicoUsuarioId) {
-    throw new DoctoraliaError(400, "No se pudo determinar el médico; indica medicoUsuarioId");
+    throw new MarketplaceError(400, "No se pudo determinar el médico; indica medicoUsuarioId");
   }
   const sucursal = await tenant.sucursal.findFirst({ select: { id: true, codigo: true } });
-  if (!sucursal) throw new DoctoraliaError(400, "El tenant no tiene sucursal configurada");
+  if (!sucursal) throw new MarketplaceError(400, "El tenant no tiene sucursal configurada");
 
   const pacienteId = await upsertPacienteLocal(tenant, booking);
   const cita = await tenant.$transaction(async (tx) => {
@@ -805,7 +808,7 @@ export async function confirmarReserva(
         sucursalId: sucursal.id,
         fechaProgramada: booking.fechaHora,
         estado: "confirmada",
-        motivoTexto: booking.motivo ?? "Cita agendada desde Doctoralia",
+        motivoTexto: booking.motivo ?? "Cita agendada en línea",
       },
       select: { id: true, folio: true },
     });
@@ -826,10 +829,10 @@ export async function rechazarReserva(
 ) {
   const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
   if (!booking || booking.tenantId !== tenantId) {
-    throw new DoctoraliaError(404, "Reserva no encontrada");
+    throw new MarketplaceError(404, "Reserva no encontrada");
   }
   if (booking.status !== "pendiente") {
-    throw new DoctoraliaError(409, `La reserva ya está "${booking.status}"`);
+    throw new MarketplaceError(409, `La reserva ya está "${booking.status}"`);
   }
   return master.publicBooking.update({
     where: { id: bookingId },

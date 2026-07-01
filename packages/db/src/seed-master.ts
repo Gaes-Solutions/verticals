@@ -103,7 +103,7 @@ const PLAN_CONFIG = [
       dominio_custom: ["bool", "true"],
       salud_basico: ["bool", "true"],
       salud_n3_hospitalizacion: ["bool", "true"],
-      marketplace_doctoralia: ["bool", "true"],
+      marketplace_citas: ["bool", "true"],
       phr_unificado: ["bool", "true"],
       partners_panel: ["bool", "true"],
     },

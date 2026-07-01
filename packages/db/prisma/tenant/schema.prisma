@@ -2494,7 +2494,7 @@ model Medico {
   aceptaSeguros             Json     @default("[]") @map("acepta_seguros")
   firmaElectronicaUrl       String?  @map("firma_electronica_url")
   aceptaTelemedicina        Boolean  @default(false) @map("acepta_telemedicina")
-  isPerfilPublicoDoctoralia Boolean  @default(false) @map("is_perfil_publico_doctoralia")
+  isPerfilPublicoMarketplace Boolean @default(false) @map("is_perfil_publico_marketplace")
   isActive                  Boolean  @default(true) @map("is_active")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")

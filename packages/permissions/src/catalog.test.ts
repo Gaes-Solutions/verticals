@@ -44,10 +44,10 @@ describe("catalog", () => {
     expect(isKnownPermission("")).toBe(false);
   });
 
-  it("filtra por vertical: retail no ve salud/doctoralia, sí ecommerce", () => {
+  it("filtra por vertical: retail no ve salud/marketplace, sí ecommerce", () => {
     const retail = listPermissionsByCategory("retail_mayoreo");
     expect(retail.pacientes).toBeUndefined();
-    expect(retail.doctoralia).toBeUndefined();
+    expect(retail.marketplace).toBeUndefined();
     expect(retail.consultas).toBeUndefined();
     expect(retail.recargas).toBeUndefined();
     expect(retail.ecommerce).toBeDefined();
