@@ -51,7 +51,7 @@ type Seccion =
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
 const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "agenda", label: "Agenda del día", icon: CalendarDays, perm: "citas.leer" },
-  { key: "reservas", label: "Reservas Doctoralia", icon: CalendarCheck, perm: "citas.leer" },
+  { key: "reservas", label: "Reservas en línea", icon: CalendarCheck, perm: "citas.leer" },
   { key: "pacientes", label: "Pacientes", icon: UserRound, perm: "pacientes.leer" },
   { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
   { key: "soap", label: "Consulta SOAP", icon: ClipboardList, perm: "consultas.crear" },

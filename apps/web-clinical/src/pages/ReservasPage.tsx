@@ -102,7 +102,7 @@ export function ReservasPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 font-bold text-2xl text-slate-800">Reservas Doctoralia</h1>
+      <h1 className="mb-1 font-bold text-2xl text-slate-800">Reservas en línea</h1>
       <p className="mb-4 text-slate-500 text-sm">
         Citas solicitadas desde el portal público. Al confirmar se agendan en tu agenda.
       </p>
