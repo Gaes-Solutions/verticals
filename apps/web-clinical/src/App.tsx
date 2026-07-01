@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FlaskConical,
   FolderHeart,
+  IdCard,
   type LucideIcon,
   Menu,
   Pill,
@@ -25,6 +26,7 @@ import { ExpedientesPage } from "./pages/ExpedientesPage.js";
 import { HospitalizacionPage } from "./pages/HospitalizacionPage.js";
 import { ImagenologiaPage } from "./pages/ImagenologiaPage.js";
 import { LaboratorioPage } from "./pages/LaboratorioPage.js";
+import { MarketplacePerfilPage } from "./pages/MarketplacePerfilPage.js";
 import { PacientesPage } from "./pages/PacientesPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
 import { ReservasPage } from "./pages/ReservasPage.js";
@@ -45,6 +47,7 @@ type Seccion =
   | "laboratorio"
   | "imagenologia"
   | "cartilla"
+  | "miperfil"
   | "configagenda";
 
 // `perm` = permiso de lectura que exige la pantalla. La UI oculta el item si el
@@ -65,6 +68,12 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "laboratorio", label: "Laboratorio", icon: FlaskConical, perm: "laboratorio.leer" },
   { key: "imagenologia", label: "Imagenología", icon: ScanLine, perm: "imagenologia.leer" },
   { key: "cartilla", label: "Cartilla / Vacunas", icon: Syringe, perm: "vacunas.leer" },
+  {
+    key: "miperfil",
+    label: "Mi perfil público",
+    icon: IdCard,
+    perm: "marketplace.perfil_gestionar",
+  },
   { key: "configagenda", label: "Configurar agenda", icon: CalendarCog, perm: "agenda.gestionar" },
 ];
 
@@ -79,6 +88,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   laboratorio: LaboratorioPage,
   imagenologia: ImagenologiaPage,
   cartilla: CartillaPage,
+  miperfil: MarketplacePerfilPage,
   configagenda: ConfigurarAgendaPage,
 };
 
