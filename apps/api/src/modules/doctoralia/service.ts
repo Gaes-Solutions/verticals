@@ -665,3 +665,174 @@ export async function moderarResenaAdmin(
   await recalcularScoreProfesional(master, review.professionalId);
   return updated;
 }
+
+// ─────────────────────────── Reservas (bookings) ────────────────────────────
+
+import type { TenantPrismaClient } from "@gaespos/db";
+import { nextCitaFolio } from "../tenant/citas/service.js";
+import { nextNumeroExpediente } from "../tenant/pacientes/service.js";
+
+export interface ReservarCitaInput {
+  professionalId: string;
+  pacienteMasterId: string;
+  locationId?: string | undefined;
+  fechaHora: string;
+  modalidad: "presencial" | "telemedicina";
+  motivo?: string | undefined;
+}
+
+/** Un paciente verificado reserva una cita con un profesional publicado. */
+export async function reservarCita(master: MasterPrismaClient, input: ReservarCitaInput) {
+  const prof = await master.publicProfessional.findUnique({
+    where: { id: input.professionalId },
+  });
+  if (!prof || prof.status !== "publicado") {
+    throw new DoctoraliaError(404, "Profesional no encontrado");
+  }
+  const paciente = await master.pacienteMaster.findUnique({
+    where: { id: input.pacienteMasterId },
+  });
+  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
+  if (!paciente.otpVerificadoAt) {
+    throw new DoctoraliaError(403, "El paciente debe verificar su cuenta antes de reservar");
+  }
+  if (input.modalidad === "telemedicina" && !prof.aceptaTelemedicina) {
+    throw new DoctoraliaError(409, "Este profesional no ofrece telemedicina");
+  }
+  return master.publicBooking.create({
+    data: {
+      professionalId: prof.id,
+      tenantId: prof.tenantIdPrincipal,
+      medicoIdLocal: prof.medicoIdLocal,
+      pacienteMasterId: paciente.id,
+      pacienteNombre: [paciente.nombre, paciente.apellidos].filter(Boolean).join(" "),
+      pacienteTelefono: paciente.telefono ?? paciente.phoneE164,
+      pacienteEmail: paciente.email,
+      fechaHora: new Date(input.fechaHora),
+      modalidad: input.modalidad,
+      ...(input.locationId ? { locationId: input.locationId } : {}),
+      ...(input.motivo ? { motivo: input.motivo } : {}),
+    },
+  });
+}
+
+export async function listarReservasPaciente(master: MasterPrismaClient, pacienteMasterId: string) {
+  return master.publicBooking.findMany({
+    where: { pacienteMasterId },
+    orderBy: { fechaHora: "desc" },
+    include: { professional: { select: { nombrePublico: true, slugSeo: true } } },
+  });
+}
+
+export async function listarReservasTenant(
+  master: MasterPrismaClient,
+  tenantId: string,
+  status?: string,
+) {
+  return master.publicBooking.findMany({
+    where: { tenantId, ...(status ? { status: status as never } : {}) },
+    orderBy: { fechaHora: "asc" },
+    include: { professional: { select: { nombrePublico: true } } },
+  });
+}
+
+// Reusa o crea un paciente LOCAL del tenant a partir del snapshot del booking.
+// Empata por email para no duplicar en reservas sucesivas del mismo paciente.
+async function upsertPacienteLocal(
+  tenant: TenantPrismaClient,
+  booking: {
+    pacienteNombre: string;
+    pacienteEmail: string | null;
+    pacienteTelefono: string | null;
+  },
+): Promise<string> {
+  if (booking.pacienteEmail) {
+    const existente = await tenant.paciente.findFirst({
+      where: { emailPrincipal: booking.pacienteEmail },
+      select: { id: true },
+    });
+    if (existente) return existente.id;
+  }
+  const [nombre, ...resto] = booking.pacienteNombre.split(" ");
+  const numeroExpediente = await nextNumeroExpediente(tenant);
+  const creado = await tenant.paciente.create({
+    data: {
+      numeroExpediente,
+      nombre: nombre || booking.pacienteNombre,
+      ...(resto.length ? { apellidoPaterno: resto.join(" ") } : {}),
+      ...(booking.pacienteTelefono ? { telefonoPrincipal: booking.pacienteTelefono } : {}),
+      ...(booking.pacienteEmail ? { emailPrincipal: booking.pacienteEmail } : {}),
+      fechaPrimeraVisita: new Date(),
+    },
+    select: { id: true },
+  });
+  return creado.id;
+}
+
+/**
+ * El tenant del profesional confirma la reserva: crea (o reusa) el paciente
+ * local, genera una Cita en su agenda y liga la reserva a esa Cita.
+ */
+export async function confirmarReserva(
+  master: MasterPrismaClient,
+  tenant: TenantPrismaClient,
+  tenantId: string,
+  bookingId: string,
+  medicoUsuarioIdOverride?: string,
+): Promise<{ bookingId: string; citaId: string; folio: string; pacienteId: string }> {
+  const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.tenantId !== tenantId) {
+    throw new DoctoraliaError(404, "Reserva no encontrada");
+  }
+  if (booking.status !== "pendiente") {
+    throw new DoctoraliaError(409, `La reserva ya está "${booking.status}"`);
+  }
+  const medicoUsuarioId = medicoUsuarioIdOverride ?? booking.medicoIdLocal;
+  if (!medicoUsuarioId) {
+    throw new DoctoraliaError(400, "No se pudo determinar el médico; indica medicoUsuarioId");
+  }
+  const sucursal = await tenant.sucursal.findFirst({ select: { id: true, codigo: true } });
+  if (!sucursal) throw new DoctoraliaError(400, "El tenant no tiene sucursal configurada");
+
+  const pacienteId = await upsertPacienteLocal(tenant, booking);
+  const cita = await tenant.$transaction(async (tx) => {
+    const folio = await nextCitaFolio(tx, sucursal.id, sucursal.codigo);
+    return tx.cita.create({
+      data: {
+        folio,
+        pacienteId,
+        medicoUsuarioId,
+        sucursalId: sucursal.id,
+        fechaProgramada: booking.fechaHora,
+        estado: "confirmada",
+        motivoTexto: booking.motivo ?? "Cita agendada desde Doctoralia",
+      },
+      select: { id: true, folio: true },
+    });
+  });
+
+  await master.publicBooking.update({
+    where: { id: bookingId },
+    data: { status: "confirmada", confirmadaAt: new Date(), citaIdLocal: cita.id },
+  });
+  return { bookingId, citaId: cita.id, folio: cita.folio, pacienteId };
+}
+
+export async function rechazarReserva(
+  master: MasterPrismaClient,
+  tenantId: string,
+  bookingId: string,
+  motivo: string,
+) {
+  const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.tenantId !== tenantId) {
+    throw new DoctoraliaError(404, "Reserva no encontrada");
+  }
+  if (booking.status !== "pendiente") {
+    throw new DoctoraliaError(409, `La reserva ya está "${booking.status}"`);
+  }
+  return master.publicBooking.update({
+    where: { id: bookingId },
+    data: { status: "rechazada", rechazadaAt: new Date(), motivoRechazo: motivo },
+  });
+}

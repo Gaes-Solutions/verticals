@@ -482,6 +482,19 @@ enum ReviewModeracionStatus {
   denunciado_medico
 }
 
+enum BookingStatus {
+  pendiente
+  confirmada
+  rechazada
+  cancelada
+  completada
+}
+
+enum BookingModalidad {
+  presencial
+  telemedicina
+}
+
 /** Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR). */
 enum PatientSexAtBirth {
   male
@@ -591,6 +604,7 @@ model PacienteMaster {
   updatedAt        DateTime           @updatedAt @map("updated_at")
 
   reviews     PublicReview[]
+  bookings    PublicBooking[]
   logins      PatientLogin[]
   records     PatientRecord[]
   consents    PatientConsent[]
@@ -795,6 +809,7 @@ model PublicProfessional {
 
   ubicaciones PublicProfessionalLocation[]
   reviews     PublicReview[]
+  bookings    PublicBooking[]
   searchIndex PublicProfessionalSearchIndex?
 
   @@unique([tenantIdPrincipal, medicoIdLocal])
@@ -856,6 +871,43 @@ model PublicReview {
   @@index([professionalId, moderacionStatus])
   @@index([pacienteMasterId])
   @@map("public_reviews")
+}
+
+/**
+ * Reserva de cita hecha desde el portal público (Doctoralia). Vive en master
+ * porque el paciente es cross-tenant; al confirmarla, el tenant del profesional
+ * crea una Cita local y guarda su id en `citaIdLocal`. Snapshot de contacto para
+ * no depender del paciente master en el tenant.
+ */
+model PublicBooking {
+  id               String           @id @default(cuid())
+  professionalId   String           @map("professional_id")
+  locationId       String?          @map("location_id")
+  tenantId         String           @map("tenant_id")
+  medicoIdLocal    String?          @map("medico_id_local")
+  pacienteMasterId String           @map("paciente_master_id")
+  pacienteNombre   String           @map("paciente_nombre")
+  pacienteTelefono String?          @map("paciente_telefono")
+  pacienteEmail    String?          @map("paciente_email")
+  fechaHora        DateTime         @map("fecha_hora")
+  modalidad        BookingModalidad @default(presencial)
+  motivo           String?
+  status           BookingStatus    @default(pendiente)
+  citaIdLocal      String?          @map("cita_id_local")
+  confirmadaAt     DateTime?        @map("confirmada_at")
+  rechazadaAt      DateTime?        @map("rechazada_at")
+  motivoRechazo    String?          @map("motivo_rechazo")
+  canceladaAt      DateTime?        @map("cancelada_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  paciente     PacienteMaster     @relation(fields: [pacienteMasterId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([professionalId, fechaHora])
+  @@index([pacienteMasterId])
+  @@map("public_bookings")
 }
 
 model PublicProfessionalSearchIndex {

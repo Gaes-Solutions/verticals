@@ -1,5 +1,6 @@
 import {
   BedDouble,
+  CalendarCheck,
   CalendarCog,
   CalendarDays,
   ClipboardList,
@@ -26,6 +27,7 @@ import { ImagenologiaPage } from "./pages/ImagenologiaPage.js";
 import { LaboratorioPage } from "./pages/LaboratorioPage.js";
 import { PacientesPage } from "./pages/PacientesPage.js";
 import { RecetaPage } from "./pages/RecetaPage.js";
+import { ReservasPage } from "./pages/ReservasPage.js";
 
 export interface Session {
   nombre: string;
@@ -34,6 +36,7 @@ export interface Session {
 
 type Seccion =
   | "agenda"
+  | "reservas"
   | "pacientes"
   | "expedientes"
   | "soap"
@@ -48,6 +51,7 @@ type Seccion =
 // rol no lo tiene (el dueño con "*" ve todo). El backend revalida igual.
 const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "agenda", label: "Agenda del día", icon: CalendarDays, perm: "citas.leer" },
+  { key: "reservas", label: "Reservas Doctoralia", icon: CalendarCheck, perm: "citas.leer" },
   { key: "pacientes", label: "Pacientes", icon: UserRound, perm: "pacientes.leer" },
   { key: "expedientes", label: "Expedientes", icon: FolderHeart, perm: "mascotas.leer" },
   { key: "soap", label: "Consulta SOAP", icon: ClipboardList, perm: "consultas.crear" },
@@ -66,6 +70,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   agenda: AgendaPage,
+  reservas: ReservasPage,
   pacientes: PacientesPage,
   expedientes: ExpedientesPage,
   soap: ExpedienteSoapPage,

@@ -18,6 +18,7 @@ const PASSWORD = "ChangeMe!2026";
 
 const PACIENTE_OK = "paciente-ok@test.local";
 const PACIENTE_SPAM = "paciente-spam@test.local";
+const PACIENTE_BOOKING = "paciente-booking@test.local";
 
 let app: FastifyInstance;
 let adminToken: string;
@@ -49,6 +50,7 @@ async function cleanupDoctoralia() {
   });
   const ids = profs.map((p) => p.id);
   if (ids.length > 0) {
+    await masterPrisma.publicBooking.deleteMany({ where: { professionalId: { in: ids } } });
     await masterPrisma.publicReview.deleteMany({ where: { professionalId: { in: ids } } });
     await masterPrisma.publicProfessionalSearchIndex.deleteMany({
       where: { professionalId: { in: ids } },
@@ -59,7 +61,7 @@ async function cleanupDoctoralia() {
     await masterPrisma.publicProfessional.deleteMany({ where: { id: { in: ids } } });
   }
   await masterPrisma.pacienteMaster.deleteMany({
-    where: { email: { in: [PACIENTE_OK, PACIENTE_SPAM] } },
+    where: { email: { in: [PACIENTE_OK, PACIENTE_SPAM, PACIENTE_BOOKING] } },
   });
 }
 
@@ -262,6 +264,110 @@ describe("validación admin GaesSoft", () => {
     const p = res.json() as { status: string; validadaSsaAt: string | null };
     expect(p.status).toBe("publicado");
     expect(p.validadaSsaAt).not.toBeNull();
+  });
+});
+
+describe("reservas (bookings desde el portal)", () => {
+  let pacienteMasterId: string;
+  let bookingId: string;
+
+  it("registra y verifica un paciente que va a reservar", async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/doctoralia/pacientes/registro",
+      payload: {
+        email: PACIENTE_BOOKING,
+        nombre: "Laura",
+        apellidos: "Méndez",
+        telefono: "5511122233",
+      },
+    });
+    expect(reg.statusCode).toBe(201);
+    pacienteMasterId = (reg.json() as { id: string }).id;
+    const conf = await app.inject({
+      method: "POST",
+      url: "/doctoralia/pacientes/confirmar",
+      payload: { email: PACIENTE_BOOKING },
+    });
+    expect(conf.statusCode).toBe(200);
+    expect((conf.json() as { verificado: boolean }).verificado).toBe(true);
+  });
+
+  it("el paciente reserva una cita (queda pendiente)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/doctoralia/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+        modalidad: "presencial",
+        motivo: "Chequeo general",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const b = res.json() as { id: string; status: string };
+    expect(b.status).toBe("pendiente");
+    bookingId = b.id;
+  });
+
+  it("el tenant ve la reserva entrante", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/doctoralia/reservas?status=pendiente",
+      headers: authRecepcion(),
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{ id: string; pacienteNombre: string }>;
+    expect(items.some((r) => r.id === bookingId)).toBe(true);
+  });
+
+  it("confirmar crea una Cita local ligada a la reserva", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/doctoralia/reservas/${bookingId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { citaId: string; folio: string; pacienteId: string };
+    expect(r.citaId).toBeTruthy();
+    expect(r.folio).toContain("CT-");
+    expect(r.pacienteId).toBeTruthy();
+
+    const booking = await masterPrisma.publicBooking.findUnique({ where: { id: bookingId } });
+    expect(booking?.status).toBe("confirmada");
+    expect(booking?.citaIdLocal).toBe(r.citaId);
+  });
+
+  it("no se puede confirmar dos veces", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/doctoralia/reservas/${bookingId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("rechazar una reserva pendiente la marca rechazada", async () => {
+    const reserva = await app.inject({
+      method: "POST",
+      url: `/doctoralia/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+        modalidad: "presencial",
+      },
+    });
+    const otroId = (reserva.json() as { id: string }).id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/doctoralia/reservas/${otroId}/rechazar`,
+      headers: authRecepcion(),
+      payload: { motivo: "Agenda llena esa fecha" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { status: string }).status).toBe("rechazada");
   });
 });
 

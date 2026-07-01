@@ -6,8 +6,13 @@ import {
   idParamSchema,
   moderarResenaAdminSchema,
   pacienteConfirmarSchema,
+  pacienteIdParamSchema,
   pacienteRegistroSchema,
   perfilUpsertSchema,
+  reservaConfirmarSchema,
+  reservaCreateSchema,
+  reservaListQuerySchema,
+  reservaRechazarSchema,
   responderResenaSchema,
   slugParamSchema,
   ubicacionCreateSchema,
@@ -18,12 +23,17 @@ import {
   agregarUbicacion,
   buscarProfesionales,
   confirmarPacienteMaster,
+  confirmarReserva,
   crearResena,
   denunciarResena,
   enviarPerfilARevision,
+  listarReservasPaciente,
+  listarReservasTenant,
   moderarResenaAdmin,
   obtenerPerfilPublico,
+  rechazarReserva,
   registrarPacienteMaster,
+  reservarCita,
   responderResena,
   suspenderPerfil,
   upsertPerfilProfesional,
@@ -193,6 +203,47 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
   });
+
+  // ── Reservas entrantes del portal (el médico/recepción las confirma) ──
+  app.get("/reservas", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_LEER);
+    const { status } = reservaListQuerySchema.parse(req.query);
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      return await listarReservasTenant(app.masterPrisma, tenantId, status);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post("/reservas/:id/confirmar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_GESTIONAR);
+    const { id } = idParamSchema.parse(req.params);
+    const body = reservaConfirmarSchema.parse(req.body ?? {});
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      // Si la reserva no trae médico, se usa el usuario en sesión.
+      const medico = body.medicoUsuarioId ?? req.principal.userId;
+      return await confirmarReserva(app.masterPrisma, req.tenantPrisma, tenantId, id, medico);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post("/reservas/:id/rechazar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_GESTIONAR);
+    const { id } = idParamSchema.parse(req.params);
+    const body = reservaRechazarSchema.parse(req.body);
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      return await rechazarReserva(app.masterPrisma, tenantId, id, body.motivo);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
 };
 
 /**
@@ -305,6 +356,29 @@ export const doctoraliaPublicRoutes: FastifyPluginAsync = async (app) => {
       if (handleErr(reply, err)) return;
       throw err;
     }
+  });
+
+  // El paciente reserva una cita con un profesional (queda pendiente hasta que
+  // el tenant la confirme).
+  app.post(
+    "/doctoralia/profesionales/:id/reservar",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { id } = idParamSchema.parse(req.params);
+      const body = reservaCreateSchema.parse(req.body);
+      try {
+        const booking = await reservarCita(app.masterPrisma, { professionalId: id, ...body });
+        return reply.code(201).send({ id: booking.id, status: booking.status });
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  app.get("/doctoralia/pacientes/:pacienteId/reservas", async (req) => {
+    const { pacienteId } = pacienteIdParamSchema.parse(req.params);
+    return listarReservasPaciente(app.masterPrisma, pacienteId);
   });
 };
 
