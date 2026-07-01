@@ -1,14 +1,9 @@
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { RecetaImprimible } from "../components/RecetaImprimible.js";
+import { type Sujeto, SujetoBuscador } from "../components/SujetoBuscador.js";
 import { ApiError, api, getUsuario, puede } from "../lib/api.js";
 
-interface MascotaLite {
-  id: string;
-  nombre: string;
-  especie: string;
-  numeroExpediente: string;
-}
 interface Sucursal {
   id: string;
 }
@@ -53,87 +48,42 @@ function esControlado(m: Medicamento): boolean {
 }
 
 export function RecetaPage() {
-  const [mascota, setMascota] = useState<MascotaLite | null>(null);
+  const [sujeto, setSujeto] = useState<Sujeto | null>(null);
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 font-bold text-2xl text-slate-800">Receta electrónica</h1>
       <p className="mb-4 text-slate-500 text-sm">
         Emisión con validación COFEPRIS y QR de farmacia
       </p>
-      {!mascota ? (
-        <MascotaBuscador onSelect={setMascota} />
+      {!sujeto ? (
+        <SujetoBuscador onSelect={setSujeto} />
       ) : (
-        <RecetaDeMascota mascota={mascota} onCambiar={() => setMascota(null)} />
+        <RecetaDeSujeto sujeto={sujeto} onCambiar={() => setSujeto(null)} />
       )}
     </div>
   );
 }
 
-function MascotaBuscador({ onSelect }: { onSelect: (m: MascotaLite) => void }) {
-  const [q, setQ] = useState("");
-  const [items, setItems] = useState<MascotaLite[]>([]);
-  useEffect(() => {
-    if (q.trim().length < 2) {
-      setItems([]);
-      return;
-    }
-    const t = setTimeout(() => {
-      api<{ items: MascotaLite[] }>(`/t/mascotas?pageSize=8&q=${encodeURIComponent(q.trim())}`)
-        .then((r) => setItems(r.items ?? []))
-        .catch(() => setItems([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [q]);
-  return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Buscar paciente por nombre, microchip o raza…"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
-      />
-      <div className="mt-2 flex flex-col gap-1">
-        {items.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onSelect(m)}
-            className="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
-          >
-            <span className="font-medium text-slate-800">{m.nombre}</span>
-            <span className="text-slate-400 text-xs capitalize">
-              {m.especie} · {m.numeroExpediente}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RecetaDeMascota({
-  mascota,
-  onCambiar,
-}: {
-  mascota: MascotaLite;
-  onCambiar: () => void;
-}) {
+function RecetaDeSujeto({ sujeto, onCambiar }: { sujeto: Sujeto; onCambiar: () => void }) {
   const [previas, setPrevias] = useState<RecetaLite[]>([]);
   const [recargar, setRecargar] = useState(0);
   const [imprimirId, setImprimirId] = useState<string | null>(null);
+  const filtro = sujeto.tipo === "mascota" ? "mascotaId" : "pacienteId";
   useEffect(() => {
-    api<{ items: RecetaLite[] }>(`/t/recetas?mascotaId=${mascota.id}&pageSize=10`)
+    api<{ items: RecetaLite[] }>(`/t/recetas?${filtro}=${sujeto.id}&pageSize=10`)
       .then((r) => setPrevias(r.items ?? []))
       .catch(() => setPrevias([]));
-  }, [mascota.id, recargar]);
+  }, [sujeto.id, filtro, recargar]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm">
         <div>
-          <p className="font-bold text-slate-800">{mascota.nombre}</p>
+          <p className="font-bold text-slate-800">
+            {sujeto.tipo === "mascota" ? "🐾" : "👤"} {sujeto.nombre}
+          </p>
           <p className="text-slate-500 text-sm capitalize">
-            {mascota.especie} · {mascota.numeroExpediente}
+            {sujeto.subtitulo} · {sujeto.numeroExpediente}
           </p>
         </div>
         <button type="button" onClick={onCambiar} className="gx-btn-secondary">
@@ -170,7 +120,7 @@ function RecetaDeMascota({
         </div>
       )}
 
-      <RecetaForm mascota={mascota} onEmitida={() => setRecargar((n) => n + 1)} />
+      <RecetaForm sujeto={sujeto} onEmitida={() => setRecargar((n) => n + 1)} />
       {imprimirId && <RecetaImprimible id={imprimirId} onClose={() => setImprimirId(null)} />}
     </div>
   );
@@ -296,7 +246,7 @@ function LineaEditor({
 
 let lineaSeq = 1;
 
-function RecetaForm({ mascota, onEmitida }: { mascota: MascotaLite; onEmitida: () => void }) {
+function RecetaForm({ sujeto, onEmitida }: { sujeto: Sujeto; onEmitida: () => void }) {
   const vigenciaId = useId();
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [vigenciaDias, setVigenciaDias] = useState("30");
@@ -365,7 +315,7 @@ function RecetaForm({ mascota, onEmitida }: { mascota: MascotaLite; onEmitida: (
       }
       const r = await api<{ folio: string; qrValidacionToken: string }>("/t/recetas", {
         body: {
-          mascotaId: mascota.id,
+          [sujeto.tipo === "mascota" ? "mascotaId" : "pacienteId"]: sujeto.id,
           medicoUsuarioId,
           sucursalId,
           vigenciaDias: Number.parseInt(vigenciaDias, 10) || 30,
