@@ -25,7 +25,28 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 - #5 Checkout/billing tenant ⛔ (split auth + llaves, ver BLOQUEADOS)
 - #8 Firma real B2B ✅ (d2e41d4): columna firma_data_url (migración aditiva) + SignaturePad canvas en web-b2b. 33 tests verdes.
 - #7 Doctoralia ✅ (1fe4a9e): app nueva apps/web-doctoralia (directorio público — buscador, tarjetas con rating/badges, perfil con bio/ubicaciones/reseñas). Sin auth.
-- #6 Portal Paciente → pendiente (app nueva con auth `patient`; backend patient-portal listo con login + me/expediente/criticos/consents/familia/emergency-qr/audit/export). Último item de TIER A.
+- #6 Portal Paciente ✅ (0446183): app nueva apps/web-paciente (login OTP kind patient, expediente, consentimientos revocar, familia, QR emergencia, export ARCO).
+- ✅✅ TIER A CERRADO: 6 construidos, 2 bloqueados por decisión/llaves. Ver RESUMEN FINAL abajo.
+
+## 🏁 RESUMEN FINAL (TIER A cerrado, loop detenido)
+
+**HECHO (6 de 8, todo lo construible sin decisiones/llaves de Gaby):**
+- #1 Abarrotes (POS): admin balanza+IEPS, ticket IEPS/IVA (+fix $NaN), recargas/servicios, fiado/CxC, apartados, captura de peso.
+- #3 Despacho contable UI (web-admin): CFDIs recibidos + categorización IA + DIOT.
+- #4 Signup SaaS público: /auth/plans + signupPublico con onboardTenant (dueño RBAC) + pantalla Signup.
+- #7 Doctoralia: app nueva web-doctoralia (directorio público).
+- #8 Firma real B2B: columna firma_data_url (migración aditiva) + SignaturePad.
+- #6 Portal Paciente: app nueva web-paciente (login OTP, expediente, consentimientos, familia, QR emergencia, export ARCO).
+
+**BLOQUEADO (necesita decisión/llaves de Gaby):**
+- #2 Portal Partner Contador ⛔ — falta diseñar auth partner-facing (ADR).
+- #5 Checkout/billing tenant ⛔ — split de auth (RBAC vs admin_tenant) + llaves Stripe/Conekta para cobro real.
+
+**LO QUE FALTA DE GABY:**
+1. Decidir auth del Partner (para #2).
+2. Decidir integración auth billing + dar llaves Stripe/Conekta (para #5, cobro real; hoy es mock).
+3. Revisar y mergear la rama `autonomo/verticales-pendientes` a main.
+4. Al mergear/deploy: aplicar migración tenant `20260702090000_add_cotizacion_firma` (prisma migrate deploy) y `prisma generate`.
 
 ## Diario de iteraciones
 
