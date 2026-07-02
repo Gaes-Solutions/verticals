@@ -30,6 +30,7 @@ import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
+import { ContabilidadPage } from "./pages/ContabilidadPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
@@ -72,6 +73,7 @@ type Seccion =
   | "importador"
   | "compras"
   | "cfdi"
+  | "contabilidad"
   | "usuarios"
   | "seguridad"
   | "tienda";
@@ -95,6 +97,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
   { key: "automatizaciones", label: "Automatizaciones", icon: Zap },
   { key: "preguntas", label: "Preguntas", icon: MessageCircleQuestion },
   { key: "cfdi", label: "Facturación", icon: FileText },
+  { key: "contabilidad", label: "Contabilidad", icon: FileText },
   { key: "usuarios", label: "Usuarios y permisos", icon: Users },
   { key: "seguridad", label: "Seguridad", icon: ShieldCheck },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart },
@@ -210,6 +213,7 @@ export function App() {
         {seccion === "importador" && <ImportadorPage />}
         {seccion === "compras" && <ComprasPage />}
         {seccion === "cfdi" && <CfdiPage />}
+        {seccion === "contabilidad" && <ContabilidadPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "seguridad" && <SeguridadPage />}
         {seccion === "ventas" && <VentasPage />}
