@@ -7,7 +7,7 @@ Regla: push solo a esta rama, nunca a main. No tocar áreas en vuelo de veterina
 
 | # | Vertical | Estado | Notas |
 |---|----------|--------|-------|
-| 1 | Abarrotes (flujo 2 / 4.14) | ⬜ pendiente | granel+balanza, recargas, fiados, servicios, IEPS, multi-cajero |
+| 1 | Abarrotes (flujo 2 / 4.14) | 🟡 en curso | Admin: campos balanza+IEPS ✅ (c5c71fe). Falta: IEPS en Recibo, recargas UI, fiados en CobroModal, apartados |
 | 2 | Vendedor mayoreo PWA campo (flujo 3) | ⬜ pendiente | CRM ligero, pedidos offline, firma, gamificación comisiones |
 | 3 | Médico humano + Paciente + telemedicina (flujos 6,7) | ⬜ pendiente | pediatría, CFDI exento, marketplace, Daily.co, PHR; SIN IA clínica |
 | 4 | Partner Contador / despacho (flujo 9 / 4.12) | ⬜ pendiente | partners, niveles, IA contable no-decisional |
