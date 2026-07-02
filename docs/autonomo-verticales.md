@@ -10,7 +10,7 @@ Regla: push solo a esta rama, nunca a main. No tocar áreas en vuelo de veterina
 | 1 | Abarrotes (flujo 2 / 4.14) | ✅ hecha | Admin campos balanza+IEPS (c5c71fe) · Ticket IEPS/IVA +fix $NaN (c581828) · Recargas/servicios POS (87b0e26) · Fiado/CxC en cobro (d141730) · Apartados (d89cc81) · Captura de peso/balanza (aa5cdce) |
 | 2 | Vendedor mayoreo PWA campo (flujo 3) | ⬜ pendiente | CRM ligero, pedidos offline, firma, gamificación comisiones |
 | 3 | Médico humano + Paciente + telemedicina (flujos 6,7) | ⬜ pendiente | pediatría, CFDI exento, marketplace, Daily.co, PHR; SIN IA clínica |
-| 4 | Partner Contador / despacho (flujo 9 / 4.12) | ⛔ bloqueada | Portal partner requiere auth partner-facing nueva (ver BLOQUEADOS). Despacho contable UI (CFDIs recibidos/DIOT) sí es construible en web-admin |
+| 4 | Partner Contador / despacho (flujo 9 / 4.12) | 🟡 parcial | Portal partner ⛔ (falta auth, ver BLOQUEADOS). Despacho contable UI ✅ (f3e94f3): CFDIs recibidos + categorización IA + DIOT en web-admin |
 
 Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 
