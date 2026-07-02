@@ -22,7 +22,9 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 ## Progreso TIER A (cross-cutting)
 - #1 Abarrotes ✅ · #2 Portal Partner ⛔ (auth) · #3 Despacho contable UI ✅ (f3e94f3)
 - #4 Signup SaaS público ✅ (72fef5e): `GET /auth/plans` público + `signupPublico` ahora usa `onboardTenant` (crea dueño RBAC → tenant usable) + pantalla Signup en web-admin. Billing tests 12/12 verdes.
-- #5 Checkout/billing tenant · #6 Portal Paciente · #7 Doctoralia · #8 Firma B2B → pendientes
+- #5 Checkout/billing tenant ⛔ (split auth + llaves, ver BLOQUEADOS)
+- #8 Firma real B2B ✅ (d2e41d4): columna firma_data_url (migración aditiva) + SignaturePad canvas en web-b2b. 33 tests verdes.
+- #6 Portal Paciente · #7 Doctoralia → pendientes (apps nuevas)
 
 ## Diario de iteraciones
 

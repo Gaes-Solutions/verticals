@@ -290,10 +290,11 @@ export async function aceptarCotizacionCliente(
   prisma: TenantPrismaClient,
   clienteB2bId: string,
   cotizacionId: string,
+  firmaDataUrl?: string,
 ): Promise<{ folio: string; estado: string }> {
   await cotizacionDelCliente(prisma, clienteB2bId, cotizacionId);
   try {
-    return await aceptarCotizacion(prisma, cotizacionId);
+    return await aceptarCotizacion(prisma, cotizacionId, firmaDataUrl);
   } catch (err) {
     if (err instanceof CotizacionError) throw new B2bPortalError(err.statusCode, err.message);
     throw err;

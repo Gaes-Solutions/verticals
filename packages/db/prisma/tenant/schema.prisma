@@ -2036,6 +2036,7 @@ model Cotizacion {
   enviadoCanal      CotizacionCanalEnvio? @map("enviado_canal")
   enviadoDestino    String?               @map("enviado_destino")
   aceptadoAt        DateTime?             @map("aceptado_at")
+  firmaDataUrl      String?               @map("firma_data_url")
   rechazadoAt       DateTime?             @map("rechazado_at")
   rechazoMotivo     String?               @map("rechazo_motivo")
   pedidoId          String?               @unique @map("pedido_id")

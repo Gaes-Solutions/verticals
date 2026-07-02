@@ -39,6 +39,9 @@ const crearPedidoSchema = z.object({
 });
 
 const idParam = z.object({ id: z.string().min(1) });
+const aceptarSchema = z.object({
+  firmaDataUrl: z.string().startsWith("data:image/").max(200_000).optional(),
+});
 
 function errLabel(s: number): string {
   if (s === 404) return "Not Found";
@@ -148,8 +151,14 @@ export const b2bPortalRoutes: FastifyPluginAsync = async (app) => {
   app.post("/cotizaciones/:id/aceptar", async (req, reply) => {
     const { clienteB2bId, tenantSlug } = b2bCtx(req);
     const { id } = idParam.parse(req.params);
+    const { firmaDataUrl } = aceptarSchema.parse(req.body ?? {});
     try {
-      return await aceptarCotizacionCliente(getTenantClient(tenantSlug), clienteB2bId, id);
+      return await aceptarCotizacionCliente(
+        getTenantClient(tenantSlug),
+        clienteB2bId,
+        id,
+        firmaDataUrl,
+      );
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;

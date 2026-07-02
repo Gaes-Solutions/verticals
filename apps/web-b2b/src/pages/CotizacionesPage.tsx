@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SignaturePad } from "../components/SignaturePad.js";
 import { ApiError, api } from "../lib/api.js";
 import type { CotizacionRow } from "../lib/types.js";
 
@@ -24,6 +25,8 @@ export function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<CotizacionRow[]>([]);
   const [detalle, setDetalle] = useState<CotizacionDetalle | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [firmando, setFirmando] = useState<{ id: string; folio: string } | null>(null);
+  const [procesandoFirma, setProcesandoFirma] = useState(false);
 
   const cargar = useCallback(() => {
     api<CotizacionRow[]>("/b2b-portal/cotizaciones")
@@ -33,20 +36,32 @@ export function CotizacionesPage() {
 
   useEffect(() => cargar(), [cargar]);
 
-  async function accion(id: string, tipo: "aceptar" | "rechazar") {
+  async function rechazar(id: string) {
     setError(null);
+    const motivo = window.prompt("Motivo del rechazo:");
+    if (!motivo) return;
     try {
-      if (tipo === "rechazar") {
-        const motivo = window.prompt("Motivo del rechazo:");
-        if (!motivo) return;
-        await api(`/b2b-portal/cotizaciones/${id}/rechazar`, { body: { motivo } });
-      } else {
-        await api(`/b2b-portal/cotizaciones/${id}/aceptar`, { body: {} });
-      }
+      await api(`/b2b-portal/cotizaciones/${id}/rechazar`, { body: { motivo } });
       setDetalle(null);
       cargar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
+    }
+  }
+
+  async function aceptarConFirma(firmaDataUrl: string) {
+    if (!firmando) return;
+    setError(null);
+    setProcesandoFirma(true);
+    try {
+      await api(`/b2b-portal/cotizaciones/${firmando.id}/aceptar`, { body: { firmaDataUrl } });
+      setFirmando(null);
+      setDetalle(null);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Error");
+    } finally {
+      setProcesandoFirma(false);
     }
   }
 
@@ -134,14 +149,14 @@ export function CotizacionesPage() {
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => accion(detalle.id, "aceptar")}
+                  onClick={() => setFirmando({ id: detalle.id, folio: detalle.folio })}
                   className="flex-1 rounded-lg bg-emerald-600 py-2 font-semibold text-white hover:bg-emerald-700"
                 >
-                  Aceptar cotización
+                  Firmar y aceptar
                 </button>
                 <button
                   type="button"
-                  onClick={() => accion(detalle.id, "rechazar")}
+                  onClick={() => rechazar(detalle.id)}
                   className="rounded-lg border border-red-300 px-4 py-2 font-semibold text-red-600 hover:bg-red-50"
                 >
                   Rechazar
@@ -150,6 +165,15 @@ export function CotizacionesPage() {
             )}
           </div>
         </div>
+      )}
+
+      {firmando && (
+        <SignaturePad
+          titulo={`Cotización ${firmando.folio}`}
+          procesando={procesandoFirma}
+          onConfirm={aceptarConFirma}
+          onCancel={() => setFirmando(null)}
+        />
       )}
     </div>
   );

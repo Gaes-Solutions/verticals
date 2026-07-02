@@ -291,6 +291,7 @@ export async function enviarCotizacion(
 export async function aceptarCotizacion(
   client: TenantClient,
   cotizacionId: string,
+  firmaDataUrl?: string,
 ): Promise<{ folio: string; estado: string }> {
   const cot = await client.cotizacion.findUnique({ where: { id: cotizacionId } });
   if (!cot) throw new CotizacionError(404, "Cotización no encontrada");
@@ -302,7 +303,11 @@ export async function aceptarCotizacion(
   }
   const upd = await client.cotizacion.update({
     where: { id: cotizacionId },
-    data: { estado: "aceptada", aceptadoAt: new Date() },
+    data: {
+      estado: "aceptada",
+      aceptadoAt: new Date(),
+      ...(firmaDataUrl ? { firmaDataUrl } : {}),
+    },
   });
   return { folio: upd.folio, estado: upd.estado };
 }
