@@ -16,6 +16,7 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 
 ## BLOQUEADOS
 
+- **TIER A #5 Checkout/billing del tenant** (⛔ decisión de arquitectura + llaves). Los endpoints `/billing/*` (me, invoices, payment-methods, change-plan) usan `authenticateAdminTenant` (token kind `admin_tenant`, del owner creado en signup), DISTINTO del token RBAC con que entra web-admin (`/auth/tenant/login`). Para una sección "Mi suscripción" dentro de web-admin sin segundo login se necesita decidir: (a) sesión unificada (que el login RBAC del owner también emita/acepte acceso billing), (b) que `authenticateAdminTenant` acepte el token RBAC del owner, o (c) portal de billing separado. Además el cobro real es MOCK (`mockCobrar`), necesita llaves Stripe/Conekta. Un segundo login sería shortcut → mejor decidir con ADR. Se salta.
 - **TIER A #2 Portal Partner Contador** (⛔ decisión de arquitectura). El modelo `Partner` (master) tiene `emailContacto` único pero SIN credenciales; NO existe auth partner-facing (todo `/partners/*` es `authenticateAdmin`). Un portal self-serve exige diseñar autenticación de partner nueva: kind `partner` en JWT, password/flujo de invitación-set-password, endpoints partner-scoped (`/partner/me`, `/partner/referrals`, `/partner/commissions`, `/partner/payouts`). Decisión para Gaby: ¿login propio del partner (email+password+2FA como admin) o magic-link, y flujo de alta? Requiere ADR antes de codear. Mientras tanto se salta.
 
 ## Progreso TIER A (cross-cutting)
