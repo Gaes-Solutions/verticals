@@ -18,6 +18,11 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 
 - **TIER A #2 Portal Partner Contador** (⛔ decisión de arquitectura). El modelo `Partner` (master) tiene `emailContacto` único pero SIN credenciales; NO existe auth partner-facing (todo `/partners/*` es `authenticateAdmin`). Un portal self-serve exige diseñar autenticación de partner nueva: kind `partner` en JWT, password/flujo de invitación-set-password, endpoints partner-scoped (`/partner/me`, `/partner/referrals`, `/partner/commissions`, `/partner/payouts`). Decisión para Gaby: ¿login propio del partner (email+password+2FA como admin) o magic-link, y flujo de alta? Requiere ADR antes de codear. Mientras tanto se salta.
 
+## Progreso TIER A (cross-cutting)
+- #1 Abarrotes ✅ · #2 Portal Partner ⛔ (auth) · #3 Despacho contable UI ✅ (f3e94f3)
+- #4 Signup SaaS público ✅ (72fef5e): `GET /auth/plans` público + `signupPublico` ahora usa `onboardTenant` (crea dueño RBAC → tenant usable) + pantalla Signup en web-admin. Billing tests 12/12 verdes.
+- #5 Checkout/billing tenant · #6 Portal Paciente · #7 Doctoralia · #8 Firma B2B → pendientes
+
 ## Diario de iteraciones
 
 ### Setup (2026-07-02)
