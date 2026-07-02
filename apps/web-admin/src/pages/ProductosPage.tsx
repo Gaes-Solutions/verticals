@@ -135,6 +135,9 @@ function ProductoModal({
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [precioBase, setPrecioBase] = useState(producto?.variantes[0]?.precioBase ?? "");
   const [aplicaIva, setAplicaIva] = useState(producto?.aplicaIva ?? true);
+  const [aplicaIeps, setAplicaIeps] = useState(producto?.aplicaIeps ?? false);
+  const [tasaIeps, setTasaIeps] = useState(producto?.tasaIeps ?? "");
+  const [requiresBalanza, setRequiresBalanza] = useState(producto?.requiresBalanza ?? false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoriaId, setCategoriaId] = useState(producto?.categoriaId ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -150,10 +153,16 @@ function ProductoModal({
     setError(null);
     setGuardando(true);
     try {
+      const impuestos = {
+        aplicaIva,
+        aplicaIeps,
+        requiresBalanza,
+        ...(aplicaIeps && tasaIeps ? { tasaIeps } : {}),
+      };
       if (editando && producto) {
         await api(`/t/productos/${producto.id}`, {
           method: "PATCH",
-          body: { nombre, aplicaIva, ...(categoriaId ? { categoriaId } : {}) },
+          body: { nombre, ...impuestos, ...(categoriaId ? { categoriaId } : {}) },
         });
       } else {
         await api("/t/productos", {
@@ -161,8 +170,8 @@ function ProductoModal({
             skuPadre,
             nombre,
             precioBase,
-            aplicaIva,
             tasaIva: "16",
+            ...impuestos,
             ...(categoriaId ? { categoriaId } : {}),
           },
         });
@@ -230,6 +239,34 @@ function ProductoModal({
               onChange={(e) => setAplicaIva(e.target.checked)}
             />
             Aplica IVA (16%)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={aplicaIeps}
+              onChange={(e) => setAplicaIeps(e.target.checked)}
+            />
+            Aplica IEPS
+          </label>
+          {aplicaIeps && (
+            <Field label="Tasa IEPS (%)">
+              <input
+                type="number"
+                step="0.01"
+                value={tasaIeps ?? ""}
+                onChange={(e) => setTasaIeps(e.target.value)}
+                placeholder="Ej. 8, 26.5, 160"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              />
+            </Field>
+          )}
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={requiresBalanza}
+              onChange={(e) => setRequiresBalanza(e.target.checked)}
+            />
+            Se vende por peso (balanza)
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>

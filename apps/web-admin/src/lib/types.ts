@@ -22,6 +22,9 @@ export interface Producto {
   skuPadre: string;
   nombre: string;
   aplicaIva?: boolean;
+  aplicaIeps?: boolean;
+  tasaIeps?: string | null;
+  requiresBalanza?: boolean;
   isActive?: boolean;
   categoriaId?: string | null;
   variantes: Variante[];
