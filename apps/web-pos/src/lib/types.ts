@@ -36,6 +36,7 @@ export interface Producto {
   skuPadre: string;
   nombre: string;
   aplicaIva?: boolean;
+  requiresBalanza?: boolean;
   variantes: Variante[];
 }
 
@@ -60,6 +61,7 @@ export interface TicketLinea {
   nombre: string;
   precioUnitario: number;
   cantidad: number;
+  esBalanza?: boolean;
 }
 
 export interface VentaResponse {

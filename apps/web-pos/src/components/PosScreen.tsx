@@ -15,8 +15,17 @@ import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
 import { DevolucionModal } from "./DevolucionModal.js";
+import { PesoModal } from "./PesoModal.js";
 import { RecargaModal } from "./RecargaModal.js";
 import { Recibo } from "./Recibo.js";
+
+interface PesajePendiente {
+  varianteId: string;
+  sku: string;
+  nombre: string;
+  precioUnitario: number;
+  pesoInicial?: number;
+}
 
 function money(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -37,6 +46,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [modalDevolucion, setModalDevolucion] = useState(false);
   const [modalRecarga, setModalRecarga] = useState(false);
   const [modalApartados, setModalApartados] = useState(false);
+  const [pesaje, setPesaje] = useState<PesajePendiente | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [descuentoPct, setDescuentoPct] = useState(0);
@@ -77,6 +87,17 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     const variante = p.variantes[0];
     if (!variante) return;
     const precio = Number.parseFloat(variante.precioBase);
+    if (p.requiresBalanza) {
+      setPesaje({
+        varianteId: variante.id,
+        sku: variante.sku,
+        nombre: p.nombre,
+        precioUnitario: precio,
+      });
+      setQuery("");
+      setResultados([]);
+      return;
+    }
     setTicket((prev) => {
       const existente = prev.find((l) => l.varianteId === variante.id);
       if (existente) {
@@ -127,6 +148,29 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
   function quitarLinea(varianteId: string) {
     setTicket((prev) => prev.filter((l) => l.varianteId !== varianteId));
+  }
+
+  function confirmarPeso(kg: number) {
+    if (!pesaje) return;
+    setTicket((prev) => {
+      const existente = prev.find((l) => l.varianteId === pesaje.varianteId);
+      if (existente) {
+        return prev.map((l) => (l.varianteId === pesaje.varianteId ? { ...l, cantidad: kg } : l));
+      }
+      return [
+        ...prev,
+        {
+          varianteId: pesaje.varianteId,
+          sku: pesaje.sku,
+          nombre: pesaje.nombre,
+          precioUnitario: pesaje.precioUnitario,
+          cantidad: kg,
+          esBalanza: true,
+        },
+      ];
+    });
+    setPesaje(null);
+    searchRef.current?.focus();
   }
 
   async function confirmarCobro(pago: CobroResult) {
@@ -290,23 +334,41 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                         <p className="font-medium text-slate-800">{l.nombre}</p>
                         <p className="text-xs text-slate-400">{money(l.precioUnitario)} c/u</p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      {l.esBalanza ? (
                         <button
                           type="button"
-                          onClick={() => cambiarCantidad(l.varianteId, -1)}
-                          className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
+                          onClick={() =>
+                            setPesaje({
+                              varianteId: l.varianteId,
+                              sku: l.sku,
+                              nombre: l.nombre,
+                              precioUnitario: l.precioUnitario,
+                              pesoInicial: l.cantidad,
+                            })
+                          }
+                          className="rounded bg-slate-100 px-2 py-1 text-sm font-medium text-slate-700"
                         >
-                          −
+                          {l.cantidad.toFixed(3)} kg
                         </button>
-                        <span className="w-8 text-center font-medium">{l.cantidad}</span>
-                        <button
-                          type="button"
-                          onClick={() => cambiarCantidad(l.varianteId, 1)}
-                          className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
-                        >
-                          +
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => cambiarCantidad(l.varianteId, -1)}
+                            className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 text-center font-medium">{l.cantidad}</span>
+                          <button
+                            type="button"
+                            onClick={() => cambiarCantidad(l.varianteId, 1)}
+                            className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                       <span className="w-20 text-right font-semibold text-slate-800">
                         {money(l.precioUnitario * l.cantidad)}
                       </span>
@@ -438,6 +500,16 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             setDescuentoPct(0);
             setDescuentoMotivo("");
           }}
+        />
+      )}
+
+      {pesaje && (
+        <PesoModal
+          nombre={pesaje.nombre}
+          precioPorKg={pesaje.precioUnitario}
+          {...(pesaje.pesoInicial !== undefined ? { pesoInicial: pesaje.pesoInicial } : {})}
+          onConfirm={confirmarPeso}
+          onCancel={() => setPesaje(null)}
         />
       )}
 
