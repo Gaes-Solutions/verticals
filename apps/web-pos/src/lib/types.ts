@@ -51,7 +51,8 @@ export type MetodoPago =
   | "tarjeta_debito"
   | "tarjeta_credito"
   | "transferencia"
-  | "monedero";
+  | "monedero"
+  | "credito_fiado";
 
 export interface TicketLinea {
   varianteId: string;

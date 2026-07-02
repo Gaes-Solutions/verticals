@@ -16,12 +16,14 @@ export interface CobroResult {
 export function CobroModal({
   total,
   saldoMonedero,
+  clienteNombre,
   onConfirm,
   onCancel,
   procesando,
 }: {
   total: number;
   saldoMonedero: number;
+  clienteNombre?: string | null;
   onConfirm: (pago: CobroResult) => void;
   onCancel: () => void;
   procesando: boolean;
@@ -43,6 +45,8 @@ export function CobroModal({
   const base = cubreTodoMonedero ? total : restante;
   const montos = [base, Math.ceil(base / 50) * 50, Math.ceil(base / 100) * 100];
   const sugerencias = [...new Set(montos)].filter((m) => m >= restante).slice(0, 4);
+
+  const esFiado = metodo === "credito_fiado";
 
   function confirmar() {
     const pagos: CobroResult["pagos"] = [];
@@ -89,7 +93,7 @@ export function CobroModal({
                 <span className="font-semibold text-slate-900">${restante.toFixed(2)}</span>
               </p>
             )}
-            <div className="mb-4 grid grid-cols-2 gap-2">
+            <div className="mb-3 grid grid-cols-2 gap-2">
               {METODOS.map((m) => (
                 <button
                   key={m.value}
@@ -105,6 +109,23 @@ export function CobroModal({
                 </button>
               ))}
             </div>
+            {clienteNombre ? (
+              <button
+                type="button"
+                onClick={() => setMetodo("credito_fiado")}
+                className={`mb-4 w-full rounded-lg border py-2.5 text-sm font-medium ${
+                  esFiado
+                    ? "border-amber-500 bg-amber-500 text-white"
+                    : "border-amber-300 bg-amber-50 text-amber-700"
+                }`}
+              >
+                Fiar a {clienteNombre}
+              </button>
+            ) : (
+              <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Selecciona un cliente para vender a fiado.
+              </p>
+            )}
           </>
         )}
 

@@ -6,6 +6,8 @@ const METODO_LABEL: Record<string, string> = {
   tarjeta_debito: "Débito",
   tarjeta_credito: "Crédito",
   transferencia: "Transferencia",
+  monedero: "Monedero",
+  credito_fiado: "Fiado",
 };
 
 /**

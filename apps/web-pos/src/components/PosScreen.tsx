@@ -383,6 +383,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         <CobroModal
           total={total}
           saldoMonedero={cliente ? Number(cliente.saldoMonedero ?? 0) : 0}
+          clienteNombre={cliente ? cliente.nombre : null}
           procesando={procesando}
           onCancel={() => setCobrando(false)}
           onConfirm={confirmarCobro}
