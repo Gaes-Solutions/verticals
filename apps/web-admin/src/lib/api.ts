@@ -140,6 +140,33 @@ export function loginTenant(
   return api("/auth/tenant/login", { auth: false, body: { tenantSlug, email, password } });
 }
 
+export interface PlanPublico {
+  id: string;
+  code: string;
+  name: string;
+  priceCents: number;
+  currency: string;
+}
+export function planesPublicos(): Promise<PlanPublico[]> {
+  return api("/auth/plans", { auth: false });
+}
+
+export interface SignupInput {
+  slug: string;
+  name: string;
+  vertical: string;
+  planCode: string;
+  adminName: string;
+  adminEmail: string;
+  adminPassword: string;
+  billingEmail: string;
+}
+export function signupTenant(
+  input: SignupInput,
+): Promise<{ tenant: { slug: string; name: string; trialEndsAt: string | null } }> {
+  return api("/auth/signup", { auth: false, body: input });
+}
+
 export function mfaTenantSetup(mfaToken: string): Promise<{ secret: string; otpauthUrl: string }> {
   return api("/auth/tenant/mfa/setup", { token: mfaToken, method: "POST" });
 }

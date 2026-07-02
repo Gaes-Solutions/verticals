@@ -43,7 +43,10 @@ function tenantDeSubdominio(): string | null {
 
 type Paso = "password" | "setup" | "verify" | "codes";
 
-export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
+export function Login({
+  onLogin,
+  onCrearCuenta,
+}: { onLogin: (s: AdminSession) => void; onCrearCuenta?: () => void }) {
   const slugFijo = tenantDeSubdominio();
   const [paso, setPaso] = useState<Paso>("password");
   const [tenantSlug, setTenantSlug] = useState(slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "");
@@ -194,6 +197,15 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
             >
               {loading ? "Entrando…" : "Entrar"}
             </button>
+            {onCrearCuenta && (
+              <button
+                type="button"
+                onClick={onCrearCuenta}
+                className="mt-3 w-full text-center text-slate-500 text-sm hover:text-brand"
+              >
+                ¿Nuevo negocio? Crea tu cuenta
+              </button>
+            )}
           </form>
         )}
 

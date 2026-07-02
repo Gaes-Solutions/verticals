@@ -25,6 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
+import { Signup } from "./components/Signup.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
@@ -108,6 +109,7 @@ export function App() {
   const [seccion, setSeccion] = useState<Seccion>("dashboard");
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
 
   useEffect(() => {
     if (!loadToken()) {
@@ -128,7 +130,10 @@ export function App() {
     return <div className="flex h-full items-center justify-center text-slate-400">Cargando…</div>;
   }
 
-  if (!session) return <Login onLogin={setSession} />;
+  if (!session) {
+    if (registrando) return <Signup onVolver={() => setRegistrando(false)} />;
+    return <Login onLogin={setSession} onCrearCuenta={() => setRegistrando(true)} />;
+  }
 
   function navegar(s: Seccion) {
     setSeccion(s);

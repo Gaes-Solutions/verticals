@@ -56,6 +56,15 @@ function tenantIdFrom(req: FastifyRequest): string {
  * Rutas públicas: signup self-serve + login admin tenant.
  */
 export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/auth/plans", async () => {
+    const plans = await app.masterPrisma.plan.findMany({
+      where: { isPublic: true },
+      orderBy: { tierOrder: "asc" },
+      select: { id: true, code: true, name: true, priceCents: true, currency: true },
+    });
+    return plans;
+  });
+
   app.post(
     "/auth/signup",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },

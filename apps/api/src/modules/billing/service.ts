@@ -12,7 +12,7 @@ import {
   type Subscription,
   type Tenant,
   type TenantUserAdmin,
-  createTenant,
+  onboardTenant,
   seedTenantDefaults,
 } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
@@ -140,7 +140,15 @@ export async function signupPublico(
   });
   if (!price) throw new BillingError(400, `Plan sin precio para ${currency}/${interval}`);
 
-  await createTenant({ slug: input.slug, name: input.name, planCode: plan.code });
+  await onboardTenant({
+    slug: input.slug,
+    name: input.name,
+    planCode: plan.code,
+    vertical: input.vertical,
+    ownerEmail: input.adminEmail,
+    ownerPassword: input.adminPassword,
+    ownerNombre: input.adminName,
+  });
 
   const now = new Date();
   const trialEnd = daysFromNow(TRIAL_DAYS);
