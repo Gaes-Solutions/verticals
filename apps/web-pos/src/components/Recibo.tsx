@@ -38,9 +38,15 @@ export function Recibo({ session, venta }: { session: Session; venta: VentaDetal
         <span>Subtotal</span>
         <span>${Number.parseFloat(venta.subtotal).toFixed(2)}</span>
       </div>
+      {Number.parseFloat(venta.iepsTotal) > 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span>IEPS</span>
+          <span>${Number.parseFloat(venta.iepsTotal).toFixed(2)}</span>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span>IVA</span>
-        <span>${Number.parseFloat(venta.impuestos).toFixed(2)}</span>
+        <span>${Number.parseFloat(venta.ivaTotal).toFixed(2)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold" }}>
         <span>TOTAL</span>

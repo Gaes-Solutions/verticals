@@ -81,7 +81,8 @@ export interface VentaDetalle {
   estado?: string;
   total: string;
   subtotal: string;
-  impuestos: string;
+  ivaTotal: string;
+  iepsTotal: string;
   cambio?: string | null;
   lineas: VentaLineaDetalle[];
   pagos: Array<{ metodo: string; monto: string }>;
