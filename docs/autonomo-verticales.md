@@ -10,13 +10,13 @@ Regla: push solo a esta rama, nunca a main. No tocar áreas en vuelo de veterina
 | 1 | Abarrotes (flujo 2 / 4.14) | ✅ hecha | Admin campos balanza+IEPS (c5c71fe) · Ticket IEPS/IVA +fix $NaN (c581828) · Recargas/servicios POS (87b0e26) · Fiado/CxC en cobro (d141730) · Apartados (d89cc81) · Captura de peso/balanza (aa5cdce) |
 | 2 | Vendedor mayoreo PWA campo (flujo 3) | ⬜ pendiente | CRM ligero, pedidos offline, firma, gamificación comisiones |
 | 3 | Médico humano + Paciente + telemedicina (flujos 6,7) | ⬜ pendiente | pediatría, CFDI exento, marketplace, Daily.co, PHR; SIN IA clínica |
-| 4 | Partner Contador / despacho (flujo 9 / 4.12) | ⬜ pendiente | partners, niveles, IA contable no-decisional |
+| 4 | Partner Contador / despacho (flujo 9 / 4.12) | ⛔ bloqueada | Portal partner requiere auth partner-facing nueva (ver BLOQUEADOS). Despacho contable UI (CFDIs recibidos/DIOT) sí es construible en web-admin |
 
 Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 
 ## BLOQUEADOS
 
-(ninguno aún)
+- **TIER A #2 Portal Partner Contador** (⛔ decisión de arquitectura). El modelo `Partner` (master) tiene `emailContacto` único pero SIN credenciales; NO existe auth partner-facing (todo `/partners/*` es `authenticateAdmin`). Un portal self-serve exige diseñar autenticación de partner nueva: kind `partner` en JWT, password/flujo de invitación-set-password, endpoints partner-scoped (`/partner/me`, `/partner/referrals`, `/partner/commissions`, `/partner/payouts`). Decisión para Gaby: ¿login propio del partner (email+password+2FA como admin) o magic-link, y flujo de alta? Requiere ADR antes de codear. Mientras tanto se salta.
 
 ## Diario de iteraciones
 
