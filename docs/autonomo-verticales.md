@@ -24,7 +24,8 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 - #4 Signup SaaS público ✅ (72fef5e): `GET /auth/plans` público + `signupPublico` ahora usa `onboardTenant` (crea dueño RBAC → tenant usable) + pantalla Signup en web-admin. Billing tests 12/12 verdes.
 - #5 Checkout/billing tenant ⛔ (split auth + llaves, ver BLOQUEADOS)
 - #8 Firma real B2B ✅ (d2e41d4): columna firma_data_url (migración aditiva) + SignaturePad canvas en web-b2b. 33 tests verdes.
-- #6 Portal Paciente · #7 Doctoralia → pendientes (apps nuevas)
+- #7 Doctoralia ✅ (1fe4a9e): app nueva apps/web-doctoralia (directorio público — buscador, tarjetas con rating/badges, perfil con bio/ubicaciones/reseñas). Sin auth.
+- #6 Portal Paciente → pendiente (app nueva con auth `patient`; backend patient-portal listo con login + me/expediente/criticos/consents/familia/emergency-qr/audit/export). Último item de TIER A.
 
 ## Diario de iteraciones
 
