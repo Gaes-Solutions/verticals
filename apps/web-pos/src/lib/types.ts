@@ -161,6 +161,21 @@ export interface RecargaResultado {
   montoCobradoCliente: string;
 }
 
+export interface ApartadoLista {
+  id: string;
+  folio: string;
+  estado: string;
+  total: string;
+  montoPagado: string;
+  cliente?: { id: string; nombre: string; apellidos?: string | null } | null;
+  _count?: { lineas: number; abonos: number };
+}
+
+export interface ApartadosPaged {
+  items: ApartadoLista[];
+  total: number;
+}
+
 export interface CorteResultado {
   corteId: string;
   tipo: "X" | "Z";

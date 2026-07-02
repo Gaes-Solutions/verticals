@@ -10,6 +10,7 @@ import type {
   VentaDetalle,
   VentaResponse,
 } from "../lib/types.js";
+import { ApartadosModal } from "./ApartadosModal.js";
 import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
@@ -35,6 +36,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [modalCorte, setModalCorte] = useState(false);
   const [modalDevolucion, setModalDevolucion] = useState(false);
   const [modalRecarga, setModalRecarga] = useState(false);
+  const [modalApartados, setModalApartados] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [descuentoPct, setDescuentoPct] = useState(0);
@@ -196,6 +198,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               className="rounded bg-brand-dark px-3 py-1"
             >
               Recarga
+            </button>
+          )}
+          {puede("apartados.leer") && (
+            <button
+              type="button"
+              onClick={() => setModalApartados(true)}
+              className="rounded bg-brand-dark px-3 py-1"
+            >
+              Apartados
             </button>
           )}
           {session.caja && puede("corte.consultar") && (
@@ -414,6 +425,21 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       {modalDevolucion && <DevolucionModal onClose={() => setModalDevolucion(false)} />}
 
       {modalRecarga && <RecargaModal session={session} onClose={() => setModalRecarga(false)} />}
+
+      {modalApartados && (
+        <ApartadosModal
+          session={session}
+          cliente={cliente}
+          ticket={ticket}
+          onClose={() => setModalApartados(false)}
+          onCreated={() => {
+            setTicket([]);
+            setCliente(null);
+            setDescuentoPct(0);
+            setDescuentoMotivo("");
+          }}
+        />
+      )}
 
       {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
