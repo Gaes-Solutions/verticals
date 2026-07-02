@@ -136,6 +136,30 @@ export interface Denominaciones {
   monedas: Record<string, number>;
 }
 
+export interface RecargaCompania {
+  codigo: string;
+  nombre: string;
+  tipo: "tiempo_aire" | "pago_servicio";
+  montosDisponibles: number[];
+  permiteMontoCustom: boolean;
+  montoMinimo?: number;
+  montoMaximo?: number;
+  requiereReferencia?: boolean;
+  formatoReferencia?: string;
+}
+
+export interface RecargaCatalogo {
+  companias: RecargaCompania[];
+}
+
+export interface RecargaResultado {
+  id: string;
+  folio: string;
+  estado: "exitosa" | "fallida";
+  folioProveedor: string | null;
+  montoCobradoCliente: string;
+}
+
 export interface CorteResultado {
   corteId: string;
   tipo: "X" | "Z";

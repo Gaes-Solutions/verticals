@@ -14,6 +14,7 @@ import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
 import { DevolucionModal } from "./DevolucionModal.js";
+import { RecargaModal } from "./RecargaModal.js";
 import { Recibo } from "./Recibo.js";
 
 function money(n: number): string {
@@ -33,6 +34,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [modalCliente, setModalCliente] = useState(false);
   const [modalCorte, setModalCorte] = useState(false);
   const [modalDevolucion, setModalDevolucion] = useState(false);
+  const [modalRecarga, setModalRecarga] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [descuentoPct, setDescuentoPct] = useState(0);
@@ -185,6 +187,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               className="rounded bg-brand-dark px-3 py-1"
             >
               Devolución
+            </button>
+          )}
+          {puede("recargas.vender") && (
+            <button
+              type="button"
+              onClick={() => setModalRecarga(true)}
+              className="rounded bg-brand-dark px-3 py-1"
+            >
+              Recarga
             </button>
           )}
           {session.caja && puede("corte.consultar") && (
@@ -400,6 +411,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       )}
 
       {modalDevolucion && <DevolucionModal onClose={() => setModalDevolucion(false)} />}
+
+      {modalRecarga && <RecargaModal session={session} onClose={() => setModalRecarga(false)} />}
 
       {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
