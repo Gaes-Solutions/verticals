@@ -221,6 +221,9 @@ model Usuario {
   solicitudesDevolucionResueltas SolicitudDevolucion[]        @relation("SolicitudDevolucionResueltaPor")
   mensajesPedido                 MensajePedido[]              @relation("MensajePedidoUsuario")
   preguntasRespondidas           PreguntaProducto[]           @relation("PreguntaRespondidaPor")
+  metasVendedor                  MetaVendedor[]               @relation("MetaVendedorUsuario")
+  comisionesVendedor             Comision[]                   @relation("ComisionVendedor")
+  visitasVendedor                Visita[]                     @relation("VisitaVendedor")
 
   @@index([isActive])
   @@index([tipoUsuario])
@@ -479,6 +482,7 @@ model Categoria {
   children              Categoria[]            @relation("CategoriaTree")
   productos             Producto[]
   reglasPrecioCategoria ReglaPrecioCategoria[]
+  reglasComision        ReglaComision[]        @relation("ReglaComisionCategoria")
 
   @@index([parentId])
   @@index([isActive])
@@ -549,6 +553,7 @@ model Producto {
   reglasPrecioProducto ReglaPrecioProducto[]
   productoPublicado    ProductoPublicado?
   promociones          PromocionProducto[]
+  reglasComision       ReglaComision[]       @relation("ReglaComisionProducto")
 
   @@index([categoriaId])
   @@index([marcaId])
@@ -969,6 +974,7 @@ model Venta {
   cargosHospitalFacturados CargoHospital[]       @relation("CargoHospitalFacturadoEnVenta")
   pedidoEcommerce          PedidoEcommerce?      @relation("PedidoEcommerceVenta")
   promocionesAplicadas     PromocionAplicacion[] @relation("VentaPromociones")
+  comisiones               Comision[]
 
   @@unique([sucursalId, folio])
   @@index([estado, createdAt])
@@ -1516,6 +1522,7 @@ model ClienteB2b {
   cuentasCobrar       CuentaCobrar[]
   cotizaciones        Cotizacion[]
   pedidos             Pedido[]
+  visitas             Visita[]
 
   @@index([razonSocial])
   @@index([rfc])
@@ -1848,6 +1855,7 @@ model CxcPago {
 
   cuentaCobrar CuentaCobrar @relation(fields: [cuentaCobrarId], references: [id], onDelete: Cascade)
   usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  comision Comision?
 
   @@index([cuentaCobrarId, createdAt])
   @@map("cxc_pagos")
@@ -2117,6 +2125,8 @@ model Pedido {
   trackingUrl          String?                @map("tracking_url")
   fechaEntregaEstimada DateTime?              @map("fecha_entrega_estimada")
   notas                String?
+  firmaDataUrl         String?                @map("firma_data_url")
+  firmadoAt            DateTime?              @map("firmado_at")
   ventaId              String?                @unique @map("venta_id")
   enviadoAt            DateTime?              @map("enviado_at")
   entregadoAt          DateTime?              @map("entregado_at")
@@ -2135,6 +2145,7 @@ model Pedido {
   direccionEnvio ClienteB2bDireccion? @relation(fields: [direccionEnvioId], references: [id], onDelete: SetNull)
   venta          Venta?               @relation(fields: [ventaId], references: [id], onDelete: SetNull)
   lineas         PedidoLinea[]
+  comisiones     Comision[]
 
   @@unique([sucursalId, folio])
   @@index([estado])
@@ -4517,4 +4528,163 @@ model SyncTombstone {
 
   @@index([entityType, deletedAt])
   @@map("sync_tombstones")
+}
+
+// ============================================================
+// Flujo 3 — Vendedor de campo: comisiones + CRM de visitas
+// ============================================================
+
+enum FirmaPedidoModo {
+  off
+  sugerida
+  obligatoria
+}
+
+/// Config del tenant para vendedores de campo (fila única, patrón ConfigSeguridad).
+/// bonosEscalonados: [{ desdePct: 80, bonoPct: 1.0 }, ...] — % extra sobre lo
+/// vendido del periodo al cruzar cada escalón de la meta.
+model ConfigVendedores {
+  id                 String          @id @default(cuid())
+  geocheckinActivo   Boolean         @default(false) @map("geocheckin_activo")
+  rankingActivo      Boolean         @default(false) @map("ranking_activo")
+  firmaPedidoModo    FirmaPedidoModo @default(sugerida) @map("firma_pedido_modo")
+  metaMensualDefault Decimal?        @map("meta_mensual_default") @db.Decimal(14, 2)
+  bonosEscalonados   Json            @default("[]") @map("bonos_escalonados")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@map("config_vendedores")
+}
+
+enum ComisionBase {
+  venta // devenga al registrar la venta / convertir pedido
+  cobro // devenga al cobrar (pago de CxC) — alinea vendedor con cobranza
+}
+
+/// Regla configurable. Sin categoría/producto = regla general; la más específica
+/// con menor `prioridad` gana por línea.
+model ReglaComision {
+  id          String       @id @default(cuid())
+  nombre      String
+  base        ComisionBase @default(venta)
+  pct         Decimal      @db.Decimal(5, 2)
+  categoriaId String?      @map("categoria_id")
+  productoId  String?      @map("producto_id")
+  prioridad   Int          @default(100)
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  categoria  Categoria? @relation("ReglaComisionCategoria", fields: [categoriaId], references: [id], onDelete: Cascade)
+  producto   Producto?  @relation("ReglaComisionProducto", fields: [productoId], references: [id], onDelete: Cascade)
+  comisiones Comision[]
+
+  @@index([isActive, prioridad])
+  @@map("reglas_comision")
+}
+
+model MetaVendedor {
+  id        String   @id @default(cuid())
+  usuarioId String   @map("usuario_id")
+  periodo   String // "YYYY-MM"
+  montoMeta Decimal  @map("monto_meta") @db.Decimal(14, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  usuario Usuario @relation("MetaVendedorUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, periodo])
+  @@index([periodo])
+  @@map("metas_vendedor")
+}
+
+enum ComisionEstado {
+  pendiente
+  pagada
+  cancelada
+}
+
+/// Devengo individual. Se cancela (no se borra) si la venta se cancela o
+/// devuelve — el historial de castigos queda auditable.
+model Comision {
+  id              String         @id @default(cuid())
+  vendedorId      String         @map("vendedor_id")
+  reglaId         String?        @map("regla_id")
+  base            ComisionBase
+  ventaId         String?        @map("venta_id")
+  pedidoId        String?        @map("pedido_id")
+  cxcPagoId       String?        @unique @map("cxc_pago_id")
+  periodo         String // "YYYY-MM" del devengo
+  montoBase       Decimal        @map("monto_base") @db.Decimal(14, 4)
+  pct             Decimal        @db.Decimal(5, 2)
+  monto           Decimal        @db.Decimal(14, 4)
+  estado          ComisionEstado @default(pendiente)
+  pagadaAt        DateTime?      @map("pagada_at")
+  canceladaMotivo String?        @map("cancelada_motivo")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  vendedor Usuario        @relation("ComisionVendedor", fields: [vendedorId], references: [id], onDelete: Restrict)
+  regla    ReglaComision? @relation(fields: [reglaId], references: [id], onDelete: SetNull)
+  venta    Venta?         @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  pedido   Pedido?        @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  cxcPago  CxcPago?       @relation(fields: [cxcPagoId], references: [id], onDelete: SetNull)
+
+  @@index([vendedorId, periodo])
+  @@index([estado])
+  @@map("comisiones")
+}
+
+enum VisitaTipo {
+  visita
+  llamada
+}
+
+enum VisitaEstado {
+  planeada
+  hecha
+  cancelada
+}
+
+/// Visita de campo (o llamada) a un cliente B2B. Se planea (ruta del día) y se
+/// cierra con checkin geo opcional, notas, fotos y resultado.
+model Visita {
+  id                 String       @id @default(cuid())
+  vendedorId         String       @map("vendedor_id")
+  clienteB2bId       String       @map("cliente_b2b_id")
+  tipo               VisitaTipo   @default(visita)
+  estado             VisitaEstado @default(planeada)
+  fechaPlaneada      DateTime     @map("fecha_planeada")
+  checkinAt          DateTime?    @map("checkin_at")
+  checkinLat         Decimal?     @map("checkin_lat") @db.Decimal(9, 6)
+  checkinLng         Decimal?     @map("checkin_lng") @db.Decimal(9, 6)
+  notas              String?
+  resultado          String?
+  motivoNoVisita     String?      @map("motivo_no_visita")
+  duracionLlamadaSeg Int?         @map("duracion_llamada_seg")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  vendedor   Usuario      @relation("VisitaVendedor", fields: [vendedorId], references: [id], onDelete: Restrict)
+  clienteB2b ClienteB2b   @relation(fields: [clienteB2bId], references: [id], onDelete: Cascade)
+  fotos      VisitaFoto[]
+
+  @@index([vendedorId, fechaPlaneada])
+  @@index([clienteB2bId, fechaPlaneada])
+  @@map("visitas")
+}
+
+/// Evidencia fotográfica (anaquel/fachada/exhibidor) como data URL ≤200KB,
+/// misma convención que la firma de cotización.
+model VisitaFoto {
+  id        String   @id @default(cuid())
+  visitaId  String   @map("visita_id")
+  dataUrl   String   @map("data_url")
+  etiqueta  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visita Visita @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+
+  @@index([visitaId])
+  @@map("visita_fotos")
 }
