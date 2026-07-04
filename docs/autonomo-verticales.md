@@ -48,6 +48,19 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 3. Revisar y mergear la rama `autonomo/verticales-pendientes` a main.
 4. Al mergear/deploy: aplicar migración tenant `20260702090000_add_cotizacion_firma` (prisma migrate deploy) y `prisma generate`.
 
+## FASE 2 (2026-07-03) — Decisiones destrabadas + Vendedor Mayoreo
+
+Gaby cerró las 2 decisiones bloqueantes (ver ADR 013 y 014):
+- Partner: email + password + 2FA TOTP (invitación → set password). → #2 DESBLOQUEADO.
+- Billing: sesión unificada del dueño (token RBAC rol `*` válido en /billing/*). → #5 DESBLOQUEADO (cobro sigue mock hasta llaves).
+
+Orden de trabajo acordado:
+1. **Vendedor mayoreo PWA campo (flujo 3)** — única vertical sin construir. Ya existe: Cotizacion/Pedido con vendedorId, CxC con vendedorId, ClienteB2bVendedorAsignado, rol preset vendedor, firma en cotización. Falta: comisiones configurables (reglas por venta/cobro, bonos escalonados, metas), CRM de visitas (checkin geo opcional, notas, fotos, cierre de día), dashboard vendedor, app PWA `web-vendedor` (puerto 5179) con pedido offline (borrador IndexedDB + cola pending_upload) y firma en pedido.
+2. **Portal Partner Contador** (ADR 013): credenciales+invitación, JWT kind partner, app `web-partner`.
+3. **Billing "Mi suscripción"** en web-admin (ADR 014): guard dual + sección UI.
+
+Reglas vigentes: push solo a `autonomo/verticales-pendientes`, no tocar áreas veterinaria (web-clinical/web-marketplace/salud), design system gx-*, responsive mobile-first, gating por permisos, tests Vitest por módulo.
+
 ## Diario de iteraciones
 
 ### Setup (2026-07-02)
