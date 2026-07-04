@@ -10,7 +10,7 @@ Regla: push solo a esta rama, nunca a main. No tocar áreas en vuelo de veterina
 | 1 | Abarrotes (flujo 2 / 4.14) | ✅ hecha | Admin campos balanza+IEPS (c5c71fe) · Ticket IEPS/IVA +fix $NaN (c581828) · Recargas/servicios POS (87b0e26) · Fiado/CxC en cobro (d141730) · Apartados (d89cc81) · Captura de peso/balanza (aa5cdce) |
 | 2 | Vendedor mayoreo PWA campo (flujo 3) | ✅ hecha | Schema+migración (7a2f0a2) · Backend comisiones/visitas/vendedor + devengo automático + castigos + 21 tests (76bd5e6) · PWA web-vendedor:5179 verificada e2e (2da0ca4) |
 | 3 | Médico humano + Paciente + telemedicina (flujos 6,7) | ⬜ pendiente | pediatría, CFDI exento, marketplace, Daily.co, PHR; SIN IA clínica |
-| 4 | Partner Contador / despacho (flujo 9 / 4.12) | 🟡 parcial | Portal partner ⛔ (falta auth, ver BLOQUEADOS). Despacho contable UI ✅ (f3e94f3): CFDIs recibidos + categorización IA + DIOT en web-admin |
+| 4 | Partner Contador / despacho (flujo 9 / 4.12) | ✅ hecha | Despacho contable UI ✅ (f3e94f3) · Auth partner + endpoints self-serve ✅ (fbe8033, ADR 013) · web-partner:5180 verificado e2e ✅ (65b307d) |
 
 Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 
@@ -47,6 +47,15 @@ Estados: ⬜ pendiente · 🟡 en curso · ✅ hecha · ⛔ bloqueada
 2. Decidir integración auth billing + dar llaves Stripe/Conekta (para #5, cobro real; hoy es mock).
 3. Revisar y mergear la rama `autonomo/verticales-pendientes` a main.
 4. Al mergear/deploy: aplicar migración tenant `20260702090000_add_cotizacion_firma` (prisma migrate deploy) y `prisma generate`.
+
+## 🏁 FASE 2 CERRADA (2026-07-04)
+
+Todo el backlog quedó construido y verificado e2e en navegador:
+1. **Vendedor Mayoreo (flujo 3)** ✅ — comisiones+visitas+dashboard backend (76bd5e6, 21 tests) + PWA web-vendedor:5179 (2da0ca4).
+2. **Portal Partner** ✅ — auth email+password+2FA (fbe8033, 11 tests, ADR 013) + web-partner:5180 (65b307d).
+3. **Billing "Mi suscripción"** ✅ — guard dual dueño/admin_tenant (ADR 014) + sección en web-admin solo-dueño (1e43c32, 4 tests).
+
+Pendiente SOLO de Gaby: llaves Stripe/Conekta (cobro real), Resend (emails), deploy de las apps nuevas, y el PR de esta rama a main.
 
 ## FASE 2 (2026-07-03) — Decisiones destrabadas + Vendedor Mayoreo
 
