@@ -15,7 +15,7 @@ cd "$ROOT"
 set -a; [ -f .env ] && . ./.env; set +a
 
 API_PORT=3000
-declare -A APPS=([superadmin]=5176 [admin]=5174 [pos]=5173 [tienda]=3001)
+declare -A APPS=([superadmin]=5176 [admin]=5174 [pos]=5173 [tienda]=3001 [vendedor]=5179)
 
 # Lanza un comando en sesión propia (sobrevive al cierre de la tarea del agente).
 launch() { setsid bash -c "$1" </dev/null >"$2" 2>&1 & disown; }
@@ -36,6 +36,7 @@ cmd_up() {
   launch "VITE_API_URL=http://localhost:$API_PORT pnpm --filter @gaespos/web-superadmin dev" /tmp/gaes-superadmin.log
   launch "VITE_API_URL=http://localhost:$API_PORT pnpm --filter @gaespos/web-admin dev" /tmp/gaes-admin.log
   launch "VITE_API_URL=http://localhost:$API_PORT pnpm --filter @gaespos/web-pos dev" /tmp/gaes-pos.log
+  launch "VITE_API_URL=http://localhost:$API_PORT pnpm --filter @gaespos/web-vendedor dev" /tmp/gaes-vendedor.log
   launch "TIENDA_TENANT_SLUG=${TIENDA_TENANT_SLUG:-globoland} TIENDA_USER_EMAIL=${TIENDA_USER_EMAIL:-dueno@globoland.mx} TIENDA_USER_PASSWORD=${TIENDA_USER_PASSWORD:-Cliente!2026} pnpm --filter @gaespos/web-tienda dev" /tmp/gaes-tienda.log
 
   for svc in superadmin admin pos tienda; do
