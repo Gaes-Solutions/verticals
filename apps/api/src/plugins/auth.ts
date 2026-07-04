@@ -56,6 +56,19 @@ type ClienteTokenPayload = {
   kind: "cliente";
 };
 
+type PartnerTokenPayload = {
+  sub: string;
+  email: string;
+  kind: "partner";
+};
+
+// Token intermedio del partner: password validada, falta el reto TOTP.
+type PartnerMfaTokenPayload = {
+  sub: string;
+  email: string;
+  kind: "partner_mfa";
+};
+
 type ClienteB2bTokenPayload = {
   sub: string; // usuarioB2bId
   clienteB2bId: string;
@@ -73,6 +86,8 @@ type TokenPayload =
   | PatientTokenPayload
   | AdminTenantTokenPayload
   | ClienteTokenPayload
+  | PartnerTokenPayload
+  | PartnerMfaTokenPayload
   | ClienteB2bTokenPayload;
 
 declare module "fastify" {
@@ -84,6 +99,7 @@ declare module "fastify" {
     authenticateAdminTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateCliente: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateClienteB2b: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticatePartner: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -174,6 +190,17 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente");
+    }
+  });
+
+  app.decorate("authenticatePartner", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "partner") {
+      return rejectUnauthorized(reply, "Se requiere sesión de partner");
     }
   });
 

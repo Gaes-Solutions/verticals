@@ -25,6 +25,7 @@ import doctoraliaTenantRoutes, {
   doctoraliaPublicRoutes,
 } from "./modules/doctoralia/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import partnerPortalRoutes from "./modules/partner-portal/routes.js";
 import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
 import phrTenantRoutes, {
   patientAuthRoutes,
@@ -180,6 +181,7 @@ export async function buildApp(
   await app.register(adminObservabilidadRoutes, { prefix: "/admin/observabilidad" });
   await app.register(adminTicketsRoutes, { prefix: "/admin/tickets" });
   await app.register(partnersRoutes, { prefix: "/partners" });
+  await app.register(partnerPortalRoutes, { prefix: "/partner" });
   await app.register(partnersPublicRoutes);
   await app.register(doctoraliaAdminRoutes);
   await app.register(doctoraliaPublicRoutes);

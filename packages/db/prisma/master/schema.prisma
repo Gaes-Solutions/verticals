@@ -273,6 +273,11 @@ model Partner {
   rfc                     String?       @unique
   emailContacto           String        @unique @map("email_contacto")
   telefonoContacto        String?       @map("telefono_contacto")
+  passwordHash            String?       @map("password_hash")
+  mfaSecret               String?       @map("mfa_secret")
+  mfaVerifiedAt           DateTime?     @map("mfa_verified_at")
+  mfaBackupCodes          String[]      @default([]) @map("mfa_backup_codes")
+  lastLoginAt             DateTime?     @map("last_login_at")
   tipo                    PartnerTipo
   nivel                   PartnerNivel  @default(bronze)
   comisionPctOverride     Decimal?      @map("comision_pct_override") @db.Decimal(5, 2)
