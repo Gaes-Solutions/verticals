@@ -1,0 +1,30 @@
+{
+  "name": "@gaespos/web-partner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portal self-serve del partner contador: su programa de referidos, comisiones, payouts y links de referencia. SPA Vite+React conectada a la API GaesSoft.",
+  "scripts": {
+    "dev": "vite --port 5180",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 5180",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "qrcode.react": "^4.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@gaespos/ui": "workspace:*",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
