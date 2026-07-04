@@ -1,6 +1,11 @@
 import type { TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import {
+  devengarComisionesVenta,
+  getConfigVendedores,
+  pctOverrideVendedor,
+} from "../comisiones/service.js";
 import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
@@ -38,6 +43,7 @@ export interface CrearPedidoInput {
   direccionEnvioId?: string;
   fechaEntregaEstimada?: Date;
   notas?: string;
+  firmaDataUrl?: string;
   lineas: PedidoLineaInput[];
 }
 
@@ -188,6 +194,7 @@ interface PersistirPedidoInput {
     notas?: string;
     listaPrecioCodigo?: string;
     cuponCodigo?: string;
+    firmaDataUrl?: string;
   };
 }
 
@@ -212,6 +219,9 @@ async function persistirPedido(tx: Tx, p: PersistirPedidoInput): Promise<PedidoC
         ? { fechaEntregaEstimada: p.extras.fechaEntregaEstimada }
         : {}),
       ...(p.extras.notas ? { notas: p.extras.notas } : {}),
+      ...(p.extras.firmaDataUrl
+        ? { firmaDataUrl: p.extras.firmaDataUrl, firmadoAt: new Date() }
+        : {}),
     },
   });
   for (const linea of p.lineas) {
@@ -291,6 +301,10 @@ export async function crearPedido(
   const iva = lineas.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
   const descuento = Decimal.max(subtotal.minus(total), ZERO);
   const estadoAprobacion = determinarAprobacion(cliente, total);
+  const configVendedores = await getConfigVendedores(client);
+  if (configVendedores.firmaPedidoModo === "obligatoria" && !input.firmaDataUrl) {
+    throw new PedidoError(422, "El negocio exige firma del cliente para levantar pedidos");
+  }
 
   return client.$transaction((tx) =>
     persistirPedido(tx, {
@@ -308,6 +322,7 @@ export async function crearPedido(
         ...(input.notas ? { notas: input.notas } : {}),
         ...(input.listaPrecioCodigo ? { listaPrecioCodigo: input.listaPrecioCodigo } : {}),
         ...(input.cuponCodigo ? { cuponCodigo: input.cuponCodigo } : {}),
+        ...(input.firmaDataUrl ? { firmaDataUrl: input.firmaDataUrl } : {}),
       },
     }),
   );
@@ -577,6 +592,31 @@ type PedidoConLineas = NonNullable<Awaited<ReturnType<TenantClient["pedido"]["fi
   sucursal: { id: string; codigo: string };
 };
 
+/** Devengo base `venta` al convertir: la base es el subtotal neto de cada línea. */
+async function devengarComisionesPedido(
+  tx: Tx,
+  ped: PedidoConLineas,
+  ventaId: string,
+): Promise<void> {
+  const productos = await tx.producto.findMany({
+    where: { id: { in: ped.lineas.map((l) => l.productoId) } },
+    select: { id: true, categoriaId: true },
+  });
+  const categoriaPor = new Map(productos.map((p) => [p.id, p.categoriaId]));
+  const pctOverride = await pctOverrideVendedor(tx, ped.clienteB2bId, ped.vendedorId);
+  await devengarComisionesVenta(tx, {
+    vendedorId: ped.vendedorId,
+    ventaId,
+    pedidoId: ped.id,
+    lineas: ped.lineas.map((l) => ({
+      productoId: l.productoId,
+      categoriaId: categoriaPor.get(l.productoId) ?? null,
+      montoBase: l.subtotal.toString(),
+    })),
+    pctOverride,
+  });
+}
+
 function validarPagosConvertir(
   total: Decimal,
   pagos: ConvertirVentaInput["pagos"],
@@ -737,6 +777,7 @@ export async function convertirAVenta(
         });
       }
       await tx.pedido.update({ where: { id: ped.id }, data: { ventaId } });
+      await devengarComisionesPedido(tx, ped, ventaId);
       return {
         ventaId,
         folioVenta,

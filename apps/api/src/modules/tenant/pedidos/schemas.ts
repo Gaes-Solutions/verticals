@@ -24,6 +24,7 @@ export const pedidoCreateSchema = z.object({
   direccionEnvioId: z.string().optional(),
   fechaEntregaEstimada: z.string().datetime().optional(),
   notas: z.string().max(1000).optional(),
+  firmaDataUrl: z.string().startsWith("data:image/").max(200_000).optional(),
   lineas: z.array(pedidoLineaSchema).min(1),
 });
 
@@ -71,6 +72,10 @@ export const pedidoConvertirVentaSchema = z.object({
 });
 
 export const pedidoIdParamSchema = z.object({ id: z.string().min(1) });
+
+export const pedidoFirmaSchema = z.object({
+  firmaDataUrl: z.string().startsWith("data:image/").max(200_000),
+});
 
 export const pedidoListQuerySchema = z.object({
   estado: z.enum(["creado", "preparando", "enviado", "entregado", "cancelado"]).optional(),

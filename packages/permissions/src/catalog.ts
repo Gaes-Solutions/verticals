@@ -192,6 +192,13 @@ export const PERMISSIONS = {
 
   CONFIGURACION_LEER: "configuracion.leer",
   CONFIGURACION_ACTUALIZAR: "configuracion.actualizar",
+
+  COMISIONES_LEER_PROPIAS: "comisiones.leer_propias",
+  COMISIONES_LEER_TODAS: "comisiones.leer_todas",
+  COMISIONES_GESTIONAR: "comisiones.gestionar",
+
+  VISITAS_LEER: "visitas.leer",
+  VISITAS_GESTIONAR: "visitas.gestionar",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -603,6 +610,25 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
     category: "configuracion",
     description: "Editar configuración del tenant",
   },
+
+  "comisiones.leer_propias": {
+    category: "comisiones",
+    description: "Ver mis comisiones, meta y progreso",
+  },
+  "comisiones.leer_todas": {
+    category: "comisiones",
+    description: "Ver comisiones y metas de todos los vendedores",
+  },
+  "comisiones.gestionar": {
+    category: "comisiones",
+    description: "Configurar reglas, metas, bonos y marcar comisiones pagadas",
+  },
+
+  "visitas.leer": { category: "visitas", description: "Ver visitas y ruta del día" },
+  "visitas.gestionar": {
+    category: "visitas",
+    description: "Planear, hacer checkin y cerrar visitas de campo",
+  },
 };
 
 export function permissionMeta(code: PermissionCode): PermissionMeta {
@@ -620,6 +646,9 @@ const CATEGORY_VERTICALS: Record<string, ReadonlyArray<string>> = {
   cotizaciones: ["retail_mayoreo", "abarrotes"],
   pedidos: ["retail_mayoreo", "abarrotes"],
   ecommerce: ["retail_mayoreo", "abarrotes"],
+  // vendedor de campo
+  comisiones: ["retail_mayoreo", "abarrotes"],
+  visitas: ["retail_mayoreo", "abarrotes"],
   // abarrotes
   recargas: ["abarrotes"],
   // salud (vet + humana)

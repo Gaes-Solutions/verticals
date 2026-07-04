@@ -6,6 +6,7 @@ import {
   pedidoConvertirVentaSchema,
   pedidoCreateSchema,
   pedidoEnviadoSchema,
+  pedidoFirmaSchema,
   pedidoIdParamSchema,
   pedidoListQuerySchema,
   pedidoRechazarSchema,
@@ -125,6 +126,7 @@ const pedidosRoutes: FastifyPluginAsync = async (app) => {
           ? { fechaEntregaEstimada: new Date(body.fechaEntregaEstimada) }
           : {}),
         ...(body.notas ? { notas: body.notas } : {}),
+        ...(body.firmaDataUrl ? { firmaDataUrl: body.firmaDataUrl } : {}),
       });
       return reply.code(201).send(result);
     } catch (err) {
@@ -132,6 +134,33 @@ const pedidosRoutes: FastifyPluginAsync = async (app) => {
       if (handled !== null) return handled;
       throw err;
     }
+  });
+
+  app.post("/:id/firma", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.PEDIDOS_CREAR);
+    const { id } = pedidoIdParamSchema.parse(req.params);
+    const body = pedidoFirmaSchema.parse(req.body);
+    const pedido = await req.tenantPrisma.pedido.findUnique({ where: { id } });
+    if (!pedido) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Pedido no encontrado" });
+    }
+    if (pedido.estado === "cancelado") {
+      return reply
+        .code(409)
+        .send({ statusCode: 409, error: "Conflict", message: "Pedido cancelado no se firma" });
+    }
+    if (pedido.firmaDataUrl) {
+      return reply
+        .code(409)
+        .send({ statusCode: 409, error: "Conflict", message: "El pedido ya tiene firma" });
+    }
+    return req.tenantPrisma.pedido.update({
+      where: { id },
+      data: { firmaDataUrl: body.firmaDataUrl, firmadoAt: new Date() },
+      select: { id: true, folio: true, firmadoAt: true },
+    });
   });
 
   app.post("/:id/aprobar", async (req, reply) => {

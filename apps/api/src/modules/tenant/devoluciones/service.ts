@@ -9,6 +9,7 @@ import {
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { FiadoError, aplicarAbonoFiado } from "../clientes/fiado-service.js";
+import { castigarComisionesDevolucion } from "../comisiones/service.js";
 import { CxcError, registrarPago as registrarPagoCxc } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 
@@ -528,16 +529,21 @@ export async function procesarDevolucion(
 
   let persisted: { devolucionId: string; folio: string };
   try {
-    persisted = await client.$transaction((tx) =>
-      persistirDevolucion(tx, {
+    persisted = await client.$transaction(async (tx) => {
+      const result = await persistirDevolucion(tx, {
         venta,
         input,
         lineasCalc,
         usuarioId,
         tipo,
         totales: { subtotalDev, ivaDev, iepsDev, totalDev },
-      }),
-    );
+      });
+      await castigarComisionesDevolucion(tx, {
+        ventaId: venta.id,
+        montoDevuelto: subtotalDev.toString(),
+      });
+      return result;
+    });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
       throw new DevolucionError(409, err.message, {

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { devengarComisionCobro } from "../comisiones/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -253,7 +254,7 @@ export async function registrarPago(
         ...(estado === "liquidada" ? { liquidadaAt: new Date() } : {}),
       },
     });
-    await tx.cxcPago.create({
+    const pago = await tx.cxcPago.create({
       data: {
         cuentaCobrarId: cxc.id,
         metodo: input.metodo,
@@ -263,6 +264,13 @@ export async function registrarPago(
         usuarioId: input.usuarioId,
       },
     });
+    if (cxc.vendedorId) {
+      await devengarComisionCobro(tx, {
+        vendedorId: cxc.vendedorId,
+        cxcPagoId: pago.id,
+        monto: monto.toString(),
+      });
+    }
 
     return {
       saldoRestante: saldoNuevo.toString(),

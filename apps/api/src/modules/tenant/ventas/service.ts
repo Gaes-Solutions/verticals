@@ -2,6 +2,7 @@ import type { LineaCalculada, TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
+import { cancelarComisionesVenta } from "../comisiones/service.js";
 import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
 import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
@@ -694,6 +695,7 @@ export async function cancelarVenta(
         });
       }
     }
+    await cancelarComisionesVenta(tx, venta.id, "venta_cancelada");
     await tx.venta.update({
       where: { id: ventaId },
       data: {
