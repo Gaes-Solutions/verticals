@@ -45,11 +45,17 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
   return false;
 }
 
+declare module "fastify" {
+  interface FastifyRequest {
+    billingTenantId?: string;
+  }
+}
+
 function tenantIdFrom(req: FastifyRequest): string {
-  if (req.user.kind !== "admin_tenant") {
+  if (!req.billingTenantId) {
     throw new BillingError(401, "Sesión de admin del tenant requerida");
   }
-  return req.user.tenantId;
+  return req.billingTenantId;
 }
 
 /**
@@ -132,7 +138,41 @@ export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
  * Endpoints del admin del tenant para gestionar su cuenta SaaS.
  */
 export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
-  app.addHook("preHandler", app.authenticateAdminTenant);
+  // ADR 014 — sesión unificada: además del token admin_tenant, el token RBAC
+  // del DUEÑO (rol "*") accede al billing de SU tenant, resuelto del propio
+  // token (jamás de parámetros). Empleados con otros roles no pasan.
+  app.addHook("preHandler", async (req, reply) => {
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply
+        .code(401)
+        .send({ statusCode: 401, error: "Unauthorized", message: "Token inválido o expirado" });
+    }
+    if (req.user.kind === "admin_tenant") {
+      req.billingTenantId = req.user.tenantId;
+      return;
+    }
+    if (req.user.kind === "tenant") {
+      const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+      const esDueno = perms.length === 1 && perms[0] === "*";
+      if (esDueno) {
+        const tenant = await app.masterPrisma.tenant.findUnique({
+          where: { slug: req.user.tenantSlug },
+          select: { id: true },
+        });
+        if (tenant) {
+          req.billingTenantId = tenant.id;
+          return;
+        }
+      }
+    }
+    return reply.code(401).send({
+      statusCode: 401,
+      error: "Unauthorized",
+      message: "Se requiere sesión de admin del tenant o del dueño del negocio",
+    });
+  });
 
   app.get("/billing/me", async (req) => getBillingContext(app.masterPrisma, tenantIdFrom(req)));
 

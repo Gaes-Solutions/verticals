@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CreditCard,
   FileText,
   Link2,
   type LucideIcon,
@@ -26,7 +27,7 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { Signup } from "./components/Signup.js";
-import { loadToken, setToken } from "./lib/api.js";
+import { loadToken, puede, setToken } from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
@@ -46,6 +47,7 @@ import { ProductosPage } from "./pages/ProductosPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
 import { SeguridadPage } from "./pages/SeguridadPage.js";
+import { SuscripcionPage } from "./pages/SuscripcionPage.js";
 import { TiendaPage } from "./pages/TiendaPage.js";
 import { UsuariosRolesPage } from "./pages/UsuariosRolesPage.js";
 import { VentasPage } from "./pages/VentasPage.js";
@@ -77,9 +79,10 @@ type Seccion =
   | "contabilidad"
   | "usuarios"
   | "seguridad"
+  | "suscripcion"
   | "tienda";
 
-const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
+const NAV: { key: Seccion; label: string; icon: LucideIcon; soloDueno?: boolean }[] = [
   { key: "dashboard", label: "Resumen", icon: BarChart3 },
   { key: "reportes", label: "Reportes", icon: BarChart3 },
   { key: "productos", label: "Productos", icon: Package },
@@ -101,6 +104,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon }[] = [
   { key: "contabilidad", label: "Contabilidad", icon: FileText },
   { key: "usuarios", label: "Usuarios y permisos", icon: Users },
   { key: "seguridad", label: "Seguridad", icon: ShieldCheck },
+  { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, soloDueno: true },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart },
 ];
 
@@ -179,7 +183,7 @@ export function App() {
       >
         <div className="hidden px-5 py-4 text-lg font-bold text-brand md:block">GaesSoft</div>
         <nav className="flex-1 overflow-y-auto px-2 pt-3 md:pt-0">
-          {NAV.map((n) => (
+          {NAV.filter((n) => !n.soloDueno || puede("*")).map((n) => (
             <button
               key={n.key}
               type="button"
@@ -221,6 +225,7 @@ export function App() {
         {seccion === "contabilidad" && <ContabilidadPage />}
         {seccion === "usuarios" && <UsuariosRolesPage />}
         {seccion === "seguridad" && <SeguridadPage />}
+        {seccion === "suscripcion" && <SuscripcionPage />}
         {seccion === "ventas" && <VentasPage />}
         {seccion === "cobros" && <CobrosPage />}
         {seccion === "monedero" && <MonederoPage />}
