@@ -4,6 +4,7 @@ import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
 import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
+import { startRecordatoriosScheduler } from "./jobs/recordatorios-scheduler.js";
 import { initSentry } from "./observability/sentry.js";
 
 async function main(): Promise<void> {
@@ -35,10 +36,22 @@ async function main(): Promise<void> {
     stopFlowsScheduler = startFlowsScheduler(app.log, config.FLOWS_RUN_INTERVAL_MIN);
   }
 
+  let stopRecordatoriosScheduler: (() => void) | undefined;
+  if (config.RECORDATORIOS_SCHEDULER_ENABLED) {
+    stopRecordatoriosScheduler = startRecordatoriosScheduler(
+      app.log,
+      config.RECORDATORIOS_RUN_INTERVAL_MIN,
+      app.mensajeriaProviderFactory,
+      app.emailProviderFactory,
+      config.PUBLIC_BASE_URL,
+    );
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "shutdown signal received");
     try {
       stopFlowsScheduler?.();
+      stopRecordatoriosScheduler?.();
       await app.close();
       process.exit(0);
     } catch (err) {

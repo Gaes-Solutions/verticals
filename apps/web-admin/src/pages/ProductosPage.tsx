@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type { Categoria, Paged, Producto } from "../lib/types.js";
 
 export function ProductosPage() {
@@ -7,6 +7,9 @@ export function ProductosPage() {
   const [query, setQuery] = useState("");
   const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState<Producto | "nuevo" | null>(null);
+  const puedeCrear = puede("productos.crear");
+  const puedeEditar = puede("productos.actualizar");
+  const puedeArchivar = puede("productos.archivar");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -35,13 +38,15 @@ export function ProductosPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Productos</h1>
-        <button
-          type="button"
-          onClick={() => setModal("nuevo")}
-          className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
-        >
-          + Nuevo producto
-        </button>
+        {puedeCrear && (
+          <button
+            type="button"
+            onClick={() => setModal("nuevo")}
+            className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
+          >
+            + Nuevo producto
+          </button>
+        )}
       </div>
 
       <input
@@ -86,20 +91,25 @@ export function ProductosPage() {
                     : "—"}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setModal(p)}
-                    className="mr-3 text-brand hover:underline"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => archivar(p.id)}
-                    className="text-slate-400 hover:text-red-500"
-                  >
-                    Archivar
-                  </button>
+                  {puedeEditar && (
+                    <button
+                      type="button"
+                      onClick={() => setModal(p)}
+                      className="mr-3 text-brand hover:underline"
+                    >
+                      Editar
+                    </button>
+                  )}
+                  {puedeArchivar && (
+                    <button
+                      type="button"
+                      onClick={() => archivar(p.id)}
+                      className="text-slate-400 hover:text-red-500"
+                    >
+                      Archivar
+                    </button>
+                  )}
+                  {!puedeEditar && !puedeArchivar && <span className="text-slate-300">—</span>}
                 </td>
               </tr>
             ))}

@@ -8,7 +8,7 @@
  *            catálogo público → carrito → checkout (pago mock) → pedido→venta.
  *   ACTO 2 — Marketing (4.2): promo automática en venta POS + lealtad
  *            (inscribir/acumular/canjear) + campaña WhatsApp (segmento→worker).
- *   ACTO 3 — Doctoralia (4.3): perfil médico → admin valida cédula → publica →
+ *   ACTO 3 — Marketplace (4.3): perfil médico → admin valida cédula → publica →
  *            búsqueda pública → reseña verificada de paciente.
  *   ACTO 4 — Portal paciente PHR (4.4): login OTP sin contraseña → la clínica
  *            registra consent y publica un registro → expediente unificado
@@ -401,8 +401,8 @@ interface ClinicState {
   patientId: string;
 }
 
-async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<void> {
-  act("ACTO 3 — Doctoralia (perfiles + búsqueda + reseñas 4.3)");
+async function actoMarketplace(adminToken: string, state: ClinicState): Promise<void> {
+  act("ACTO 3 — Marketplace (perfiles + búsqueda + reseñas 4.3)");
   state.adminToken = adminToken;
 
   step("Provisionar clínica + médico");
@@ -443,7 +443,7 @@ async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<v
   step("Médico crea su perfil público y lo envía a revisión");
   const perfil = await call<{ id: string; slugSeo: string; status: string }>(
     "POST",
-    "/t/doctoralia/perfil",
+    "/t/marketplace/perfil",
     {
       token: state.medicoToken,
       body: {
@@ -460,7 +460,7 @@ async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<v
   assertOk(perfil, 201, "crear perfil");
   state.professionalId = perfil.body.id;
   state.slugSeo = perfil.body.slugSeo;
-  await call("POST", `/t/doctoralia/perfil/${state.professionalId}/ubicaciones`, {
+  await call("POST", `/t/marketplace/perfil/${state.professionalId}/ubicaciones`, {
     token: state.medicoToken,
     body: {
       nombreLugar: "Consultorio Centro Médico",
@@ -469,7 +469,7 @@ async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<v
       esPrincipal: true,
     },
   });
-  await call("POST", `/t/doctoralia/perfil/${state.professionalId}/enviar-revision`, {
+  await call("POST", `/t/marketplace/perfil/${state.professionalId}/enviar-revision`, {
     token: state.medicoToken,
   });
   ok(
@@ -479,7 +479,7 @@ async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<v
   step("Admin GaesSoft valida cédula SSa y publica");
   const val = await call<{ status: string; validadaSsaAt: string | null }>(
     "POST",
-    `/doctoralia/admin/perfiles/${state.professionalId}/validar`,
+    `/marketplace/admin/perfiles/${state.professionalId}/validar`,
     { token: adminToken, body: { cedulaValidaSsa: true, aprobar: true } },
   );
   assertOk(val, 200, "admin valida");
@@ -488,27 +488,27 @@ async function actoDoctoralia(adminToken: string, state: ClinicState): Promise<v
   step("Búsqueda pública del marketplace + perfil por slug");
   const busca = await call<{ total: number }>(
     "GET",
-    "/doctoralia/buscar?q=house&ciudad=Guadalajara",
+    "/marketplace/buscar?q=house&ciudad=Guadalajara",
   );
   assertOk(busca, 200, "búsqueda pública");
   const pub = await call<{ nombrePublico: string }>(
     "GET",
-    `/doctoralia/profesionales/${state.slugSeo}`,
+    `/marketplace/profesionales/${state.slugSeo}`,
   );
   ok(
     `búsqueda "house" en Guadalajara → ${busca.body.total} resultado(s) · perfil público: ${pub.body.nombrePublico}`,
   );
 
   step("Paciente verificado deja una reseña");
-  await call("POST", "/doctoralia/pacientes/registro", {
+  await call("POST", "/marketplace/pacientes/registro", {
     body: { email: `resena-${SUFFIX}@demo.mx`, nombre: "Pedro Reseña" },
   });
-  await call("POST", "/doctoralia/pacientes/confirmar", {
+  await call("POST", "/marketplace/pacientes/confirmar", {
     body: { email: `resena-${SUFFIX}@demo.mx` },
   });
   const review = await call<{ moderacionStatus: string; publicada: boolean }>(
     "POST",
-    `/doctoralia/profesionales/${state.professionalId}/resenas`,
+    `/marketplace/profesionales/${state.professionalId}/resenas`,
     {
       body: {
         pacienteEmail: `resena-${SUFFIX}@demo.mx`,
@@ -632,11 +632,11 @@ async function main(): Promise<void> {
     patientToken: "",
     patientId: "",
   };
-  await actoDoctoralia(adminToken, clinic);
+  await actoMarketplace(adminToken, clinic);
   await actoPhr(clinic);
 
   console.log(
-    `\n${c.bold}${c.green}✓ Demo Hito 4 completo — tienda + marketing + Doctoralia + PHR end-to-end${c.reset}\n`,
+    `\n${c.bold}${c.green}✓ Demo Hito 4 completo — tienda + marketing + Marketplace + PHR end-to-end${c.reset}\n`,
   );
   process.exit(0);
 }

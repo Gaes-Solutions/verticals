@@ -1,13 +1,15 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
   type VentaListQuery,
   ventaCancelarSchema,
+  ventaCobrarSchema,
   ventaCreateSchema,
   ventaIdParamSchema,
   ventaListQuerySchema,
+  ventaPreviewSchema,
 } from "./schemas.js";
-import { VentaError, cancelarVenta, crearVenta } from "./service.js";
+import { VentaError, cancelarVenta, cobrarVenta, crearVenta, previewVenta } from "./service.js";
 
 function buildVentaWhere(q: VentaListQuery): Record<string, unknown> {
   const where: Record<string, unknown> = {};
@@ -79,9 +81,58 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.VENTAS_CREAR);
     const body = ventaCreateSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
-      const result = await crearVenta(req.tenantPrisma, req.principal.userId, body);
+      const result = await crearVenta(req.tenantPrisma, req.principal.userId, body, {
+        permiteDescuentoAlto,
+      });
       return reply.code(201).send(result);
+    } catch (err) {
+      if (err instanceof VentaError) {
+        return reply.code(err.statusCode).send({
+          statusCode: err.statusCode,
+          error: err.statusCode >= 500 ? "Internal" : "Bad Request",
+          message: err.message,
+          ...(err.extra ?? {}),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/preview", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    const body = ventaPreviewSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
+    try {
+      return await previewVenta(req.tenantPrisma, req.principal.userId, body, {
+        permiteDescuentoAlto,
+      });
+    } catch (err) {
+      if (err instanceof VentaError) {
+        return reply.code(err.statusCode).send({
+          statusCode: err.statusCode,
+          error: err.statusCode >= 500 ? "Internal" : "Bad Request",
+          message: err.message,
+          ...(err.extra ?? {}),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/:id/cobrar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    const { id } = ventaIdParamSchema.parse(req.params);
+    const body = ventaCobrarSchema.parse(req.body);
+    try {
+      return await cobrarVenta(req.tenantPrisma, id, body);
     } catch (err) {
       if (err instanceof VentaError) {
         return reply.code(err.statusCode).send({

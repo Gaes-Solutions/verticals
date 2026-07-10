@@ -1,7 +1,7 @@
 import { masterPrisma } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { moderarTextoResena, slugify } from "../src/modules/doctoralia/service.js";
+import { moderarTextoResena, slugify } from "../src/modules/marketplace/service.js";
 import {
   buildTestApp,
   createTenantUser,
@@ -10,7 +10,7 @@ import {
   loginTenantUser,
 } from "./helpers.js";
 
-const TENANT_SLUG = "test-doctoralia-1";
+const TENANT_SLUG = "test-marketplace-1";
 const OWNER_EMAIL = "owner-doc@test.local";
 const MEDICO_EMAIL = "medico-doc@test.local";
 const RECEPCION_EMAIL = "rec-doc@test.local";
@@ -18,6 +18,7 @@ const PASSWORD = "ChangeMe!2026";
 
 const PACIENTE_OK = "paciente-ok@test.local";
 const PACIENTE_SPAM = "paciente-spam@test.local";
+const PACIENTE_BOOKING = "paciente-booking@test.local";
 
 let app: FastifyInstance;
 let adminToken: string;
@@ -31,6 +32,8 @@ let professionalId: string;
 let slugSeo: string;
 let reviewLimpiaId: string;
 let reviewSpamId: string;
+let otpOk = "";
+let otpSpam = "";
 
 function authMedico() {
   return { authorization: `Bearer ${medicoToken}` };
@@ -42,13 +45,14 @@ function authAdmin() {
   return { authorization: `Bearer ${adminToken}` };
 }
 
-async function cleanupDoctoralia() {
+async function cleanupMarketplace() {
   const profs = await masterPrisma.publicProfessional.findMany({
     where: { tenantIdPrincipal: tenantId },
     select: { id: true },
   });
   const ids = profs.map((p) => p.id);
   if (ids.length > 0) {
+    await masterPrisma.publicBooking.deleteMany({ where: { professionalId: { in: ids } } });
     await masterPrisma.publicReview.deleteMany({ where: { professionalId: { in: ids } } });
     await masterPrisma.publicProfessionalSearchIndex.deleteMany({
       where: { professionalId: { in: ids } },
@@ -59,17 +63,17 @@ async function cleanupDoctoralia() {
     await masterPrisma.publicProfessional.deleteMany({ where: { id: { in: ids } } });
   }
   await masterPrisma.pacienteMaster.deleteMany({
-    where: { email: { in: [PACIENTE_OK, PACIENTE_SPAM] } },
+    where: { email: { in: [PACIENTE_OK, PACIENTE_SPAM, PACIENTE_BOOKING] } },
   });
 }
 
 beforeAll(async () => {
   app = await buildTestApp();
   adminToken = (await loginAdmin(app)).accessToken;
-  await createTestTenant(TENANT_SLUG, "Clínica Doctoralia Test");
+  await createTestTenant(TENANT_SLUG, "Clínica Marketplace Test");
   const tenant = await masterPrisma.tenant.findUniqueOrThrow({ where: { slug: TENANT_SLUG } });
   tenantId = tenant.id;
-  await cleanupDoctoralia();
+  await cleanupMarketplace();
 
   await createTenantUser(TENANT_SLUG, {
     email: OWNER_EMAIL,
@@ -112,7 +116,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanupDoctoralia();
+  await cleanupMarketplace();
   if (app) await app.close();
 });
 
@@ -140,10 +144,10 @@ describe("funciones puras", () => {
 });
 
 describe("perfil profesional (tenant)", () => {
-  it("recepción NO puede gestionar perfil Doctoralia → 403", async () => {
+  it("recepción NO puede gestionar perfil Marketplace → 403", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/t/doctoralia/perfil",
+      url: "/t/marketplace/perfil",
       headers: authRecepcion(),
       payload: { medicoIdLocal: medicoLocalId, tipo: "medico_humano", nombrePublico: "X" },
     });
@@ -153,7 +157,7 @@ describe("perfil profesional (tenant)", () => {
   it("médico crea su perfil en estado borrador", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/t/doctoralia/perfil",
+      url: "/t/marketplace/perfil",
       headers: authMedico(),
       payload: {
         medicoIdLocal: medicoLocalId,
@@ -176,7 +180,7 @@ describe("perfil profesional (tenant)", () => {
   it("upsert es idempotente por (tenant, medico)", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/t/doctoralia/perfil",
+      url: "/t/marketplace/perfil",
       headers: authMedico(),
       payload: {
         medicoIdLocal: medicoLocalId,
@@ -193,7 +197,7 @@ describe("perfil profesional (tenant)", () => {
   it("agrega ubicación principal", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/t/doctoralia/perfil/${professionalId}/ubicaciones`,
+      url: `/t/marketplace/perfil/${professionalId}/ubicaciones`,
       headers: authMedico(),
       payload: {
         nombreLugar: "Consultorio Centro Médico",
@@ -208,21 +212,21 @@ describe("perfil profesional (tenant)", () => {
   it("no aparece en búsqueda mientras está en borrador", async () => {
     // La búsqueda es cross-tenant (master): afirmamos por slug propio, no por
     // conteo global (otros profesionales pueden existir en el master DB).
-    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house&pageSize=50" });
+    const res = await app.inject({ method: "GET", url: "/marketplace/buscar?q=house&pageSize=50" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { items: Array<{ slugSeo: string }> };
     expect(body.items.every((p) => p.slugSeo !== slugSeo)).toBe(true);
   });
 
   it("perfil público en borrador → 404", async () => {
-    const res = await app.inject({ method: "GET", url: `/doctoralia/profesionales/${slugSeo}` });
+    const res = await app.inject({ method: "GET", url: `/marketplace/profesionales/${slugSeo}` });
     expect(res.statusCode).toBe(404);
   });
 
   it("médico envía perfil a revisión", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/t/doctoralia/perfil/${professionalId}/enviar-revision`,
+      url: `/t/marketplace/perfil/${professionalId}/enviar-revision`,
       headers: authMedico(),
     });
     expect(res.statusCode).toBe(200);
@@ -234,7 +238,7 @@ describe("validación admin GaesSoft", () => {
   it("sin token admin → 401", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/admin/perfiles/${professionalId}/validar`,
+      url: `/marketplace/admin/perfiles/${professionalId}/validar`,
       payload: { cedulaValidaSsa: true, aprobar: true },
     });
     expect(res.statusCode).toBe(401);
@@ -243,7 +247,7 @@ describe("validación admin GaesSoft", () => {
   it("perfil aparece en la cola de pendientes", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/doctoralia/admin/pendientes",
+      url: "/marketplace/admin/pendientes",
       headers: authAdmin(),
     });
     expect(res.statusCode).toBe(200);
@@ -254,7 +258,7 @@ describe("validación admin GaesSoft", () => {
   it("admin valida cédula y publica el perfil", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/admin/perfiles/${professionalId}/validar`,
+      url: `/marketplace/admin/perfiles/${professionalId}/validar`,
       headers: authAdmin(),
       payload: { cedulaValidaSsa: true, aprobar: true },
     });
@@ -265,9 +269,148 @@ describe("validación admin GaesSoft", () => {
   });
 });
 
+describe("reservas (bookings desde el portal)", () => {
+  let pacienteMasterId: string;
+  let bookingId: string;
+
+  it("registra y verifica un paciente que va a reservar", async () => {
+    const reg = await app.inject({
+      method: "POST",
+      url: "/marketplace/pacientes/registro",
+      payload: {
+        email: PACIENTE_BOOKING,
+        nombre: "Laura",
+        apellidos: "Méndez",
+        telefono: "5511122233",
+      },
+    });
+    expect(reg.statusCode).toBe(201);
+    const regBody = reg.json() as { id: string; otpDev?: string };
+    pacienteMasterId = regBody.id;
+    expect(regBody.otpDev).toMatch(/^\d{6}$/);
+    // Con código incorrecto → 401.
+    const malo = await app.inject({
+      method: "POST",
+      url: "/marketplace/pacientes/confirmar",
+      payload: { email: PACIENTE_BOOKING, codigo: "000000" },
+    });
+    expect(malo.statusCode).toBe(401);
+    const conf = await app.inject({
+      method: "POST",
+      url: "/marketplace/pacientes/confirmar",
+      payload: { email: PACIENTE_BOOKING, codigo: regBody.otpDev },
+    });
+    expect(conf.statusCode).toBe(200);
+    expect((conf.json() as { verificado: boolean }).verificado).toBe(true);
+  });
+
+  it("el paciente reserva una cita (queda pendiente)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/marketplace/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+        modalidad: "presencial",
+        motivo: "Chequeo general",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const b = res.json() as { id: string; status: string };
+    expect(b.status).toBe("pendiente");
+    bookingId = b.id;
+  });
+
+  it("el tenant ve la reserva entrante", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/t/marketplace/reservas?status=pendiente",
+      headers: authRecepcion(),
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{ id: string; pacienteNombre: string }>;
+    expect(items.some((r) => r.id === bookingId)).toBe(true);
+  });
+
+  it("confirmar crea una Cita local ligada a la reserva", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/marketplace/reservas/${bookingId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { citaId: string; folio: string; pacienteId: string };
+    expect(r.citaId).toBeTruthy();
+    expect(r.folio).toContain("CT-");
+    expect(r.pacienteId).toBeTruthy();
+
+    const booking = await masterPrisma.publicBooking.findUnique({ where: { id: bookingId } });
+    expect(booking?.status).toBe("confirmada");
+    expect(booking?.citaIdLocal).toBe(r.citaId);
+  });
+
+  it("no se puede confirmar dos veces", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/marketplace/reservas/${bookingId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("confirmar una reserva de telemedicina crea la sala de video", async () => {
+    const reserva = await app.inject({
+      method: "POST",
+      url: `/marketplace/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        modalidad: "telemedicina",
+        motivo: "Consulta a distancia",
+      },
+    });
+    const teleId = (reserva.json() as { id: string }).id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/marketplace/reservas/${teleId}/confirmar`,
+      headers: authRecepcion(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json() as { salaVideoUrl: string | null };
+    expect(r.salaVideoUrl).toMatch(/^https:\/\//);
+    const booking = await masterPrisma.publicBooking.findUnique({ where: { id: teleId } });
+    expect(booking?.salaVideoUrl).toBe(r.salaVideoUrl);
+    expect(booking?.salaVideoProveedor).toBe("mock");
+  });
+
+  it("rechazar una reserva pendiente la marca rechazada", async () => {
+    const reserva = await app.inject({
+      method: "POST",
+      url: `/marketplace/profesionales/${professionalId}/reservar`,
+      payload: {
+        pacienteMasterId,
+        fechaHora: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+        modalidad: "presencial",
+      },
+    });
+    const otroId = (reserva.json() as { id: string }).id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/marketplace/reservas/${otroId}/rechazar`,
+      headers: authRecepcion(),
+      payload: { motivo: "Agenda llena esa fecha" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { status: string }).status).toBe("rechazada");
+  });
+});
+
 describe("búsqueda y perfil público", () => {
   it("encuentra el profesional publicado por texto", async () => {
-    const res = await app.inject({ method: "GET", url: "/doctoralia/buscar?q=house&pageSize=50" });
+    const res = await app.inject({ method: "GET", url: "/marketplace/buscar?q=house&pageSize=50" });
     const body = res.json() as { items: Array<{ slugSeo: string }> };
     expect(body.items.some((p) => p.slugSeo === slugSeo)).toBe(true);
   });
@@ -275,14 +418,14 @@ describe("búsqueda y perfil público", () => {
   it("filtra por ciudad y telemedicina", async () => {
     const ok = await app.inject({
       method: "GET",
-      url: "/doctoralia/buscar?ciudad=Guadalajara&aceptaTelemedicina=true&pageSize=50",
+      url: "/marketplace/buscar?ciudad=Guadalajara&aceptaTelemedicina=true&pageSize=50",
     });
     expect(
       (ok.json() as { items: Array<{ slugSeo: string }> }).items.some((p) => p.slugSeo === slugSeo),
     ).toBe(true);
     const miss = await app.inject({
       method: "GET",
-      url: "/doctoralia/buscar?ciudad=Monterrey&pageSize=50",
+      url: "/marketplace/buscar?ciudad=Monterrey&pageSize=50",
     });
     expect(
       (miss.json() as { items: Array<{ slugSeo: string }> }).items.every(
@@ -292,7 +435,7 @@ describe("búsqueda y perfil público", () => {
   });
 
   it("perfil público accesible por slug", async () => {
-    const res = await app.inject({ method: "GET", url: `/doctoralia/profesionales/${slugSeo}` });
+    const res = await app.inject({ method: "GET", url: `/marketplace/profesionales/${slugSeo}` });
     expect(res.statusCode).toBe(200);
     const p = res.json() as { nombrePublico: string; ubicaciones: unknown[] };
     expect(p.nombrePublico).toBe("Dr. Gregory House");
@@ -302,14 +445,15 @@ describe("búsqueda y perfil público", () => {
 
 describe("reseñas verificadas", () => {
   it("paciente no verificado no puede reseñar → 403", async () => {
-    await app.inject({
+    const reg = await app.inject({
       method: "POST",
-      url: "/doctoralia/pacientes/registro",
+      url: "/marketplace/pacientes/registro",
       payload: { email: PACIENTE_OK, nombre: "Ana López" },
     });
+    otpOk = (reg.json() as { otpDev: string }).otpDev;
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/profesionales/${professionalId}/resenas`,
+      url: `/marketplace/profesionales/${professionalId}/resenas`,
       payload: { pacienteEmail: PACIENTE_OK, ratingGeneral: 5, comentario: "Muy bien" },
     });
     expect(res.statusCode).toBe(403);
@@ -318,12 +462,12 @@ describe("reseñas verificadas", () => {
   it("reseña limpia de paciente verificado se publica automáticamente", async () => {
     await app.inject({
       method: "POST",
-      url: "/doctoralia/pacientes/confirmar",
-      payload: { email: PACIENTE_OK },
+      url: "/marketplace/pacientes/confirmar",
+      payload: { email: PACIENTE_OK, codigo: otpOk },
     });
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/profesionales/${professionalId}/resenas`,
+      url: `/marketplace/profesionales/${professionalId}/resenas`,
       payload: {
         pacienteEmail: PACIENTE_OK,
         bookingId: "booking-123",
@@ -340,26 +484,27 @@ describe("reseñas verificadas", () => {
   });
 
   it("recalcula score del profesional tras publicar reseña", async () => {
-    const res = await app.inject({ method: "GET", url: `/doctoralia/profesionales/${slugSeo}` });
+    const res = await app.inject({ method: "GET", url: `/marketplace/profesionales/${slugSeo}` });
     const p = res.json() as { scorePromedio: string; totalResenas: number };
     expect(Number(p.scorePromedio)).toBe(5);
     expect(p.totalResenas).toBe(1);
   });
 
   it("reseña con lenguaje ofensivo queda en revisión humana (no pública)", async () => {
-    await app.inject({
+    const reg = await app.inject({
       method: "POST",
-      url: "/doctoralia/pacientes/registro",
+      url: "/marketplace/pacientes/registro",
       payload: { email: PACIENTE_SPAM, nombre: "Beto Spam" },
     });
+    otpSpam = (reg.json() as { otpDev: string }).otpDev;
     await app.inject({
       method: "POST",
-      url: "/doctoralia/pacientes/confirmar",
-      payload: { email: PACIENTE_SPAM },
+      url: "/marketplace/pacientes/confirmar",
+      payload: { email: PACIENTE_SPAM, codigo: otpSpam },
     });
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/profesionales/${professionalId}/resenas`,
+      url: `/marketplace/profesionales/${professionalId}/resenas`,
       payload: {
         pacienteEmail: PACIENTE_SPAM,
         ratingGeneral: 1,
@@ -374,7 +519,7 @@ describe("reseñas verificadas", () => {
   });
 
   it("score NO cambia con la reseña no publicada", async () => {
-    const res = await app.inject({ method: "GET", url: `/doctoralia/profesionales/${slugSeo}` });
+    const res = await app.inject({ method: "GET", url: `/marketplace/profesionales/${slugSeo}` });
     const p = res.json() as { scorePromedio: string; totalResenas: number };
     expect(p.totalResenas).toBe(1);
   });
@@ -382,7 +527,7 @@ describe("reseñas verificadas", () => {
   it("reseña duplicada del mismo paciente → 409", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/profesionales/${professionalId}/resenas`,
+      url: `/marketplace/profesionales/${professionalId}/resenas`,
       payload: { pacienteEmail: PACIENTE_OK, ratingGeneral: 4, comentario: "Otra vez" },
     });
     expect(res.statusCode).toBe(409);
@@ -393,7 +538,7 @@ describe("médico responde y denuncia reseñas", () => {
   it("médico responde públicamente una reseña publicada", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/t/doctoralia/perfil/${professionalId}/resenas/${reviewLimpiaId}/responder`,
+      url: `/t/marketplace/perfil/${professionalId}/resenas/${reviewLimpiaId}/responder`,
       headers: authMedico(),
       payload: { respuesta: "¡Gracias por su confianza!" },
     });
@@ -404,14 +549,14 @@ describe("médico responde y denuncia reseñas", () => {
   it("médico denuncia una reseña → sale de publicación y baja conteo", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/t/doctoralia/perfil/${professionalId}/resenas/${reviewLimpiaId}/denunciar`,
+      url: `/t/marketplace/perfil/${professionalId}/resenas/${reviewLimpiaId}/denunciar`,
       headers: authMedico(),
     });
     expect(res.statusCode).toBe(200);
     expect((res.json() as { moderacionStatus: string }).moderacionStatus).toBe("denunciado_medico");
     const perfil = await app.inject({
       method: "GET",
-      url: `/doctoralia/profesionales/${slugSeo}`,
+      url: `/marketplace/profesionales/${slugSeo}`,
     });
     expect((perfil.json() as { totalResenas: number }).totalResenas).toBe(0);
   });
@@ -419,7 +564,7 @@ describe("médico responde y denuncia reseñas", () => {
   it("médico de otro tenant no puede tocar este perfil (aislamiento)", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/t/doctoralia/perfil/${professionalId}/resenas/${reviewSpamId}/responder`,
+      url: `/t/marketplace/perfil/${professionalId}/resenas/${reviewSpamId}/responder`,
       headers: authRecepcion(),
       payload: { respuesta: "hola" },
     });
@@ -432,7 +577,7 @@ describe("moderación admin de reseñas escaladas", () => {
   it("admin aprueba la reseña que estaba en revisión humana", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/admin/resenas/${reviewSpamId}/moderar`,
+      url: `/marketplace/admin/resenas/${reviewSpamId}/moderar`,
       headers: authAdmin(),
       payload: { aprobar: true },
     });
@@ -443,14 +588,14 @@ describe("moderación admin de reseñas escaladas", () => {
   it("admin suspende el perfil → desaparece de búsqueda", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/doctoralia/admin/perfiles/${professionalId}/suspender`,
+      url: `/marketplace/admin/perfiles/${professionalId}/suspender`,
       headers: authAdmin(),
     });
     expect(res.statusCode).toBe(200);
     expect((res.json() as { status: string }).status).toBe("suspendido");
     const busca = await app.inject({
       method: "GET",
-      url: "/doctoralia/buscar?q=house&pageSize=50",
+      url: "/marketplace/buscar?q=house&pageSize=50",
     });
     expect(
       (busca.json() as { items: Array<{ slugSeo: string }> }).items.every(

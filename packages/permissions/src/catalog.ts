@@ -94,6 +94,16 @@ export const PERMISSIONS = {
   KARDEX_APLICAR: "kardex.aplicar",
   KARDEX_REPROGRAMAR: "kardex.reprogramar",
 
+  LABORATORIO_LEER: "laboratorio.leer",
+  LABORATORIO_SOLICITAR: "laboratorio.solicitar",
+  LABORATORIO_CARGAR_RESULTADO: "laboratorio.cargar_resultado",
+  LABORATORIO_CANCELAR: "laboratorio.cancelar",
+
+  IMAGENOLOGIA_LEER: "imagenologia.leer",
+  IMAGENOLOGIA_SOLICITAR: "imagenologia.solicitar",
+  IMAGENOLOGIA_CARGAR_RESULTADO: "imagenologia.cargar_resultado",
+  IMAGENOLOGIA_CANCELAR: "imagenologia.cancelar",
+
   CFDIS_RECIBIDOS_LEER: "cfdis_recibidos.leer",
   CFDIS_RECIBIDOS_UPLOAD: "cfdis_recibidos.upload",
   CFDIS_RECIBIDOS_CATEGORIZAR: "cfdis_recibidos.categorizar",
@@ -120,12 +130,12 @@ export const PERMISSIONS = {
   PLANTILLAS_GESTIONAR: "plantillas.gestionar",
   LEALTAD_GESTIONAR: "lealtad.gestionar",
 
-  DOCTORALIA_PERFIL_GESTIONAR: "doctoralia.perfil_gestionar",
-  DOCTORALIA_PERFIL_PUBLICAR: "doctoralia.perfil_publicar",
-  DOCTORALIA_RESENAS_LEER: "doctoralia.resenas_leer",
-  DOCTORALIA_RESENAS_RESPONDER: "doctoralia.resenas_responder",
-  DOCTORALIA_RESENAS_DENUNCIAR: "doctoralia.resenas_denunciar",
-  DOCTORALIA_ADMIN_VALIDAR: "doctoralia.admin_validar",
+  MARKETPLACE_PERFIL_GESTIONAR: "marketplace.perfil_gestionar",
+  MARKETPLACE_PERFIL_PUBLICAR: "marketplace.perfil_publicar",
+  MARKETPLACE_RESENAS_LEER: "marketplace.resenas_leer",
+  MARKETPLACE_RESENAS_RESPONDER: "marketplace.resenas_responder",
+  MARKETPLACE_RESENAS_DENUNCIAR: "marketplace.resenas_denunciar",
+  MARKETPLACE_ADMIN_VALIDAR: "marketplace.admin_validar",
 
   PHR_PUBLICAR_REGISTRO: "phr.publicar_registro",
   PHR_SOLICITAR_CONSENT: "phr.solicitar_consent",
@@ -401,6 +411,34 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
     description: "Reprogramar dosis pendientes del kardex",
   },
 
+  "laboratorio.leer": { category: "laboratorio", description: "Consultar estudios de laboratorio" },
+  "laboratorio.solicitar": {
+    category: "laboratorio",
+    description: "Solicitar estudios de laboratorio",
+  },
+  "laboratorio.cargar_resultado": {
+    category: "laboratorio",
+    description: "Cargar resultados de laboratorio",
+  },
+  "laboratorio.cancelar": {
+    category: "laboratorio",
+    description: "Cancelar un estudio de laboratorio",
+  },
+
+  "imagenologia.leer": { category: "imagenologia", description: "Consultar estudios de imagen" },
+  "imagenologia.solicitar": {
+    category: "imagenologia",
+    description: "Solicitar estudios de imagen",
+  },
+  "imagenologia.cargar_resultado": {
+    category: "imagenologia",
+    description: "Cargar hallazgos e imágenes de un estudio",
+  },
+  "imagenologia.cancelar": {
+    category: "imagenologia",
+    description: "Cancelar un estudio de imagen",
+  },
+
   "cfdis_recibidos.leer": {
     category: "despacho",
     description: "Consultar CFDIs recibidos (XMLs de proveedores)",
@@ -490,28 +528,28 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
     description: "Configurar programa de lealtad y ajustar puntos",
   },
 
-  "doctoralia.perfil_gestionar": {
-    category: "doctoralia",
+  "marketplace.perfil_gestionar": {
+    category: "marketplace",
     description: "Editar el perfil público del profesional (bio, especialidades, ubicaciones)",
   },
-  "doctoralia.perfil_publicar": {
-    category: "doctoralia",
+  "marketplace.perfil_publicar": {
+    category: "marketplace",
     description: "Enviar el perfil a revisión / publicarlo en el marketplace",
   },
-  "doctoralia.resenas_leer": {
-    category: "doctoralia",
+  "marketplace.resenas_leer": {
+    category: "marketplace",
     description: "Consultar reseñas públicas recibidas",
   },
-  "doctoralia.resenas_responder": {
-    category: "doctoralia",
+  "marketplace.resenas_responder": {
+    category: "marketplace",
     description: "Responder públicamente a una reseña",
   },
-  "doctoralia.resenas_denunciar": {
-    category: "doctoralia",
+  "marketplace.resenas_denunciar": {
+    category: "marketplace",
     description: "Denunciar una reseña para revisión humana",
   },
-  "doctoralia.admin_validar": {
-    category: "doctoralia",
+  "marketplace.admin_validar": {
+    category: "marketplace",
     description: "Validar cédula y aprobar publicación (rol admin GaesSoft)",
   },
 
@@ -638,7 +676,7 @@ export function permissionMeta(code: PermissionCode): PermissionMeta {
 /**
  * Categorías de permisos que SOLO aplican a ciertas verticales. Las categorías
  * no listadas aquí son universales (aplican a cualquier negocio). Así un retail
- * no ve permisos de clínica/Doctoralia y un consultorio no ve los de ecommerce.
+ * no ve permisos de clínica/Marketplace y un consultorio no ve los de ecommerce.
  * Verticales: retail_mayoreo | abarrotes | salud_vet | salud_humana | despacho_contable | otro.
  */
 const CATEGORY_VERTICALS: Record<string, ReadonlyArray<string>> = {
@@ -659,7 +697,7 @@ const CATEGORY_VERTICALS: Record<string, ReadonlyArray<string>> = {
   medicos: ["salud_vet", "salud_humana"],
   recetas: ["salud_vet", "salud_humana"],
   hospitalizacion: ["salud_vet", "salud_humana"],
-  doctoralia: ["salud_vet", "salud_humana"],
+  marketplace: ["salud_vet", "salud_humana"],
   phr: ["salud_vet", "salud_humana"],
   vacunas: ["salud_vet", "salud_humana"],
   mascotas: ["salud_vet"],

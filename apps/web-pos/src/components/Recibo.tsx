@@ -15,7 +15,7 @@ const METODO_LABEL: Record<string, string> = {
  * en `window.print()` vía CSS @media print. Sirve para impresora térmica o PDF.
  */
 export function Recibo({ session, venta }: { session: Session; venta: VentaDetalle }) {
-  const cambio = venta.cambio ? Number.parseFloat(venta.cambio) : 0;
+  const cambio = venta.cambioDado ? Number.parseFloat(venta.cambioDado) : 0;
   return (
     <div className="recibo-print">
       <div style={{ textAlign: "center", marginBottom: 8 }}>
@@ -30,9 +30,9 @@ export function Recibo({ session, venta }: { session: Session; venta: VentaDetal
       {venta.lineas.map((l) => (
         <div key={l.numero} style={{ display: "flex", justifyContent: "space-between" }}>
           <span>
-            {l.cantidad}× {l.descripcion}
+            {l.cantidad}× {l.snapshotProducto?.nombreProducto ?? "—"}
           </span>
-          <span>${Number.parseFloat(l.total).toFixed(2)}</span>
+          <span>${Number.parseFloat(l.totalLinea).toFixed(2)}</span>
         </div>
       ))}
       <div>{"-".repeat(32)}</div>

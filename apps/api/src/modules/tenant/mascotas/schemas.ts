@@ -26,7 +26,10 @@ export const mascotaCreateSchema = z.object({
   fechaNacimiento: z.string().datetime().optional(),
   fechaNacimientoAproximada: z.boolean().default(false),
   color: z.string().max(80).optional(),
-  microchip: z.string().max(80).optional(),
+  microchip: z
+    .string()
+    .regex(/^\d{9,15}$/, "Microchip debe ser de 9 a 15 dígitos (ISO 11784/11785)")
+    .optional(),
   pesoActualKg: positiveDecimal.optional(),
   fotoUrl: z.string().url().max(500).optional(),
   tutorClienteId: z.string().optional(),

@@ -8,7 +8,7 @@ import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "..
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
-import type { VentaCreateInput } from "./schemas.js";
+import type { VentaCobrarInput, VentaCreateInput, VentaPreviewInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -33,6 +33,38 @@ export interface VentaCreadaResult {
   total: string;
   totalCobrado: string;
   cambioDado: string;
+}
+
+/** Capacidades del usuario que afectan la venta (resueltas en la ruta vía RBAC). */
+export interface VentaOpts {
+  /** Permite sobrepasar el tope de descuento configurado (ventas.aplicar_descuento_alto o dueño). */
+  permiteDescuentoAlto?: boolean;
+}
+
+/**
+ * Valida que el descuento global manual no exceda el tope configurado por el
+ * dueño (config_ventas.descuentoMaximoPct, default 100 = sin tope). Quien tiene
+ * `permiteDescuentoAlto` lo sobrepasa. Bloquea antes de calcular precios.
+ */
+async function validarTopeDescuento(
+  client: TenantClient,
+  descuentoGlobalPct: number | string | null | undefined,
+  permiteDescuentoAlto: boolean,
+): Promise<void> {
+  if (permiteDescuentoAlto || descuentoGlobalPct === null || descuentoGlobalPct === undefined) {
+    return;
+  }
+  const pct = new Decimal(String(descuentoGlobalPct));
+  if (pct.lte(ZERO)) return;
+  const cfg = await client.configVentas.findFirst();
+  const max = new Decimal(cfg ? cfg.descuentoMaximoPct.toString() : "100");
+  if (pct.gt(max)) {
+    throw new VentaError(
+      400,
+      `El descuento máximo permitido es ${max.toString()}%. Pide autorización para aplicar un descuento mayor.`,
+      { descuentoMaximoPct: max.toString(), solicitado: pct.toString() },
+    );
+  }
 }
 
 interface VarianteSnapshot {
@@ -352,11 +384,69 @@ function totalesVenta(
   };
 }
 
+export interface VentaPreviewResult {
+  subtotal: string;
+  descuentoTotal: string;
+  descuentoPromo: string;
+  ivaTotal: string;
+  iepsTotal: string;
+  total: string;
+  promosAplicadas: number;
+}
+
+/**
+ * Calcula los totales de un ticket con la MISMA lógica que la venta (pricing +
+ * promociones automáticas) pero sin pagos ni persistencia. Lo usa el POS para
+ * mostrar el total real antes de cobrar y no cobrar de más cuando hay promos.
+ */
+export async function previewVenta(
+  client: TenantClient,
+  usuarioId: string,
+  input: VentaPreviewInput,
+  opts: VentaOpts = {},
+): Promise<VentaPreviewResult> {
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
+  const sucursal = await validarSucursalCaja(client, input.sucursalId, undefined);
+  const fullInput = { ...input, pagos: [] } as unknown as VentaCreateInput;
+  const ticket = await ejecutarPreviewSegura(client, usuarioId, fullInput);
+
+  const snapshots = await loadSnapshots(
+    client,
+    ticket.lineas.map((l) => l.productoVarianteId),
+  );
+  const varianteAProducto = new Map<string, string>();
+  for (const [varId, snap] of snapshots) varianteAProducto.set(varId, snap.productoId);
+
+  const promos = await cargarPromocionesAplicables(client, {
+    canal: input.canal === "mayoreo" ? "b2b" : input.canal,
+    sucursalId: sucursal.id,
+    fecha: new Date(),
+    ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+    varianteAProducto,
+  });
+  const promoResult = aplicarPromocionesATicket(ticket, promos, varianteAProducto);
+  const ticketFinal = promoResult.ticket;
+  const lineasCalc = buildLineasCalculo(ticketFinal, fullInput, snapshots);
+  const totales = totalesVenta(ticketFinal, lineasCalc);
+
+  return {
+    subtotal: totales.subtotalVenta.toString(),
+    descuentoTotal: totales.descuentoVenta.toString(),
+    descuentoPromo: promoResult.descuentoPromoTotal,
+    ivaTotal: totales.ivaVenta.toString(),
+    iepsTotal: totales.iepsVenta.toString(),
+    total: totales.totalVenta.toString(),
+    promosAplicadas: promoResult.aplicaciones.length,
+  };
+}
+
 export async function crearVenta(
   client: TenantClient,
   usuarioId: string,
   input: VentaCreateInput,
+  opts: VentaOpts = {},
 ): Promise<VentaCreadaResult> {
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
   const sucursal = await validarSucursalCaja(client, input.sucursalId, input.cajaId);
   const ticket = await ejecutarPreviewSegura(client, usuarioId, input);
 
@@ -441,12 +531,16 @@ export async function crearVenta(
     });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
-      throw new VentaError(409, err.message, {
-        varianteId: err.varianteId,
-        sucursalId: err.sucursalId,
-        stockActual: err.stockActual,
-        intentado: err.intentado,
-      });
+      throw new VentaError(
+        409,
+        `Stock insuficiente: hay ${err.stockActual} disponible(s) y se intentó vender ${err.intentado}.`,
+        {
+          varianteId: err.varianteId,
+          sucursalId: err.sucursalId,
+          stockActual: err.stockActual,
+          intentado: err.intentado,
+        },
+      );
     }
     if (err instanceof FiadoError) {
       throw new VentaError(err.statusCode, err.message, err.extra);
@@ -644,6 +738,67 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
     total: p.totales.totalVenta.toString(),
     totalCobrado: p.totales.totalCobrado.toString(),
     cambioDado: p.totales.cambio.toString(),
+  };
+}
+
+/**
+ * Cobra una venta en borrador (la que genera el alta hospitalaria, un apartado o
+ * una cotización) finalizándola hacia una caja con apertura abierta. Registra los
+ * pagos y la marca `cobrada` para que entre al corte X/Z igual que cualquier venta
+ * del POS — reutiliza la misma validación de pagos y de caja.
+ */
+export async function cobrarVenta(
+  client: TenantClient,
+  ventaId: string,
+  input: VentaCobrarInput,
+): Promise<VentaCreadaResult> {
+  const venta = await client.venta.findUnique({ where: { id: ventaId } });
+  if (!venta) throw new VentaError(404, "Venta no encontrada");
+  if (venta.estado !== "borrador") {
+    throw new VentaError(409, `La venta ya está ${venta.estado}`, { estado: venta.estado });
+  }
+  await validarSucursalCaja(client, venta.sucursalId, input.cajaId);
+
+  const total = new Decimal(venta.total.toString());
+  const { totalCobrado, cambio } = validarPagos(
+    total,
+    input.pagos,
+    venta.clienteId ?? undefined,
+    venta.clienteB2bId ?? undefined,
+  );
+
+  const actualizada = await client.$transaction(async (tx) => {
+    for (const p of input.pagos) {
+      await tx.ventaPago.create({
+        data: {
+          ventaId,
+          metodo: p.metodo,
+          monto: p.monto,
+          ...(p.referencia ? { referencia: p.referencia } : {}),
+          ...(p.autorizacion ? { autorizacion: p.autorizacion } : {}),
+          ...(p.terminalReferencia ? { terminalReferencia: p.terminalReferencia } : {}),
+          ...(p.ultimosCuatro ? { ultimosCuatro: p.ultimosCuatro } : {}),
+        },
+      });
+    }
+    return tx.venta.update({
+      where: { id: ventaId },
+      data: {
+        estado: "cobrada",
+        cajaId: input.cajaId,
+        cobradaAt: new Date(),
+        totalCobrado: totalCobrado.toFixed(4),
+        cambioDado: cambio.toFixed(4),
+      },
+    });
+  });
+
+  return {
+    ventaId: actualizada.id,
+    folio: actualizada.folio,
+    total: actualizada.total.toString(),
+    totalCobrado: actualizada.totalCobrado.toString(),
+    cambioDado: actualizada.cambioDado.toString(),
   };
 }
 

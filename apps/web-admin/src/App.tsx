@@ -1,7 +1,9 @@
 import {
+  BadgePercent,
   BarChart3,
   CreditCard,
   FileText,
+  HandCoins,
   Link2,
   type LucideIcon,
   Menu,
@@ -11,6 +13,7 @@ import {
   QrCode,
   Receipt,
   RotateCcw,
+  Settings,
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
@@ -23,7 +26,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ComponentType, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { Signup } from "./components/Signup.js";
@@ -33,6 +36,8 @@ import { CfdiPage } from "./pages/CfdiPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { ContabilidadPage } from "./pages/ContabilidadPage.js";
+import { ConfiguracionPage } from "./pages/ConfiguracionPage.js";
+import { CxcPage } from "./pages/CxcPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
@@ -44,6 +49,7 @@ import { MonederoPage } from "./pages/MonederoPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
 import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
+import { PromocionesPage } from "./pages/PromocionesPage.js";
 import { ReportesPage } from "./pages/ReportesPage.js";
 import { ResenasPage } from "./pages/ResenasPage.js";
 import { SeguridadPage } from "./pages/SeguridadPage.js";
@@ -66,6 +72,8 @@ type Seccion =
   | "etiquetas"
   | "ventas"
   | "cobros"
+  | "cxc"
+  | "promociones"
   | "monedero"
   | "pedidos"
   | "devoluciones"
@@ -79,34 +87,81 @@ type Seccion =
   | "contabilidad"
   | "usuarios"
   | "seguridad"
+  | "configuracion"
+  | "contabilidad"
   | "suscripcion"
   | "tienda";
 
-const NAV: { key: Seccion; label: string; icon: LucideIcon; soloDueno?: boolean }[] = [
-  { key: "dashboard", label: "Resumen", icon: BarChart3 },
-  { key: "reportes", label: "Reportes", icon: BarChart3 },
-  { key: "productos", label: "Productos", icon: Package },
-  { key: "inventario", label: "Inventario", icon: Tags },
-  { key: "inventario-iq", label: "Inteligencia inventario", icon: TrendingUp },
-  { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode },
-  { key: "importador", label: "Carga masiva", icon: Upload },
-  { key: "compras", label: "Compras (OC)", icon: ShoppingBag },
-  { key: "ventas", label: "Ventas", icon: Receipt },
-  { key: "cobros", label: "Cobros / Links", icon: Link2 },
-  { key: "monedero", label: "Monedero / Gift cards", icon: Wallet },
-  { key: "pedidos", label: "Pedidos online", icon: PackageCheck },
-  { key: "devoluciones", label: "Devoluciones", icon: RotateCcw },
-  { key: "envios", label: "Envíos", icon: Truck },
-  { key: "resenas", label: "Reseñas", icon: Star },
-  { key: "automatizaciones", label: "Automatizaciones", icon: Zap },
-  { key: "preguntas", label: "Preguntas", icon: MessageCircleQuestion },
-  { key: "cfdi", label: "Facturación", icon: FileText },
-  { key: "contabilidad", label: "Contabilidad", icon: FileText },
-  { key: "usuarios", label: "Usuarios y permisos", icon: Users },
-  { key: "seguridad", label: "Seguridad", icon: ShieldCheck },
-  { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, soloDueno: true },
-  { key: "tienda", label: "Tienda online", icon: ShoppingCart },
+// `perm` = permiso de lectura que exige la ruta de ese módulo. La UI oculta el
+// item si el usuario no lo tiene (el dueño con "*" ve todo). Defensa en
+// profundidad: el backend revalida igual con requirePerm.
+const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
+  { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
+  { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
+  { key: "productos", label: "Productos", icon: Package, perm: "productos.leer" },
+  { key: "inventario", label: "Inventario", icon: Tags, perm: "inventario.leer" },
+  {
+    key: "inventario-iq",
+    label: "Inteligencia inventario",
+    icon: TrendingUp,
+    perm: "reportes.ventas",
+  },
+  { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode, perm: "productos.leer" },
+  { key: "importador", label: "Carga masiva", icon: Upload, perm: "productos.bulk_import" },
+  { key: "compras", label: "Compras (OC)", icon: ShoppingBag, perm: "compras_oc.leer" },
+  { key: "ventas", label: "Ventas", icon: Receipt, perm: "ventas.leer" },
+  { key: "cobros", label: "Cobros / Links", icon: Link2, perm: "ventas.crear" },
+  { key: "cxc", label: "Cuentas por cobrar", icon: HandCoins, perm: "cxc.leer" },
+  { key: "promociones", label: "Promociones", icon: BadgePercent, perm: "promociones.gestionar" },
+  { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
+  { key: "pedidos", label: "Pedidos online", icon: PackageCheck, perm: "ecommerce.pedidos_leer" },
+  { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
+  { key: "envios", label: "Envíos", icon: Truck, perm: "ecommerce.envios_gestionar" },
+  { key: "resenas", label: "Reseñas", icon: Star, perm: "ecommerce.resenas_moderar" },
+  { key: "automatizaciones", label: "Automatizaciones", icon: Zap, perm: "plantillas.gestionar" },
+  {
+    key: "preguntas",
+    label: "Preguntas",
+    icon: MessageCircleQuestion,
+    perm: "ecommerce.resenas_moderar",
+  },
+  { key: "cfdi", label: "Facturación", icon: FileText, perm: "cfdi.leer" },
+  { key: "usuarios", label: "Usuarios y permisos", icon: Users, perm: "usuarios.leer" },
+  { key: "seguridad", label: "Seguridad", icon: ShieldCheck, perm: "configuracion.leer" },
+  { key: "configuracion", label: "Configuración", icon: Settings, perm: "configuracion.leer" },
+  { key: "contabilidad", label: "Contabilidad", icon: FileText, perm: "cfdis_recibidos.leer" },
+  { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, perm: "*" },
+  { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
+
+const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
+  dashboard: DashboardPage,
+  reportes: ReportesPage,
+  productos: ProductosPage,
+  inventario: InventarioPage,
+  "inventario-iq": InventarioInsightsPage,
+  etiquetas: EtiquetasPage,
+  importador: ImportadorPage,
+  compras: ComprasPage,
+  cfdi: CfdiPage,
+  usuarios: UsuariosRolesPage,
+  seguridad: SeguridadPage,
+  configuracion: ConfiguracionPage,
+  ventas: VentasPage,
+  cobros: CobrosPage,
+  cxc: CxcPage,
+  promociones: PromocionesPage,
+  monedero: MonederoPage,
+  pedidos: PedidosPage,
+  devoluciones: DevolucionesPage,
+  envios: EnviosPage,
+  resenas: ResenasPage,
+  automatizaciones: AutomatizacionesPage,
+  preguntas: PreguntasPage,
+  contabilidad: ContabilidadPage,
+  suscripcion: SuscripcionPage,
+  tienda: TiendaPage,
+};
 
 export function App() {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -114,6 +169,16 @@ export function App() {
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [registrando, setRegistrando] = useState(false);
+
+  const visibleNav = NAV.filter((n) => puede(n.perm));
+
+  // Si la sección activa no es visible para este rol, caer a la primera permitida.
+  useEffect(() => {
+    if (!session || visibleNav.length === 0) return;
+    if (!visibleNav.some((n) => n.key === seccion)) {
+      setSeccion(visibleNav[0].key);
+    }
+  }, [session, seccion, visibleNav]);
 
   useEffect(() => {
     if (!loadToken()) {
@@ -147,6 +212,8 @@ export function App() {
   function abrirLink(link: string) {
     if (link.startsWith("/pedidos")) navegar("pedidos");
   }
+
+  const ActivePage = PAGE_COMPONENTS[seccion];
 
   return (
     <div className="flex h-full flex-col md:flex-row">
@@ -183,7 +250,7 @@ export function App() {
       >
         <div className="hidden px-5 py-4 text-lg font-bold text-brand md:block">GaesSoft</div>
         <nav className="flex-1 overflow-y-auto px-2 pt-3 md:pt-0">
-          {NAV.filter((n) => !n.soloDueno || puede("*")).map((n) => (
+          {visibleNav.map((n) => (
             <button
               key={n.key}
               type="button"
@@ -213,29 +280,7 @@ export function App() {
         <div className="mb-4 hidden justify-end md:flex">
           <NotificacionesBell onOpenLink={abrirLink} />
         </div>
-        {seccion === "dashboard" && <DashboardPage />}
-        {seccion === "reportes" && <ReportesPage />}
-        {seccion === "productos" && <ProductosPage />}
-        {seccion === "inventario" && <InventarioPage />}
-        {seccion === "inventario-iq" && <InventarioInsightsPage />}
-        {seccion === "etiquetas" && <EtiquetasPage />}
-        {seccion === "importador" && <ImportadorPage />}
-        {seccion === "compras" && <ComprasPage />}
-        {seccion === "cfdi" && <CfdiPage />}
-        {seccion === "contabilidad" && <ContabilidadPage />}
-        {seccion === "usuarios" && <UsuariosRolesPage />}
-        {seccion === "seguridad" && <SeguridadPage />}
-        {seccion === "suscripcion" && <SuscripcionPage />}
-        {seccion === "ventas" && <VentasPage />}
-        {seccion === "cobros" && <CobrosPage />}
-        {seccion === "monedero" && <MonederoPage />}
-        {seccion === "pedidos" && <PedidosPage />}
-        {seccion === "devoluciones" && <DevolucionesPage />}
-        {seccion === "envios" && <EnviosPage />}
-        {seccion === "resenas" && <ResenasPage />}
-        {seccion === "automatizaciones" && <AutomatizacionesPage />}
-        {seccion === "preguntas" && <PreguntasPage />}
-        {seccion === "tienda" && <TiendaPage />}
+        <ActivePage />
       </main>
     </div>
   );

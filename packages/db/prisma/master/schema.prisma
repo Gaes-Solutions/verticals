@@ -459,7 +459,7 @@ model PartnerInvitacion {
 }
 
 // ============================================================
-// HITO 4.3 — Portal Doctoralia (Modelo 4.17, master DB cross-tenant)
+// HITO 4.3 — Portal / marketplace de citas (Modelo 4.17, master DB cross-tenant)
 // Perfiles médicos publicables + búsqueda + reseñas portables al médico.
 // Reservas portal→tenant y telemedicina Daily.co diferidos a 4.3 fase 2.
 // ============================================================
@@ -489,9 +489,20 @@ enum ReviewModeracionStatus {
   denunciado_medico
 }
 
-/**
- * Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR).
- */
+enum BookingStatus {
+  pendiente
+  confirmada
+  rechazada
+  cancelada
+  completada
+}
+
+enum BookingModalidad {
+  presencial
+  telemedicina
+}
+
+/** Paciente cross-tenant. Cimiento mínimo del PHR (4.4 lo expande con FHIR). */
 enum PatientSexAtBirth {
   male
   female
@@ -570,43 +581,46 @@ enum PhrAuditAction {
 
 /**
  * Paciente del PHR cross-tenant. Identidad principal = phoneE164 (WhatsApp, ref.
- * Apple Health/Doctoralia). email opcional sigue sirviendo a reseñas Doctoralia.
+ * Apple Health, etc.). email opcional sigue sirviendo a las reseñas del marketplace.
  * Cifrado at-rest de campos sensibles diferido a hito de hardening.
  */
 model PacienteMaster {
-  id                String             @id @default(cuid())
-  phoneE164         String?            @unique @map("phone_e164")
-  email             String?            @unique
-  nombre            String
-  apellidos         String?
-  preferredName     String?            @map("preferred_name")
-  birthDate         DateTime?          @map("birth_date") @db.Date
-  sexAtBirth        PatientSexAtBirth? @map("sex_at_birth")
-  genderIdentity    String?            @map("gender_identity")
-  rfc               String?
-  curp              String?
-  country           String             @default("MX")
-  address           Json?
-  bloodType         String?            @map("blood_type")
-  languagePreferred String             @default("es-MX") @map("language_preferred")
-  weightKg          Decimal?           @map("weight_kg") @db.Decimal(6, 2)
-  heightCm          Decimal?           @map("height_cm") @db.Decimal(6, 2)
-  metadata          Json?
-  telefono          String?
-  otpVerificadoAt   DateTime?          @map("otp_verificado_at")
-  archivedAt        DateTime?          @map("archived_at")
-  deletedAt         DateTime?          @map("deleted_at")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
+  id               String             @id @default(cuid())
+  phoneE164        String?            @unique @map("phone_e164")
+  email            String?            @unique
+  nombre           String
+  apellidos        String?
+  preferredName    String?            @map("preferred_name")
+  birthDate        DateTime?          @map("birth_date") @db.Date
+  sexAtBirth       PatientSexAtBirth? @map("sex_at_birth")
+  genderIdentity   String?            @map("gender_identity")
+  rfc              String?
+  curp             String?
+  country          String             @default("MX")
+  address          Json?
+  bloodType        String?            @map("blood_type")
+  languagePreferred String            @default("es-MX") @map("language_preferred")
+  weightKg         Decimal?           @map("weight_kg") @db.Decimal(6, 2)
+  heightCm         Decimal?           @map("height_cm") @db.Decimal(6, 2)
+  metadata         Json?
+  telefono         String?
+  otpCodigo        String?            @map("otp_codigo")
+  otpExpiraAt      DateTime?          @map("otp_expira_at")
+  otpVerificadoAt  DateTime?          @map("otp_verificado_at")
+  archivedAt       DateTime?          @map("archived_at")
+  deletedAt        DateTime?          @map("deleted_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
 
-  reviews      PublicReview[]
-  logins       PatientLogin[]
-  records      PatientRecord[]
-  consents     PatientConsent[]
-  emergencyQr  PatientEmergencyQr?
-  auditLogs    PatientAuditLog[]
-  dependientes PatientFamily[]     @relation("dependiente")
-  tutorias     PatientFamily[]     @relation("tutor")
+  reviews     PublicReview[]
+  bookings    PublicBooking[]
+  logins      PatientLogin[]
+  records     PatientRecord[]
+  consents    PatientConsent[]
+  emergencyQr PatientEmergencyQr?
+  auditLogs   PatientAuditLog[]
+  dependientes PatientFamily[] @relation("dependiente")
+  tutorias    PatientFamily[] @relation("tutor")
 
   @@index([email])
   @@index([phoneE164])
@@ -804,6 +818,7 @@ model PublicProfessional {
 
   ubicaciones PublicProfessionalLocation[]
   reviews     PublicReview[]
+  bookings    PublicBooking[]
   searchIndex PublicProfessionalSearchIndex?
 
   @@unique([tenantIdPrincipal, medicoIdLocal])
@@ -865,6 +880,45 @@ model PublicReview {
   @@index([professionalId, moderacionStatus])
   @@index([pacienteMasterId])
   @@map("public_reviews")
+}
+
+/**
+ * Reserva de cita hecha desde el portal público (marketplace). Vive en master
+ * porque el paciente es cross-tenant; al confirmarla, el tenant del profesional
+ * crea una Cita local y guarda su id en `citaIdLocal`. Snapshot de contacto para
+ * no depender del paciente master en el tenant.
+ */
+model PublicBooking {
+  id               String           @id @default(cuid())
+  professionalId   String           @map("professional_id")
+  locationId       String?          @map("location_id")
+  tenantId         String           @map("tenant_id")
+  medicoIdLocal    String?          @map("medico_id_local")
+  pacienteMasterId String           @map("paciente_master_id")
+  pacienteNombre   String           @map("paciente_nombre")
+  pacienteTelefono String?          @map("paciente_telefono")
+  pacienteEmail    String?          @map("paciente_email")
+  fechaHora        DateTime         @map("fecha_hora")
+  modalidad        BookingModalidad @default(presencial)
+  motivo           String?
+  status           BookingStatus    @default(pendiente)
+  citaIdLocal      String?          @map("cita_id_local")
+  salaVideoUrl     String?          @map("sala_video_url")
+  salaVideoProveedor String?        @map("sala_video_proveedor")
+  confirmadaAt     DateTime?        @map("confirmada_at")
+  rechazadaAt      DateTime?        @map("rechazada_at")
+  motivoRechazo    String?          @map("motivo_rechazo")
+  canceladaAt      DateTime?        @map("cancelada_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  professional PublicProfessional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  paciente     PacienteMaster     @relation(fields: [pacienteMasterId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([professionalId, fechaHora])
+  @@index([pacienteMasterId])
+  @@map("public_bookings")
 }
 
 model PublicProfessionalSearchIndex {
@@ -1296,4 +1350,21 @@ model SupportTicketMessage {
 
   @@index([ticketId])
   @@map("support_ticket_message")
+}
+
+// Registro global host → tenant para resolver la tienda online por hostname.
+// Vive en master (no en el schema del tenant) porque la resolución ocurre ANTES
+// de conocer el tenant. tipo: "subdominio" (apex de la plataforma, verificado
+// automático) | "propio" (dominio del cliente, verificado por DNS TXT).
+model TiendaDominio {
+  id         String   @id @default(cuid())
+  host       String   @unique
+  tenantSlug String   @map("tenant_slug")
+  tipo       String
+  verificado Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantSlug])
+  @@map("tienda_dominios")
 }

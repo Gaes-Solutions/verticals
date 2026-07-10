@@ -39,6 +39,10 @@ export interface PromoEvaluable {
   sucursalesAplicables: string[];
   productosIncluidos: Set<string>;
   productosExcluidos: Set<string>;
+  /** Productos que disparan el regalo (rol "comprado"/"requerido"). */
+  productosComprados: Set<string>;
+  /** Productos que se regalan / descuentan al cumplir la compra (rol "regalo"). */
+  productosRegalo: Set<string>;
 }
 
 export interface PromocionAplicada {
@@ -111,6 +115,14 @@ export async function cargarPromocionesAplicables(
       productosExcluidos: new Set(
         p.productos.filter((x) => x.rol === "excluido").map((x) => x.productoId),
       ),
+      productosComprados: new Set(
+        p.productos
+          .filter((x) => x.rol === "comprado" || x.rol === "requerido")
+          .map((x) => x.productoId),
+      ),
+      productosRegalo: new Set(
+        p.productos.filter((x) => x.rol === "regalo").map((x) => x.productoId),
+      ),
     }))
     .filter((p) => promoAplicaContexto(p, ctx));
 }
@@ -134,6 +146,9 @@ function evaluarPromo(
   lineas: LineaMut[],
   varianteAProducto: Map<string, string>,
 ): { monto: Decimal; afectados: string[] } {
+  if (promo.tipo === "regalo_con_compra") {
+    return evaluarRegaloConCompra(promo, lineas, varianteAProducto);
+  }
   let monto = ZERO;
   const afectados: string[] = [];
   const elegibles = lineas.filter((l) => {
@@ -148,12 +163,45 @@ function evaluarPromo(
     let descLinea = ZERO;
     if (promo.tipo === "descuento_pct" || promo.tipo === "happy_hour") {
       descLinea = linea.subtotal.mul(valor).div(100);
+    } else if (promo.tipo === "descuento_monto" || promo.tipo === "mxn") {
+      // Monto fijo en MXN de descuento por unidad, con tope al subtotal de la línea.
+      descLinea = Decimal.min(valor.mul(linea.cantidad), linea.subtotal);
     } else if (promo.tipo === "precio_especial") {
       const nuevoSub = valor.mul(linea.cantidad);
       descLinea = Decimal.max(linea.subtotal.minus(nuevoSub), ZERO);
     } else if (promo.tipo === "dos_x_uno") {
       const gratis = linea.cantidad.dividedToIntegerBy(2);
       descLinea = linea.precioUnitario.mul(gratis);
+    } else if (promo.tipo === "tres_x_n") {
+      // acciones { compra, paga }: por cada `compra` unidades, pagas `paga`.
+      const compra = new Decimal(String(promo.acciones.compra ?? 3));
+      const paga = new Decimal(String(promo.acciones.paga ?? 2));
+      if (compra.gt(paga) && compra.gt(ZERO)) {
+        const gratis = linea.cantidad.dividedToIntegerBy(compra).mul(compra.minus(paga));
+        descLinea = linea.precioUnitario.mul(gratis);
+      }
+    } else if (promo.tipo === "compra_x_lleva_y") {
+      // acciones { compra, lleva }: pagas `compra`, te llevas `lleva` (lleva > compra).
+      const compra = new Decimal(String(promo.acciones.compra ?? 2));
+      const lleva = new Decimal(String(promo.acciones.lleva ?? 3));
+      if (lleva.gt(compra) && lleva.gt(ZERO)) {
+        const gratis = linea.cantidad.dividedToIntegerBy(lleva).mul(lleva.minus(compra));
+        descLinea = linea.precioUnitario.mul(gratis);
+      }
+    } else if (promo.tipo === "escalonado_volumen") {
+      // acciones { escalones: [{ minCantidad, descuentoPct }] }: aplica el % del
+      // escalón de mayor minCantidad que la cantidad de la línea alcanza.
+      const escalones = Array.isArray(promo.acciones.escalones)
+        ? (promo.acciones.escalones as Array<{ minCantidad?: number; descuentoPct?: number }>)
+        : [];
+      let pct = ZERO;
+      for (const e of escalones) {
+        if (linea.cantidad.gte(new Decimal(String(e.minCantidad ?? 0)))) {
+          const p = new Decimal(String(e.descuentoPct ?? 0));
+          if (p.gt(pct)) pct = p;
+        }
+      }
+      descLinea = linea.subtotal.mul(pct).div(100);
     }
     if (descLinea.gt(ZERO)) {
       const nuevoSub = Decimal.max(linea.subtotal.minus(descLinea), ZERO);
@@ -162,6 +210,79 @@ function evaluarPromo(
       monto = monto.plus(descLinea);
       afectados.push(linea.productoVarianteId);
     }
+  }
+  return { monto, afectados };
+}
+
+/** Aplica el descuento de regalo a una línea y devuelve el monto descontado. */
+function descontarLineaRegalo(linea: LineaMut, descLinea: Decimal): Decimal {
+  if (descLinea.lte(ZERO)) return ZERO;
+  const nuevoSub = Decimal.max(linea.subtotal.minus(descLinea), ZERO);
+  const aplicado = linea.subtotal.minus(nuevoSub);
+  linea.precioUnitario = linea.cantidad.gt(ZERO) ? nuevoSub.div(linea.cantidad) : ZERO;
+  linea.subtotal = nuevoSub;
+  return aplicado;
+}
+
+/** Unidades de regalo ganadas según la cantidad comprada de los disparadores. */
+function unidadesRegaloGanadas(
+  promo: PromoEvaluable,
+  lineas: LineaMut[],
+  productoDe: (l: LineaMut) => string | undefined,
+): Decimal {
+  const compradoQty = lineas
+    .filter((l) => {
+      const pid = productoDe(l);
+      return pid ? promo.productosComprados.has(pid) : false;
+    })
+    .reduce((acc, l) => acc.plus(l.cantidad), ZERO);
+  const cantRequerida = new Decimal(String(promo.acciones.cantidadRequerida ?? 1));
+  const cantRegalo = new Decimal(String(promo.acciones.cantidadRegalo ?? 1));
+  if (cantRequerida.lte(ZERO)) return ZERO;
+  return compradoQty.dividedToIntegerBy(cantRequerida).mul(cantRegalo);
+}
+
+/**
+ * Regalo con compra (cross-producto): por cada `cantidadRequerida` unidades de
+ * los productos "comprados" se ganan `cantidadRegalo` unidades de los productos
+ * "regalo", con `descuentoPct` de descuento sobre ellas (default 100 = gratis).
+ * Configurable por el dueño; el sistema recomienda 100% (gratis).
+ */
+function evaluarRegaloConCompra(
+  promo: PromoEvaluable,
+  lineas: LineaMut[],
+  varianteAProducto: Map<string, string>,
+): { monto: Decimal; afectados: string[] } {
+  const afectados: string[] = [];
+  if (promo.productosComprados.size === 0 || promo.productosRegalo.size === 0) {
+    return { monto: ZERO, afectados };
+  }
+  const productoDe = (l: LineaMut) => varianteAProducto.get(l.productoVarianteId);
+  const pct = Decimal.min(
+    new Decimal(String(promo.acciones.descuentoPct ?? 100)),
+    new Decimal(100),
+  );
+  if (pct.lte(ZERO)) return { monto: ZERO, afectados };
+
+  let unidadesRegalo = unidadesRegaloGanadas(promo, lineas, productoDe);
+  if (unidadesRegalo.lte(ZERO)) return { monto: ZERO, afectados };
+
+  const lineasRegalo = lineas.filter((l) => {
+    const pid = productoDe(l);
+    return pid ? promo.productosRegalo.has(pid) : false;
+  });
+
+  let monto = ZERO;
+  for (const linea of lineasRegalo) {
+    if (unidadesRegalo.lte(ZERO)) break;
+    const aplica = Decimal.min(unidadesRegalo, linea.cantidad);
+    const bruto = linea.precioUnitario.mul(aplica).mul(pct).div(100);
+    const aplicado = descontarLineaRegalo(linea, Decimal.min(bruto, linea.subtotal));
+    if (aplicado.gt(ZERO)) {
+      monto = monto.plus(aplicado);
+      afectados.push(linea.productoVarianteId);
+    }
+    unidadesRegalo = unidadesRegalo.minus(aplica);
   }
   return { monto, afectados };
 }

@@ -42,6 +42,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     RATE_LIMIT_WINDOW: "1 minute",
     FLOWS_SCHEDULER_ENABLED: false,
     FLOWS_RUN_INTERVAL_MIN: 360,
+    RECORDATORIOS_SCHEDULER_ENABLED: false,
+    RECORDATORIOS_RUN_INTERVAL_MIN: 60,
+    PUBLIC_BASE_URL: "http://localhost:3000",
     ...overrides,
   };
 }

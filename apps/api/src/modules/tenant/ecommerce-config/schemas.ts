@@ -8,6 +8,17 @@ export const configTiendaSchema = z.object({
     .max(63)
     .regex(/^[a-z0-9-]+$/, "Subdominio solo minúsculas, números y guiones"),
   nombre: z.string().min(1).max(120),
+  // Dominio propio del cliente (ej. "tienda.minegocio.com"). null/"" lo desconecta.
+  dominioPropio: z
+    .string()
+    .max(253)
+    .regex(
+      /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i,
+      "Dominio inválido (ej. tienda.minegocio.com)",
+    )
+    .transform((v) => v.toLowerCase())
+    .nullable()
+    .optional(),
   lema: z.string().max(200).optional(),
   descripcionSeo: z.string().max(300).optional(),
   monedas: z.array(z.string()).optional(),

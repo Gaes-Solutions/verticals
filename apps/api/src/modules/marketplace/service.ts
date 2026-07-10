@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type {
   MasterPrismaClient,
   PacienteMaster,
@@ -8,14 +9,14 @@ import type {
 } from "@gaespos/db";
 import Decimal from "decimal.js";
 
-export class DoctoraliaError extends Error {
+export class MarketplaceError extends Error {
   constructor(
     public readonly statusCode: number,
     message: string,
     public readonly extra?: Record<string, unknown>,
   ) {
     super(message);
-    this.name = "DoctoraliaError";
+    this.name = "MarketplaceError";
   }
 }
 
@@ -183,9 +184,9 @@ async function getProfesionalDelTenant(
   tenantId: string,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   if (prof.tenantIdPrincipal !== tenantId) {
-    throw new DoctoraliaError(403, "El perfil no pertenece a este tenant");
+    throw new MarketplaceError(403, "El perfil no pertenece a este tenant");
   }
   return prof;
 }
@@ -197,10 +198,10 @@ export async function enviarPerfilARevision(
 ): Promise<PublicProfessional> {
   const prof = await getProfesionalDelTenant(master, professionalId, tenantId);
   if (!prof.cedulaProfesional) {
-    throw new DoctoraliaError(409, "No se puede enviar a revisión sin cédula profesional");
+    throw new MarketplaceError(409, "No se puede enviar a revisión sin cédula profesional");
   }
   if (prof.status !== "borrador" && prof.status !== "suspendido") {
-    throw new DoctoraliaError(409, `No se puede enviar a revisión desde estado ${prof.status}`);
+    throw new MarketplaceError(409, `No se puede enviar a revisión desde estado ${prof.status}`);
   }
   return master.publicProfessional.update({
     where: { id: professionalId },
@@ -221,9 +222,12 @@ export async function validarPerfilPorAdmin(
   input: ValidarAdminInput,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   if (prof.status !== "en_revision") {
-    throw new DoctoraliaError(409, `Solo se valida un perfil en_revision (actual: ${prof.status})`);
+    throw new MarketplaceError(
+      409,
+      `Solo se valida un perfil en_revision (actual: ${prof.status})`,
+    );
   }
   const now = new Date();
   if (!input.aprobar) {
@@ -249,7 +253,7 @@ export async function suspenderPerfil(
   professionalId: string,
 ): Promise<PublicProfessional> {
   const prof = await master.publicProfessional.findUnique({ where: { id: professionalId } });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   await master.publicProfessionalSearchIndex
     .delete({ where: { professionalId } })
     .catch(() => undefined);
@@ -318,7 +322,7 @@ export async function refreshSearchIndex(
     where: { id: professionalId },
     include: { ubicaciones: { where: { activa: true } } },
   });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
 
   if (prof.status !== "publicado") {
     await master.publicProfessionalSearchIndex
@@ -467,11 +471,18 @@ export async function obtenerPerfilPublico(
     },
   });
   if (!prof || prof.status !== "publicado") {
-    throw new DoctoraliaError(404, "Profesional no encontrado");
+    throw new MarketplaceError(404, "Profesional no encontrado");
   }
   return prof;
 }
 
+const OTP_TTL_MIN = 10;
+
+/**
+ * Registra (o actualiza) al paciente y genera un OTP de 6 dígitos con caducidad.
+ * Devuelve el paciente y el código para que la ruta lo envíe por correo (y lo
+ * exponga como `otpDev` solo fuera de producción).
+ */
 export async function registrarPacienteMaster(
   master: MasterPrismaClient,
   input: {
@@ -480,21 +491,22 @@ export async function registrarPacienteMaster(
     apellidos?: string | undefined;
     telefono?: string | undefined;
   },
-): Promise<PacienteMaster> {
-  return master.pacienteMaster.upsert({
+): Promise<{ paciente: PacienteMaster; codigo: string }> {
+  const codigo = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const otpExpiraAt = new Date(Date.now() + OTP_TTL_MIN * 60_000);
+  const datos = {
+    nombre: input.nombre,
+    otpCodigo: codigo,
+    otpExpiraAt,
+    ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
+    ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
+  };
+  const paciente = await master.pacienteMaster.upsert({
     where: { email: input.email },
-    create: {
-      email: input.email,
-      nombre: input.nombre,
-      ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
-      ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
-    },
-    update: {
-      nombre: input.nombre,
-      ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
-      ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
-    },
+    create: { email: input.email, ...datos },
+    update: datos,
   });
+  return { paciente, codigo };
 }
 
 /**
@@ -505,13 +517,23 @@ export async function registrarPacienteMaster(
 export async function confirmarPacienteMaster(
   master: MasterPrismaClient,
   email: string,
+  codigo: string,
 ): Promise<PacienteMaster> {
   const paciente = await master.pacienteMaster.findUnique({ where: { email } });
-  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
-  if (paciente.otpVerificadoAt) return paciente;
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
+  if (paciente.otpVerificadoAt && !paciente.otpCodigo) return paciente;
+  if (!paciente.otpCodigo || !paciente.otpExpiraAt) {
+    throw new MarketplaceError(409, "No hay un código pendiente; solicita uno nuevo");
+  }
+  if (paciente.otpExpiraAt.getTime() < Date.now()) {
+    throw new MarketplaceError(410, "El código expiró; solicita uno nuevo");
+  }
+  if (paciente.otpCodigo !== codigo) {
+    throw new MarketplaceError(401, "Código incorrecto");
+  }
   return master.pacienteMaster.update({
     where: { email },
-    data: { otpVerificadoAt: new Date() },
+    data: { otpVerificadoAt: new Date(), otpCodigo: null, otpExpiraAt: null },
   });
 }
 
@@ -553,21 +575,21 @@ export async function crearResena(
     select: { id: true, status: true },
   });
   if (!prof || prof.status !== "publicado") {
-    throw new DoctoraliaError(404, "Profesional no disponible para reseñas");
+    throw new MarketplaceError(404, "Profesional no disponible para reseñas");
   }
   const paciente = await master.pacienteMaster.findUnique({
     where: { email: input.pacienteEmail },
   });
-  if (!paciente) throw new DoctoraliaError(404, "Paciente no registrado");
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
   if (!paciente.otpVerificadoAt) {
-    throw new DoctoraliaError(403, "El paciente debe verificar su identidad antes de reseñar");
+    throw new MarketplaceError(403, "El paciente debe verificar su identidad antes de reseñar");
   }
 
   const existente = await master.publicReview.findFirst({
     where: { professionalId: input.professionalId, pacienteMasterId: paciente.id },
   });
   if (existente) {
-    throw new DoctoraliaError(409, "El paciente ya reseñó a este profesional");
+    throw new MarketplaceError(409, "El paciente ya reseñó a este profesional");
   }
 
   const moderacion = moderarTextoResena(input.comentario);
@@ -606,9 +628,9 @@ async function getReviewDelProfesional(
   professionalId: string,
 ): Promise<PublicReview> {
   const review = await master.publicReview.findUnique({ where: { id: reviewId } });
-  if (!review) throw new DoctoraliaError(404, "Reseña no encontrada");
+  if (!review) throw new MarketplaceError(404, "Reseña no encontrada");
   if (review.professionalId !== professionalId) {
-    throw new DoctoraliaError(403, "La reseña no pertenece a este profesional");
+    throw new MarketplaceError(403, "La reseña no pertenece a este profesional");
   }
   return review;
 }
@@ -621,7 +643,7 @@ export async function responderResena(
 ): Promise<PublicReview> {
   const review = await getReviewDelProfesional(master, reviewId, professionalId);
   if (review.moderacionStatus !== "publicado") {
-    throw new DoctoraliaError(409, "Solo se puede responder una reseña publicada");
+    throw new MarketplaceError(409, "Solo se puede responder una reseña publicada");
   }
   return master.publicReview.update({
     where: { id: reviewId },
@@ -655,7 +677,7 @@ export async function moderarResenaAdmin(
   aprobar: boolean,
 ): Promise<PublicReview> {
   const review = await master.publicReview.findUnique({ where: { id: reviewId } });
-  if (!review) throw new DoctoraliaError(404, "Reseña no encontrada");
+  if (!review) throw new MarketplaceError(404, "Reseña no encontrada");
   const updated = await master.publicReview.update({
     where: { id: reviewId },
     data: aprobar
@@ -664,4 +686,200 @@ export async function moderarResenaAdmin(
   });
   await recalcularScoreProfesional(master, review.professionalId);
   return updated;
+}
+
+// ─────────────────────────── Reservas (bookings) ────────────────────────────
+
+import type { TenantPrismaClient } from "@gaespos/db";
+import { nextCitaFolio } from "../tenant/citas/service.js";
+import { nextNumeroExpediente } from "../tenant/pacientes/service.js";
+
+export interface ReservarCitaInput {
+  professionalId: string;
+  pacienteMasterId: string;
+  locationId?: string | undefined;
+  fechaHora: string;
+  modalidad: "presencial" | "telemedicina";
+  motivo?: string | undefined;
+}
+
+/** Un paciente verificado reserva una cita con un profesional publicado. */
+export async function reservarCita(master: MasterPrismaClient, input: ReservarCitaInput) {
+  const prof = await master.publicProfessional.findUnique({
+    where: { id: input.professionalId },
+  });
+  if (!prof || prof.status !== "publicado") {
+    throw new MarketplaceError(404, "Profesional no encontrado");
+  }
+  const paciente = await master.pacienteMaster.findUnique({
+    where: { id: input.pacienteMasterId },
+  });
+  if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
+  if (!paciente.otpVerificadoAt) {
+    throw new MarketplaceError(403, "El paciente debe verificar su cuenta antes de reservar");
+  }
+  if (input.modalidad === "telemedicina" && !prof.aceptaTelemedicina) {
+    throw new MarketplaceError(409, "Este profesional no ofrece telemedicina");
+  }
+  return master.publicBooking.create({
+    data: {
+      professionalId: prof.id,
+      tenantId: prof.tenantIdPrincipal,
+      medicoIdLocal: prof.medicoIdLocal,
+      pacienteMasterId: paciente.id,
+      pacienteNombre: [paciente.nombre, paciente.apellidos].filter(Boolean).join(" "),
+      pacienteTelefono: paciente.telefono ?? paciente.phoneE164,
+      pacienteEmail: paciente.email,
+      fechaHora: new Date(input.fechaHora),
+      modalidad: input.modalidad,
+      ...(input.locationId ? { locationId: input.locationId } : {}),
+      ...(input.motivo ? { motivo: input.motivo } : {}),
+    },
+  });
+}
+
+export async function listarReservasPaciente(master: MasterPrismaClient, pacienteMasterId: string) {
+  return master.publicBooking.findMany({
+    where: { pacienteMasterId },
+    orderBy: { fechaHora: "desc" },
+    include: { professional: { select: { nombrePublico: true, slugSeo: true } } },
+  });
+}
+
+export async function listarReservasTenant(
+  master: MasterPrismaClient,
+  tenantId: string,
+  status?: string,
+) {
+  return master.publicBooking.findMany({
+    where: { tenantId, ...(status ? { status: status as never } : {}) },
+    orderBy: { fechaHora: "asc" },
+    include: { professional: { select: { nombrePublico: true } } },
+  });
+}
+
+// Reusa o crea un paciente LOCAL del tenant a partir del snapshot del booking.
+// Empata por email para no duplicar en reservas sucesivas del mismo paciente.
+async function upsertPacienteLocal(
+  tenant: TenantPrismaClient,
+  booking: {
+    pacienteNombre: string;
+    pacienteEmail: string | null;
+    pacienteTelefono: string | null;
+  },
+): Promise<string> {
+  if (booking.pacienteEmail) {
+    const existente = await tenant.paciente.findFirst({
+      where: { emailPrincipal: booking.pacienteEmail },
+      select: { id: true },
+    });
+    if (existente) return existente.id;
+  }
+  const [nombre, ...resto] = booking.pacienteNombre.split(" ");
+  const numeroExpediente = await nextNumeroExpediente(tenant);
+  const creado = await tenant.paciente.create({
+    data: {
+      numeroExpediente,
+      nombre: nombre || booking.pacienteNombre,
+      ...(resto.length ? { apellidoPaterno: resto.join(" ") } : {}),
+      ...(booking.pacienteTelefono ? { telefonoPrincipal: booking.pacienteTelefono } : {}),
+      ...(booking.pacienteEmail ? { emailPrincipal: booking.pacienteEmail } : {}),
+      fechaPrimeraVisita: new Date(),
+    },
+    select: { id: true },
+  });
+  return creado.id;
+}
+
+/**
+ * El tenant del profesional confirma la reserva: crea (o reusa) el paciente
+ * local, genera una Cita en su agenda y liga la reserva a esa Cita.
+ */
+export async function confirmarReserva(
+  master: MasterPrismaClient,
+  tenant: TenantPrismaClient,
+  tenantId: string,
+  bookingId: string,
+  medicoUsuarioIdOverride?: string,
+  crearSalaVideo?: (opts: { nombre: string }) => Promise<{ url: string; proveedor: string }>,
+): Promise<{
+  bookingId: string;
+  citaId: string;
+  folio: string;
+  pacienteId: string;
+  salaVideoUrl: string | null;
+}> {
+  const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.tenantId !== tenantId) {
+    throw new MarketplaceError(404, "Reserva no encontrada");
+  }
+  if (booking.status !== "pendiente") {
+    throw new MarketplaceError(409, `La reserva ya está "${booking.status}"`);
+  }
+  const medicoUsuarioId = medicoUsuarioIdOverride ?? booking.medicoIdLocal;
+  if (!medicoUsuarioId) {
+    throw new MarketplaceError(400, "No se pudo determinar el médico; indica medicoUsuarioId");
+  }
+  const sucursal = await tenant.sucursal.findFirst({ select: { id: true, codigo: true } });
+  if (!sucursal) throw new MarketplaceError(400, "El tenant no tiene sucursal configurada");
+
+  // Telemedicina: crea la sala de video (best-effort, no bloquea la confirmación).
+  let sala: { url: string; proveedor: string } | null = null;
+  if (booking.modalidad === "telemedicina" && crearSalaVideo) {
+    sala = await crearSalaVideo({ nombre: `cita-${bookingId}` }).catch(() => null);
+  }
+
+  const pacienteId = await upsertPacienteLocal(tenant, booking);
+  const cita = await tenant.$transaction(async (tx) => {
+    const folio = await nextCitaFolio(tx, sucursal.id, sucursal.codigo);
+    return tx.cita.create({
+      data: {
+        folio,
+        pacienteId,
+        medicoUsuarioId,
+        sucursalId: sucursal.id,
+        fechaProgramada: booking.fechaHora,
+        estado: "confirmada",
+        motivoTexto: booking.motivo ?? "Cita agendada en línea",
+        ...(sala ? { consultorioRoom: sala.url } : {}),
+      },
+      select: { id: true, folio: true },
+    });
+  });
+
+  await master.publicBooking.update({
+    where: { id: bookingId },
+    data: {
+      status: "confirmada",
+      confirmadaAt: new Date(),
+      citaIdLocal: cita.id,
+      ...(sala ? { salaVideoUrl: sala.url, salaVideoProveedor: sala.proveedor } : {}),
+    },
+  });
+  return {
+    bookingId,
+    citaId: cita.id,
+    folio: cita.folio,
+    pacienteId,
+    salaVideoUrl: sala?.url ?? null,
+  };
+}
+
+export async function rechazarReserva(
+  master: MasterPrismaClient,
+  tenantId: string,
+  bookingId: string,
+  motivo: string,
+) {
+  const booking = await master.publicBooking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.tenantId !== tenantId) {
+    throw new MarketplaceError(404, "Reserva no encontrada");
+  }
+  if (booking.status !== "pendiente") {
+    throw new MarketplaceError(409, `La reserva ya está "${booking.status}"`);
+  }
+  return master.publicBooking.update({
+    where: { id: bookingId },
+    data: { status: "rechazada", rechazadaAt: new Date(), motivoRechazo: motivo },
+  });
 }

@@ -1,29 +1,40 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { loadConfig } from "../../config.js";
 import {
   busquedaQuerySchema,
   crearResenaPublicaSchema,
   idParamSchema,
   moderarResenaAdminSchema,
   pacienteConfirmarSchema,
+  pacienteIdParamSchema,
   pacienteRegistroSchema,
   perfilUpsertSchema,
+  reservaConfirmarSchema,
+  reservaCreateSchema,
+  reservaListQuerySchema,
+  reservaRechazarSchema,
   responderResenaSchema,
   slugParamSchema,
   ubicacionCreateSchema,
   validarAdminSchema,
 } from "./schemas.js";
 import {
-  DoctoraliaError,
+  MarketplaceError,
   agregarUbicacion,
   buscarProfesionales,
   confirmarPacienteMaster,
+  confirmarReserva,
   crearResena,
   denunciarResena,
   enviarPerfilARevision,
+  listarReservasPaciente,
+  listarReservasTenant,
   moderarResenaAdmin,
   obtenerPerfilPublico,
+  rechazarReserva,
   registrarPacienteMaster,
+  reservarCita,
   responderResena,
   suspenderPerfil,
   upsertPerfilProfesional,
@@ -39,7 +50,7 @@ function errLabel(s: number): string {
 }
 
 function handleErr(reply: FastifyReply, err: unknown): boolean {
-  if (err instanceof DoctoraliaError) {
+  if (err instanceof MarketplaceError) {
     reply.code(err.statusCode).send({
       statusCode: err.statusCode,
       error: errLabel(err.statusCode),
@@ -56,7 +67,7 @@ async function resolverTenantId(
   slug: string,
 ): Promise<string> {
   const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
-  if (!tenant) throw new DoctoraliaError(404, "Tenant no encontrado");
+  if (!tenant) throw new MarketplaceError(404, "Tenant no encontrado");
   return tenant.id;
 }
 
@@ -69,9 +80,9 @@ async function assertProfesionalDelTenant(
     where: { id: professionalId },
     select: { id: true, tenantIdPrincipal: true },
   });
-  if (!prof) throw new DoctoraliaError(404, "Perfil no encontrado");
+  if (!prof) throw new MarketplaceError(404, "Perfil no encontrado");
   if (prof.tenantIdPrincipal !== tenantId) {
-    throw new DoctoraliaError(403, "El perfil no pertenece a este tenant");
+    throw new MarketplaceError(403, "El perfil no pertenece a este tenant");
   }
 }
 
@@ -80,9 +91,9 @@ async function assertProfesionalDelTenant(
  * perfil público, ubicaciones y reseñas recibidas. El `medicoIdLocal` debe
  * existir como Medico en el schema del tenant.
  */
-const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
+const marketplaceTenantRoutes: FastifyPluginAsync = async (app) => {
   app.post("/perfil", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_PERFIL_GESTIONAR);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_PERFIL_GESTIONAR);
     const body = perfilUpsertSchema.parse(req.body);
     const medico = await req.tenantPrisma.medico.findUnique({ where: { id: body.medicoIdLocal } });
     if (!medico) {
@@ -103,7 +114,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/perfil/by-medico/:id", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_PERFIL_GESTIONAR);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_PERFIL_GESTIONAR);
     const { id } = idParamSchema.parse(req.params);
     const tenantId = await resolverTenantId(app, req.tenantSlug);
     const perfil = await app.masterPrisma.publicProfessional.findUnique({
@@ -121,7 +132,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/perfil/:id/ubicaciones", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_PERFIL_GESTIONAR);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_PERFIL_GESTIONAR);
     const { id } = idParamSchema.parse(req.params);
     const body = ubicacionCreateSchema.parse(req.body);
     try {
@@ -135,7 +146,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/perfil/:id/enviar-revision", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_PERFIL_PUBLICAR);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_PERFIL_PUBLICAR);
     const { id } = idParamSchema.parse(req.params);
     try {
       const tenantId = await resolverTenantId(app, req.tenantSlug);
@@ -148,7 +159,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/perfil/:id/resenas", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_RESENAS_LEER);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_RESENAS_LEER);
     const { id } = idParamSchema.parse(req.params);
     try {
       const tenantId = await resolverTenantId(app, req.tenantSlug);
@@ -164,7 +175,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/perfil/:id/resenas/:reviewId/responder", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_RESENAS_RESPONDER);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_RESENAS_RESPONDER);
     const { id } = idParamSchema.parse(req.params);
     const reviewId = (req.params as { reviewId: string }).reviewId;
     const body = responderResenaSchema.parse(req.body);
@@ -180,7 +191,7 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/perfil/:id/resenas/:reviewId/denunciar", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.DOCTORALIA_RESENAS_DENUNCIAR);
+    req.requirePerm(PERMISSIONS.MARKETPLACE_RESENAS_DENUNCIAR);
     const { id } = idParamSchema.parse(req.params);
     const reviewId = (req.params as { reviewId: string }).reviewId;
     try {
@@ -193,6 +204,50 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
   });
+
+  // ── Reservas entrantes del portal (el médico/recepción las confirma) ──
+  app.get("/reservas", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_LEER);
+    const { status } = reservaListQuerySchema.parse(req.query);
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      return await listarReservasTenant(app.masterPrisma, tenantId, status);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post("/reservas/:id/confirmar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_GESTIONAR);
+    const { id } = idParamSchema.parse(req.params);
+    const body = reservaConfirmarSchema.parse(req.body ?? {});
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      // Si la reserva no trae médico, se usa el usuario en sesión.
+      const medico = body.medicoUsuarioId ?? req.principal.userId;
+      const video = app.telemedicineProviderFactory();
+      return await confirmarReserva(app.masterPrisma, req.tenantPrisma, tenantId, id, medico, (o) =>
+        video.crearSala(o),
+      );
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post("/reservas/:id/rechazar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.CITAS_GESTIONAR);
+    const { id } = idParamSchema.parse(req.params);
+    const body = reservaRechazarSchema.parse(req.body);
+    try {
+      const tenantId = await resolverTenantId(app, req.tenantSlug);
+      return await rechazarReserva(app.masterPrisma, tenantId, id, body.motivo);
+    } catch (err) {
+      if (handleErr(reply, err)) return;
+      throw err;
+    }
+  });
 };
 
 /**
@@ -200,10 +255,10 @@ const doctoraliaTenantRoutes: FastifyPluginAsync = async (app) => {
  * Valida cédula contra SSA y aprueba/rechaza publicación + modera reseñas
  * escaladas a revisión humana.
  */
-export const doctoraliaAdminRoutes: FastifyPluginAsync = async (app) => {
+export const marketplaceAdminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
 
-  app.get("/doctoralia/admin/pendientes", async () => {
+  app.get("/marketplace/admin/pendientes", async () => {
     const [perfiles, resenas] = await Promise.all([
       app.masterPrisma.publicProfessional.findMany({
         where: { status: "en_revision" },
@@ -217,7 +272,7 @@ export const doctoraliaAdminRoutes: FastifyPluginAsync = async (app) => {
     return { perfiles, resenas };
   });
 
-  app.post("/doctoralia/admin/perfiles/:id/validar", async (req, reply) => {
+  app.post("/marketplace/admin/perfiles/:id/validar", async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
     const body = validarAdminSchema.parse(req.body);
     try {
@@ -232,7 +287,7 @@ export const doctoraliaAdminRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/doctoralia/admin/perfiles/:id/suspender", async (req, reply) => {
+  app.post("/marketplace/admin/perfiles/:id/suspender", async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
     try {
       return await suspenderPerfil(app.masterPrisma, id);
@@ -242,7 +297,7 @@ export const doctoraliaAdminRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/doctoralia/admin/resenas/:id/moderar", async (req, reply) => {
+  app.post("/marketplace/admin/resenas/:id/moderar", async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
     const body = moderarResenaAdminSchema.parse(req.body);
     try {
@@ -258,13 +313,13 @@ export const doctoraliaAdminRoutes: FastifyPluginAsync = async (app) => {
  * Marketplace público (sin auth). Búsqueda, perfil por slug, registro/verif
  * mínima de paciente y alta de reseñas verificadas.
  */
-export const doctoraliaPublicRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/doctoralia/buscar", async (req) => {
+export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/marketplace/buscar", async (req) => {
     const q = busquedaQuerySchema.parse(req.query);
     return buscarProfesionales(app.masterPrisma, q);
   });
 
-  app.get("/doctoralia/profesionales/:slug", async (req, reply) => {
+  app.get("/marketplace/profesionales/:slug", async (req, reply) => {
     const { slug } = slugParamSchema.parse(req.params);
     try {
       return await obtenerPerfilPublico(app.masterPrisma, slug);
@@ -274,24 +329,48 @@ export const doctoraliaPublicRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/doctoralia/pacientes/registro", async (req, reply) => {
-    const body = pacienteRegistroSchema.parse(req.body);
-    const paciente = await registrarPacienteMaster(app.masterPrisma, body);
-    return reply.code(201).send({ id: paciente.id, email: paciente.email });
-  });
+  app.post(
+    "/marketplace/pacientes/registro",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = pacienteRegistroSchema.parse(req.body);
+      const { paciente, codigo } = await registrarPacienteMaster(app.masterPrisma, body);
+      // Envía el código por correo (best-effort: no bloquea el registro si falla).
+      try {
+        await app.emailProviderFactory().enviar({
+          para: paciente.email ?? body.email,
+          asunto: "Tu código de verificación — GaesSalud",
+          html: `<p>Hola ${paciente.nombre},</p><p>Tu código para reservar es: <strong style="font-size:20px">${codigo}</strong></p><p>Vence en 10 minutos.</p>`,
+          texto: `Tu código de verificación es ${codigo} (vence en 10 minutos).`,
+        });
+      } catch (err) {
+        app.log.warn({ err }, "no se pudo enviar OTP del marketplace por correo");
+      }
+      const esProd = loadConfig().NODE_ENV === "production";
+      return reply.code(201).send({
+        id: paciente.id,
+        email: paciente.email,
+        ...(esProd ? {} : { otpDev: codigo }),
+      });
+    },
+  );
 
-  app.post("/doctoralia/pacientes/confirmar", async (req, reply) => {
-    const body = pacienteConfirmarSchema.parse(req.body);
-    try {
-      const paciente = await confirmarPacienteMaster(app.masterPrisma, body.email);
-      return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt) };
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+  app.post(
+    "/marketplace/pacientes/confirmar",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = pacienteConfirmarSchema.parse(req.body);
+      try {
+        const paciente = await confirmarPacienteMaster(app.masterPrisma, body.email, body.codigo);
+        return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt) };
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
 
-  app.post("/doctoralia/profesionales/:id/resenas", async (req, reply) => {
+  app.post("/marketplace/profesionales/:id/resenas", async (req, reply) => {
     const { id } = idParamSchema.parse(req.params);
     const body = crearResenaPublicaSchema.parse(req.body);
     try {
@@ -306,6 +385,29 @@ export const doctoraliaPublicRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
   });
+
+  // El paciente reserva una cita con un profesional (queda pendiente hasta que
+  // el tenant la confirme).
+  app.post(
+    "/marketplace/profesionales/:id/reservar",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { id } = idParamSchema.parse(req.params);
+      const body = reservaCreateSchema.parse(req.body);
+      try {
+        const booking = await reservarCita(app.masterPrisma, { professionalId: id, ...body });
+        return reply.code(201).send({ id: booking.id, status: booking.status });
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  app.get("/marketplace/pacientes/:pacienteId/reservas", async (req) => {
+    const { pacienteId } = pacienteIdParamSchema.parse(req.params);
+    return listarReservasPaciente(app.masterPrisma, pacienteId);
+  });
 };
 
-export default doctoraliaTenantRoutes;
+export default marketplaceTenantRoutes;

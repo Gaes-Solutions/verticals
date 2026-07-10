@@ -77,6 +77,7 @@ export const pacienteRegistroSchema = z.object({
 
 export const pacienteConfirmarSchema = z.object({
   email: z.string().email().toLowerCase(),
+  codigo: z.string().regex(/^\d{4,8}$/),
 });
 
 export const crearResenaPublicaSchema = z.object({
@@ -89,4 +90,28 @@ export const crearResenaPublicaSchema = z.object({
   comentario: z.string().max(2000).optional(),
 });
 
+export const reservaCreateSchema = z.object({
+  pacienteMasterId: z.string().min(1),
+  locationId: z.string().min(1).optional(),
+  fechaHora: z.string().datetime(),
+  modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),
+  motivo: z.string().max(500).optional(),
+});
+
+export const pacienteIdParamSchema = z.object({ pacienteId: z.string().min(1) });
+
+export const reservaConfirmarSchema = z.object({
+  medicoUsuarioId: z.string().min(1).optional(),
+});
+
+export const reservaRechazarSchema = z.object({
+  motivo: z.string().min(3).max(500),
+});
+
+export const reservaListQuerySchema = z.object({
+  status: z.enum(["pendiente", "confirmada", "rechazada", "cancelada", "completada"]).optional(),
+});
+
 export type BusquedaQuery = z.infer<typeof busquedaQuerySchema>;
+export type ReservaCreateInput = z.infer<typeof reservaCreateSchema>;
+export type ReservaListQuery = z.infer<typeof reservaListQuerySchema>;

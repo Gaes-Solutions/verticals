@@ -1,6 +1,12 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
+  instruccionesDns,
+  sincronizarDominioMaster,
+  tokenVerificacion,
+  verificarTxt,
+} from "./dominio-service.js";
+import {
   categoriaPublicaSchema,
   configTiendaSchema,
   idParamSchema,
@@ -8,6 +14,29 @@ import {
 } from "./schemas.js";
 
 const SINGLETON_ID = "tienda";
+
+/**
+ * Calcula el parche de campos del dominio propio según el valor entrante:
+ * desconectar (null/""), conectar/cambiar (nuevo token + sin verificar), o
+ * dejarlo igual. El token sirve para probar la propiedad por DNS TXT.
+ */
+function patchDominioPropio(
+  entrante: string | null | undefined,
+  anterior: string | null,
+): Record<string, unknown> {
+  if (entrante === undefined) return {};
+  if (!entrante) {
+    return { dominioPropio: null, dominioVerificado: false, dominioTokenVerificacion: null };
+  }
+  if (entrante !== anterior) {
+    return {
+      dominioPropio: entrante,
+      dominioVerificado: false,
+      dominioTokenVerificacion: tokenVerificacion(),
+    };
+  }
+  return {};
+}
 
 const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
   app.get("/config", async (req) => {
@@ -74,13 +103,64 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       ...(body.pushHabilitado !== undefined ? { pushHabilitado: body.pushHabilitado } : {}),
       ...(body.pushEventos ? { pushEventos: body.pushEventos } : {}),
       ...(body.politicasHtml ? { politicasHtml: body.politicasHtml } : {}),
+      ...patchDominioPropio(body.dominioPropio, existing?.dominioPropio ?? null),
     };
     const cfg = existing
       ? await req.tenantPrisma.configTiendaEcommerce.update({ where: { id: existing.id }, data })
       : await req.tenantPrisma.configTiendaEcommerce.create({
           data: { id: SINGLETON_ID, ...data },
         });
+    await sincronizarDominioMaster(app.masterPrisma, req.tenantSlug, {
+      subdominio: cfg.subdominio,
+      dominioPropio: cfg.dominioPropio,
+      dominioVerificado: cfg.dominioVerificado,
+      dominioPropioAnterior: existing?.dominioPropio ?? null,
+    });
     return reply.code(existing ? 200 : 201).send(cfg);
+  });
+
+  // Estado del dominio propio + instrucciones DNS que el sistema recomienda.
+  app.get("/dominio", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const c = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    const dominio = c?.dominioPropio ?? null;
+    return {
+      dominioPropio: dominio,
+      verificado: c?.dominioVerificado ?? false,
+      instrucciones: dominio
+        ? instruccionesDns(dominio, c?.dominioTokenVerificacion ?? null)
+        : null,
+    };
+  });
+
+  // Verifica la propiedad del dominio leyendo el TXT esperado vía DNS.
+  app.post("/dominio/verificar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const c = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    if (!c?.dominioPropio || !c.dominioTokenVerificacion) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: "No hay un dominio propio por verificar",
+      });
+    }
+    const ok = await verificarTxt(c.dominioPropio, c.dominioTokenVerificacion);
+    if (ok && !c.dominioVerificado) {
+      await req.tenantPrisma.configTiendaEcommerce.update({
+        where: { id: c.id },
+        data: { dominioVerificado: true },
+      });
+    }
+    await sincronizarDominioMaster(app.masterPrisma, req.tenantSlug, {
+      subdominio: c.subdominio,
+      dominioPropio: c.dominioPropio,
+      dominioVerificado: ok,
+      dominioPropioAnterior: c.dominioPropio,
+    });
+    return {
+      verificado: ok,
+      instrucciones: instruccionesDns(c.dominioPropio, c.dominioTokenVerificacion),
+    };
   });
 
   app.post("/categorias", async (req, reply) => {

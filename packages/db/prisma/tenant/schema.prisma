@@ -243,6 +243,38 @@ model ConfigSeguridad {
   @@map("config_seguridad")
 }
 
+// Configuración de ventas del negocio (singleton). El dueño define el tope de
+// descuento manual; default 100 (sin tope = comportamiento histórico). Roles con
+// `ventas.aplicar_descuento_alto` (o el dueño) lo sobrepasan. El sistema recomienda
+// 15% en la UI.
+model ConfigVentas {
+  id                 String   @id @default(cuid())
+  descuentoMaximoPct Decimal  @default(100) @map("descuento_maximo_pct") @db.Decimal(5, 2)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("config_ventas")
+}
+
+// Recordatorios automáticos configurables por el dueño (default ON + valores
+// recomendados por el sistema). Singleton por tenant. V1: citas (anti-no-show);
+// vacunas se suma en una iteración posterior reusando este mismo registro.
+model ConfigRecordatorios {
+  id               String   @id @default(cuid())
+  citasActivo      Boolean  @default(true) @map("citas_activo")
+  citasHorasAntes  Int      @default(24) @map("citas_horas_antes")
+  citasCanal       String   @default("whatsapp") @map("citas_canal")
+  citasPlantilla   String?  @map("citas_plantilla")
+  vacunasActivo    Boolean  @default(true) @map("vacunas_activo")
+  vacunasDiasAntes Int      @default(7) @map("vacunas_dias_antes")
+  vacunasCanal     String   @default("whatsapp") @map("vacunas_canal")
+  vacunasPlantilla String?  @map("vacunas_plantilla")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("config_recordatorios")
+}
+
 // Link de cobro (pago a distancia / por WhatsApp). El negocio genera un link por
 // un monto y concepto; el cliente lo abre y paga (Conekta/Stripe/mock).
 model LinkPago {
@@ -2474,7 +2506,7 @@ model Medico {
   aceptaSeguros             Json     @default("[]") @map("acepta_seguros")
   firmaElectronicaUrl       String?  @map("firma_electronica_url")
   aceptaTelemedicina        Boolean  @default(false) @map("acepta_telemedicina")
-  isPerfilPublicoDoctoralia Boolean  @default(false) @map("is_perfil_publico_doctoralia")
+  isPerfilPublicoMarketplace Boolean @default(false) @map("is_perfil_publico_marketplace")
   isActive                  Boolean  @default(true) @map("is_active")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
@@ -2571,6 +2603,9 @@ model Cita {
   canceladoAt               DateTime?  @map("cancelado_at")
   canceladoPorId            String?    @map("cancelado_por_id")
   canceladoMotivo           String?    @map("cancelado_motivo")
+  recordatorioEnviadoAt     DateTime?  @map("recordatorio_enviado_at")
+  recordatorioCanal         String?    @map("recordatorio_canal")
+  confirmacionToken         String?    @unique @map("confirmacion_token")
   createdAt                 DateTime   @default(now()) @map("created_at")
   updatedAt                 DateTime   @updatedAt @map("updated_at")
 
@@ -2943,6 +2978,7 @@ model Vacunacion {
   dosisAplicada            String?   @map("dosis_aplicada")
   reaccionAdversaObservada String?   @map("reaccion_adversa_observada")
   proximaAplicacionFecha   DateTime? @map("proxima_aplicacion_fecha")
+  recordatorioProximaEnviadoAt DateTime? @map("recordatorio_proxima_enviado_at")
   notas                    String?
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")
@@ -3195,6 +3231,71 @@ model CargoHospital {
   @@index([hospitalizacionId, tipo])
   @@index([facturadoEnVentaId])
   @@map("cargos_hospital")
+}
+
+// Estudio de laboratorio: el médico lo solicita para un paciente (humano o
+// mascota) y luego se cargan los resultados. `resultados` es un arreglo de
+// parámetros con su rango de referencia; el backend marca `fueraDeRango`.
+model EstudioLaboratorio {
+  id                  String    @id @default(cuid())
+  folio               String    @unique
+  sucursalId          String    @map("sucursal_id")
+  pacienteId          String?   @map("paciente_id")
+  mascotaId           String?   @map("mascota_id")
+  medicoSolicitanteId String    @map("medico_solicitante_id")
+  consultaId          String?   @map("consulta_id")
+  tipoEstudio         String    @map("tipo_estudio")
+  nombreEstudio       String    @map("nombre_estudio")
+  prioridad           String    @default("rutina")
+  notasClinicas       String?   @map("notas_clinicas")
+  estado              String    @default("solicitado")
+  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResultado      DateTime? @map("fecha_resultado")
+  resultadoResumen    String?   @map("resultado_resumen")
+  resultadoArchivoUrl String?   @map("resultado_archivo_url")
+  resultados          Json      @default("[]")
+  cargadoPorId        String?   @map("cargado_por_id")
+  canceladoMotivo     String?   @map("cancelado_motivo")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([mascotaId])
+  @@index([pacienteId])
+  @@index([estado])
+  @@map("estudios_laboratorio")
+}
+
+// Estudio de imagen (rayos X, ultrasonido, etc.): el médico lo solicita y luego
+// se cargan hallazgos, impresión diagnóstica e imágenes (`imagenes` = arreglo de
+// {url, descripcion}). Sin interpretación automática (línea roja no-IA-clínica).
+model EstudioImagen {
+  id                  String    @id @default(cuid())
+  folio               String    @unique
+  sucursalId          String    @map("sucursal_id")
+  pacienteId          String?   @map("paciente_id")
+  mascotaId           String?   @map("mascota_id")
+  medicoSolicitanteId String    @map("medico_solicitante_id")
+  consultaId          String?   @map("consulta_id")
+  modalidad           String
+  region              String?
+  nombreEstudio       String    @map("nombre_estudio")
+  prioridad           String    @default("rutina")
+  notasClinicas       String?   @map("notas_clinicas")
+  estado              String    @default("solicitado")
+  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResultado      DateTime? @map("fecha_resultado")
+  hallazgos           String?
+  impresionDiagnostica String?  @map("impresion_diagnostica")
+  imagenes            Json      @default("[]")
+  cargadoPorId        String?   @map("cargado_por_id")
+  canceladoMotivo     String?   @map("cancelado_motivo")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([mascotaId])
+  @@index([pacienteId])
+  @@index([estado])
+  @@map("estudios_imagen")
 }
 
 // ============================================================
@@ -3488,6 +3589,8 @@ model ConfigTiendaEcommerce {
   activa                         Boolean    @default(false)
   subdominio                     String     @unique
   dominioPropio                  String?    @unique @map("dominio_propio")
+  dominioVerificado              Boolean    @default(false) @map("dominio_verificado")
+  dominioTokenVerificacion       String?    @map("dominio_token_verificacion")
   nombre                         String
   lema                           String?
   descripcionSeo                 String?    @map("descripcion_seo")
