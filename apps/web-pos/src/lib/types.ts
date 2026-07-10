@@ -195,48 +195,6 @@ export type MetodoAbono =
   | "vale"
   | "otro";
 
-export interface ApartadoListItem {
-  id: string;
-  folio: string;
-  estado: ApartadoEstado;
-  total: string;
-  montoPagado: string;
-  fechaLimite: string;
-  cliente?: { nombre: string; apellidos?: string | null } | null;
-  clienteB2b?: { razonSocial: string } | null;
-  _count?: { lineas: number; abonos: number };
-}
-
-export interface ApartadoLineaDetalle {
-  id: string;
-  numero: number;
-  cantidad: string;
-  totalLinea: string;
-  snapshotProducto: { nombreProducto: string; nombreVariante?: string | null };
-}
-
-export interface ApartadoAbono {
-  id: string;
-  monto: string;
-  metodo: MetodoAbono;
-  referencia?: string | null;
-  createdAt: string;
-}
-
-export interface ApartadoDetalle extends ApartadoListItem {
-  subtotal: string;
-  ivaTotal: string;
-  penaCancelacionPct: string;
-  observaciones?: string | null;
-  lineas: ApartadoLineaDetalle[];
-  abonos: ApartadoAbono[];
-}
-
-export interface ApartadoLista {
-  items: ApartadoListItem[];
-  total: number;
-}
-
 export interface CfdiResultado {
   id: string;
   uuid?: string | null;
