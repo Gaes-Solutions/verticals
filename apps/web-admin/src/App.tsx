@@ -5,6 +5,7 @@ import {
   Building2,
   DollarSign,
   Percent,
+  Rocket,
   FileText,
   HandCoins,
   Link2,
@@ -41,6 +42,7 @@ import { ComprasPage } from "./pages/ComprasPage.js";
 import { ContabilidadPage } from "./pages/ContabilidadPage.js";
 import { ClientesB2bPage } from "./pages/ClientesB2bPage.js";
 import { ComisionesPage } from "./pages/ComisionesPage.js";
+import { GuiaInicioPage } from "./pages/GuiaInicioPage.js";
 import { PreciosPage } from "./pages/PreciosPage.js";
 import { ConfiguracionPage } from "./pages/ConfiguracionPage.js";
 import { CxcPage } from "./pages/CxcPage.js";
@@ -70,6 +72,7 @@ export interface AdminSession {
 }
 
 type Seccion =
+  | "inicio"
   | "dashboard"
   | "reportes"
   | "productos"
@@ -105,6 +108,7 @@ type Seccion =
 // item si el usuario no lo tiene (el dueño con "*" ve todo). Defensa en
 // profundidad: el backend revalida igual con requirePerm.
 const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
+  { key: "inicio", label: "Guía de inicio", icon: Rocket, perm: "reportes.ventas" },
   { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
   { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
   { key: "productos", label: "Productos", icon: Package, perm: "productos.leer" },
@@ -147,6 +151,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
+  inicio: GuiaInicioPage,
   dashboard: DashboardPage,
   reportes: ReportesPage,
   productos: ProductosPage,
@@ -180,10 +185,22 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
 
 export function App() {
   const [session, setSession] = useState<AdminSession | null>(null);
-  const [seccion, setSeccion] = useState<Seccion>("dashboard");
+  const [seccion, setSeccion] = useState<Seccion>("inicio");
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [registrando, setRegistrando] = useState(false);
+
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent<string>).detail;
+      if (typeof d === "string") {
+        setSeccion(d as Seccion);
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener("gaes-nav", h);
+    return () => window.removeEventListener("gaes-nav", h);
+  }, []);
 
   const visibleNav = NAV.filter((n) => puede(n.perm));
 

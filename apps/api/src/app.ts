@@ -76,6 +76,7 @@ import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
 import pedidosEcommerceRoutes from "./modules/tenant/pedidos-ecommerce/routes.js";
 import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
 import preguntasRoutes from "./modules/tenant/preguntas/routes.js";
+import onboardingRoutes from "./modules/tenant/onboarding/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
@@ -222,6 +223,7 @@ export async function buildApp(
       await tenantApp.register(categoriasRoutes, { prefix: "/categorias" });
       await tenantApp.register(marcasRoutes, { prefix: "/marcas" });
       await tenantApp.register(productosRoutes, { prefix: "/productos" });
+      await tenantApp.register(onboardingRoutes, { prefix: "/onboarding" });
       await tenantApp.register(variantesRoutes, { prefix: "/variantes" });
       await tenantApp.register(inventarioRoutes, { prefix: "/inventario" });
       await tenantApp.register(lotesRoutes, { prefix: "/lotes" });
