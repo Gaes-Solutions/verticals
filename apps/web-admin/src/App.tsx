@@ -4,6 +4,7 @@ import {
   CreditCard,
   Building2,
   DollarSign,
+  Percent,
   FileText,
   HandCoins,
   Link2,
@@ -39,6 +40,7 @@ import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComprasPage } from "./pages/ComprasPage.js";
 import { ContabilidadPage } from "./pages/ContabilidadPage.js";
 import { ClientesB2bPage } from "./pages/ClientesB2bPage.js";
+import { ComisionesPage } from "./pages/ComisionesPage.js";
 import { PreciosPage } from "./pages/PreciosPage.js";
 import { ConfiguracionPage } from "./pages/ConfiguracionPage.js";
 import { CxcPage } from "./pages/CxcPage.js";
@@ -91,6 +93,7 @@ type Seccion =
   | "contabilidad"
   | "precios"
   | "clientes-b2b"
+  | "comisiones"
   | "usuarios"
   | "seguridad"
   | "configuracion"
@@ -138,6 +141,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "contabilidad", label: "Contabilidad", icon: FileText, perm: "cfdis_recibidos.leer" },
   { key: "precios", label: "Listas de precios", icon: DollarSign, perm: "precios.leer" },
   { key: "clientes-b2b", label: "Clientes mayoreo", icon: Building2, perm: "clientes.leer" },
+  { key: "comisiones", label: "Comisiones", icon: Percent, perm: "comisiones.gestionar" },
   { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, perm: "*" },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
@@ -169,6 +173,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   contabilidad: ContabilidadPage,
   precios: PreciosPage,
   "clientes-b2b": ClientesB2bPage,
+  comisiones: ComisionesPage,
   suscripcion: SuscripcionPage,
   tienda: TiendaPage,
 };
