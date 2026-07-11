@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { leer, onCambio } from "./lib/carrito.js";
+import { type Marca, resolverMarca } from "./lib/marca.js";
 import { CarritoPage } from "./pages/CarritoPage.js";
 import { CatalogoPage } from "./pages/CatalogoPage.js";
 import { CotizacionesPage } from "./pages/CotizacionesPage.js";
@@ -32,6 +33,11 @@ export function App() {
   const [restoring, setRestoring] = useState(true);
   const [carritoCount, setCarritoCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [marca, setMarca] = useState<Marca | null | undefined>(undefined);
+
+  useEffect(() => {
+    void resolverMarca().then(setMarca);
+  }, []);
 
   useEffect(() => {
     if (!loadToken()) {
@@ -53,10 +59,12 @@ export function App() {
     setSession(null);
   }
 
-  if (restoring) {
+  if (restoring || marca === undefined) {
     return <div className="flex h-full items-center justify-center text-slate-400">Cargando…</div>;
   }
-  if (!session) return <Login onLogin={setSession} />;
+  if (!session) return <Login onLogin={setSession} marca={marca} />;
+
+  const marcaNombre = marca?.nombre ?? "Portal Mayorista";
 
   function navegar(s: Seccion) {
     setSeccion(s);
@@ -66,7 +74,7 @@ export function App() {
   return (
     <div className="flex h-full flex-col md:flex-row">
       <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-slate-100 md:hidden">
-        <span className="text-lg font-bold text-brand">Portal Mayorista</span>
+        <span className="text-lg font-bold text-brand">{marcaNombre}</span>
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
@@ -96,9 +104,7 @@ export function App() {
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="hidden px-5 py-4 text-lg font-bold text-brand md:block">
-          Portal Mayorista
-        </div>
+        <div className="hidden px-5 py-4 text-lg font-bold text-brand md:block">{marcaNombre}</div>
         <nav className="flex-1 overflow-y-auto px-2 pt-3 md:pt-0">
           {NAV.map((n) => (
             <button

@@ -1,12 +1,11 @@
 import {
   BadgePercent,
   BarChart3,
-  CreditCard,
   Building2,
+  CreditCard,
   DollarSign,
-  Percent,
-  Rocket,
   FileText,
+  Globe,
   HandCoins,
   Link2,
   type LucideIcon,
@@ -14,8 +13,10 @@ import {
   MessageCircleQuestion,
   Package,
   PackageCheck,
+  Percent,
   QrCode,
   Receipt,
+  Rocket,
   RotateCcw,
   Settings,
   ShieldCheck,
@@ -37,24 +38,25 @@ import { Signup } from "./components/Signup.js";
 import { loadToken, puede, setToken } from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
-import { CobrosPage } from "./pages/CobrosPage.js";
-import { ComprasPage } from "./pages/ComprasPage.js";
-import { ContabilidadPage } from "./pages/ContabilidadPage.js";
 import { ClientesB2bPage } from "./pages/ClientesB2bPage.js";
+import { CobrosPage } from "./pages/CobrosPage.js";
 import { ComisionesPage } from "./pages/ComisionesPage.js";
-import { GuiaInicioPage } from "./pages/GuiaInicioPage.js";
-import { PreciosPage } from "./pages/PreciosPage.js";
+import { ComprasPage } from "./pages/ComprasPage.js";
 import { ConfiguracionPage } from "./pages/ConfiguracionPage.js";
+import { ContabilidadPage } from "./pages/ContabilidadPage.js";
 import { CxcPage } from "./pages/CxcPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { DevolucionesPage } from "./pages/DevolucionesPage.js";
+import { DominioB2bPage } from "./pages/DominioB2bPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
 import { EtiquetasPage } from "./pages/EtiquetasPage.js";
+import { GuiaInicioPage } from "./pages/GuiaInicioPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
 import { InventarioInsightsPage } from "./pages/InventarioInsightsPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
 import { MonederoPage } from "./pages/MonederoPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
+import { PreciosPage } from "./pages/PreciosPage.js";
 import { PreguntasPage } from "./pages/PreguntasPage.js";
 import { ProductosPage } from "./pages/ProductosPage.js";
 import { PromocionesPage } from "./pages/PromocionesPage.js";
@@ -102,6 +104,7 @@ type Seccion =
   | "configuracion"
   | "contabilidad"
   | "suscripcion"
+  | "portal-b2b"
   | "tienda";
 
 // `perm` = permiso de lectura que exige la ruta de ese módulo. La UI oculta el
@@ -146,6 +149,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "precios", label: "Listas de precios", icon: DollarSign, perm: "precios.leer" },
   { key: "clientes-b2b", label: "Clientes mayoreo", icon: Building2, perm: "clientes.leer" },
   { key: "comisiones", label: "Comisiones", icon: Percent, perm: "comisiones.gestionar" },
+  { key: "portal-b2b", label: "Portal mayorista", icon: Globe, perm: "configuracion.actualizar" },
   { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, perm: "*" },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
 ];
@@ -179,6 +183,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   precios: PreciosPage,
   "clientes-b2b": ClientesB2bPage,
   comisiones: ComisionesPage,
+  "portal-b2b": DominioB2bPage,
   suscripcion: SuscripcionPage,
   tienda: TiendaPage,
 };

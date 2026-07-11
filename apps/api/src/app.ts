@@ -13,6 +13,7 @@ import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import autofacturaPublicRoutes from "./modules/autofactura/routes.js";
 import { b2bAuthRoutes, b2bPortalRoutes } from "./modules/b2b-portal/routes.js";
+import b2bPublicRoutes from "./modules/b2b-public/routes.js";
 import {
   billingAdminGaesSoftRoutes,
   billingAdminTenantRoutes,
@@ -21,11 +22,11 @@ import {
 } from "./modules/billing/routes.js";
 import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
 import healthRoutes from "./modules/health/routes.js";
-import partnerPortalRoutes from "./modules/partner-portal/routes.js";
 import marketplaceTenantRoutes, {
   marketplaceAdminRoutes,
   marketplacePublicRoutes,
 } from "./modules/marketplace/routes.js";
+import partnerPortalRoutes from "./modules/partner-portal/routes.js";
 import partnersRoutes, { partnersPublicRoutes } from "./modules/partners/routes.js";
 import phrTenantRoutes, {
   patientAuthRoutes,
@@ -35,6 +36,7 @@ import phrTenantRoutes, {
 import storefrontPublicRoutes from "./modules/storefront/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
+import b2bDominioRoutes from "./modules/tenant/b2b-dominio/routes.js";
 import cajasRoutes from "./modules/tenant/cajas/routes.js";
 import camasRoutes from "./modules/tenant/camas/routes.js";
 import campanasRoutes from "./modules/tenant/campanas/routes.js";
@@ -71,12 +73,12 @@ import mascotasRoutes from "./modules/tenant/mascotas/routes.js";
 import medicosRoutes from "./modules/tenant/medicos/routes.js";
 import monederoRoutes from "./modules/tenant/monedero/routes.js";
 import notificacionesRoutes from "./modules/tenant/notificaciones/routes.js";
+import onboardingRoutes from "./modules/tenant/onboarding/routes.js";
 import ordenesCompraRoutes from "./modules/tenant/ordenes-compra/routes.js";
 import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
 import pedidosEcommerceRoutes from "./modules/tenant/pedidos-ecommerce/routes.js";
 import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
 import preguntasRoutes from "./modules/tenant/preguntas/routes.js";
-import onboardingRoutes from "./modules/tenant/onboarding/routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
@@ -204,6 +206,7 @@ export async function buildApp(
   await app.register(autofacturaPublicRoutes);
   await app.register(citasPublicRoutes);
   await app.register(storefrontPublicRoutes);
+  await app.register(b2bPublicRoutes);
   await app.register(billingAdminTenantRoutes);
   await app.register(billingWebhookRoutes);
   await app.register(conektaWebhookRoutes);
@@ -224,6 +227,7 @@ export async function buildApp(
       await tenantApp.register(marcasRoutes, { prefix: "/marcas" });
       await tenantApp.register(productosRoutes, { prefix: "/productos" });
       await tenantApp.register(onboardingRoutes, { prefix: "/onboarding" });
+      await tenantApp.register(b2bDominioRoutes, { prefix: "/b2b-dominio" });
       await tenantApp.register(variantesRoutes, { prefix: "/variantes" });
       await tenantApp.register(inventarioRoutes, { prefix: "/inventario" });
       await tenantApp.register(lotesRoutes, { prefix: "/lotes" });
