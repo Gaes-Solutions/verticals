@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  HOST: z.string().default("0.0.0.0"),
+  // "::" (IPv6, dual-stack) para que el api sea alcanzable por la red privada de
+  // Railway (`*.railway.internal` es IPv6-only). En 0.0.0.0 el proxy /api de las
+  // SPAs se cuelga. `::` también acepta IPv4 en Linux dual-stack.
+  HOST: z.string().default("::"),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   DATABASE_URL_MASTER: z.string().url(),
