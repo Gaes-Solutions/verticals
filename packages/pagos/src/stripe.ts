@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { verificarFirmaStripe } from "./stripe-sig.js";
 import {
   type CrearIntentInput,
   PagoError,
@@ -108,21 +108,7 @@ export class StripeClient implements PaymentProvider {
 
   /** Firma Stripe-Signature: `t=<ts>,v1=<hmac-sha256(secret, "<ts>.<payload>")>`. */
   parseWebhook(payload: string, signature: string): WebhookEvento {
-    const partes = new Map(signature.split(",").map((p) => p.split("=", 2) as [string, string]));
-    const t = partes.get("t");
-    const v1 = partes.get("v1");
-    if (!t || !v1) throw new PagoError("Firma Stripe malformada", "INVALID_WEBHOOK");
-    const esperada = createHmac("sha256", this.webhookSecret)
-      .update(`${t}.${payload}`)
-      .digest("hex");
-    const a = Buffer.from(esperada);
-    const b = Buffer.from(v1);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new PagoError("Firma Stripe inválida", "INVALID_WEBHOOK");
-    }
-    if (Math.abs(Date.now() / 1000 - Number(t)) > this.tolerancia) {
-      throw new PagoError("Webhook Stripe expirado", "INVALID_WEBHOOK");
-    }
+    verificarFirmaStripe(payload, signature, this.webhookSecret, this.tolerancia);
 
     const evento = JSON.parse(payload) as {
       type: string;
