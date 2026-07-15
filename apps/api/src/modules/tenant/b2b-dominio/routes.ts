@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { type DnsRecord, provisionarDominio, railwayCfg } from "./railway.js";
 
 /** Destino CNAME al que el mayorista apunta su dominio propio del portal B2B. */
 function cnameTarget(): string {
@@ -32,7 +33,7 @@ const b2bDominioRoutes: FastifyPluginAsync = async (app) => {
       select: { host: true, verificado: true },
       orderBy: { createdAt: "asc" },
     });
-    return { dominios, cname: cnameTarget() };
+    return { dominios, cname: cnameTarget(), automatico: railwayCfg() !== null };
   });
 
   app.post("/", async (req, reply) => {
@@ -55,11 +56,29 @@ const b2bDominioRoutes: FastifyPluginAsync = async (app) => {
       update: { tenantSlug: req.tenantSlug, tipo: "portal_b2b", verificado: true },
     });
 
-    return reply.code(201).send({
-      host,
-      verificado: true,
-      dns: { tipo: "CNAME", host, valor: cnameTarget() },
-    });
+    // Self-serve: si Railway está configurado, damos de alta el custom domain y
+    // devolvemos los registros DNS reales (Railway emite el TLS solo). Si no, o
+    // si Railway lo rechaza, caemos al CNAME genérico.
+    let records: DnsRecord[] = [{ tipo: "CNAME", nombre: host, valor: cnameTarget() }];
+    let automatico = false;
+    let aviso: string | null = null;
+    const cfg = railwayCfg();
+    if (cfg) {
+      try {
+        const railwayRecords = await provisionarDominio(cfg, host);
+        if (railwayRecords.length > 0) {
+          records = railwayRecords;
+          automatico = true;
+        }
+      } catch (err) {
+        app.log.warn({ err, host }, "no se pudo provisionar el dominio B2B en Railway");
+        aviso =
+          "El dominio quedó registrado, pero no se pudo conectar automáticamente. " +
+          "Usa el CNAME de abajo o reintenta.";
+      }
+    }
+
+    return reply.code(201).send({ host, verificado: true, automatico, aviso, dns: { records } });
   });
 
   app.delete("/:host", async (req) => {

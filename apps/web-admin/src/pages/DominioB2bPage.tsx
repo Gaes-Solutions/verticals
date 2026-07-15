@@ -8,6 +8,18 @@ interface DominioB2b {
 interface Config {
   dominios: DominioB2b[];
   cname: string;
+  automatico: boolean;
+}
+interface DnsRecord {
+  tipo: string;
+  nombre: string;
+  valor: string;
+}
+interface ConectarResult {
+  host: string;
+  automatico: boolean;
+  aviso: string | null;
+  dns: { records: DnsRecord[] };
 }
 
 export function DominioB2bPage() {
@@ -15,6 +27,7 @@ export function DominioB2bPage() {
   const [host, setHost] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [result, setResult] = useState<ConectarResult | null>(null);
 
   const cargar = useCallback(async () => {
     setConfig(await api<Config>("/t/b2b-dominio"));
@@ -28,7 +41,10 @@ export function DominioB2bPage() {
     setError(null);
     setGuardando(true);
     try {
-      await api("/t/b2b-dominio", { body: { host: host.trim().toLowerCase() } });
+      const r = await api<ConectarResult>("/t/b2b-dominio", {
+        body: { host: host.trim().toLowerCase() },
+      });
+      setResult(r);
       setHost("");
       await cargar();
     } catch (err) {
@@ -42,6 +58,7 @@ export function DominioB2bPage() {
     await api(`/t/b2b-dominio/${encodeURIComponent(h)}`, { method: "DELETE" }).catch(
       () => undefined,
     );
+    if (result?.host === h) setResult(null);
     void cargar();
   }
 
@@ -117,34 +134,62 @@ export function DominioB2bPage() {
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-        <h2 className="mb-2 font-semibold text-slate-800">Cómo apuntar tu dominio</h2>
-        <p className="mb-3 text-sm text-slate-500">
-          En tu proveedor de dominio (GoDaddy, Hostinger, Cloudflare…) crea este registro:
-        </p>
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead className="bg-slate-100 text-left text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Tipo</th>
-                <th className="px-3 py-2">Nombre / Host</th>
-                <th className="px-3 py-2">Apunta a</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t border-slate-100">
-                <td className="px-3 py-2 font-mono">CNAME</td>
-                <td className="px-3 py-2 font-mono">{host.trim() || "pedidos"}</td>
-                <td className="px-3 py-2 font-mono">{config.cname}</td>
-              </tr>
-            </tbody>
-          </table>
+      {result ? (
+        <div className="rounded-xl border border-brand/30 bg-brand/5 p-5">
+          <h2 className="mb-1 font-semibold text-slate-800">
+            Último paso: agrega este registro en tu DNS
+          </h2>
+          <p className="mb-3 text-sm text-slate-600">
+            En tu proveedor de dominio (GoDaddy, Hostinger, Cloudflare…) crea el registro de abajo
+            para <span className="font-mono">{result.host}</span>.{" "}
+            {result.automatico
+              ? "El certificado de seguridad (HTTPS) se activa solo en unos minutos."
+              : "Los cambios pueden tardar unos minutos en propagarse."}
+          </p>
+          {result.aviso && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              {result.aviso}
+            </p>
+          )}
+          <DnsTable records={result.dns.records} />
         </div>
-        <p className="mt-3 text-xs text-slate-400">
-          Los cambios de DNS pueden tardar unos minutos en propagarse. Si necesitas ayuda para
-          conectarlo, escríbenos a soporte.
-        </p>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+          <h2 className="mb-2 font-semibold text-slate-800">Cómo funciona</h2>
+          <p className="text-sm text-slate-500">
+            Escribe el dominio que quieres usar y pulsa <strong>Conectar</strong>. Te mostraremos el
+            registro DNS exacto que debes crear en tu proveedor de dominio.{" "}
+            {config.automatico
+              ? "Nosotros damos de alta el dominio y activamos el HTTPS automáticamente."
+              : "Después de apuntarlo, tu portal quedará disponible en tu dominio."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DnsTable({ records }: { records: DnsRecord[] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="w-full min-w-[420px] text-sm">
+        <thead className="bg-slate-100 text-left text-slate-500">
+          <tr>
+            <th className="px-3 py-2">Tipo</th>
+            <th className="px-3 py-2">Nombre / Host</th>
+            <th className="px-3 py-2">Apunta a</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((r) => (
+            <tr key={`${r.tipo}-${r.nombre}-${r.valor}`} className="border-t border-slate-100">
+              <td className="px-3 py-2 font-mono">{r.tipo}</td>
+              <td className="px-3 py-2 font-mono break-all">{r.nombre}</td>
+              <td className="px-3 py-2 font-mono break-all">{r.valor}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
