@@ -15,6 +15,7 @@ import {
   cambiarPlan,
   correrDunningCiclo,
   correrTrialConversions,
+  crearSetupIntentTenant,
   getBillingContext,
   listInvoices,
   loginAdminTenant,
@@ -183,6 +184,17 @@ export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
     const pm = await agregarPaymentMethod(app.masterPrisma, tenantIdFrom(req), body);
     return reply.code(201).send(pm);
   });
+
+  // Config pública que necesita el frontend para Stripe.js (la publishable NO es
+  // secreta). Si no hay llave, el front muestra captura de tarjeta deshabilitada.
+  app.get("/billing/stripe-config", async () => ({
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() || null,
+  }));
+
+  // SetupIntent para guardar una tarjeta (Stripe Elements confirma en el front).
+  app.post("/billing/setup-intent", async (req) =>
+    crearSetupIntentTenant(app.masterPrisma, tenantIdFrom(req)),
+  );
 
   app.post("/billing/subscription/coupon", async (req, reply) => {
     const body = couponApplySchema.parse(req.body);

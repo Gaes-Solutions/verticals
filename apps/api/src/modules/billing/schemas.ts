@@ -40,6 +40,9 @@ export const loginAdminTenantSchema = z.object({
 export const paymentMethodSchema = z.object({
   type: z.enum(["card", "oxxo", "spei", "manual"]),
   setDefault: z.boolean().optional(),
+  // Stripe: payment_method confirmado en el frontend (SetupIntent). Si viene, los
+  // datos de la tarjeta se leen de Stripe y se ignoran los de abajo.
+  paymentMethodId: z.string().min(1).max(80).optional(),
   last4: z.string().length(4).optional(),
   brand: z.string().max(40).optional(),
   expMonth: z.number().int().min(1).max(12).optional(),

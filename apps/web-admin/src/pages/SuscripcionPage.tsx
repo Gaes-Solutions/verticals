@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AgregarTarjeta } from "../components/AgregarTarjeta.js";
 import { ApiError, api } from "../lib/api.js";
 
 interface BillingContext {
@@ -160,6 +161,8 @@ export function SuscripcionPage() {
   const [error, setError] = useState<string | null>(null);
   const [cambiando, setCambiando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [stripePk, setStripePk] = useState<string | null>(null);
+  const [agregandoTarjeta, setAgregandoTarjeta] = useState(false);
 
   const cargar = useCallback(() => {
     Promise.all([api<BillingContext>("/billing/me"), api<Invoice[]>("/billing/invoices")])
@@ -173,6 +176,12 @@ export function SuscripcionPage() {
       );
   }, []);
   useEffect(() => cargar(), [cargar]);
+
+  useEffect(() => {
+    api<{ publishableKey: string | null }>("/billing/stripe-config")
+      .then((c) => setStripePk(c.publishableKey))
+      .catch(() => setStripePk(null));
+  }, []);
 
   if (error) {
     return (
@@ -238,7 +247,18 @@ export function SuscripcionPage() {
       </div>
 
       <div className="gx-card p-5">
-        <h2 className="mb-2 font-semibold text-slate-800">Método de pago</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-800">Método de pago</h2>
+          {stripePk && !agregandoTarjeta && (
+            <button
+              type="button"
+              onClick={() => setAgregandoTarjeta(true)}
+              className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-sm text-white hover:bg-brand-dark"
+            >
+              {ctx.paymentMethods.length === 0 ? "+ Agregar tarjeta" : "Cambiar tarjeta"}
+            </button>
+          )}
+        </div>
         {ctx.paymentMethods.length === 0 ? (
           <p className="text-slate-400 text-sm">
             Sin método de pago registrado: tus facturas se cobran manualmente.
@@ -259,6 +279,22 @@ export function SuscripcionPage() {
               </li>
             ))}
           </ul>
+        )}
+        {stripePk && agregandoTarjeta && (
+          <AgregarTarjeta
+            publishableKey={stripePk}
+            onCancelar={() => setAgregandoTarjeta(false)}
+            onAgregada={() => {
+              setAgregandoTarjeta(false);
+              setMsg("Tarjeta guardada");
+              cargar();
+            }}
+          />
+        )}
+        {stripePk === null && ctx.paymentMethods.length === 0 && (
+          <p className="mt-2 text-slate-400 text-xs">
+            La captura de tarjeta en línea aún no está disponible.
+          </p>
         )}
       </div>
 

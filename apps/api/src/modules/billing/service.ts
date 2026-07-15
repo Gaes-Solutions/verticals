@@ -312,10 +312,19 @@ export async function listInvoices(
 export interface AddPaymentMethodInput {
   type: "card" | "oxxo" | "spei" | "manual";
   setDefault?: boolean | undefined;
+  /** payment_method de Stripe confirmado en el frontend (SetupIntent). */
+  paymentMethodId?: string | undefined;
   last4?: string | undefined;
   brand?: string | undefined;
   expMonth?: number | undefined;
   expYear?: number | undefined;
+}
+
+interface DatosTarjeta {
+  last4?: string;
+  brand?: string;
+  expMonth?: number;
+  expYear?: number;
 }
 
 export async function agregarPaymentMethod(
@@ -323,6 +332,28 @@ export async function agregarPaymentMethod(
   tenantId: string,
   input: AddPaymentMethodInput,
 ) {
+  const stripe = stripeBilling();
+  let externalMethodId = `pm_mock_${randomUUID().slice(0, 12)}`;
+  let tarjeta: DatosTarjeta = {
+    ...(input.last4 !== undefined ? { last4: input.last4 } : {}),
+    ...(input.brand !== undefined ? { brand: input.brand } : {}),
+    ...(input.expMonth !== undefined ? { expMonth: input.expMonth } : {}),
+    ...(input.expYear !== undefined ? { expYear: input.expYear } : {}),
+  };
+
+  // Tarjeta real de Stripe: el pm ya quedó ligado al customer vía el SetupIntent;
+  // leemos sus datos de Stripe (no confiamos en los que mande el cliente).
+  if (input.paymentMethodId && stripe) {
+    externalMethodId = input.paymentMethodId;
+    const t = await stripe.getTarjeta(input.paymentMethodId);
+    tarjeta = {
+      ...(t.last4 ? { last4: t.last4 } : {}),
+      ...(t.brand ? { brand: t.brand } : {}),
+      ...(t.expMonth ? { expMonth: t.expMonth } : {}),
+      ...(t.expYear ? { expYear: t.expYear } : {}),
+    };
+  }
+
   if (input.setDefault) {
     await master.paymentMethod.updateMany({ where: { tenantId }, data: { isDefault: false } });
   }
@@ -332,13 +363,50 @@ export async function agregarPaymentMethod(
       tenantId,
       type: input.type,
       isDefault: input.setDefault ?? has === 0,
-      externalMethodId: `pm_mock_${randomUUID().slice(0, 12)}`,
-      ...(input.last4 !== undefined ? { last4: input.last4 } : {}),
-      ...(input.brand !== undefined ? { brand: input.brand } : {}),
-      ...(input.expMonth !== undefined ? { expMonth: input.expMonth } : {}),
-      ...(input.expYear !== undefined ? { expYear: input.expYear } : {}),
+      externalMethodId,
+      ...tarjeta,
     },
   });
+}
+
+// Asegura (y persiste) el customer de Stripe del tenant. Lo crea con el email del
+// admin la primera vez. Necesario para guardar tarjetas y cobrar off-session.
+async function asegurarStripeCustomer(
+  master: MasterPrismaClient,
+  tenantId: string,
+  stripe: NonNullable<ReturnType<typeof stripeBilling>>,
+): Promise<string> {
+  const tenant = await master.tenant.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { stripeCustomerId: true, commercialName: true, legalName: true },
+  });
+  if (tenant.stripeCustomerId) return tenant.stripeCustomerId;
+
+  const admin = await master.tenantUserAdmin.findFirst({
+    where: { tenantId },
+    select: { email: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const name = tenant.commercialName ?? tenant.legalName ?? null;
+  const { customerId } = await stripe.crearCustomer({
+    email: admin?.email ?? `tenant+${tenantId}@gaessoft.mx`,
+    metadata: { tenantId },
+    ...(name ? { name } : {}),
+  });
+  await master.tenant.update({ where: { id: tenantId }, data: { stripeCustomerId: customerId } });
+  return customerId;
+}
+
+/** SetupIntent para que el dueño guarde su tarjeta desde "Mi suscripción". */
+export async function crearSetupIntentTenant(
+  master: MasterPrismaClient,
+  tenantId: string,
+): Promise<{ clientSecret: string }> {
+  const stripe = stripeBilling();
+  if (!stripe) throw new BillingError(503, "Stripe no está configurado");
+  const customerId = await asegurarStripeCustomer(master, tenantId, stripe);
+  const si = await stripe.crearSetupIntent(customerId);
+  return { clientSecret: si.clientSecret };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
