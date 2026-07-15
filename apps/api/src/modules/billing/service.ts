@@ -16,6 +16,7 @@ import {
   seedTenantDefaults,
 } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
+import { stripeBilling } from "./stripe.js";
 
 export class BillingError extends Error {
   constructor(
@@ -59,6 +60,36 @@ async function mockCobrar(
     return { success: false, failureReason: "Tarjeta declinada (mock)" };
   }
   return { success: true, externalChargeId: `ch_mock_${randomUUID().slice(0, 12)}` };
+}
+
+// Cobra la suscripción: usa Stripe (off-session) si está configurado y el tenant
+// tiene customer + tarjeta real de Stripe; si no, cae al mock. `invoice.total` ya
+// está en centavos. Idempotency por invoice para no duplicar el cobro en reintentos.
+async function cobrarSuscripcion(
+  invoice: { id: string; total: number; currency: string; invoiceNumber: string },
+  tenant: { stripeCustomerId: string | null },
+  pm: { id: string; externalMethodId: string | null },
+): Promise<{ success: boolean; externalChargeId?: string; failureReason?: string }> {
+  const stripe = stripeBilling();
+  const customerId = tenant.stripeCustomerId;
+  const pmId = pm.externalMethodId;
+  const esTarjetaStripe = !!pmId && pmId.startsWith("pm_") && !pmId.startsWith("pm_mock_");
+  if (stripe && customerId && pmId && esTarjetaStripe) {
+    const r = await stripe.cobrarOffSession({
+      customerId,
+      paymentMethodId: pmId,
+      montoCentavos: invoice.total,
+      moneda: invoice.currency,
+      descripcion: `Suscripción ${invoice.invoiceNumber}`,
+      idempotencyKey: `inv_${invoice.id}`,
+    });
+    return {
+      success: r.success,
+      ...(r.chargeId ? { externalChargeId: r.chargeId } : {}),
+      ...(r.failureReason ? { failureReason: r.failureReason } : {}),
+    };
+  }
+  return mockCobrar(pm.id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -583,7 +614,7 @@ async function intentarPagoInvoice(
     return { success: false, failureReason: "Sin método de pago default" };
   }
 
-  const charge = await mockCobrar(pm.id);
+  const charge = await cobrarSuscripcion(invoice, invoice.tenant, pm);
   await master.invoicePayment.create({
     data: {
       invoiceId,

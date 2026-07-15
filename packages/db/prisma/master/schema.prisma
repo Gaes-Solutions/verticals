@@ -69,6 +69,7 @@ model Tenant {
   schemaName             String          @unique @map("schema_name")
   status                 TenantStatus    @default(trial)
   planId                 String          @map("plan_id")
+  stripeCustomerId       String?         @map("stripe_customer_id")
   parentTenantId         String?         @map("parent_tenant_id")
   partnerId              String?         @map("partner_id")
   partnerAttributedUntil DateTime?       @map("partner_attributed_until")
