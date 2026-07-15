@@ -56,7 +56,8 @@ export async function provisionarDominio(cfg: RailwayCfg, domain: string): Promi
   const res = await fetch(RAILWAY_API, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${cfg.token}`,
+      // Token de proyecto → header Project-Access-Token (los de cuenta usan Bearer).
+      "Project-Access-Token": cfg.token,
       "Content-Type": "application/json",
       "User-Agent": BROWSER_UA,
     },
