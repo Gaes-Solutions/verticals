@@ -79,7 +79,8 @@ export async function provisionarDominio(cfg: RailwayCfg, domain: string): Promi
   }
   const records = body.data?.customDomainCreate?.status?.dnsRecords ?? [];
   return records.map((r) => ({
-    tipo: r.recordType ?? "CNAME",
+    // Railway devuelve el enum "DNS_RECORD_TYPE_CNAME"; lo dejamos legible ("CNAME").
+    tipo: (r.recordType ?? "CNAME").replace(/^DNS_RECORD_TYPE_/, ""),
     nombre: r.hostlabel ?? domain,
     valor: r.requiredValue ?? "",
   }));
