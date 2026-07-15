@@ -17,6 +17,10 @@ export interface CrearIntentInput {
   cardTokenId?: string;
   /** Meses sin intereses (3/6/9/12…). Solo aplica a pago con tarjeta. */
   mesesSinIntereses?: number;
+  /** Cuenta Connect del comercio: si viene, el cobro se hace EN su cuenta (direct charge). */
+  stripeAccountId?: string;
+  /** Comisión de la plataforma en centavos. Solo aplica junto con stripeAccountId. */
+  applicationFeeCentavos?: number;
 }
 
 export interface PagoIntent {

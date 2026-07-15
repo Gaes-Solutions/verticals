@@ -108,9 +108,27 @@ async function finalizarSiConfirmado(
   await postPago(app, prisma, confirmacion);
 }
 
+interface ConnectCobro {
+  stripeAccountId?: string;
+  platformFeeBps?: number;
+}
+
+// Si el tenant ya tiene su cuenta Connect habilitada, el cobro con tarjeta se hace
+// EN su cuenta (direct charge) y la plataforma retiene su comisión.
+async function resolverConnect(app: FastifyInstance, tenantSlug: string): Promise<ConnectCobro> {
+  const t = await app.masterPrisma.tenant.findUnique({
+    where: { slug: tenantSlug },
+    select: { stripeAccountId: true, stripeAccountStatus: true },
+  });
+  if (!t?.stripeAccountId || t.stripeAccountStatus !== "enabled") return {};
+  const bps = Number(process.env.STRIPE_PLATFORM_FEE_BPS ?? "0") || 0;
+  return { stripeAccountId: t.stripeAccountId, ...(bps > 0 ? { platformFeeBps: bps } : {}) };
+}
+
 function buildCheckoutInput(
   body: z.infer<typeof iniciarCheckoutSchema>,
   tenantSlug: string,
+  connect: ConnectCobro,
 ): IniciarCheckoutInput {
   return {
     carritoId: body.carritoId,
@@ -125,6 +143,8 @@ function buildCheckoutInput(
     ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
     requiereFactura: body.requiereFactura,
     ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),
+    ...(connect.stripeAccountId ? { stripeAccountId: connect.stripeAccountId } : {}),
+    ...(connect.platformFeeBps ? { platformFeeBps: connect.platformFeeBps } : {}),
   };
 }
 
@@ -134,7 +154,8 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
     const provider = resolverProvider(app, body.proveedorPago, reply);
     if (!provider) return;
     try {
-      const input = buildCheckoutInput(body, req.principal.tenantSlug);
+      const connect = await resolverConnect(app, req.principal.tenantSlug);
+      const input = buildCheckoutInput(body, req.principal.tenantSlug, connect);
       const result = await iniciarCheckout(req.tenantPrisma, provider, input);
       await finalizarSiConfirmado(app, req.tenantPrisma, req.principal.userId, result);
       return reply.code(201).send(result);

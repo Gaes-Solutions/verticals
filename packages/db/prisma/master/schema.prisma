@@ -70,6 +70,8 @@ model Tenant {
   status                 TenantStatus    @default(trial)
   planId                 String          @map("plan_id")
   stripeCustomerId       String?         @map("stripe_customer_id")
+  stripeAccountId        String?         @map("stripe_account_id")
+  stripeAccountStatus    String?         @map("stripe_account_status")
   parentTenantId         String?         @map("parent_tenant_id")
   partnerId              String?         @map("partner_id")
   partnerAttributedUntil DateTime?       @map("partner_attributed_until")

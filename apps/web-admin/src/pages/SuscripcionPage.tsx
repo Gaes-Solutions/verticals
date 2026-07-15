@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AgregarTarjeta } from "../components/AgregarTarjeta.js";
+import { ConectarStripe } from "../components/ConectarStripe.js";
 import { ApiError, api } from "../lib/api.js";
 
 interface BillingContext {
@@ -297,6 +298,8 @@ export function SuscripcionPage() {
           </p>
         )}
       </div>
+
+      {stripePk && <ConectarStripe />}
 
       <div className="gx-card p-5">
         <h2 className="mb-2 font-semibold text-slate-800">Facturas ({invoices.length})</h2>

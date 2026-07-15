@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { estadoConnect, iniciarOnboardingConnect } from "./connect-service.js";
 import {
   changePlanSchema,
   couponApplySchema,
@@ -194,6 +195,15 @@ export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
   // SetupIntent para guardar una tarjeta (Stripe Elements confirma en el front).
   app.post("/billing/setup-intent", async (req) =>
     crearSetupIntentTenant(app.masterPrisma, tenantIdFrom(req)),
+  );
+
+  // Stripe Connect: onboarding para que el tenant cobre a SUS clientes.
+  app.post("/billing/connect/onboard", async (req) =>
+    iniciarOnboardingConnect(app.masterPrisma, tenantIdFrom(req)),
+  );
+
+  app.get("/billing/connect/status", async (req) =>
+    estadoConnect(app.masterPrisma, tenantIdFrom(req)),
   );
 
   app.post("/billing/subscription/coupon", async (req, reply) => {

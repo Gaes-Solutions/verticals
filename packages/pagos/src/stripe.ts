@@ -58,13 +58,16 @@ export class StripeClient implements PaymentProvider {
     this.tolerancia = opts.toleranciaWebhookSeg ?? 300;
   }
 
-  private async post<T>(path: string, form: URLSearchParams): Promise<T> {
+  private async post<T>(path: string, form: URLSearchParams, stripeAccountId?: string): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+    // Connect direct charge: el cobro se ejecuta EN la cuenta del comercio.
+    if (stripeAccountId) headers["Stripe-Account"] = stripeAccountId;
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers,
       body: form.toString(),
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -93,7 +96,15 @@ export class StripeClient implements PaymentProvider {
     for (const [k, v] of Object.entries(input.metadata ?? {})) {
       form.set(`metadata[${k}]`, v);
     }
-    const intent = await this.post<StripeIntentResponse>("/v1/payment_intents", form);
+    // Comisión de la plataforma (solo en direct charges sobre la cuenta Connect).
+    if (input.stripeAccountId && input.applicationFeeCentavos) {
+      form.set("application_fee_amount", String(input.applicationFeeCentavos));
+    }
+    const intent = await this.post<StripeIntentResponse>(
+      "/v1/payment_intents",
+      form,
+      input.stripeAccountId,
+    );
     const referencia = intent.next_action?.oxxo_display_details?.number;
     const expira = intent.next_action?.oxxo_display_details?.expires_after;
     return {

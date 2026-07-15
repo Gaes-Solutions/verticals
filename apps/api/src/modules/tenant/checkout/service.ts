@@ -52,6 +52,10 @@ export interface IniciarCheckoutInput {
   mesesSinIntereses?: number | undefined;
   requiereFactura: boolean;
   datosFactura?: Record<string, unknown>;
+  /** Cuenta Connect habilitada del comercio (si aplica): el cobro va a su cuenta. */
+  stripeAccountId?: string | undefined;
+  /** Comisión de la plataforma en puntos base (1% = 100). Solo con stripeAccountId. */
+  platformFeeBps?: number | undefined;
 }
 
 export interface IniciarCheckoutResult {
@@ -179,6 +183,10 @@ export async function iniciarCheckout(
     },
     ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
     ...(input.mesesSinIntereses ? { mesesSinIntereses: input.mesesSinIntereses } : {}),
+    ...(input.stripeAccountId ? { stripeAccountId: input.stripeAccountId } : {}),
+    ...(input.stripeAccountId && input.platformFeeBps
+      ? { applicationFeeCentavos: Math.round((montoCentavos * input.platformFeeBps) / 10000) }
+      : {}),
   });
 
   await client.pedidoEcommerce.update({
