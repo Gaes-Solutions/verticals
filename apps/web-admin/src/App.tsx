@@ -7,6 +7,7 @@ import {
   FileText,
   Globe,
   HandCoins,
+  HelpCircle,
   Link2,
   type LucideIcon,
   Menu,
@@ -35,8 +36,10 @@ import { type ComponentType, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { Signup } from "./components/Signup.js";
+import { Tour } from "./components/Tour.js";
 import { loadToken, puede, setToken } from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
+import { AyudaPage } from "./pages/AyudaPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
 import { ClientesB2bPage } from "./pages/ClientesB2bPage.js";
 import { CobrosPage } from "./pages/CobrosPage.js";
@@ -105,7 +108,8 @@ type Seccion =
   | "contabilidad"
   | "suscripcion"
   | "portal-b2b"
-  | "tienda";
+  | "tienda"
+  | "ayuda";
 
 // `perm` = permiso de lectura que exige la ruta de ese módulo. La UI oculta el
 // item si el usuario no lo tiene (el dueño con "*" ve todo). Defensa en
@@ -152,6 +156,7 @@ const NAV: { key: Seccion; label: string; icon: LucideIcon; perm: string }[] = [
   { key: "portal-b2b", label: "Portal mayorista", icon: Globe, perm: "configuracion.actualizar" },
   { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, perm: "*" },
   { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
+  { key: "ayuda", label: "Ayuda", icon: HelpCircle, perm: "" },
 ];
 
 const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
@@ -186,6 +191,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   "portal-b2b": DominioB2bPage,
   suscripcion: SuscripcionPage,
   tienda: TiendaPage,
+  ayuda: AyudaPage,
 };
 
 export function App() {
@@ -207,7 +213,7 @@ export function App() {
     return () => window.removeEventListener("gaes-nav", h);
   }, []);
 
-  const visibleNav = NAV.filter((n) => puede(n.perm));
+  const visibleNav = NAV.filter((n) => n.key === "ayuda" || puede(n.perm));
 
   // Si la sección activa no es visible para este rol, caer a la primera permitida.
   useEffect(() => {
@@ -291,6 +297,7 @@ export function App() {
             <button
               key={n.key}
               type="button"
+              data-tour={`nav-${n.key}`}
               onClick={() => navegar(n.key)}
               className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                 seccion === n.key ? "bg-brand text-white" : "text-slate-300 hover:bg-slate-800"
@@ -319,6 +326,8 @@ export function App() {
         </div>
         <ActivePage />
       </main>
+
+      <Tour />
     </div>
   );
 }
