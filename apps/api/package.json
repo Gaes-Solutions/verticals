@@ -19,7 +19,8 @@
     "demo:despacho": "dotenv -e ../../.env -- tsx scripts/demo-despacho.ts",
     "demo:digital": "dotenv -e ../../.env -- tsx scripts/demo-digital.ts",
     "demo:offline-sync": "dotenv -e ../../.env -- tsx scripts/demo-offline-sync.ts",
-    "demo:saas-onboarding": "dotenv -e ../../.env -- tsx scripts/demo-saas-onboarding.ts"
+    "demo:saas-onboarding": "dotenv -e ../../.env -- tsx scripts/demo-saas-onboarding.ts",
+    "backfill:tienda-dominios": "dotenv -e ../../.env -- tsx scripts/backfill-tienda-dominios.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
