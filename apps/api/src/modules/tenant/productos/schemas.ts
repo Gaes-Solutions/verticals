@@ -73,6 +73,9 @@ export const productoUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   isVisiblePublico: z.boolean().optional(),
   isVisibleB2b: z.boolean().optional(),
+  // Edición del precio/código de la variante base (productos de una sola variante).
+  precioBase: decimalString.optional(),
+  sku: z.string().min(1).max(60).optional(),
 });
 
 export const productoIdParamSchema = z.object({ id: z.string().min(1) });

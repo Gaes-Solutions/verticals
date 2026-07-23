@@ -246,17 +246,40 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send(created);
   });
 
-  app.patch("/:id", async (req) => {
+  app.patch("/:id", async (req, reply) => {
     req.requirePerm(PERMISSIONS.PRODUCTOS_ACTUALIZAR);
     const { id } = productoIdParamSchema.parse(req.params);
-    const body = productoUpdateSchema.parse(req.body);
-    return req.tenantPrisma.producto.update({
+    const { precioBase, sku, ...rest } = productoUpdateSchema.parse(req.body);
+    await req.tenantPrisma.producto.update({
       where: { id },
-      data: buildProductoUpdateData(body) as Parameters<
+      data: buildProductoUpdateData(rest) as Parameters<
         typeof req.tenantPrisma.producto.update
       >[0]["data"],
-      include: PRODUCTO_BASE_INCLUDE,
     });
+    // Precio/SKU viven en la variante: se editan sobre la variante base (default).
+    if (precioBase !== undefined || sku !== undefined) {
+      const variantes = await req.tenantPrisma.productoVariante.findMany({
+        where: { productoId: id },
+        select: { id: true, isDefault: true },
+      });
+      const base = variantes.find((v) => v.isDefault) ?? variantes[0];
+      if (base) {
+        try {
+          await req.tenantPrisma.productoVariante.update({
+            where: { id: base.id },
+            data: {
+              ...(precioBase !== undefined ? { precioBase } : {}),
+              ...(sku !== undefined ? { sku } : {}),
+            },
+          });
+        } catch {
+          return reply
+            .code(409)
+            .send({ statusCode: 409, error: "Conflict", message: "Ese código/SKU ya está en uso" });
+        }
+      }
+    }
+    return req.tenantPrisma.producto.findUnique({ where: { id }, include: PRODUCTO_BASE_INCLUDE });
   });
 
   app.delete("/:id", async (req) => {

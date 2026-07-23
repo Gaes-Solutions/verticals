@@ -142,7 +142,9 @@ function ProductoModal({
   onSaved: () => void;
 }) {
   const editando = producto !== null;
-  const [skuPadre, setSkuPadre] = useState(producto?.skuPadre ?? "");
+  // Precio/código se editan sobre la variante base; solo para productos de una variante.
+  const editaPrecio = !editando || (producto?.variantes.length ?? 0) <= 1;
+  const [sku, setSku] = useState(producto?.variantes[0]?.sku ?? producto?.skuPadre ?? "");
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [precioBase, setPrecioBase] = useState(producto?.variantes[0]?.precioBase ?? "");
   const [aplicaIva, setAplicaIva] = useState(producto?.aplicaIva ?? true);
@@ -173,12 +175,17 @@ function ProductoModal({
       if (editando && producto) {
         await api(`/t/productos/${producto.id}`, {
           method: "PATCH",
-          body: { nombre, ...impuestos, ...(categoriaId ? { categoriaId } : {}) },
+          body: {
+            nombre,
+            ...impuestos,
+            ...(categoriaId ? { categoriaId } : {}),
+            ...(editaPrecio ? { precioBase, sku } : {}),
+          },
         });
       } else {
         await api("/t/productos", {
           body: {
-            skuPadre,
+            skuPadre: sku,
             nombre,
             precioBase,
             tasaIva: "16",
@@ -202,17 +209,7 @@ function ProductoModal({
           {editando ? "Editar producto" : "Nuevo producto"}
         </h2>
         <div className="space-y-3">
-          {!editando && (
-            <Field label="SKU">
-              <input
-                data-tour="prod-f-sku"
-                value={skuPadre}
-                onChange={(e) => setSkuPadre(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
-              />
-            </Field>
-          )}
-          <Field label="Nombre">
+          <Field label="Nombre *">
             <input
               data-tour="prod-f-nombre"
               value={nombre}
@@ -220,14 +217,25 @@ function ProductoModal({
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
             />
           </Field>
-          {!editando && (
-            <Field label="Precio (IVA incluido)">
+          {editaPrecio && (
+            <Field label="Precio de venta (IVA incluido) *">
               <input
                 type="number"
                 step="0.01"
                 data-tour="prod-f-precio"
                 value={precioBase}
                 onChange={(e) => setPrecioBase(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              />
+            </Field>
+          )}
+          {editaPrecio && (
+            <Field label="SKU / código de barras *">
+              <input
+                data-tour="prod-f-sku"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                placeholder="Ej. 7501234567890 — para escanear en caja"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
               />
             </Field>
@@ -296,7 +304,7 @@ function ProductoModal({
             type="button"
             data-tour="prod-f-guardar"
             onClick={guardar}
-            disabled={guardando || !nombre || (!editando && (!skuPadre || !precioBase))}
+            disabled={guardando || !nombre || (editaPrecio && (!sku || !precioBase))}
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar"}
