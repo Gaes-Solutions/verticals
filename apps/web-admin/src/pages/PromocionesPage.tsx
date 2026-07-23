@@ -376,6 +376,7 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         <label className="mb-3 block">
           <span className="gx-label">Nombre</span>
           <input
+            data-tour="promo-f-nombre"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             className="gx-input"

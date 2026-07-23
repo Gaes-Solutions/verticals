@@ -291,6 +291,7 @@ function NuevaOcModal({
           <label className="block">
             <span className="gx-label">Razón social</span>
             <input
+              data-tour="compra-f-proveedor"
               value={proveedorRazonSocial}
               onChange={(e) => setProveedorRazonSocial(e.target.value)}
               className="gx-input"

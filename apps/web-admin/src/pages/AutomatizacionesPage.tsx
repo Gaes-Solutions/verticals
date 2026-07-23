@@ -199,7 +199,12 @@ function NuevoFlowModal({
         )}
         <label className="mb-3 block">
           <span className="gx-label">Cuándo (disparador)</span>
-          <select value={evento} onChange={(e) => setEvento(e.target.value)} className="gx-input">
+          <select
+            data-tour="auto-f-evento"
+            value={evento}
+            onChange={(e) => setEvento(e.target.value)}
+            className="gx-input"
+          >
             {eventos.map((ev) => (
               <option key={ev.evento} value={ev.evento}>
                 {ev.label}

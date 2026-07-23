@@ -474,6 +474,7 @@ function NuevaCxcModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
           ) : (
             <div className="relative">
               <input
+                data-tour="cxc-f-cliente"
                 value={clienteQuery}
                 onChange={(e) => setClienteQuery(e.target.value)}
                 className="gx-input"
