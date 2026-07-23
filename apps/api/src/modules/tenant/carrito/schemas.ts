@@ -10,7 +10,9 @@ export const carritoUpsertSchema = z
       .array(
         z.object({
           varianteId: z.string().min(1),
-          cantidad: z.number().positive(),
+          // Tope alto pero seguro: evita el overflow numérico (columnas Decimal(14,4),
+          // máx ~10^10) al calcular subtotales con cantidades absurdas.
+          cantidad: z.number().positive().max(100000),
         }),
       )
       .min(1),
