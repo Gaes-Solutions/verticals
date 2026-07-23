@@ -147,6 +147,7 @@ function ProductoModal({
   const [sku, setSku] = useState(producto?.variantes[0]?.sku ?? producto?.skuPadre ?? "");
   const [nombre, setNombre] = useState(producto?.nombre ?? "");
   const [precioBase, setPrecioBase] = useState(producto?.variantes[0]?.precioBase ?? "");
+  const [stockInicial, setStockInicial] = useState("");
   const [aplicaIva, setAplicaIva] = useState(producto?.aplicaIva ?? true);
   const [aplicaIeps, setAplicaIeps] = useState(producto?.aplicaIeps ?? false);
   const [tasaIeps, setTasaIeps] = useState(producto?.tasaIeps ?? "");
@@ -183,7 +184,7 @@ function ProductoModal({
           },
         });
       } else {
-        await api("/t/productos", {
+        const creado = await api<Producto>("/t/productos", {
           body: {
             skuPadre: sku,
             nombre,
@@ -193,6 +194,26 @@ function ProductoModal({
             ...(categoriaId ? { categoriaId } : {}),
           },
         });
+        // Existencias iniciales (opcional): se dan de alta en la sucursal principal.
+        const nStock = Number(stockInicial);
+        const varianteId = creado.variantes[0]?.id;
+        if (nStock > 0 && varianteId) {
+          const sucursales = await api<{ id: string }[] | Paged<{ id: string }>>("/t/sucursales")
+            .then((r) => (Array.isArray(r) ? r : r.items))
+            .catch(() => [] as { id: string }[]);
+          const sucursalId = sucursales[0]?.id;
+          if (sucursalId) {
+            await api("/t/inventario/ajustes", {
+              body: {
+                varianteId,
+                sucursalId,
+                tipo: "ajuste_positivo",
+                cantidad: stockInicial,
+                motivo: "Stock inicial",
+              },
+            }).catch(() => undefined);
+          }
+        }
       }
       onSaved();
     } catch (err) {
@@ -236,6 +257,19 @@ function ProductoModal({
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Ej. 7501234567890 — para escanear en caja"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              />
+            </Field>
+          )}
+          {!editando && (
+            <Field label="Existencias iniciales (opcional)">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={stockInicial}
+                onChange={(e) => setStockInicial(e.target.value)}
+                placeholder="Cuántas piezas tienes hoy. Puedes dejarlo vacío."
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
               />
             </Field>
