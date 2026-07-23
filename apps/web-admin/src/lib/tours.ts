@@ -162,13 +162,27 @@ export const TOURS: TourDef[] = [
         titulo: "Entra a Clientes de mayoreo",
         texto: "Aquí van tus clientes B2B. Ya te traje a esta sección.",
       },
-      { anchor: "cli-nuevo", titulo: "Agrega un cliente", texto: "Toca “+ Nuevo cliente”." },
       {
-        titulo: "Sus datos fiscales",
-        texto:
-          "Razón social, RFC y régimen fiscal son obligatorios. Puedes fijarle su lista de precios y días de crédito.",
+        anchor: "cli-nuevo",
+        titulo: "Agrega un cliente",
+        texto: "Toca “+ Nuevo cliente”. (Ahora te abro el formulario.)",
       },
-      { titulo: "¡Listo! ✅", texto: "Ya puedes venderle con sus precios y condiciones." },
+      {
+        abrir: "cli-nuevo",
+        anchor: "cli-f-razon",
+        titulo: "1) Razón social",
+        texto: "El nombre fiscal del cliente (como aparece en su RFC).",
+      },
+      {
+        anchor: "cli-f-rfc",
+        titulo: "2) RFC",
+        texto: "Su RFC. Junto al régimen fiscal, son obligatorios para facturarle.",
+      },
+      {
+        anchor: "cli-f-crear",
+        titulo: "3) ¡Crea el cliente! ✅",
+        texto: "Toca Crear cliente. Puedes fijarle su lista de precios y días de crédito.",
+      },
     ],
   },
   {
@@ -201,14 +215,27 @@ export const TOURS: TourDef[] = [
         titulo: "Entra a Comisiones",
         texto: "Aquí defines las comisiones de tu equipo. Ya te traje a esta sección.",
       },
-      { anchor: "com-nuevo", titulo: "Crea una regla", texto: "Toca “+ Nueva regla”." },
       {
-        titulo: "El porcentaje y sobre qué",
-        texto: "Ej. 5% sobre la venta. Puedes limitarla a una categoría o producto.",
+        anchor: "com-nuevo",
+        titulo: "Crea una regla",
+        texto: "Toca “+ Nueva regla”. (Ahora te abro el formulario.)",
       },
       {
-        titulo: "¡Listo! ✅",
-        texto: "El vendedor gana su comisión automáticamente en cada venta.",
+        abrir: "com-nuevo",
+        anchor: "com-f-nombre",
+        titulo: "1) Nómbrala",
+        texto: "Un nombre para identificar la regla, ej. “Comisión general”.",
+      },
+      {
+        anchor: "com-f-pct",
+        titulo: "2) El porcentaje",
+        texto:
+          "Cuánto gana el vendedor, ej. 5. A la derecha eliges si es sobre la venta o el cobro.",
+      },
+      {
+        anchor: "com-f-crear",
+        titulo: "3) ¡Crea la regla! ✅",
+        texto: "Toca Crear regla. El vendedor gana su comisión automáticamente en cada venta.",
       },
     ],
   },
@@ -223,12 +250,28 @@ export const TOURS: TourDef[] = [
         titulo: "Entra a Cobros / Links",
         texto: "Aquí generas links de pago. Ya te traje a esta sección.",
       },
-      { anchor: "cobro-nuevo", titulo: "Crea un cobro", texto: "Toca “+ Nuevo cobro”." },
       {
-        titulo: "Monto y concepto",
-        texto: "Escribe cuánto y por qué. Se genera un link que le mandas a tu cliente.",
+        anchor: "cobro-nuevo",
+        titulo: "Crea un cobro",
+        texto: "Toca “+ Nuevo cobro”. (Ahora te abro el formulario.)",
       },
-      { titulo: "¡Listo! ✅", texto: "Cuando pague, tú te enteras y queda registrado." },
+      {
+        abrir: "cobro-nuevo",
+        anchor: "cobro-f-concepto",
+        titulo: "1) El concepto",
+        texto: "Por qué le cobras, ej. “Anticipo pedido #123”.",
+      },
+      {
+        anchor: "cobro-f-monto",
+        titulo: "2) El monto",
+        texto: "Cuánto va a pagar.",
+      },
+      {
+        anchor: "cobro-f-crear",
+        titulo: "3) ¡Genera el link! ✅",
+        texto:
+          "Toca Crear cobro; se genera un link que le mandas por WhatsApp. Al pagar, te enteras.",
+      },
     ],
   },
   {

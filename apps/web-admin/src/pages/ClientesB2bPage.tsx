@@ -179,6 +179,7 @@ function NuevoClienteModal({
         <div className="space-y-3">
           <Campo label="Razón social">
             <input
+              data-tour="cli-f-razon"
               value={razonSocial}
               onChange={(e) => setRazonSocial(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
@@ -187,6 +188,7 @@ function NuevoClienteModal({
           <div className="grid grid-cols-2 gap-3">
             <Campo label="RFC">
               <input
+                data-tour="cli-f-rfc"
                 value={rfc}
                 onChange={(e) => setRfc(e.target.value.toUpperCase())}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
@@ -271,6 +273,7 @@ function NuevoClienteModal({
           </button>
           <button
             type="button"
+            data-tour="cli-f-crear"
             onClick={crear}
             disabled={guardando || !razonSocial || rfc.length < 12}
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

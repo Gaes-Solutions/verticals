@@ -163,6 +163,7 @@ function NuevaReglaModal({
           <label className="block text-sm font-medium text-slate-700">
             Nombre
             <input
+              data-tour="com-f-nombre"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Comisión general"
@@ -175,6 +176,7 @@ function NuevaReglaModal({
               <input
                 type="number"
                 step="0.1"
+                data-tour="com-f-pct"
                 value={pct}
                 onChange={(e) => setPct(e.target.value)}
                 placeholder="5"
@@ -220,6 +222,7 @@ function NuevaReglaModal({
           </button>
           <button
             type="button"
+            data-tour="com-f-crear"
             onClick={crear}
             disabled={guardando || !nombre || !(pctNum > 0 && pctNum <= 100)}
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

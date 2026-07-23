@@ -245,6 +245,7 @@ function NuevoCobroModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         <label className="mb-3 block">
           <span className="gx-label">Concepto</span>
           <input
+            data-tour="cobro-f-concepto"
             value={concepto}
             onChange={(e) => setConcepto(e.target.value)}
             className="gx-input"
@@ -258,6 +259,7 @@ function NuevoCobroModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             type="number"
             min="1"
             step="0.01"
+            data-tour="cobro-f-monto"
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
             className="gx-input"
@@ -288,7 +290,12 @@ function NuevoCobroModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="submit" disabled={guardando} className="gx-btn-primary">
+          <button
+            type="submit"
+            data-tour="cobro-f-crear"
+            disabled={guardando}
+            className="gx-btn-primary"
+          >
             {guardando ? "Creando…" : "Crear cobro"}
           </button>
         </div>
