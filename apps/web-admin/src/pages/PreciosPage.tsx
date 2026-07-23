@@ -279,6 +279,7 @@ function NuevaListaModal({ onClose, onCreada }: { onClose: () => void; onCreada:
           <label className="block text-sm font-medium text-slate-700">
             Código
             <input
+              data-tour="precio-f-codigo"
               value={codigo}
               onChange={(e) => setCodigo(e.target.value.toUpperCase().replace(/\s/g, "_"))}
               placeholder="MAYOREO"
@@ -288,6 +289,7 @@ function NuevaListaModal({ onClose, onCreada }: { onClose: () => void; onCreada:
           <label className="block text-sm font-medium text-slate-700">
             Nombre
             <input
+              data-tour="precio-f-nombre"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Precio de mayoreo"
@@ -318,6 +320,7 @@ function NuevaListaModal({ onClose, onCreada }: { onClose: () => void; onCreada:
           </button>
           <button
             type="button"
+            data-tour="precio-f-crear"
             onClick={crear}
             disabled={guardando || !codigo || !nombre}
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

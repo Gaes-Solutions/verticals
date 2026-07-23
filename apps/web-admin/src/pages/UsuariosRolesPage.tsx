@@ -291,12 +291,18 @@ function NuevoUsuarioModal({
         <h2 className="mb-4 text-lg font-bold text-slate-800">Nuevo usuario</h2>
         <label className="mb-3 block">
           <span className="gx-label">Nombre</span>
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="gx-input" />
+          <input
+            data-tour="user-f-nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="gx-input"
+          />
         </label>
         <label className="mb-3 block">
           <span className="gx-label">Correo</span>
           <input
             type="email"
+            data-tour="user-f-email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="gx-input"
@@ -306,6 +312,7 @@ function NuevoUsuarioModal({
           <span className="gx-label">Contraseña (mínimo 8)</span>
           <input
             type="text"
+            data-tour="user-f-pass"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="gx-input"
@@ -329,6 +336,7 @@ function NuevoUsuarioModal({
           </button>
           <button
             type="button"
+            data-tour="user-f-crear"
             onClick={crear}
             disabled={guardando || !nombre || !email || password.length < 8}
             className="gx-btn-primary"

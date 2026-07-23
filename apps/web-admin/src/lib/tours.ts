@@ -141,14 +141,30 @@ export const TOURS: TourDef[] = [
       {
         anchor: "user-nuevo",
         titulo: "Agrega un usuario",
-        texto: "Toca “+ Nuevo usuario”.",
+        texto: "Toca “+ Nuevo usuario”. (Ahora te abro el formulario.)",
       },
       {
-        titulo: "Sus datos y su rol",
-        texto:
-          "Pon su nombre, correo y una contraseña, y elige su rol. El sistema solo le mostrará lo que su rol permite.",
+        abrir: "user-nuevo",
+        anchor: "user-f-nombre",
+        titulo: "1) Su nombre",
+        texto: "El nombre de la persona de tu equipo.",
       },
-      { titulo: "¡Listo! ✅", texto: "Ya puede entrar con su correo y contraseña." },
+      {
+        anchor: "user-f-email",
+        titulo: "2) Su correo",
+        texto: "Con este correo iniciará sesión.",
+      },
+      {
+        anchor: "user-f-pass",
+        titulo: "3) Una contraseña",
+        texto: "Ponle una contraseña temporal; luego él puede cambiarla.",
+      },
+      {
+        anchor: "user-f-crear",
+        titulo: "4) ¡Crea el usuario! ✅",
+        texto:
+          "Elige su rol y toca Crear usuario. El sistema solo le mostrará lo que su rol permite.",
+      },
     ],
   },
   {
@@ -196,12 +212,28 @@ export const TOURS: TourDef[] = [
         titulo: "Entra a Listas de precios",
         texto: "Aquí creas precios distintos al normal. Ya te traje a esta sección.",
       },
-      { anchor: "precio-nuevo", titulo: "Crea una lista", texto: "Toca “+ Nueva lista”." },
       {
-        titulo: "Nómbrala y define su tipo",
-        texto: "Ej. “Mayoreo”. Luego le pones el precio especial a cada producto que quieras.",
+        anchor: "precio-nuevo",
+        titulo: "Crea una lista",
+        texto: "Toca “+ Nueva lista”. (Ahora te abro el formulario.)",
       },
-      { titulo: "¡Lista! ✅", texto: "Asígnala a tus clientes de mayoreo y listo." },
+      {
+        abrir: "precio-nuevo",
+        anchor: "precio-f-codigo",
+        titulo: "1) Un código",
+        texto: "Una clave corta para identificarla, ej. MAYOREO.",
+      },
+      {
+        anchor: "precio-f-nombre",
+        titulo: "2) Su nombre",
+        texto: "Cómo la verás, ej. “Precio de mayoreo”.",
+      },
+      {
+        anchor: "precio-f-crear",
+        titulo: "3) ¡Créala! ✅",
+        texto:
+          "Toca Crear. Luego le pones el precio especial a cada producto y la asignas a clientes.",
+      },
     ],
   },
   {
