@@ -75,7 +75,12 @@ export function AutomatizacionesPage() {
           <button type="button" onClick={ejecutar} className="gx-btn-secondary">
             Ejecutar ahora
           </button>
-          <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
+          <button
+            type="button"
+            data-tour="auto-nuevo"
+            onClick={() => setNuevo(true)}
+            className="gx-btn-primary"
+          >
             + Nueva automatización
           </button>
         </div>

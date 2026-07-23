@@ -108,7 +108,12 @@ export function CxcPage() {
           </p>
         </div>
         {puede("cxc.crear") && (
-          <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
+          <button
+            type="button"
+            data-tour="cxc-nuevo"
+            onClick={() => setNuevo(true)}
+            className="gx-btn-primary"
+          >
             + Nueva cuenta
           </button>
         )}

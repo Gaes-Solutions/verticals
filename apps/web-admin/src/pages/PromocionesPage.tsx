@@ -70,7 +70,12 @@ export function PromocionesPage() {
           </p>
         </div>
         {gestiona && (
-          <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
+          <button
+            type="button"
+            data-tour="promo-nuevo"
+            onClick={() => setNuevo(true)}
+            className="gx-btn-primary"
+          >
             + Nueva promoción
           </button>
         )}

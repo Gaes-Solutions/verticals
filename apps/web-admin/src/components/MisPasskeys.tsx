@@ -117,6 +117,7 @@ export function MisPasskeys() {
 
       <button
         type="button"
+        data-tour="huella-activar"
         onClick={activar}
         disabled={busy}
         className="flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"

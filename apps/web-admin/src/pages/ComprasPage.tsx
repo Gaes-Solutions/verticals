@@ -97,7 +97,12 @@ export function ComprasPage() {
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+          <button
+            type="button"
+            data-tour="compra-nuevo"
+            onClick={() => setCreando(true)}
+            className="gx-btn-primary"
+          >
             + Nueva orden
           </button>
         </div>

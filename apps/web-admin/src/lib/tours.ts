@@ -210,6 +210,142 @@ export const TOURS: TourDef[] = [
       { titulo: "¡Listo! ✅", texto: "Cuando pague, tú te enteras y queda registrado." },
     ],
   },
+  {
+    id: "crear-promocion",
+    nombre: "Crear una promoción",
+    descripcion: "Descuentos automáticos para vender más.",
+    pasos: [
+      {
+        seccion: "promociones",
+        anchor: "nav-promociones",
+        titulo: "Entra a Promociones",
+        texto: "Aquí creas ofertas que se aplican solas al cobrar. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "promo-nuevo",
+        titulo: "Crea una promo",
+        texto: "Toca el botón para crear una nueva.",
+      },
+      {
+        titulo: "Define la oferta",
+        texto: "Ej. 2x1, % de descuento o precio especial, y a qué productos aplica.",
+      },
+      { titulo: "¡Activa! ✅", texto: "La promo se aplica automáticamente en el POS y en línea." },
+    ],
+  },
+  {
+    id: "crear-orden-compra",
+    nombre: "Levantar una orden de compra",
+    descripcion: "Pídele mercancía a tu proveedor.",
+    pasos: [
+      {
+        seccion: "compras",
+        anchor: "nav-compras",
+        titulo: "Entra a Compras (OC)",
+        texto: "Aquí registras lo que le compras a tus proveedores. Ya te traje a esta sección.",
+      },
+      { anchor: "compra-nuevo", titulo: "Nueva orden", texto: "Toca el botón para crear una OC." },
+      {
+        titulo: "Proveedor y productos",
+        texto: "Elige el proveedor y agrega los productos con sus cantidades y costos.",
+      },
+      {
+        titulo: "Al recibir, entra a inventario ✅",
+        texto: "Cuando llegue la mercancía, la marcas como recibida y tu stock sube solo.",
+      },
+    ],
+  },
+  {
+    id: "crear-automatizacion",
+    nombre: "Crear una automatización",
+    descripcion: "Mensajes automáticos a tus clientes (WhatsApp, etc.).",
+    pasos: [
+      {
+        seccion: "automatizaciones",
+        anchor: "nav-automatizaciones",
+        titulo: "Entra a Automatizaciones",
+        texto: "Aquí configuras mensajes que se envían solos. Ya te traje a esta sección.",
+      },
+      { anchor: "auto-nuevo", titulo: "Crea una", texto: "Toca el botón para crear una nueva." },
+      {
+        titulo: "Cuándo y qué se manda",
+        texto: "Ej. “agradecer tras una compra” o “recordar un carrito abandonado”.",
+      },
+      { titulo: "¡Activa! ✅", texto: "A partir de ahí trabaja sola por ti." },
+    ],
+  },
+  {
+    id: "registrar-cobro-cxc",
+    nombre: "Registrar un pago de cuentas por cobrar",
+    descripcion: "Anota cuando un cliente te paga lo que debía.",
+    pasos: [
+      {
+        seccion: "cxc",
+        anchor: "nav-cxc",
+        titulo: "Entra a Cuentas por cobrar",
+        texto: "Aquí ves quién te debe. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "cxc-nuevo",
+        titulo: "Registra un pago",
+        texto: "Toca el botón para registrar un abono.",
+      },
+      {
+        titulo: "Cliente y monto",
+        texto: "Elige al cliente y cuánto te pagó; su saldo baja al instante.",
+      },
+      { titulo: "¡Al día! ✅", texto: "Queda registrado y ves cuánto le falta por pagar." },
+    ],
+  },
+  {
+    id: "activar-huella",
+    nombre: "Activar entrar con huella",
+    descripcion: "Entra sin contraseña, solo con tu huella o Face ID.",
+    pasos: [
+      {
+        seccion: "seguridad",
+        anchor: "nav-seguridad",
+        titulo: "Entra a Seguridad",
+        texto: "Aquí proteges tu cuenta. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "huella-activar",
+        titulo: "Activa tu huella",
+        texto: "Toca “Activar huella en este dispositivo”.",
+      },
+      {
+        titulo: "Confirma con tu dedo",
+        texto: "Tu teléfono te pedirá tu huella o Face ID; confírmalo.",
+      },
+      {
+        titulo: "¡Listo! ✅",
+        texto: "La próxima vez que salgas, entrarás con tu huella sin escribir la contraseña.",
+      },
+    ],
+  },
+  {
+    id: "agregar-tarjeta",
+    nombre: "Guardar tu tarjeta de pago",
+    descripcion: "Registra la tarjeta con la que se cobra tu plan.",
+    pasos: [
+      {
+        seccion: "suscripcion",
+        anchor: "nav-suscripcion",
+        titulo: "Entra a Mi suscripción",
+        texto: "Aquí está tu plan y tu método de pago. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "tarjeta-agregar",
+        titulo: "Agrega tu tarjeta",
+        texto: "Toca “+ Agregar tarjeta”.",
+      },
+      {
+        titulo: "Captura tu tarjeta",
+        texto: "Ingresa el número, vencimiento y CVC en el campo seguro de Stripe.",
+      },
+      { titulo: "¡Guardada! ✅", texto: "Tu plan se cobrará automáticamente con esa tarjeta." },
+    ],
+  },
 ];
 
 export function tourPorId(id: string): TourDef | undefined {
