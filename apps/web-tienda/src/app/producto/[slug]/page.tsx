@@ -55,6 +55,15 @@ function precioDe(prod: ProductoDetalle): string {
   );
 }
 
+// Serializa JSON-LD escapando `<`/`>`/`&` para que un nombre de producto con
+// "</script>" no pueda romper el <script> e inyectar código (XSS almacenado).
+function jsonLdSafe(obj: unknown): string {
+  return JSON.stringify(obj)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -116,7 +125,7 @@ function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
     <script
       type="application/ld+json"
       // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD de SEO, contenido propio serializado
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }}
     />
   );
 }
@@ -144,7 +153,7 @@ function BreadcrumbJsonLd({ prod, slug }: { prod: ProductoDetalle; slug: string 
     <script
       type="application/ld+json"
       // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD de SEO, contenido propio serializado
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }}
     />
   );
 }
