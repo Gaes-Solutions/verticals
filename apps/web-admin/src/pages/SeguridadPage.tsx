@@ -2,6 +2,7 @@ import { Lock, LockOpen, Stethoscope } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
 import { BackupCodes } from "../components/BackupCodes.js";
+import { MisPasskeys } from "../components/MisPasskeys.js";
 import {
   ApiError,
   type MfaEstado,
@@ -30,6 +31,7 @@ export function SeguridadPage() {
         <h1 className="font-bold text-2xl text-slate-800">Seguridad</h1>
         <p className="text-slate-500 text-sm">Verificación en dos pasos (2FA) de tu cuenta.</p>
       </div>
+      <MisPasskeys />
       <Mi2fa />
       {puede("configuracion.actualizar") && <PoliticaEquipo />}
     </div>

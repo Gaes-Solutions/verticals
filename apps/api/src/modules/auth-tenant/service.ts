@@ -72,6 +72,27 @@ export async function loadTenantUserForLogin(
   };
 }
 
+export async function loadTenantUserById(
+  userId: string,
+  tenantPrisma: TenantPrismaClient,
+): Promise<LoadedUser | null> {
+  const user = await tenantPrisma.usuario.findUnique({
+    where: { id: userId },
+    include: { roles: { include: { rol: true } } },
+  });
+  if (!user) return null;
+  return {
+    id: user.id,
+    email: user.email,
+    nombre: user.nombre,
+    apellidos: user.apellidos,
+    tipoUsuario: user.tipoUsuario,
+    passwordHash: user.passwordHash,
+    isActive: user.isActive,
+    roles: user.roles.map((r) => ({ codigo: r.rol.codigo, permisos: r.rol.permisos })),
+  };
+}
+
 export function buildTenantPrincipal(user: LoadedUser, tenantSlug: string): TenantPrincipal {
   const permArrays = user.roles.map((r) =>
     Array.isArray(r.permisos) ? (r.permisos as ReadonlyArray<string>) : [],

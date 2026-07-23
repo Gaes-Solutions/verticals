@@ -9,6 +9,7 @@ import adminRolesPlantillaRoutes from "./modules/admin/roles-plantilla-routes.js
 import adminTeamRoutes from "./modules/admin/team-routes.js";
 import adminTenantsRoutes from "./modules/admin/tenants-routes.js";
 import adminTicketsRoutes from "./modules/admin/tickets-routes.js";
+import passkeyRoutes from "./modules/auth-tenant/passkey-routes.js";
 import authTenantRoutes from "./modules/auth-tenant/routes.js";
 import authRoutes from "./modules/auth/routes.js";
 import autofacturaPublicRoutes from "./modules/autofactura/routes.js";
@@ -185,6 +186,7 @@ export async function buildApp(
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
+  await app.register(passkeyRoutes, { prefix: "/auth/tenant" });
   await app.register(tenantRoutes, { prefix: "/tenants" });
   await app.register(adminMetricsRoutes, { prefix: "/admin/metrics" });
   await app.register(adminBillingOpsRoutes, { prefix: "/admin/billing-ops" });

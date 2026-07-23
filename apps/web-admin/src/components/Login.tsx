@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Fingerprint } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useState } from "react";
 import type { AdminSession } from "../App.js";
@@ -13,6 +13,7 @@ import {
   setToken,
   setUserId,
 } from "../lib/api.js";
+import { loginConPasskey, passkeyDisponible } from "../lib/passkey.js";
 import { BackupCodes } from "./BackupCodes.js";
 
 const SLUG_KEY = "gaespos_admin_slug";
@@ -108,6 +109,22 @@ export function Login({
     }
   }
 
+  async function entrarConHuella() {
+    if (!tenantSlug) {
+      setError("Escribe primero el negocio para entrar con huella.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      entrar(await loginConPasskey(tenantSlug));
+    } catch (err) {
+      fail(err, "No se pudo entrar con huella. Usa tu contraseña.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function submitCode(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -197,6 +214,22 @@ export function Login({
             >
               {loading ? "Entrando…" : "Entrar"}
             </button>
+            {passkeyDisponible() && (
+              <>
+                <div className="my-3 flex items-center gap-3 text-slate-300 text-xs">
+                  <span className="h-px flex-1 bg-slate-200" />o
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
+                <button
+                  type="button"
+                  onClick={entrarConHuella}
+                  disabled={loading}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand py-2.5 font-semibold text-brand hover:bg-brand/5 disabled:opacity-50"
+                >
+                  <Fingerprint size={18} /> Entrar con huella
+                </button>
+              </>
+            )}
             {onCrearCuenta && (
               <button
                 type="button"
