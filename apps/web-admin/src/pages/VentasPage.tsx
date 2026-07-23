@@ -37,6 +37,46 @@ export function VentasPage() {
     setDetalle(await api<VentaDetalle>(`/t/ventas/${id}`));
   }
 
+  const [exportando, setExportando] = useState(false);
+  async function exportarCsv() {
+    setExportando(true);
+    try {
+      const CAP = 5000;
+      const filas: VentaListItem[] = [];
+      for (let page = 1; filas.length < CAP; page++) {
+        const qs = new URLSearchParams({ pageSize: "200", page: String(page) });
+        if (canal) qs.set("canal", canal);
+        if (estado) qs.set("estado", estado);
+        const res = await api<Paged<VentaListItem>>(`/t/ventas?${qs.toString()}`);
+        filas.push(...res.items);
+        if (res.items.length < 200) break;
+      }
+      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const encabezado = ["Folio", "Fecha", "Canal", "Estado", "Total", "Vendedor"];
+      const lineas = filas.map((v) =>
+        [
+          v.folio,
+          new Date(v.createdAt).toLocaleString("es-MX"),
+          v.canal,
+          v.estado,
+          v.total,
+          v.usuario?.nombre ?? "",
+        ]
+          .map((c) => esc(String(c)))
+          .join(","),
+      );
+      const csv = `﻿${[encabezado.map(esc).join(","), ...lineas].join("\r\n")}`;
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ventas-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Ventas</h1>
@@ -61,6 +101,14 @@ export function VentasPage() {
           <option value="cobrada">Cobrada</option>
           <option value="cancelada">Cancelada</option>
         </select>
+        <button
+          type="button"
+          onClick={exportarCsv}
+          disabled={exportando || items.length === 0}
+          className="ml-auto rounded-lg border border-slate-300 px-3 py-2 text-slate-700 text-sm hover:bg-slate-50 disabled:opacity-50"
+        >
+          {exportando ? "Exportando…" : "⬇ Exportar CSV"}
+        </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
