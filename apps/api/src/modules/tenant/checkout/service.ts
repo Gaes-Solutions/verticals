@@ -105,6 +105,14 @@ export async function iniciarCheckout(
       if (err instanceof EnviosError) throw new CheckoutError(err.statusCode, err.message);
       throw err;
     }
+  } else if (input.metodoEnvio !== "click_collect") {
+    // Sin tarifa elegida: si el negocio TIENE envíos configurados, hay que elegir
+    // una opción válida (evita pedidos con envío gratis a zonas sin cobertura). Sin
+    // ninguna tarifa activa, el tenant gestiona el envío manualmente (costo 0).
+    const tarifasActivas = await client.tarifaEnvio.count({ where: { isActive: true } });
+    if (tarifasActivas > 0) {
+      throw new CheckoutError(422, "Selecciona una opción de envío disponible para tu dirección");
+    }
   }
   // Cupón (si el carrito trae uno válido): descuenta del subtotal o libera el envío.
   let descuentoTotal = new Decimal(0);
