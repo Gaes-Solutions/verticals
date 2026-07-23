@@ -125,12 +125,14 @@ function NuevaZona({
       <h2 className="mb-3 font-bold text-slate-800">Nueva zona de envío</h2>
       <div className="flex flex-wrap gap-2">
         <input
+          data-tour="env-zona-nombre"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Nombre (ej. Nacional, Occidente)"
           className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
         <input
+          data-tour="env-zona-estados"
           value={estados}
           onChange={(e) => setEstados(e.target.value)}
           placeholder="Estados separados por coma (vacío = todo MX)"
@@ -138,6 +140,7 @@ function NuevaZona({
         />
         <button
           type="button"
+          data-tour="env-zona-crear"
           onClick={crear}
           className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
         >

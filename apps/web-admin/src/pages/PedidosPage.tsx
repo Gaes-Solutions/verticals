@@ -126,6 +126,7 @@ export function PedidosPage() {
             </button>
           )}
           <select
+            data-tour="ped-filtro"
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"

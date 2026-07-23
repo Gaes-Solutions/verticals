@@ -220,12 +220,16 @@ export function ImportadorPage() {
         <div className="mb-4 flex flex-wrap gap-2">
           <button
             type="button"
+            data-tour="imp-descargar"
             onClick={descargarPlantilla}
             className="gx-btn-secondary inline-flex items-center gap-1.5"
           >
             <Download size={16} /> Descargar plantilla
           </button>
-          <label className="gx-btn-primary inline-flex cursor-pointer items-center gap-1.5">
+          <label
+            data-tour="imp-archivo"
+            className="gx-btn-primary inline-flex cursor-pointer items-center gap-1.5"
+          >
             <FileText size={16} /> Elegir archivo
             <input
               ref={inputRef}
@@ -290,6 +294,7 @@ export function ImportadorPage() {
             </p>
             <button
               type="button"
+              data-tour="imp-importar"
               onClick={importar}
               disabled={enviando || filasInvalidas.length > 0}
               className="gx-btn-primary"

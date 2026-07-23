@@ -100,7 +100,9 @@ export function CfdiPage() {
       )}
 
       <section className="mb-6 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-4 font-bold text-slate-800">Datos del emisor</h2>
+        <h2 data-tour="cfdi-emisor" className="mb-4 font-bold text-slate-800">
+          Datos del emisor
+        </h2>
         {campo("RFC del emisor", "rfcEmisor", "XAXX010101000")}
         {campo("Razón social", "razonSocialEmisor")}
         <div className="grid grid-cols-2 gap-3">
@@ -123,6 +125,7 @@ export function CfdiPage() {
         <label className="mb-3 block">
           <span className="mb-1 block font-medium text-slate-700 text-sm">Ambiente</span>
           <select
+            data-tour="cfdi-ambiente"
             value={cfg.facturamaAmbiente ?? "sandbox"}
             onChange={(e) =>
               setCfg({ ...cfg, facturamaAmbiente: e.target.value as "sandbox" | "prod" })
@@ -141,6 +144,7 @@ export function CfdiPage() {
             {configurado && <span className="text-emerald-600 text-xs">· configurada </span>}
           </span>
           <input
+            data-tour="cfdi-apikey"
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
@@ -166,6 +170,7 @@ export function CfdiPage() {
       {puedeConfigurar && (
         <button
           type="button"
+          data-tour="cfdi-guardar"
           onClick={guardar}
           disabled={guardando}
           className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

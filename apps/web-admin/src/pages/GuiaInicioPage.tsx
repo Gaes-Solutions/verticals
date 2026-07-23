@@ -105,7 +105,10 @@ export function GuiaInicioPage() {
         </p>
         <div className="mt-4 flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-brand transition-all"
+              style={{ width: `${pct}%` }}
+            />
           </div>
           <span className="text-sm font-semibold text-slate-600">
             {completos} de {total}

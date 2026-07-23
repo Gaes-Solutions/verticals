@@ -73,6 +73,7 @@ export function EtiquetasPage() {
         <h1 className="font-bold text-2xl text-slate-800">Etiquetas y códigos</h1>
         <button
           type="button"
+          data-tour="etq-imprimir"
           onClick={() => window.print()}
           disabled={totalEtiquetas === 0}
           className="gx-btn-primary disabled:opacity-50"
@@ -89,6 +90,7 @@ export function EtiquetasPage() {
         {/* Buscar y agregar */}
         <section className="rounded-xl bg-white p-5 shadow-sm">
           <input
+            data-tour="etq-buscar"
             value={buscar}
             onChange={(e) => setBuscar(e.target.value)}
             placeholder="Buscar producto por nombre o SKU…"
@@ -149,6 +151,7 @@ export function EtiquetasPage() {
             <label className="block">
               <span className="gx-label">Tamaño</span>
               <select
+                data-tour="etq-tamano"
                 value={tamano}
                 onChange={(e) => setTamano(e.target.value as Tamano)}
                 className="gx-input"

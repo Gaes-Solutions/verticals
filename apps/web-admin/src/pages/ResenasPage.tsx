@@ -49,6 +49,7 @@ export function ResenasPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Reseñas</h1>
         <select
+          data-tour="res-filtro"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"

@@ -116,6 +116,7 @@ export function DominioB2bPage() {
         <h2 className="mb-3 font-semibold text-slate-800">Conectar un dominio</h2>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
+            data-tour="b2bdom-host"
             value={host}
             onChange={(e) => setHost(e.target.value)}
             placeholder="pedidos.tu-negocio.com"
@@ -124,6 +125,7 @@ export function DominioB2bPage() {
           />
           <button
             type="button"
+            data-tour="b2bdom-conectar"
             onClick={conectar}
             disabled={guardando || host.trim().length < 4}
             className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

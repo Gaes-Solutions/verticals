@@ -133,7 +133,10 @@ function CfdisTab() {
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {puede("cfdis_recibidos.upload") && (
-          <label className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark">
+          <label
+            data-tour="cont-subir"
+            className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+          >
             {ocupado === "upload" ? "Subiendo…" : "+ Subir XML"}
             <input
               type="file"

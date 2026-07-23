@@ -67,6 +67,7 @@ export function PreguntasPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-bold text-2xl text-slate-800">Preguntas de productos</h1>
         <select
+          data-tour="preg-filtro"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"

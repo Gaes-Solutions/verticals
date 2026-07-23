@@ -41,7 +41,7 @@ export function VentasPage() {
     <div>
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Ventas</h1>
 
-      <div className="mb-4 flex gap-2">
+      <div data-tour="ven-filtros" className="mb-4 flex gap-2">
         <select
           value={canal}
           onChange={(e) => setCanal(e.target.value)}

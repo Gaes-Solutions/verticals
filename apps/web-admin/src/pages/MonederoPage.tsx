@@ -257,6 +257,7 @@ function MonederoTab() {
     <div className="grid gap-6 md:grid-cols-2">
       <section className="rounded-xl bg-white p-5 shadow-sm">
         <input
+          data-tour="mon-buscar"
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
           placeholder="Buscar cliente por nombre…"

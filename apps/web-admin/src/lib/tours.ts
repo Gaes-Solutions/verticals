@@ -511,86 +511,342 @@ export const TOURS: TourDef[] = [
       { titulo: "¡Guardada! ✅", texto: "Tu plan se cobrará automáticamente con esa tarjeta." },
     ],
   },
+  guia(
+    "importador",
+    "Carga masiva de productos",
+    "Sirve para dar de alta MUCHOS productos (o clientes) de un jalón con un archivo de Excel, en vez de uno por uno. Ya te traje aquí.",
+    [
+      {
+        anchor: "imp-descargar",
+        titulo: "1) Descarga la plantilla",
+        texto:
+          "Toca “Descargar plantilla”. Se baja un Excel con las columnas correctas (nombre, precio, código…). Úsalo siempre como base.",
+      },
+      {
+        titulo: "2) Llénala en Excel",
+        texto:
+          "Abre ese archivo y captura tus productos: un renglón por producto. No cambies los títulos de las columnas ni borres las obligatorias (marcadas con *).",
+      },
+      {
+        anchor: "imp-archivo",
+        titulo: "3) Sube tu archivo",
+        texto:
+          "Toca “Elegir archivo” y selecciona el Excel que llenaste. Verás una vista previa de lo que se va a cargar.",
+      },
+      {
+        anchor: "imp-importar",
+        titulo: "4) ¡Impórtalos! ✅",
+        texto:
+          "Si alguna fila sale en rojo le falta un dato: corrígela en tu Excel y vuelve a subirlo. Cuando estén todas bien, toca “Importar” y se cargan de una vez.",
+      },
+    ],
+  ),
+  guia(
+    "etiquetas",
+    "Etiquetas y códigos de barras",
+    "Sirve para imprimir etiquetas con código de barras (escaneable en el POS) y QR para pegar en tus productos. Ya te traje aquí.",
+    [
+      {
+        anchor: "etq-buscar",
+        titulo: "1) Busca el producto",
+        texto:
+          "Escribe el nombre o SKU. En la lista que aparece, toca “Agregar” en cada producto que quieras etiquetar.",
+      },
+      {
+        titulo: "2) Ajusta la cantidad",
+        texto:
+          "En el panel “A imprimir” (a la derecha) escribe cuántas etiquetas quieres de cada producto.",
+      },
+      {
+        anchor: "etq-tamano",
+        titulo: "3) Elige el tamaño",
+        texto:
+          "Escoge el tamaño de etiqueta según tu hoja o rollo, y marca si quieres incluir el precio o el código QR.",
+      },
+      {
+        anchor: "etq-imprimir",
+        titulo: "4) ¡Imprime! ✅",
+        texto:
+          "Revisa la vista previa de abajo y toca “Imprimir”. Se abre el diálogo de impresión de tu navegador.",
+      },
+    ],
+  ),
+  guia(
+    "inventario-iq",
+    "Inteligencia de inventario",
+    "Te dice qué conviene reponer y qué casi no se vende, para no quedarte sin stock ni sobre-comprar. Ya te traje aquí.",
+    [
+      {
+        anchor: "iq-rango",
+        titulo: "Elige el periodo a analizar",
+        texto:
+          "Toca un rango (7, 30, 90 días…). Con eso, abajo verás las sugerencias de reposición y los productos de baja rotación de ese periodo.",
+      },
+    ],
+  ),
+  guia(
+    "ventas",
+    "Ventas",
+    "Aquí CONSULTAS el detalle de cada venta (POS, tienda en línea y mayoreo). Para cobrar en mostrador se usa la app de POS, no esta pantalla. Ya te traje aquí.",
+    [
+      {
+        anchor: "ven-filtros",
+        titulo: "Filtra y abre una venta",
+        texto:
+          "Usa estos filtros para acotar por canal y estado. Luego toca cualquier venta de la lista para ver su detalle completo (productos, pagos, cliente).",
+      },
+    ],
+  ),
+  guia(
+    "monedero",
+    "Monedero y gift cards",
+    "Administra el saldo de lealtad de tus clientes y las tarjetas de regalo. Ya te traje aquí.",
+    [
+      {
+        anchor: "mon-buscar",
+        titulo: "1) Busca al cliente",
+        texto: "Escribe su nombre y tócalo en la lista para ver su saldo de monedero.",
+      },
+      {
+        titulo: "2) Abona, cobra o canjea",
+        texto:
+          "Con el cliente elegido: “Abonar” le suma saldo, “Cobrar” se lo descuenta, y “Canjear gift card” aplica una tarjeta de regalo.",
+      },
+    ],
+  ),
+  guia(
+    "devoluciones",
+    "Devoluciones",
+    "Aquí revisas y resuelves las devoluciones que piden tus clientes. Ya te traje aquí.",
+    [
+      {
+        anchor: "dev-filtro",
+        titulo: "1) Filtra por estado",
+        texto: "Usa este filtro para ver solo las Pendientes, Aprobadas o Rechazadas.",
+      },
+      {
+        titulo: "2) Aprueba o rechaza",
+        texto:
+          "En cada solicitud pendiente toca “Aprobar” (el producto puede volver a tu inventario) o “Rechazar” (ahí escribes el motivo que verá el cliente).",
+      },
+    ],
+  ),
+  guia(
+    "reportes",
+    "Reportes",
+    "Aquí ves cómo va tu negocio: ventas por día, por producto y por vendedor. Ya te traje aquí.",
+    [
+      {
+        anchor: "rep-rango",
+        titulo: "1) Elige el periodo",
+        texto:
+          "Toca un rango (hoy, 7 días, 30 días…). Todos los reportes de abajo se recalculan para ese periodo.",
+      },
+      {
+        anchor: "rep-imprimir",
+        titulo: "2) Imprime o guarda PDF",
+        texto:
+          "Toca “Imprimir / PDF” para llevarte el reporte del periodo en papel o guardarlo como archivo.",
+      },
+    ],
+  ),
+  guia(
+    "pedidos",
+    "Pedidos online",
+    "Aquí ves los pedidos que entran por tu tienda web y los vas moviendo de estado. Ya te traje aquí.",
+    [
+      {
+        anchor: "ped-filtro",
+        titulo: "1) Filtra por estado",
+        texto: "Usa este filtro para ver, por ejemplo, solo los pedidos “Por preparar”.",
+      },
+      {
+        titulo: "2) Abre un pedido y avanza su estado",
+        texto:
+          "Toca un pedido de la lista para ver su detalle. Ahí cambias su estado (preparando → enviado → entregado); el cliente recibe el aviso.",
+      },
+    ],
+  ),
+  guia(
+    "envios",
+    "Envíos",
+    "Aquí defines a qué zonas envías y cuánto cobras; ese costo le aparece solo al cliente al pagar en tu tienda. Ya te traje aquí.",
+    [
+      {
+        anchor: "env-zona-nombre",
+        titulo: "1) Nombra la zona",
+        texto: "Escribe un nombre para la zona, ej. “Nacional” u “Occidente”.",
+      },
+      {
+        anchor: "env-zona-estados",
+        titulo: "2) Estados que cubre",
+        texto:
+          "Lista los estados separados por coma. Déjalo vacío si esta zona aplica a todo México.",
+      },
+      {
+        anchor: "env-zona-crear",
+        titulo: "3) ¡Crea la zona! ✅",
+        texto:
+          "Toca “Crear zona”. Después, dentro de ella, agregas sus tarifas: costo, “gratis desde $” y días de entrega.",
+      },
+    ],
+  ),
+  guia(
+    "resenas",
+    "Reseñas",
+    "Aquí moderas las reseñas de tus clientes; las que apruebas se muestran en tu tienda. Ya te traje aquí.",
+    [
+      {
+        anchor: "res-filtro",
+        titulo: "1) Filtra por estado",
+        texto: "Usa este filtro para ver las que están Pendientes de moderar.",
+      },
+      {
+        titulo: "2) Aprueba, rechaza o responde",
+        texto:
+          "En cada reseña: “Aprobar” la publica en tu tienda, “Rechazar” la oculta, y en el recuadro puedes escribirle una respuesta pública al cliente.",
+      },
+    ],
+  ),
+  guia(
+    "preguntas",
+    "Preguntas de productos",
+    "Aquí respondes las dudas que dejan tus compradores en la ficha de cada producto. Ya te traje aquí.",
+    [
+      {
+        anchor: "preg-filtro",
+        titulo: "1) Filtra las pendientes",
+        texto: "Usa este filtro para ver solo las preguntas que aún no respondes.",
+      },
+      {
+        titulo: "2) Responde y publica",
+        texto:
+          "Escribe tu respuesta en el recuadro y publícala; quedará visible en la ficha del producto para todos los compradores.",
+      },
+    ],
+  ),
+  guia(
+    "cfdi",
+    "Facturación (CFDI)",
+    "Aquí conectas tu cuenta de facturación (Facturama) para poder timbrar facturas CFDI 4.0 de tus ventas. Ya te traje aquí.",
+    [
+      {
+        anchor: "cfdi-emisor",
+        titulo: "1) Datos de tu negocio",
+        texto:
+          "Captura tu RFC, razón social, régimen fiscal y código postal, tal como los tienes registrados ante el SAT.",
+      },
+      {
+        anchor: "cfdi-ambiente",
+        titulo: "2) Ambiente",
+        texto:
+          "Empieza en “Sandbox” para probar sin gastar timbres reales. Cámbialo a “Producción” cuando ya te funcione.",
+      },
+      {
+        anchor: "cfdi-apikey",
+        titulo: "3) Tu API key de Facturama",
+        texto:
+          "Pega aquí la llave que te da Facturama (la de pruebas si estás en sandbox). Es lo que conecta tu cuenta.",
+      },
+      {
+        anchor: "cfdi-guardar",
+        titulo: "4) ¡Guarda! ✅",
+        texto:
+          "Toca “Guardar facturación”. A partir de ahí ya puedes generar la factura de tus ventas.",
+      },
+    ],
+  ),
+  guia(
+    "contabilidad",
+    "Contabilidad",
+    "Aquí juntas las facturas (CFDI) que RECIBES de tus proveedores y armas tu DIOT, todo listo para tu contador. Ya te traje aquí.",
+    [
+      {
+        anchor: "cont-subir",
+        titulo: "1) Sube los XML que recibes",
+        texto:
+          "Toca “+ Subir XML” y elige el archivo de la factura que te mandó tu proveedor. Se guarda y se categoriza solo.",
+      },
+      {
+        titulo: "2) Genera la DIOT",
+        texto:
+          "En la pestaña “DIOT”, escribe el periodo (formato AAAAMM, ej. 202607) y toca “Generar” para obtener el archivo que tu contador entrega al SAT.",
+      },
+    ],
+  ),
+  guia("configuracion", "Configuración", "Aquí ajustas reglas de tu negocio. Ya te traje aquí.", [
+    {
+      anchor: "cfg-tope",
+      titulo: "1) Tope de descuento manual",
+      texto:
+        "Escribe el descuento máximo (%) que un cajero normal puede aplicar en una venta. Los roles con permiso especial y el dueño pueden pasarlo.",
+    },
+    {
+      anchor: "cfg-guardar",
+      titulo: "2) ¡Guarda! ✅",
+      texto: "Toca “Guardar” y la regla aplica de inmediato en el POS.",
+    },
+  ]),
+  guia(
+    "tienda",
+    "Tienda online",
+    "Aquí configuras tu tienda web y eliges qué productos vender en línea. Ya te traje aquí.",
+    [
+      {
+        anchor: "tienda-subdominio",
+        titulo: "1) La dirección de tu tienda",
+        texto:
+          "Escribe tu subdominio, ej. “mi-tienda”. Tu tienda quedará en esa dirección. (Más abajo puedes conectar tu propio dominio si ya tienes uno.)",
+      },
+      {
+        anchor: "tienda-guardar",
+        titulo: "2) Guarda la configuración",
+        texto: "Toca “Guardar” para dejar viva tu tienda con esa dirección y ajustes.",
+      },
+      {
+        anchor: "tienda-publicar",
+        titulo: "3) Publica tus productos",
+        texto:
+          "En “Publicar productos” (más abajo), busca cada producto y toca “Publicar” para ponerlo a la venta en línea.",
+      },
+    ],
+  ),
+  guia(
+    "portal-b2b",
+    "Portal mayorista",
+    "Aquí conectas un dominio propio para que tus clientes de mayoreo hagan pedidos en tu portal con tu marca. Ya te traje aquí.",
+    [
+      {
+        anchor: "b2bdom-host",
+        titulo: "1) Escribe tu dominio",
+        texto: "Captura el dominio que quieres usar, ej. “pedidos.tu-negocio.com”.",
+      },
+      {
+        anchor: "b2bdom-conectar",
+        titulo: "2) Conéctalo",
+        texto:
+          "Toca “Conectar”. Te mostraremos los registros DNS que debes crear en tu proveedor de dominio para activarlo y verificarlo.",
+      },
+    ],
+  ),
   ...orientacion([
-    [
-      "importador",
-      "Carga masiva",
-      "Descarga la plantilla, llénala con tus productos y súbela para cargarlos todos de una vez.",
-    ],
-    [
-      "etiquetas",
-      "Etiquetas y códigos",
-      "Elige productos y formato, genera las etiquetas con código de barras e imprímelas.",
-    ],
-    [
-      "inventario-iq",
-      "Inteligencia de inventario",
-      "Elige un rango de días y revisa qué reponer y qué casi no se vende.",
-    ],
-    [
-      "ventas",
-      "Ventas",
-      "Consulta el detalle de cada venta. Para cobrar en mostrador usa la app de POS.",
-    ],
-    [
-      "monedero",
-      "Monedero y gift cards",
-      "Administra el saldo de lealtad de tus clientes y las tarjetas de regalo.",
-    ],
-    [
-      "devoluciones",
-      "Devoluciones",
-      "Busca la venta y registra la devolución; el producto puede volver a inventario.",
-    ],
-    [
-      "reportes",
-      "Reportes",
-      "Cambia el rango de fechas y revisa ventas por día, producto y vendedor.",
-    ],
     [
       "dashboard",
       "Resumen",
-      "Un vistazo rápido a tus números de hoy; profundiza en Reportes cuando quieras.",
-    ],
-    [
-      "tienda",
-      "Tienda online",
-      "Configura tu tienda web y publica los productos que quieras vender en línea.",
-    ],
-    [
-      "pedidos",
-      "Pedidos online",
-      "Revisa los pedidos de tu tienda y cambia su estado (preparando, enviado, entregado).",
-    ],
-    [
-      "envios",
-      "Envíos",
-      "Genera la guía del pedido y elige paquetería; el cliente puede seguir su paquete.",
-    ],
-    ["resenas", "Reseñas", "Revisa y aprueba las reseñas; las aprobadas se muestran en tu tienda."],
-    ["preguntas", "Preguntas", "Responde las dudas que dejan tus compradores en los productos."],
-    [
-      "cfdi",
-      "Facturación (CFDI)",
-      "Genera la factura de una venta con los datos fiscales del cliente.",
-    ],
-    [
-      "contabilidad",
-      "Contabilidad",
-      "Sube o recibe las facturas de tus proveedores, listas para tu contador.",
-    ],
-    [
-      "configuracion",
-      "Configuración",
-      "Ajusta datos del negocio, sucursales, impuestos e impresión, y guarda.",
-    ],
-    [
-      "portal-b2b",
-      "Portal mayorista",
-      "Conecta un dominio propio y sigue las instrucciones de DNS para que tus clientes pidan en tu portal con tu marca.",
+      "Es un vistazo rápido a tus números de hoy (ventas, tickets, alertas). Para el detalle a fondo entra a Reportes.",
     ],
   ]),
 ];
+
+/** Recorrido guiado de un apartado: navega a la sección y luego va por sus controles. */
+function guia(seccion: string, titulo: string, intro: string, pasos: TourStep[]): TourDef {
+  return {
+    id: `ver-${seccion}`,
+    nombre: titulo,
+    descripcion: "Te guío por lo que puedes hacer en este apartado.",
+    pasos: [{ seccion, anchor: `nav-${seccion}`, titulo, texto: intro }, ...pasos],
+  };
+}
 
 /** Genera recorridos de orientación (2 pasos) para apartados de solo consulta. */
 function orientacion(items: [string, string, string][]): TourDef[] {

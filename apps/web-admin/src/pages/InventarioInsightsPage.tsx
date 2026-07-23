@@ -42,7 +42,7 @@ export function InventarioInsightsPage() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-bold text-2xl text-slate-800">Inteligencia de inventario</h1>
-        <div className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
+        <div data-tour="iq-rango" className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
           {PERIODOS.map((p) => (
             <button
               key={p.dias}

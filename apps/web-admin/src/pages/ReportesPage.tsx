@@ -48,7 +48,7 @@ export function ReportesPage() {
           </p>
         </div>
         <div className="no-print flex items-center gap-2">
-          <div className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
+          <div data-tour="rep-rango" className="flex gap-1 rounded-lg bg-white p-1 shadow-sm">
             {PERIODOS.map((p) => (
               <button
                 key={p.dias}
@@ -64,6 +64,7 @@ export function ReportesPage() {
           </div>
           <button
             type="button"
+            data-tour="rep-imprimir"
             onClick={() => window.print()}
             disabled={!data}
             className="gx-btn-secondary disabled:opacity-50"

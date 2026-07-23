@@ -74,6 +74,7 @@ function TopeDescuento() {
       <label className="mb-2 block max-w-[220px]">
         <span className="gx-label">Descuento máximo (%)</span>
         <input
+          data-tour="cfg-tope"
           type="number"
           min="0"
           max="100"
@@ -93,6 +94,7 @@ function TopeDescuento() {
       {editable && (
         <button
           type="button"
+          data-tour="cfg-guardar"
           onClick={guardar}
           disabled={guardando || !valido}
           className="gx-btn-primary"

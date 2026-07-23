@@ -133,6 +133,7 @@ export function TiendaPage() {
         <label className="mb-4 block">
           <span className="mb-1 block text-sm font-medium text-slate-700">Subdominio</span>
           <input
+            data-tour="tienda-subdominio"
             value={config.subdominio ?? ""}
             onChange={(e) => setConfig({ ...config, subdominio: e.target.value })}
             placeholder="mi-tienda"
@@ -159,6 +160,7 @@ export function TiendaPage() {
         <DominioPropio refreshKey={dominioKey} />
         <button
           type="button"
+          data-tour="tienda-guardar"
           onClick={guardarConfig}
           disabled={guardando}
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
@@ -458,6 +460,7 @@ export function TiendaPage() {
           Pon tus productos a la venta en la tienda online.
         </p>
         <input
+          data-tour="tienda-publicar"
           value={buscarPub}
           onChange={(e) => setBuscarPub(e.target.value)}
           placeholder="Buscar producto por nombre o SKU…"
