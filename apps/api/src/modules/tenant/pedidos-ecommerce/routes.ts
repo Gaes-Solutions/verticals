@@ -15,6 +15,7 @@ import {
   FLUJO_ENVIO,
   FLUJO_PICKUP,
   etiquetasDe,
+  flujoDe,
   labelDe,
   mergeEtiquetas,
 } from "./estados.js";
@@ -254,6 +255,23 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
         error: "Conflict",
         message: `Pedido en estado ${pedido.statusPedido}, no permite transición`,
+      });
+    }
+    if (pedido.statusPedido === "entregado") {
+      return reply.code(409).send({
+        statusCode: 409,
+        error: "Conflict",
+        message: "Pedido ya entregado — usar devolución de venta",
+      });
+    }
+    if (
+      body.nuevoEstado !== "cancelado" &&
+      !flujoDe(pedido.metodoEnvio).includes(body.nuevoEstado)
+    ) {
+      return reply.code(409).send({
+        statusCode: 409,
+        error: "Conflict",
+        message: `Estado "${body.nuevoEstado}" no aplica a un pedido con entrega "${pedido.metodoEnvio}"`,
       });
     }
     const tsField = ESTADO_TIMESTAMP[body.nuevoEstado];
