@@ -509,6 +509,7 @@ function NuevaCxcModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
               type="number"
               min="1"
               step="0.01"
+              data-tour="cxc-f-monto"
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
               className="gx-input"
@@ -521,6 +522,7 @@ function NuevaCxcModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
               type="number"
               min="1"
               max="365"
+              data-tour="cxc-f-dias"
               value={dias}
               onChange={(e) => setDias(Number(e.target.value) || 30)}
               className="gx-input"
@@ -540,6 +542,7 @@ function NuevaCxcModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
           </button>
           <button
             type="submit"
+            data-tour="cxc-f-crear"
             disabled={guardando || !cliente || !sucursalId || !monto}
             className="gx-btn-primary"
           >

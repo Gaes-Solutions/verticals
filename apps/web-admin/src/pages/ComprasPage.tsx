@@ -283,6 +283,7 @@ function NuevaOcModal({
           <label className="block">
             <span className="gx-label">RFC del proveedor</span>
             <input
+              data-tour="compra-f-rfc"
               value={proveedorRfc}
               onChange={(e) => setProveedorRfc(e.target.value)}
               className="gx-input"
@@ -300,6 +301,7 @@ function NuevaOcModal({
           <label className="block">
             <span className="gx-label">Sucursal destino</span>
             <select
+              data-tour="compra-f-sucursal"
               value={sucursalId}
               onChange={(e) => setSucursalId(e.target.value)}
               className="gx-input"
@@ -323,6 +325,7 @@ function NuevaOcModal({
 
         <div className="relative mb-3">
           <input
+            data-tour="compra-f-buscar"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar producto para agregar…"
@@ -392,6 +395,7 @@ function NuevaOcModal({
           </button>
           <button
             type="button"
+            data-tour="compra-f-crear"
             onClick={crear}
             disabled={guardando || !puedeCrear}
             className="gx-btn-primary"

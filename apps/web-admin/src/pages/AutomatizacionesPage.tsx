@@ -215,6 +215,7 @@ function NuevoFlowModal({
         <label className="mb-3 block">
           <span className="gx-label">Qué manda (campaña)</span>
           <select
+            data-tour="auto-f-campana"
             value={campanaId}
             onChange={(e) => setCampanaId(e.target.value)}
             className="gx-input"
@@ -244,7 +245,12 @@ function NuevoFlowModal({
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="submit" disabled={!campanaId} className="gx-btn-primary">
+          <button
+            type="submit"
+            data-tour="auto-f-crear"
+            disabled={!campanaId}
+            className="gx-btn-primary"
+          >
             Crear
           </button>
         </div>

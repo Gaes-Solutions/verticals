@@ -387,7 +387,12 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
         <label className="mb-3 block">
           <span className="gx-label">Tipo</span>
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="gx-input">
+          <select
+            data-tour="promo-f-tipo"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            className="gx-input"
+          >
             {TIPOS_CREABLES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
@@ -525,7 +530,12 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="submit" disabled={guardando || !valido} className="gx-btn-primary">
+          <button
+            type="submit"
+            data-tour="promo-f-crear"
+            disabled={guardando || !valido}
+            className="gx-btn-primary"
+          >
             {guardando ? "Creando…" : "Crear promoción"}
           </button>
         </div>

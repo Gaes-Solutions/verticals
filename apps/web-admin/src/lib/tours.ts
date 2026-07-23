@@ -329,10 +329,17 @@ export const TOURS: TourDef[] = [
         texto: "Un nombre para tu promo, ej. “2x1 fin de semana”.",
       },
       {
-        titulo: "2) Define la oferta",
-        texto: "Elige el tipo (2x1, % de descuento, precio especial) y a qué productos aplica.",
+        anchor: "promo-f-tipo",
+        titulo: "2) El tipo de oferta",
+        texto:
+          "Elige 2x1, % de descuento o precio especial. Según lo que elijas, aparecen abajo los campos para definir el descuento (cantidades o porcentaje).",
       },
-      { titulo: "¡Activa! ✅", texto: "La promo se aplica automáticamente en el POS y en línea." },
+      {
+        anchor: "promo-f-crear",
+        titulo: "3) ¡Créala! ✅",
+        texto:
+          "Elige a qué productos aplica y su vigencia, y toca Crear promoción. Se aplica sola al cobrar, en el POS y en línea.",
+      },
     ],
   },
   {
@@ -353,17 +360,31 @@ export const TOURS: TourDef[] = [
       },
       {
         abrir: "compra-nuevo",
+        anchor: "compra-f-rfc",
+        titulo: "1) RFC del proveedor",
+        texto: "Escribe el RFC de tu proveedor (a quién le compras la mercancía).",
+      },
+      {
         anchor: "compra-f-proveedor",
-        titulo: "1) El proveedor",
-        texto: "Escribe a quién le compras (razón social del proveedor).",
+        titulo: "2) Razón social",
+        texto: "El nombre o razón social del proveedor.",
       },
       {
-        titulo: "2) Los productos",
-        texto: "Agrega los productos con sus cantidades y costos, y guarda la orden.",
+        anchor: "compra-f-sucursal",
+        titulo: "3) Sucursal destino",
+        texto: "Elige a qué sucursal llegará la mercancía.",
       },
       {
-        titulo: "Al recibir, entra a inventario ✅",
-        texto: "Cuando llegue la mercancía, la marcas como recibida y tu stock sube solo.",
+        anchor: "compra-f-buscar",
+        titulo: "4) Agrega los productos",
+        texto:
+          "Busca cada producto y tócalo para agregarlo; luego escribe su cantidad y su costo de compra.",
+      },
+      {
+        anchor: "compra-f-crear",
+        titulo: "5) ¡Crea la orden! ✅",
+        texto:
+          "Toca Crear orden. Cuando llegue la mercancía, la marcas como recibida y tu inventario sube solo.",
       },
     ],
   },
@@ -390,39 +411,55 @@ export const TOURS: TourDef[] = [
         texto: "Elige qué la dispara: ej. tras una compra o un carrito abandonado.",
       },
       {
+        anchor: "auto-f-campana",
         titulo: "2) El mensaje",
-        texto: "Elige la plantilla/campaña que se envía y guárdala.",
+        texto: "Elige la plantilla o campaña que se enviará cuando ocurra el disparador.",
       },
-      { titulo: "¡Activa! ✅", texto: "A partir de ahí trabaja sola por ti." },
+      {
+        anchor: "auto-f-crear",
+        titulo: "3) ¡Actívala! ✅",
+        texto: "Toca crear. A partir de ahí trabaja sola por ti, enviando el mensaje cuando toca.",
+      },
     ],
   },
   {
     id: "registrar-cobro-cxc",
-    nombre: "Registrar un pago de cuentas por cobrar",
-    descripcion: "Anota cuando un cliente te paga lo que debía.",
+    nombre: "Registrar lo que te debe un cliente",
+    descripcion: "Anota una venta a crédito para llevar el control de lo que te deben.",
     pasos: [
       {
         seccion: "cxc",
         anchor: "nav-cxc",
         titulo: "Entra a Cuentas por cobrar",
-        texto: "Aquí ves quién te debe. Ya te traje a esta sección.",
+        texto: "Aquí llevas el control de lo que te deben. Ya te traje a esta sección.",
       },
       {
         anchor: "cxc-nuevo",
-        titulo: "Registra un pago",
+        titulo: "Registra una cuenta por cobrar",
         texto: "Toca el botón. (Ahora te abro el formulario.)",
       },
       {
         abrir: "cxc-nuevo",
         anchor: "cxc-f-cliente",
         titulo: "1) El cliente",
-        texto: "Busca y elige al cliente que te pagó.",
+        texto: "Busca y elige al cliente que te debe.",
       },
       {
+        anchor: "cxc-f-monto",
         titulo: "2) El monto",
-        texto: "Escribe cuánto te pagó; su saldo baja al instante.",
+        texto: "Cuánto te debe en total.",
       },
-      { titulo: "¡Al día! ✅", texto: "Queda registrado y ves cuánto le falta por pagar." },
+      {
+        anchor: "cxc-f-dias",
+        titulo: "3) Días de crédito",
+        texto: "En cuántos días vence el pago (ej. 30).",
+      },
+      {
+        anchor: "cxc-f-crear",
+        titulo: "4) ¡Regístrala! ✅",
+        texto:
+          "Toca Crear. Cuando el cliente te pague, registras el abono desde su fila y su saldo baja solo.",
+      },
     ],
   },
   {
