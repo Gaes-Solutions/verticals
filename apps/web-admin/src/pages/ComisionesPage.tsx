@@ -46,6 +46,7 @@ export function ComisionesPage() {
         <h1 className="text-2xl font-bold text-slate-800">Comisiones</h1>
         <button
           type="button"
+          data-tour="com-nuevo"
           onClick={() => setModal(true)}
           className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
         >

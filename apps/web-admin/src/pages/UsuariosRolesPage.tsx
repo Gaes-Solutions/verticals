@@ -140,7 +140,12 @@ function UsuariosTab() {
     <div>
       {puede("usuarios.crear") && (
         <div className="mb-4 flex justify-end">
-          <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+          <button
+            type="button"
+            data-tour="user-nuevo"
+            onClick={() => setCreando(true)}
+            className="gx-btn-primary"
+          >
             + Nuevo usuario
           </button>
         </div>

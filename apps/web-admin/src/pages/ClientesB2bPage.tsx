@@ -41,7 +41,9 @@ export function ClientesB2bPage() {
   const [listas, setListas] = useState<ListaPrecio[]>([]);
 
   const cargar = useCallback(async () => {
-    const res = await api<Paged>(`/t/clientes-b2b?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+    const res = await api<Paged>(
+      `/t/clientes-b2b?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+    );
     setItems(res.items);
   }, [q]);
 
@@ -62,6 +64,7 @@ export function ClientesB2bPage() {
         <h1 className="text-2xl font-bold text-slate-800">Clientes de mayoreo</h1>
         <button
           type="button"
+          data-tour="cli-nuevo"
           onClick={() => setModal(true)}
           className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
         >

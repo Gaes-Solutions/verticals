@@ -48,6 +48,7 @@ export function PreciosPage() {
         <h1 className="text-2xl font-bold text-slate-800">Listas de precios</h1>
         <button
           type="button"
+          data-tour="precio-nuevo"
           onClick={() => setModalNueva(true)}
           className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
         >
@@ -176,11 +177,7 @@ function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () =
             >
               Guardar
             </button>
-            <button
-              type="button"
-              onClick={() => setSel(null)}
-              className="text-sm text-slate-500"
-            >
+            <button type="button" onClick={() => setSel(null)} className="text-sm text-slate-500">
               Cancelar
             </button>
           </div>

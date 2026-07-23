@@ -42,6 +42,7 @@ export function InventarioPage() {
           {puedeAjustar && (
             <button
               type="button"
+              data-tour="inv-nuevo"
               onClick={() => setEntrada(true)}
               className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
             >

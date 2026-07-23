@@ -79,6 +79,137 @@ export const TOURS: TourDef[] = [
       },
     ],
   },
+  {
+    id: "dar-entrada-inventario",
+    nombre: "Dar entrada a inventario",
+    descripcion: "Te guío para registrar mercancía que entra a tu almacén.",
+    pasos: [
+      {
+        seccion: "inventario",
+        anchor: "nav-inventario",
+        titulo: "Entra a Inventario",
+        texto: "Aquí ves y ajustas las existencias de cada producto. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "inv-nuevo",
+        titulo: "Registra una entrada",
+        texto: "Toca “+ Entrada de inventario” para sumar mercancía que llegó.",
+      },
+      {
+        titulo: "Elige producto y cantidad",
+        texto:
+          "Busca el producto, escribe cuántas piezas entraron y, si quieres, el motivo (compra, ajuste…).",
+      },
+      {
+        titulo: "¡Guardado! ✅",
+        texto: "Tu stock se actualiza al instante y queda registrado el movimiento.",
+      },
+    ],
+  },
+  {
+    id: "dar-alta-usuario",
+    nombre: "Dar de alta a alguien de tu equipo",
+    descripcion: "Crea una cuenta para un cajero, vendedor u otro colaborador.",
+    pasos: [
+      {
+        seccion: "usuarios",
+        anchor: "nav-usuarios",
+        titulo: "Entra a Usuarios y permisos",
+        texto: "Aquí administras a tu equipo. Ya te traje a esta sección.",
+      },
+      {
+        anchor: "user-nuevo",
+        titulo: "Agrega un usuario",
+        texto: "Toca “+ Nuevo usuario”.",
+      },
+      {
+        titulo: "Sus datos y su rol",
+        texto:
+          "Pon su nombre, correo y una contraseña, y elige su rol. El sistema solo le mostrará lo que su rol permite.",
+      },
+      { titulo: "¡Listo! ✅", texto: "Ya puede entrar con su correo y contraseña." },
+    ],
+  },
+  {
+    id: "dar-alta-cliente-mayoreo",
+    nombre: "Dar de alta un cliente de mayoreo",
+    descripcion: "Registra a quién le vendes al por mayor, con su crédito.",
+    pasos: [
+      {
+        seccion: "clientes-b2b",
+        anchor: "nav-clientes-b2b",
+        titulo: "Entra a Clientes de mayoreo",
+        texto: "Aquí van tus clientes B2B. Ya te traje a esta sección.",
+      },
+      { anchor: "cli-nuevo", titulo: "Agrega un cliente", texto: "Toca “+ Nuevo cliente”." },
+      {
+        titulo: "Sus datos fiscales",
+        texto:
+          "Razón social, RFC y régimen fiscal son obligatorios. Puedes fijarle su lista de precios y días de crédito.",
+      },
+      { titulo: "¡Listo! ✅", texto: "Ya puedes venderle con sus precios y condiciones." },
+    ],
+  },
+  {
+    id: "crear-lista-precios",
+    nombre: "Crear una lista de precios",
+    descripcion: "Define precios especiales (mayoreo, por cliente…).",
+    pasos: [
+      {
+        seccion: "precios",
+        anchor: "nav-precios",
+        titulo: "Entra a Listas de precios",
+        texto: "Aquí creas precios distintos al normal. Ya te traje a esta sección.",
+      },
+      { anchor: "precio-nuevo", titulo: "Crea una lista", texto: "Toca “+ Nueva lista”." },
+      {
+        titulo: "Nómbrala y define su tipo",
+        texto: "Ej. “Mayoreo”. Luego le pones el precio especial a cada producto que quieras.",
+      },
+      { titulo: "¡Lista! ✅", texto: "Asígnala a tus clientes de mayoreo y listo." },
+    ],
+  },
+  {
+    id: "crear-comision",
+    nombre: "Configurar una comisión",
+    descripcion: "Define cuánto gana un vendedor por vender o cobrar.",
+    pasos: [
+      {
+        seccion: "comisiones",
+        anchor: "nav-comisiones",
+        titulo: "Entra a Comisiones",
+        texto: "Aquí defines las comisiones de tu equipo. Ya te traje a esta sección.",
+      },
+      { anchor: "com-nuevo", titulo: "Crea una regla", texto: "Toca “+ Nueva regla”." },
+      {
+        titulo: "El porcentaje y sobre qué",
+        texto: "Ej. 5% sobre la venta. Puedes limitarla a una categoría o producto.",
+      },
+      {
+        titulo: "¡Listo! ✅",
+        texto: "El vendedor gana su comisión automáticamente en cada venta.",
+      },
+    ],
+  },
+  {
+    id: "crear-cobro",
+    nombre: "Cobrar con un link de pago",
+    descripcion: "Genera un link para cobrarle a un cliente por WhatsApp.",
+    pasos: [
+      {
+        seccion: "cobros",
+        anchor: "nav-cobros",
+        titulo: "Entra a Cobros / Links",
+        texto: "Aquí generas links de pago. Ya te traje a esta sección.",
+      },
+      { anchor: "cobro-nuevo", titulo: "Crea un cobro", texto: "Toca “+ Nuevo cobro”." },
+      {
+        titulo: "Monto y concepto",
+        texto: "Escribe cuánto y por qué. Se genera un link que le mandas a tu cliente.",
+      },
+      { titulo: "¡Listo! ✅", texto: "Cuando pague, tú te enteras y queda registrado." },
+    ],
+  },
 ];
 
 export function tourPorId(id: string): TourDef | undefined {

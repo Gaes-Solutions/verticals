@@ -77,7 +77,12 @@ export function CobrosPage() {
             Cobra a distancia: genera un link y mándalo por WhatsApp.
           </p>
         </div>
-        <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
+        <button
+          type="button"
+          data-tour="cobro-nuevo"
+          onClick={() => setNuevo(true)}
+          className="gx-btn-primary"
+        >
           + Nuevo cobro
         </button>
       </div>

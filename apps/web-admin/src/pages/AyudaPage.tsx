@@ -1,68 +1,189 @@
+import { Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
-import { TOURS, lanzarTour } from "../lib/tours.js";
+import { puede } from "../lib/api.js";
+import { lanzarTour } from "../lib/tours.js";
 
-interface Articulo {
-  categoria: string;
+interface ModuloAyuda {
+  seccion: string;
+  /** Permiso que exige el módulo (igual que el NAV). "*" = solo dueño. */
+  perm: string;
   titulo: string;
-  cuerpo: string[];
+  resumen: string;
+  guia: string[];
+  /** Recorrido interactivo que hace el proceso paso a paso. */
+  tourId?: string;
 }
 
-const ARTICULOS: Articulo[] = [
+const MODULOS: ModuloAyuda[] = [
   {
-    categoria: "Primeros pasos",
-    titulo: "¿Por dónde empiezo?",
-    cuerpo: [
-      "Al entrar verás la Guía de inicio: una lista de pasos que deja tu negocio listo para vender.",
-      "Se palomean solos conforme los completas. No tienes que hacerlos en orden, pero el primero siempre es cargar tus productos.",
-      "Si prefieres que te lleve de la mano, usa el recorrido guiado “Crear tu primer producto” de más abajo.",
+    seccion: "inicio",
+    perm: "reportes.ventas",
+    titulo: "Guía de inicio",
+    resumen: "Los pasos para dejar tu negocio listo para vender.",
+    guia: [
+      "Al entrar aterrizas aquí: una lista de pasos que se palomean solos.",
+      "Toca “Ir →” en cada paso para que te lleve a la pantalla correcta.",
+      "Cuando estén todos, ¡ya puedes vender!",
+    ],
+    tourId: "bienvenida",
+  },
+  {
+    seccion: "productos",
+    perm: "productos.leer",
+    titulo: "Productos",
+    resumen: "Da de alta y edita todo lo que vendes.",
+    guia: [
+      "Toca “+ Nuevo producto”. Con nombre y precio ya puedes vender.",
+      "Si usas código de barras, captura su clave para escanearlo.",
+      "¿Muchos productos? Usa “Carga masiva” para importarlos de un archivo.",
+    ],
+    tourId: "crear-producto",
+  },
+  {
+    seccion: "inventario",
+    perm: "inventario.leer",
+    titulo: "Inventario",
+    resumen: "Controla las existencias de cada producto.",
+    guia: [
+      "Toca “+ Entrada de inventario” para sumar mercancía que llegó.",
+      "Elige el producto, la cantidad y el motivo.",
+      "Tu stock se actualiza al instante y queda registrado el movimiento.",
+    ],
+    tourId: "dar-entrada-inventario",
+  },
+  {
+    seccion: "ventas",
+    perm: "ventas.leer",
+    titulo: "Ventas",
+    resumen: "Consulta y administra tus ventas.",
+    guia: [
+      "Aquí ves el historial de ventas con su detalle.",
+      "Para cobrar en mostrador se usa la app de POS.",
+      "Cada venta descuenta inventario y aparece en Reportes.",
     ],
   },
   {
-    categoria: "Productos",
-    titulo: "Agregar y editar productos",
-    cuerpo: [
-      "Ve a Productos y toca “+ Nuevo producto”. Con nombre y precio ya puedes vender; lo demás es opcional.",
-      "Si manejas código de barras, captura su clave para poder escanearlo en el POS.",
-      "¿Muchos productos? Usa “Carga masiva” para importarlos desde un archivo.",
+    seccion: "cobros",
+    perm: "ventas.crear",
+    titulo: "Cobros / Links de pago",
+    resumen: "Cobra a distancia con un link por WhatsApp.",
+    guia: [
+      "Toca “+ Nuevo cobro”, pon el monto y el concepto.",
+      "Se genera un link que le mandas a tu cliente.",
+      "Cuando pague, te enteras y queda registrado.",
+    ],
+    tourId: "crear-cobro",
+  },
+  {
+    seccion: "clientes-b2b",
+    perm: "clientes.leer",
+    titulo: "Clientes de mayoreo",
+    resumen: "Registra a quién le vendes al por mayor.",
+    guia: [
+      "Toca “+ Nuevo cliente”. Razón social, RFC y régimen son obligatorios.",
+      "Puedes fijarle su lista de precios y sus días de crédito.",
+      "Al venderle se aplican sus precios y condiciones.",
+    ],
+    tourId: "dar-alta-cliente-mayoreo",
+  },
+  {
+    seccion: "precios",
+    perm: "precios.leer",
+    titulo: "Listas de precios",
+    resumen: "Precios especiales (mayoreo, por cliente…).",
+    guia: [
+      "Toca “+ Nueva lista” y ponle nombre (ej. “Mayoreo”).",
+      "Define el precio especial de cada producto.",
+      "Asigna la lista a tus clientes de mayoreo.",
+    ],
+    tourId: "crear-lista-precios",
+  },
+  {
+    seccion: "comisiones",
+    perm: "comisiones.gestionar",
+    titulo: "Comisiones",
+    resumen: "Cuánto gana cada vendedor por vender o cobrar.",
+    guia: [
+      "Toca “+ Nueva regla” y define el porcentaje (ej. 5%).",
+      "Elige si es sobre la venta o sobre el cobro.",
+      "Puedes limitarla a una categoría o producto.",
+    ],
+    tourId: "crear-comision",
+  },
+  {
+    seccion: "usuarios",
+    perm: "usuarios.leer",
+    titulo: "Usuarios y permisos",
+    resumen: "Da de alta a tu equipo y define qué ve cada quien.",
+    guia: [
+      "Toca “+ Nuevo usuario”: nombre, correo y contraseña.",
+      "Asígnale un rol; solo verá lo que su rol permite.",
+      "En la pestaña Roles puedes crear roles a tu medida.",
+    ],
+    tourId: "dar-alta-usuario",
+  },
+  {
+    seccion: "suscripcion",
+    perm: "*",
+    titulo: "Mi suscripción y cobros a clientes",
+    resumen: "Tu plan, tu tarjeta y cómo aceptar pagos.",
+    guia: [
+      "Guarda la tarjeta con la que se cobra tu plan.",
+      "Con “Conectar con Stripe” aceptas tarjetas de tus clientes.",
+      "El dinero de esas ventas llega directo a tu cuenta.",
     ],
   },
   {
-    categoria: "Ventas",
-    titulo: "Cobrar en el punto de venta",
-    cuerpo: [
-      "Abre la app de POS, busca o escanea el producto, y cobra con efectivo, tarjeta o los métodos que tengas activos.",
-      "Cada venta descuenta inventario y queda registrada en Reportes.",
+    seccion: "seguridad",
+    perm: "configuracion.leer",
+    titulo: "Seguridad y huella",
+    resumen: "Entra con huella y protege tu cuenta.",
+    guia: [
+      "Toca “Activar huella en este dispositivo” y confirma con tu dedo.",
+      "Luego podrás entrar sin contraseña, solo con tu huella.",
+      "También puedes activar verificación en dos pasos (2FA).",
     ],
   },
   {
-    categoria: "Pagos y suscripción",
-    titulo: "Método de pago y cobros a clientes",
-    cuerpo: [
-      "En “Mi suscripción” guardas la tarjeta con la que se cobra tu plan.",
-      "También ahí puedes “Conectar con Stripe” para aceptar tarjetas de tus propios clientes y recibir el dinero directo a tu banco.",
+    seccion: "tienda",
+    perm: "ecommerce.configurar",
+    titulo: "Tienda online",
+    resumen: "Vende por internet con tu propia tienda.",
+    guia: [
+      "Configura el nombre, logo y datos de tu tienda.",
+      "Publica los productos que quieras vender en línea.",
+      "Recibes los pedidos en la sección “Pedidos online”.",
     ],
   },
   {
-    categoria: "Equipo",
-    titulo: "Dar de alta a tu equipo",
-    cuerpo: [
-      "En Usuarios y permisos creas cuentas para quienes operan el sistema (cajeros, vendedores, etc.).",
-      "A cada uno le asignas un rol; el sistema solo le muestra lo que su rol permite.",
+    seccion: "portal-b2b",
+    perm: "configuracion.actualizar",
+    titulo: "Portal mayorista con tu dominio",
+    resumen: "Que tus clientes de mayoreo pidan solos.",
+    guia: [
+      "Conecta un dominio propio (ej. pedidos.tu-negocio.com).",
+      "Sigue las instrucciones de DNS que te muestra la pantalla.",
+      "Tus clientes entran a tu portal con tu marca.",
     ],
   },
 ];
 
+function irA(seccion: string) {
+  window.dispatchEvent(new CustomEvent("gaes-nav", { detail: seccion }));
+}
+
 export function AyudaPage() {
   const [q, setQ] = useState("");
 
-  const filtrados = useMemo(() => {
+  const visibles = useMemo(() => {
+    const permitidos = MODULOS.filter((m) => puede(m.perm));
     const t = q.trim().toLowerCase();
-    if (!t) return ARTICULOS;
-    return ARTICULOS.filter(
-      (a) =>
-        a.titulo.toLowerCase().includes(t) ||
-        a.categoria.toLowerCase().includes(t) ||
-        a.cuerpo.some((c) => c.toLowerCase().includes(t)),
+    if (!t) return permitidos;
+    return permitidos.filter(
+      (m) =>
+        m.titulo.toLowerCase().includes(t) ||
+        m.resumen.toLowerCase().includes(t) ||
+        m.guia.some((g) => g.toLowerCase().includes(t)),
     );
   }, [q]);
 
@@ -70,72 +191,63 @@ export function AyudaPage() {
     <div className="mx-auto max-w-2xl">
       <h1 className="font-bold text-2xl text-slate-800">Ayuda</h1>
       <p className="mt-1 text-slate-500 text-sm">
-        Manual de uso y recorridos guiados. Aquí puedes volver a lanzar cualquier recorrido cuando
-        quieras.
+        Manual de cada sección que puedes usar. En cualquiera toca{" "}
+        <b className="text-brand">Guíame paso a paso</b> y te acompaño de forma interactiva a hacer
+        el proceso, las veces que quieras.
       </p>
-
-      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-1 font-semibold text-slate-800">Recorridos guiados ✨</h2>
-        <p className="mb-3 text-slate-500 text-sm">
-          Te resaltan los botones en pantalla y te dicen qué hacer, paso a paso.
-        </p>
-        <div className="space-y-2">
-          {TOURS.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
-            >
-              <div className="min-w-0">
-                <p className="font-medium text-slate-800 text-sm">{t.nombre}</p>
-                <p className="text-slate-500 text-xs">{t.descripcion}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => lanzarTour(t.id)}
-                className="shrink-0 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
-              >
-                Iniciar
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <div className="mt-5">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar en el manual…"
+          placeholder="Buscar ayuda… (ej. inventario, tarjeta, huella)"
           className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-brand focus:outline-none"
         />
       </div>
 
       <div className="mt-4 space-y-3 pb-6">
-        {filtrados.length === 0 ? (
+        {visibles.length === 0 ? (
           <p className="rounded-xl bg-white p-6 text-center text-slate-400 text-sm shadow-sm">
-            No encontramos nada para “{q}”. Prueba con otra palabra.
+            No encontramos ayuda para “{q}”. Prueba con otra palabra.
           </p>
         ) : (
-          filtrados.map((a) => (
-            <details
-              key={a.titulo}
-              className="group rounded-2xl bg-white p-4 shadow-sm [&_summary]:cursor-pointer"
-            >
-              <summary className="flex items-center justify-between gap-3 list-none">
-                <span>
-                  <span className="block text-brand text-xs uppercase tracking-wide">
-                    {a.categoria}
-                  </span>
-                  <span className="font-semibold text-slate-800">{a.titulo}</span>
+          visibles.map((m) => (
+            <details key={m.seccion} className="group rounded-2xl bg-white p-4 shadow-sm">
+              <summary className="flex cursor-pointer items-center justify-between gap-3 list-none">
+                <span className="min-w-0">
+                  <span className="block font-semibold text-slate-800">{m.titulo}</span>
+                  <span className="block text-slate-500 text-sm">{m.resumen}</span>
                 </span>
                 <span className="text-slate-400 transition-transform group-open:rotate-180">⌄</span>
               </summary>
-              <div className="mt-3 space-y-2 border-slate-100 border-t pt-3">
-                {a.cuerpo.map((c) => (
-                  <p key={c} className="text-slate-600 text-sm">
-                    {c}
-                  </p>
-                ))}
+
+              <div className="mt-3 border-slate-100 border-t pt-3">
+                <ol className="mb-3 space-y-1.5">
+                  {m.guia.map((g, i) => (
+                    <li key={g} className="flex gap-2 text-slate-600 text-sm">
+                      <span className="font-semibold text-brand">{i + 1}.</span>
+                      <span>{g}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="flex flex-wrap gap-2">
+                  {m.tourId && (
+                    <button
+                      type="button"
+                      onClick={() => lanzarTour(m.tourId as string)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                    >
+                      <Sparkles size={15} /> Guíame paso a paso
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => irA(m.seccion)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 text-sm hover:bg-slate-50"
+                  >
+                    Ir a la sección →
+                  </button>
+                </div>
               </div>
             </details>
           ))
