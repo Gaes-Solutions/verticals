@@ -100,26 +100,28 @@ export function ReportesPage() {
               {data.topProductos.length === 0 ? (
                 <p className="text-sm text-slate-400">Sin ventas en el periodo.</p>
               ) : (
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead className="text-left text-slate-500">
-                    <tr>
-                      <th className="pb-2">Producto</th>
-                      <th className="pb-2 text-right">Unidades</th>
-                      <th className="pb-2 text-right">Monto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.topProductos.map((p) => (
-                      <tr key={p.productoId} className="border-t border-slate-100">
-                        <td className="py-2 font-medium text-slate-800">{p.nombre}</td>
-                        <td className="py-2 text-right text-slate-600">{p.cantidad}</td>
-                        <td className="py-2 text-right font-semibold text-slate-800">
-                          {money(p.monto)}
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead className="text-left text-slate-500">
+                      <tr>
+                        <th className="pb-2">Producto</th>
+                        <th className="pb-2 text-right">Unidades</th>
+                        <th className="pb-2 text-right">Monto</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.topProductos.map((p) => (
+                        <tr key={p.productoId} className="border-t border-slate-100">
+                          <td className="py-2 font-medium text-slate-800">{p.nombre}</td>
+                          <td className="py-2 text-right text-slate-600">{p.cantidad}</td>
+                          <td className="py-2 text-right font-semibold text-slate-800">
+                            {money(p.monto)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
 
