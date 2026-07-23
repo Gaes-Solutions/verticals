@@ -59,8 +59,8 @@ export function ComprasPage() {
 
   const cargar = useCallback(() => {
     const qs = filtro ? `?estado=${filtro}` : "";
-    api<{ items: OcRow[] }>(`/t/ordenes-compra${qs}`)
-      .then((r) => setOrdenes(r.items))
+    api<OcRow[]>(`/t/ordenes-compra${qs}`)
+      .then(setOrdenes)
       .catch(() => setOrdenes([]));
   }, [filtro]);
 
