@@ -1,8 +1,15 @@
-# nginx para las SPAs Vite (web-admin / web-pos / web-superadmin):
+# nginx para las SPAs Vite (web-admin / web-pos / web-superadmin / etc.):
 # sirve el build estático + proxy /api/* → ${API_UPSTREAM}/* (igual que el proxy de Vite en dev).
-# nginx hace envsubst de ${API_UPSTREAM} al arrancar (resto de $vars son de nginx, se preservan).
+# nginx hace envsubst de ${API_UPSTREAM} y ${NGINX_LOCAL_RESOLVERS} al arrancar
+# (resto de $vars son de nginx, se preservan).
+#
+# El upstream se RE-RESUELVE por petición (resolver + variable en proxy_pass): en
+# Railway el api cambia de IP interna en cada deploy y con hostname literal nginx
+# cachea la IP al arrancar → proxy muerto tras cada redeploy del api.
+# NGINX_LOCAL_RESOLVERS lo exporta la imagen oficial de nginx
+# (15-local-resolvers.envsh) leyendo /etc/resolv.conf (IPv6 con corchetes).
 #   - compose/Coolify: API_UPSTREAM=api:3000
-#   - Railway:         API_UPSTREAM=<servicio-api>.railway.internal:3000
+#   - Railway:         API_UPSTREAM=<servicio-api>.railway.internal:8080
 server {
   listen 80;
   server_name _;
@@ -12,9 +19,13 @@ server {
   gzip on;
   gzip_types text/css application/javascript application/json image/svg+xml;
 
-  # API → backend (strip del prefijo /api por el trailing slash, como el rewrite de Vite)
+  # API → backend (strip del prefijo /api vía rewrite; proxy_pass con variable
+  # obliga a re-resolver el DNS respetando `valid=`)
   location /api/ {
-    proxy_pass http://${API_UPSTREAM}/;
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+    set $api_upstream ${API_UPSTREAM};
+    rewrite ^/api/(.*)$ /$1 break;
+    proxy_pass http://$api_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

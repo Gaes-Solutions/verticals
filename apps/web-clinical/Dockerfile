@@ -25,7 +25,8 @@ RUN pnpm --filter @gaespos/web-clinical build
 
 # ===== Stage 2: runtime (nginx estático) =====
 FROM nginx:1.27-alpine AS runtime
-ENV API_UPSTREAM=api:3000
+ENV API_UPSTREAM=api:3000 \
+    NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 COPY deploy/nginx-spa.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /repo/apps/web-clinical/dist /usr/share/nginx/html
 EXPOSE 80
