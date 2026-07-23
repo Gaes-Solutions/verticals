@@ -35,6 +35,11 @@ export function Tour() {
 
   const cerrar = useCallback(() => {
     if (tour) marcarTourVisto(tour.id);
+    // Si el recorrido dejó un diálogo abierto, lo cerramos con su botón Cancelar.
+    const cancelar = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.offsetParent !== null && b.textContent?.trim() === "Cancelar",
+    );
+    cancelar?.click();
     setTour(null);
     setRect(null);
   }, [tour]);
