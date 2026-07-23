@@ -17,6 +17,14 @@ function isPrismaKnownRequestError(
   );
 }
 
+// El overflow de una columna Decimal (Postgres 22003) llega como ConnectorError
+// crudo, sin código P: sin capturarlo devolvería 500. Un monto/cantidad fuera de
+// rango es entrada inválida → 422.
+function isNumericOverflow(err: unknown): boolean {
+  const msg = (err as { message?: unknown })?.message;
+  return typeof msg === "string" && msg.includes("numeric field overflow");
+}
+
 const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
   app.setErrorHandler((err: FastifyError, req, reply) => {
     if (err instanceof ZodError) {
@@ -54,6 +62,14 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
           message: "Recurso no encontrado",
         });
       }
+    }
+
+    if (isNumericOverflow(err)) {
+      return reply.code(422).send({
+        statusCode: 422,
+        error: "Unprocessable Entity",
+        message: "Un monto o cantidad excede el rango permitido",
+      });
     }
 
     const statusCode = err.statusCode;
