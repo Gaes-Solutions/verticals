@@ -328,6 +328,12 @@ function NuevoUsuarioModal({
               </option>
             ))}
           </select>
+          {!rolId && (
+            <span className="mt-1 block text-amber-600 text-xs">
+              ⚠ Sin un rol, esta persona podrá iniciar sesión pero no ver ni hacer nada. Puedes
+              asignarle uno ahora o después con el botón “Roles”.
+            </span>
+          )}
         </label>
         {error && <p className="mb-3 text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">

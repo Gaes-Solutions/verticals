@@ -293,7 +293,8 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="mb-1 text-lg font-bold text-slate-800">Entrada de inventario</h2>
         <p className="mb-4 text-sm text-slate-500">
-          Da stock inicial a un producto que aún no tiene inventario.
+          Registra mercancía que entra (compra, reabasto o stock inicial): busca el producto y suma
+          la cantidad. Para descontar existencias usa “Ajustar” en su renglón.
         </p>
         <div className="space-y-3">
           {!producto ? (
@@ -371,7 +372,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             min={0}
             value={cantidad}
             onChange={(e) => setCantidad(e.target.value)}
-            placeholder="Cantidad inicial"
+            placeholder="Cantidad que entra"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
           />
           <input
