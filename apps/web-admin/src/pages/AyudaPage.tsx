@@ -9,7 +9,11 @@ interface ModuloAyuda {
   perm: string;
   titulo: string;
   resumen: string;
+  /** Explicación de para qué sirve el apartado. */
+  paraQue: string;
   guia: string[];
+  tips?: string[];
+  dudas?: [string, string][];
   /** Recorrido interactivo que hace el proceso paso a paso. */
   tourId?: string;
 }
@@ -20,11 +24,14 @@ const MODULOS: ModuloAyuda[] = [
     perm: "reportes.ventas",
     titulo: "Guía de inicio",
     resumen: "Los pasos para dejar tu negocio listo para vender.",
+    paraQue:
+      "Es tu punto de partida: muestra los pasos para dejar tu negocio listo y los va palomeando solos conforme los completas.",
     guia: [
-      "Al entrar aterrizas aquí: una lista de pasos que se palomean solos.",
+      "Al entrar aterrizas aquí automáticamente.",
       "Toca “Ir →” en cada paso para que te lleve a la pantalla correcta.",
-      "Cuando estén todos, ¡ya puedes vender!",
+      "Cuando estén todos ✅, ¡ya puedes vender!",
     ],
+    tips: ["No tienes que hacerlos en orden, pero el primero siempre es cargar tus productos."],
     tourId: "bienvenida",
   },
   {
@@ -32,10 +39,15 @@ const MODULOS: ModuloAyuda[] = [
     perm: "productos.leer",
     titulo: "Productos",
     resumen: "Da de alta y edita todo lo que vendes.",
+    paraQue: "Tu catálogo: todo lo que vendes, con su precio y su código.",
     guia: [
       "Toca “+ Nuevo producto”. Con nombre y precio ya puedes vender.",
       "Si usas código de barras, captura su clave para escanearlo.",
       "¿Muchos productos? Usa “Carga masiva” para importarlos de un archivo.",
+    ],
+    tips: ["Puedes editar el precio de un producto cuando quieras."],
+    dudas: [
+      ["¿Qué es lo mínimo para vender?", "Solo el nombre y el precio; lo demás es opcional."],
     ],
     tourId: "crear-producto",
   },
@@ -44,22 +56,100 @@ const MODULOS: ModuloAyuda[] = [
     perm: "inventario.leer",
     titulo: "Inventario",
     resumen: "Controla las existencias de cada producto.",
+    paraQue: "Controla cuántas piezas tienes de cada producto en cada sucursal.",
     guia: [
       "Toca “+ Entrada de inventario” para sumar mercancía que llegó.",
       "Elige el producto, la cantidad y el motivo.",
-      "Tu stock se actualiza al instante y queda registrado el movimiento.",
+      "Tu stock se actualiza al instante y queda el movimiento registrado.",
+    ],
+    tips: ["Filtra por “bajo mínimo” para ver qué está por agotarse."],
+    dudas: [
+      [
+        "¿El inventario baja solo al vender?",
+        "Sí, cada venta descuenta las piezas automáticamente.",
+      ],
     ],
     tourId: "dar-entrada-inventario",
+  },
+  {
+    seccion: "importador",
+    perm: "productos.bulk_import",
+    titulo: "Carga masiva",
+    resumen: "Importa muchos productos desde un archivo.",
+    paraQue: "Sube muchos productos de golpe desde un archivo, en vez de uno por uno.",
+    guia: [
+      "Descarga la plantilla y llénala con tus productos.",
+      "Súbela; el sistema valida y te avisa si hay errores.",
+      "Confirma y todos se cargan de una vez.",
+    ],
+    dudas: [
+      [
+        "¿Y si me equivoco en el archivo?",
+        "El sistema marca la fila y el error antes de guardar; corriges y vuelves a subir.",
+      ],
+    ],
+  },
+  {
+    seccion: "etiquetas",
+    perm: "productos.leer",
+    titulo: "Etiquetas y códigos",
+    resumen: "Imprime etiquetas con código de barras.",
+    paraQue: "Imprime etiquetas con código de barras para pegar en tus productos.",
+    guia: [
+      "Elige los productos y el formato de etiqueta.",
+      "Genera e imprime.",
+      "Pégalas y ya podrás escanearlas en el POS.",
+    ],
+    tips: ["Útil si compras un lector de código de barras para cobrar más rápido."],
+  },
+  {
+    seccion: "inventario-iq",
+    perm: "reportes.ventas",
+    titulo: "Inteligencia de inventario",
+    resumen: "Qué reponer y qué se está quedando parado.",
+    paraQue: "Te dice qué reponer y qué casi no se vende, con base en tus ventas.",
+    guia: [
+      "Elige el rango de días a analizar.",
+      "Revisa lo que más rota y lo que casi no se mueve.",
+      "Úsalo para decidir qué comprar y qué dejar de comprar.",
+    ],
+    tips: ["Revísalo antes de hacer un pedido a tu proveedor."],
+  },
+  {
+    seccion: "compras",
+    perm: "compras_oc.leer",
+    titulo: "Compras (órdenes de compra)",
+    resumen: "Pídele mercancía a tus proveedores.",
+    paraQue: "Registra lo que le pides a tus proveedores.",
+    guia: [
+      "Crea una orden con el proveedor y los productos.",
+      "Cuando llegue la mercancía, márcala como recibida.",
+      "Tu inventario sube automáticamente al recibirla.",
+    ],
+    dudas: [
+      [
+        "¿Sube el inventario al crear la orden?",
+        "No, hasta que marcas la mercancía como recibida.",
+      ],
+    ],
+    tourId: "crear-orden-compra",
   },
   {
     seccion: "ventas",
     perm: "ventas.leer",
     titulo: "Ventas",
     resumen: "Consulta y administra tus ventas.",
+    paraQue: "El historial de todo lo que has vendido, con su detalle.",
     guia: [
-      "Aquí ves el historial de ventas con su detalle.",
+      "Consulta cada venta con sus productos y forma de pago.",
       "Para cobrar en mostrador se usa la app de POS.",
       "Cada venta descuenta inventario y aparece en Reportes.",
+    ],
+    dudas: [
+      [
+        "¿Dónde cobro en caja?",
+        "En la app de Punto de Venta (POS); esta pantalla es para consultar.",
+      ],
     ],
   },
   {
@@ -67,22 +157,83 @@ const MODULOS: ModuloAyuda[] = [
     perm: "ventas.crear",
     titulo: "Cobros / Links de pago",
     resumen: "Cobra a distancia con un link por WhatsApp.",
+    paraQue: "Cóbrale a un cliente a distancia con un link que le mandas por WhatsApp.",
     guia: [
-      "Toca “+ Nuevo cobro”, pon el monto y el concepto.",
-      "Se genera un link que le mandas a tu cliente.",
-      "Cuando pague, te enteras y queda registrado.",
+      "Toca “+ Nuevo cobro”, pon el concepto y el monto.",
+      "Se genera un link; compártelo por WhatsApp.",
+      "Cuando el cliente paga, te enteras y queda registrado.",
     ],
+    dudas: [["¿El cliente necesita la app?", "No; paga desde el link en su navegador."]],
     tourId: "crear-cobro",
+  },
+  {
+    seccion: "promociones",
+    perm: "promociones.gestionar",
+    titulo: "Promociones",
+    resumen: "Descuentos automáticos para vender más.",
+    paraQue: "Descuentos automáticos (2x1, % de descuento, precio especial) que se aplican solos.",
+    guia: [
+      "Toca “+ Nueva promo” y nómbrala.",
+      "Elige el tipo y a qué productos aplica.",
+      "Define su vigencia y actívala.",
+    ],
+    dudas: [["¿Se aplica sola?", "Sí, al cobrar en el POS y en línea, mientras esté vigente."]],
+    tourId: "crear-promocion",
+  },
+  {
+    seccion: "monedero",
+    perm: "ventas.crear",
+    titulo: "Monedero y tarjetas de regalo",
+    resumen: "Puntos de lealtad y gift cards.",
+    paraQue: "Saldo a favor del cliente (lealtad) y tarjetas de regalo que se venden y canjean.",
+    guia: [
+      "El monedero acumula saldo a favor de tus clientes por sus compras.",
+      "Las tarjetas de regalo se venden y se canjean en el POS.",
+    ],
+    tips: ["Buena herramienta para que los clientes regresen."],
+  },
+  {
+    seccion: "devoluciones",
+    perm: "ventas.leer",
+    titulo: "Devoluciones",
+    resumen: "Gestiona cuando un cliente regresa algo.",
+    paraQue: "Gestiona cuando un cliente regresa un producto.",
+    guia: [
+      "Busca la venta original.",
+      "Registra la devolución (el producto puede regresar a inventario).",
+      "Se genera el reembolso o nota de crédito.",
+    ],
+  },
+  {
+    seccion: "cxc",
+    perm: "cxc.leer",
+    titulo: "Cuentas por cobrar",
+    resumen: "Controla lo que te deben tus clientes.",
+    paraQue: "Controla lo que te deben tus clientes a crédito.",
+    guia: [
+      "Aquí ves quién te debe y cuánto.",
+      "Registra los pagos (abonos) que te van haciendo.",
+      "El saldo de cada cliente baja al instante.",
+    ],
+    tips: ["Revísalo seguido para cobrar a tiempo."],
+    tourId: "registrar-cobro-cxc",
   },
   {
     seccion: "clientes-b2b",
     perm: "clientes.leer",
     titulo: "Clientes de mayoreo",
     resumen: "Registra a quién le vendes al por mayor.",
+    paraQue: "Registra a quién le vendes al mayoreo, con sus datos fiscales y su crédito.",
     guia: [
       "Toca “+ Nuevo cliente”. Razón social, RFC y régimen son obligatorios.",
       "Puedes fijarle su lista de precios y sus días de crédito.",
       "Al venderle se aplican sus precios y condiciones.",
+    ],
+    dudas: [
+      [
+        "¿Puedo darle crédito?",
+        "Sí; define sus días de crédito y lo controlas en Cuentas por cobrar.",
+      ],
     ],
     tourId: "dar-alta-cliente-mayoreo",
   },
@@ -91,11 +242,13 @@ const MODULOS: ModuloAyuda[] = [
     perm: "precios.leer",
     titulo: "Listas de precios",
     resumen: "Precios especiales (mayoreo, por cliente…).",
+    paraQue: "Precios especiales distintos al público, para mayoreo o clientes específicos.",
     guia: [
-      "Toca “+ Nueva lista” y ponle nombre (ej. “Mayoreo”).",
+      "Toca “+ Nueva lista”, ponle un código y un nombre.",
       "Define el precio especial de cada producto.",
       "Asigna la lista a tus clientes de mayoreo.",
     ],
+    tips: ["Puedes tener varias listas (ej. mayoreo, medio mayoreo)."],
     tourId: "crear-lista-precios",
   },
   {
@@ -103,115 +256,51 @@ const MODULOS: ModuloAyuda[] = [
     perm: "comisiones.gestionar",
     titulo: "Comisiones",
     resumen: "Cuánto gana cada vendedor por vender o cobrar.",
+    paraQue: "Define cuánto gana cada vendedor por vender o por cobrar.",
     guia: [
       "Toca “+ Nueva regla” y define el porcentaje (ej. 5%).",
       "Elige si es sobre la venta o sobre el cobro.",
       "Puedes limitarla a una categoría o producto.",
     ],
+    dudas: [
+      ["¿Se calcula sola?", "Sí, el vendedor gana su comisión automáticamente en cada venta."],
+    ],
     tourId: "crear-comision",
   },
   {
-    seccion: "usuarios",
-    perm: "usuarios.leer",
-    titulo: "Usuarios y permisos",
-    resumen: "Da de alta a tu equipo y define qué ve cada quien.",
+    seccion: "reportes",
+    perm: "reportes.ventas",
+    titulo: "Reportes",
+    resumen: "Cómo va tu negocio en números.",
+    paraQue: "Cómo va tu negocio en números: ventas por día, producto, vendedor…",
     guia: [
-      "Toca “+ Nuevo usuario”: nombre, correo y contraseña.",
-      "Asígnale un rol; solo verá lo que su rol permite.",
-      "En la pestaña Roles puedes crear roles a tu medida.",
+      "Cambia el rango de fechas para comparar periodos.",
+      "Revisa qué se vende más y quién vende más.",
+      "Úsalo para tomar decisiones con datos.",
     ],
-    tourId: "dar-alta-usuario",
+    tips: ["Revisa tus reportes al cierre de cada semana."],
   },
   {
-    seccion: "compras",
-    perm: "compras_oc.leer",
-    titulo: "Compras (órdenes de compra)",
-    resumen: "Pídele mercancía a tus proveedores.",
+    seccion: "dashboard",
+    perm: "reportes.ventas",
+    titulo: "Resumen",
+    resumen: "Un vistazo rápido a tus números de hoy.",
+    paraQue: "Un vistazo rápido a los números clave de tu negocio hoy.",
     guia: [
-      "Crea una orden de compra con el proveedor y los productos.",
-      "Cuando llegue la mercancía, márcala como recibida.",
-      "Tu inventario sube automáticamente al recibirla.",
-    ],
-    tourId: "crear-orden-compra",
-  },
-  {
-    seccion: "cxc",
-    perm: "cxc.leer",
-    titulo: "Cuentas por cobrar",
-    resumen: "Controla lo que te deben tus clientes.",
-    guia: [
-      "Aquí ves quién te debe y cuánto.",
-      "Registra los pagos (abonos) que te van haciendo.",
-      "El saldo de cada cliente se actualiza al instante.",
-    ],
-    tourId: "registrar-cobro-cxc",
-  },
-  {
-    seccion: "promociones",
-    perm: "promociones.gestionar",
-    titulo: "Promociones",
-    resumen: "Descuentos automáticos para vender más.",
-    guia: [
-      "Crea ofertas: 2x1, % de descuento o precio especial.",
-      "Elige a qué productos aplican y su vigencia.",
-      "Se aplican solas al cobrar, en el POS y en línea.",
-    ],
-    tourId: "crear-promocion",
-  },
-  {
-    seccion: "monedero",
-    perm: "ventas.crear",
-    titulo: "Monedero y tarjetas de regalo",
-    resumen: "Puntos de lealtad y gift cards.",
-    guia: [
-      "El monedero acumula saldo a favor de tus clientes.",
-      "Las tarjetas de regalo se venden y se canjean en el POS.",
-      "Todo el saldo queda controlado y registrado.",
+      "Míralo al entrar para saber cómo vas.",
+      "Profundiza en Reportes cuando necesites detalle.",
     ],
   },
   {
-    seccion: "devoluciones",
-    perm: "ventas.leer",
-    titulo: "Devoluciones",
-    resumen: "Gestiona cuando un cliente regresa algo.",
+    seccion: "tienda",
+    perm: "ecommerce.configurar",
+    titulo: "Tienda online",
+    resumen: "Vende por internet con tu propia tienda.",
+    paraQue: "Tu tienda por internet para vender fuera del mostrador.",
     guia: [
-      "Busca la venta y registra la devolución.",
-      "El producto regresa a inventario (si aplica).",
-      "Se genera el reembolso o nota de crédito.",
-    ],
-  },
-  {
-    seccion: "automatizaciones",
-    perm: "plantillas.gestionar",
-    titulo: "Automatizaciones",
-    resumen: "Mensajes automáticos a tus clientes.",
-    guia: [
-      "Configura mensajes que se envían solos (WhatsApp, etc.).",
-      "Ej. agradecer una compra o recuperar un carrito.",
-      "Una vez activas, trabajan solas por ti.",
-    ],
-    tourId: "crear-automatizacion",
-  },
-  {
-    seccion: "importador",
-    perm: "productos.bulk_import",
-    titulo: "Carga masiva",
-    resumen: "Importa muchos productos desde un archivo.",
-    guia: [
-      "Descarga la plantilla y llénala con tus productos.",
-      "Súbela; el sistema valida y te avisa si hay errores.",
-      "Confirma y todos se cargan de una vez.",
-    ],
-  },
-  {
-    seccion: "etiquetas",
-    perm: "productos.leer",
-    titulo: "Etiquetas y códigos",
-    resumen: "Imprime etiquetas con código de barras.",
-    guia: [
-      "Elige los productos y el formato de etiqueta.",
-      "Genera e imprime las etiquetas.",
-      "Pégalas y ya podrás escanearlas en el POS.",
+      "Configura el nombre, logo y datos de tu tienda.",
+      "Publica los productos que quieras vender en línea.",
+      "Recibes los pedidos en “Pedidos online”.",
     ],
   },
   {
@@ -219,8 +308,9 @@ const MODULOS: ModuloAyuda[] = [
     perm: "ecommerce.pedidos_leer",
     titulo: "Pedidos online",
     resumen: "Los pedidos que llegan de tu tienda web.",
+    paraQue: "Los pedidos que llegan de tu tienda en línea.",
     guia: [
-      "Aquí ves los pedidos de tu tienda en línea.",
+      "Revisa cada pedido y su detalle.",
       "Cambia su estado (preparando, enviado, entregado).",
       "El cliente recibe avisos automáticos.",
     ],
@@ -230,10 +320,11 @@ const MODULOS: ModuloAyuda[] = [
     perm: "ecommerce.envios_gestionar",
     titulo: "Envíos",
     resumen: "Guías y paqueterías de tus pedidos.",
+    paraQue: "Genera las guías y elige paquetería para tus pedidos.",
     guia: [
-      "Genera la guía de envío del pedido.",
-      "Elige la paquetería y se registra el rastreo.",
-      "El cliente puede seguir su paquete.",
+      "Genera la guía del pedido.",
+      "Elige la paquetería; se registra el rastreo.",
+      "El cliente sigue su paquete.",
     ],
   },
   {
@@ -241,21 +332,42 @@ const MODULOS: ModuloAyuda[] = [
     perm: "ecommerce.resenas_moderar",
     titulo: "Reseñas",
     resumen: "Modera lo que opinan tus clientes.",
+    paraQue: "Modera lo que opinan tus clientes sobre tus productos.",
     guia: [
-      "Revisa las reseñas que dejan tus clientes.",
+      "Revisa las reseñas.",
       "Apruébalas o recházalas.",
       "Las aprobadas se muestran en tu tienda.",
     ],
+    tips: ["Las buenas reseñas ayudan a vender más."],
   },
   {
     seccion: "preguntas",
     perm: "ecommerce.resenas_moderar",
     titulo: "Preguntas",
     resumen: "Responde dudas de tus compradores.",
+    paraQue: "Responde las dudas que dejan los compradores en tus productos.",
     guia: [
-      "Aquí llegan las preguntas sobre tus productos.",
+      "Aquí llegan las preguntas.",
       "Respóndelas para ayudar a decidir la compra.",
-      "Se muestran públicamente en la ficha del producto.",
+      "Se muestran en la ficha del producto.",
+    ],
+  },
+  {
+    seccion: "portal-b2b",
+    perm: "configuracion.actualizar",
+    titulo: "Portal mayorista (dominio propio)",
+    resumen: "Que tus clientes de mayoreo pidan solos.",
+    paraQue: "Que tus clientes de mayoreo hagan pedidos solos, en un portal con tu marca.",
+    guia: [
+      "Conecta un dominio propio (ej. pedidos.tu-negocio.com).",
+      "Sigue las instrucciones de DNS que te muestra la pantalla.",
+      "Tus clientes entran a tu portal con tu marca.",
+    ],
+    dudas: [
+      [
+        "¿Necesito saber de dominios?",
+        "No: pegas tu dominio y la pantalla te dice qué registro crear.",
+      ],
     ],
   },
   {
@@ -263,10 +375,17 @@ const MODULOS: ModuloAyuda[] = [
     perm: "cfdi.leer",
     titulo: "Facturación (CFDI)",
     resumen: "Emite facturas de tus ventas.",
+    paraQue: "Emite facturas (CFDI) de tus ventas.",
     guia: [
-      "Genera la factura (CFDI) de una venta.",
+      "Genera la factura de una venta.",
       "Captura los datos fiscales del cliente.",
       "Se timbra y queda lista para descargar o enviar.",
+    ],
+    dudas: [
+      [
+        "¿Necesito algo para timbrar?",
+        "Sí, tus datos fiscales configurados; si falta algo, el sistema te avisa.",
+      ],
     ],
   },
   {
@@ -274,44 +393,58 @@ const MODULOS: ModuloAyuda[] = [
     perm: "cfdis_recibidos.leer",
     titulo: "Contabilidad",
     resumen: "Tus facturas recibidas y gastos.",
+    paraQue: "Tus facturas recibidas y gastos, listos para tu contador.",
     guia: [
       "Sube o recibe las facturas de tus proveedores.",
-      "El sistema las clasifica para tu contador.",
+      "El sistema las clasifica.",
       "Facilita tu declaración y deducciones.",
     ],
   },
   {
-    seccion: "reportes",
-    perm: "reportes.ventas",
-    titulo: "Reportes",
-    resumen: "Cómo va tu negocio en números.",
+    seccion: "usuarios",
+    perm: "usuarios.leer",
+    titulo: "Usuarios y permisos",
+    resumen: "Da de alta a tu equipo y define qué ve cada quien.",
+    paraQue: "Da de alta a tu equipo y define qué puede hacer cada quien.",
     guia: [
-      "Consulta ventas por día, producto, vendedor…",
-      "Cambia el rango de fechas para comparar.",
-      "Úsalo para tomar decisiones con datos.",
+      "Toca “+ Nuevo usuario”: nombre, correo y contraseña.",
+      "Asígnale un rol; solo verá lo que su rol permite.",
+      "En la pestaña Roles puedes crear roles a tu medida.",
     ],
+    dudas: [
+      [
+        "¿Un cajero verá mis reportes?",
+        "No, si su rol no lo permite; el sistema le oculta lo que no puede usar.",
+      ],
+    ],
+    tourId: "dar-alta-usuario",
   },
   {
-    seccion: "configuracion",
-    perm: "configuracion.leer",
-    titulo: "Configuración",
-    resumen: "Ajusta tu negocio a tu medida.",
+    seccion: "automatizaciones",
+    perm: "plantillas.gestionar",
+    titulo: "Automatizaciones",
+    resumen: "Mensajes automáticos a tus clientes.",
+    paraQue: "Mensajes automáticos a tus clientes (WhatsApp, etc.).",
     guia: [
-      "Datos del negocio, sucursales, impuestos e impresión.",
-      "Cambia lo que necesites cuando lo necesites.",
-      "Guarda y aplica de inmediato.",
+      "Toca crear una nueva.",
+      "Elige qué la dispara (tras una compra, carrito abandonado…).",
+      "Elige la plantilla/campaña que se envía y guárdala.",
     ],
+    tips: ["Una vez activas, trabaja sola por ti."],
+    tourId: "crear-automatizacion",
   },
   {
     seccion: "suscripcion",
     perm: "*",
     titulo: "Mi suscripción y cobros a clientes",
     resumen: "Tu plan, tu tarjeta y cómo aceptar pagos.",
+    paraQue: "Tu plan, tu tarjeta de pago y cómo aceptar tarjetas de tus clientes.",
     guia: [
       "Guarda la tarjeta con la que se cobra tu plan.",
       "Con “Conectar con Stripe” aceptas tarjetas de tus clientes.",
       "El dinero de esas ventas llega directo a tu cuenta.",
     ],
+    dudas: [["¿Quién ve esta sección?", "Solo el dueño del negocio."]],
     tourId: "agregar-tarjeta",
   },
   {
@@ -319,33 +452,30 @@ const MODULOS: ModuloAyuda[] = [
     perm: "configuracion.leer",
     titulo: "Seguridad y huella",
     resumen: "Entra con huella y protege tu cuenta.",
+    paraQue: "Entra con tu huella o Face ID y protege tu cuenta.",
     guia: [
       "Toca “Activar huella en este dispositivo” y confirma con tu dedo.",
       "Luego podrás entrar sin contraseña, solo con tu huella.",
-      "También puedes activar verificación en dos pasos (2FA).",
+      "Opcional: activa verificación en dos pasos (2FA).",
+    ],
+    dudas: [
+      [
+        "¿Es seguro?",
+        "Sí; tu huella nunca sale de tu teléfono (es un passkey, estándar de Apple/Google).",
+      ],
     ],
     tourId: "activar-huella",
   },
   {
-    seccion: "tienda",
-    perm: "ecommerce.configurar",
-    titulo: "Tienda online",
-    resumen: "Vende por internet con tu propia tienda.",
+    seccion: "configuracion",
+    perm: "configuracion.leer",
+    titulo: "Configuración",
+    resumen: "Ajusta tu negocio a tu medida.",
+    paraQue: "Ajusta tu negocio: datos, sucursales, impuestos e impresión.",
     guia: [
-      "Configura el nombre, logo y datos de tu tienda.",
-      "Publica los productos que quieras vender en línea.",
-      "Recibes los pedidos en la sección “Pedidos online”.",
-    ],
-  },
-  {
-    seccion: "portal-b2b",
-    perm: "configuracion.actualizar",
-    titulo: "Portal mayorista con tu dominio",
-    resumen: "Que tus clientes de mayoreo pidan solos.",
-    guia: [
-      "Conecta un dominio propio (ej. pedidos.tu-negocio.com).",
-      "Sigue las instrucciones de DNS que te muestra la pantalla.",
-      "Tus clientes entran a tu portal con tu marca.",
+      "Entra a la pestaña que quieras ajustar.",
+      "Cambia lo necesario.",
+      "Guarda; se aplica de inmediato.",
     ],
   },
 ];
@@ -365,6 +495,7 @@ export function AyudaPage() {
       (m) =>
         m.titulo.toLowerCase().includes(t) ||
         m.resumen.toLowerCase().includes(t) ||
+        m.paraQue.toLowerCase().includes(t) ||
         m.guia.some((g) => g.toLowerCase().includes(t)),
     );
   }, [q]);
@@ -374,8 +505,8 @@ export function AyudaPage() {
       <h1 className="font-bold text-2xl text-slate-800">Ayuda</h1>
       <p className="mt-1 text-slate-500 text-sm">
         Manual de cada sección que puedes usar. En cualquiera toca{" "}
-        <b className="text-brand">Guíame paso a paso</b> y te acompaño de forma interactiva a hacer
-        el proceso, las veces que quieras.
+        <b className="text-brand">Guíame paso a paso</b> y te acompaño de forma interactiva, las
+        veces que quieras.
       </p>
 
       <div className="mt-5">
@@ -404,6 +535,13 @@ export function AyudaPage() {
               </summary>
 
               <div className="mt-3 border-slate-100 border-t pt-3">
+                <p className="mb-3 text-slate-600 text-sm">
+                  <b className="text-slate-700">¿Para qué sirve?</b> {m.paraQue}
+                </p>
+
+                <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                  Cómo se hace
+                </p>
                 <ol className="mb-3 space-y-1.5">
                   {m.guia.map((g, i) => (
                     <li key={g} className="flex gap-2 text-slate-600 text-sm">
@@ -412,6 +550,31 @@ export function AyudaPage() {
                     </li>
                   ))}
                 </ol>
+
+                {m.tips?.length ? (
+                  <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
+                    {m.tips.map((t) => (
+                      <p key={t} className="text-amber-700 text-sm">
+                        💡 {t}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+
+                {m.dudas?.length ? (
+                  <div className="mb-3">
+                    <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                      Dudas comunes
+                    </p>
+                    {m.dudas.map(([pregunta, respuesta]) => (
+                      <div key={pregunta} className="mb-2">
+                        <p className="font-medium text-slate-700 text-sm">{pregunta}</p>
+                        <p className="text-slate-500 text-sm">{respuesta}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-2">
                   {m.tourId && (
                     <button
