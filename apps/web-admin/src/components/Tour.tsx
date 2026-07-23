@@ -18,10 +18,10 @@ interface Rect {
 const PAD = 6;
 
 /**
- * Recorrido guiado tipo coach-marks: resalta el elemento real (por su
- * `data-tour`) y explica el paso en una tarjeta inferior. Se lanza con el evento
- * "gaes-tour". El tour de bienvenida se ofrece una sola vez y respeta si el
- * usuario lo deshabilita.
+ * Recorrido guiado tipo coach-marks: navega a la sección, abre el diálogo si el
+ * paso lo pide (`abrir`), resalta el elemento real (`anchor`, botón o campo) con
+ * un aro que pulsa, y explica el paso en una tarjeta inferior con progreso,
+ * Atrás/Siguiente, Salir y Repetir. Se lanza con el evento "gaes-tour".
  */
 export function Tour() {
   const [tour, setTour] = useState<TourDef | null>(null);
@@ -60,7 +60,7 @@ export function Tour() {
     return undefined;
   }, [iniciar]);
 
-  // Navega a la sección del paso y localiza el elemento a resaltar.
+  // Navega a la sección, abre el diálogo si aplica, y localiza el elemento.
   useEffect(() => {
     if (!tour) return;
     const step = tour.pasos[paso];
@@ -73,7 +73,8 @@ export function Tour() {
       return;
     }
     let intentos = 0;
-    let raf = 0;
+    let clicado = false;
+    let timer = 0;
     const buscar = () => {
       const el = document.querySelector<HTMLElement>(`[data-tour="${step.anchor}"]`);
       if (el) {
@@ -82,11 +83,16 @@ export function Tour() {
         setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
         return;
       }
-      if (intentos++ < 20) raf = window.setTimeout(buscar, 80);
+      // Si el elemento aún no existe y el paso pide abrir un diálogo, lo abrimos.
+      if (step.abrir && !clicado) {
+        clicado = true;
+        document.querySelector<HTMLElement>(`[data-tour="${step.abrir}"]`)?.click();
+      }
+      if (intentos++ < 30) timer = window.setTimeout(buscar, 100);
       else setRect(null);
     };
     buscar();
-    return () => window.clearTimeout(raf);
+    return () => window.clearTimeout(timer);
   }, [tour, paso]);
 
   // Reposiciona el resaltado si cambia el tamaño de la ventana.
@@ -114,26 +120,45 @@ export function Tour() {
 
   return (
     <div className="fixed inset-0 z-[60]" aria-label={tour.nombre}>
+      <style>
+        {
+          "@keyframes gaesTourPulse{0%,100%{box-shadow:0 0 0 3px #0f766e,0 0 0 7px rgba(15,118,110,.30)}50%{box-shadow:0 0 0 3px #0f766e,0 0 0 13px rgba(15,118,110,.12)}}"
+        }
+      </style>
+
       {/* Capa oscura que atrapa toques fuera del resaltado */}
       <button
         type="button"
         aria-label="Cerrar recorrido"
         onClick={cerrar}
-        className="absolute inset-0 h-full w-full cursor-default bg-slate-900/55"
+        className="absolute inset-0 h-full w-full cursor-default bg-slate-900/60"
       />
 
-      {/* Resaltado del elemento */}
       {rect && (
-        <div
-          className="pointer-events-none absolute rounded-xl ring-4 ring-brand ring-offset-2 ring-offset-transparent transition-all"
-          style={{
-            top: rect.top - PAD,
-            left: rect.left - PAD,
-            width: rect.width + PAD * 2,
-            height: rect.height + PAD * 2,
-            boxShadow: "0 0 0 9999px rgba(15,23,42,0.55)",
-          }}
-        />
+        <>
+          {/* Recorte de la zona resaltada (deja ver el elemento real, sin oscurecer) */}
+          <div
+            className="pointer-events-none absolute rounded-xl"
+            style={{
+              top: rect.top - PAD,
+              left: rect.left - PAD,
+              width: rect.width + PAD * 2,
+              height: rect.height + PAD * 2,
+              boxShadow: "0 0 0 9999px rgba(15,23,42,0.60)",
+            }}
+          />
+          {/* Aro que pulsa */}
+          <div
+            className="pointer-events-none absolute rounded-xl transition-all"
+            style={{
+              top: rect.top - PAD,
+              left: rect.left - PAD,
+              width: rect.width + PAD * 2,
+              height: rect.height + PAD * 2,
+              animation: "gaesTourPulse 1.4s ease-in-out infinite",
+            }}
+          />
+        </>
       )}
 
       {/* Tarjeta guía (abajo, cómoda en móvil) */}
@@ -153,13 +178,13 @@ export function Tour() {
             <button
               type="button"
               onClick={cerrar}
-              className="text-slate-400 text-sm hover:text-slate-600"
+              className="rounded-lg px-2 py-1 font-medium text-slate-400 text-sm hover:bg-slate-100 hover:text-slate-600"
             >
               Salir ✕
             </button>
           </div>
 
-          <h3 className="font-bold text-slate-800 text-lg">{step.titulo}</h3>
+          <h3 className="font-bold text-lg text-slate-800">{step.titulo}</h3>
           <p className="mt-1 text-slate-600 text-sm">{step.texto}</p>
 
           <div className="mt-4 flex items-center justify-between gap-2">
@@ -184,14 +209,38 @@ export function Tour() {
                 ← Atrás
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => (esUltimo ? cerrar() : setPaso((p) => p + 1))}
-              className="rounded-lg bg-brand px-5 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
-            >
-              {esUltimo ? "¡Entendido!" : "Siguiente →"}
-            </button>
+
+            {esUltimo ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaso(0)}
+                  className="rounded-lg border border-brand px-4 py-2 font-semibold text-brand text-sm hover:bg-brand/5"
+                >
+                  ↻ Repetir
+                </button>
+                <button
+                  type="button"
+                  onClick={cerrar}
+                  className="rounded-lg bg-brand px-5 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                >
+                  ¡Entendido!
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPaso((p) => p + 1)}
+                className="rounded-lg bg-brand px-5 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+              >
+                Siguiente →
+              </button>
+            )}
           </div>
+
+          <p className="mt-3 border-slate-100 border-t pt-2 text-center text-[11px] text-slate-400">
+            Puedes <b>Salir ✕</b> cuando quieras y repetir este recorrido desde <b>Ayuda</b>.
+          </p>
         </div>
       </div>
     </div>

@@ -299,6 +299,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           {!producto ? (
             <>
               <input
+                data-tour="inv-f-buscar"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar producto por nombre o SKU…"

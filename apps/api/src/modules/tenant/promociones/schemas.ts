@@ -13,46 +13,55 @@ const tipoEnum = z.enum([
   "happy_hour",
 ]);
 
-export const promocionCreateSchema = z.object({
-  nombre: z.string().min(1).max(160),
-  descripcion: z.string().max(1000).optional(),
-  tipo: tipoEnum,
-  acciones: z.record(z.string(), z.unknown()).default({}),
-  condiciones: z.record(z.string(), z.unknown()).default({}),
-  vigenciaInicio: z.string().datetime(),
-  vigenciaFin: z.string().datetime().optional(),
-  horarios: z
-    .object({
-      dias: z.array(z.number().int().min(0).max(6)).optional(),
-      horaInicio: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .optional(),
-      horaFin: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .optional(),
-    })
-    .optional(),
-  canales: z.array(z.enum(["pos", "ecommerce", "b2b", "todos"])).default(["todos"]),
-  sucursalesAplicables: z.array(z.string()).default([]),
-  stackConOtras: z.boolean().default(false),
-  prioridad: z.number().int().min(1).max(1000).default(100),
-  limiteUsosTotal: z.number().int().min(1).optional(),
-  limiteUsosCliente: z.number().int().min(1).optional(),
-  requiereCodigo: z.boolean().default(false),
-  codigo: z.string().max(40).optional(),
-  productos: z
-    .array(
-      z.object({
-        productoId: z.string().min(1),
-        rol: z
-          .enum(["incluido", "excluido", "regalo", "comprado", "requerido"])
-          .default("incluido"),
-      }),
-    )
-    .optional(),
-});
+export const promocionCreateSchema = z
+  .object({
+    nombre: z.string().min(1).max(160),
+    descripcion: z.string().max(1000).optional(),
+    tipo: tipoEnum,
+    acciones: z.record(z.string(), z.unknown()).default({}),
+    condiciones: z.record(z.string(), z.unknown()).default({}),
+    vigenciaInicio: z.string().datetime(),
+    vigenciaFin: z.string().datetime().optional(),
+    horarios: z
+      .object({
+        dias: z.array(z.number().int().min(0).max(6)).optional(),
+        horaInicio: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+        horaFin: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+      })
+      .optional(),
+    canales: z.array(z.enum(["pos", "ecommerce", "b2b", "todos"])).default(["todos"]),
+    sucursalesAplicables: z.array(z.string()).default([]),
+    stackConOtras: z.boolean().default(false),
+    prioridad: z.number().int().min(1).max(1000).default(100),
+    limiteUsosTotal: z.number().int().min(1).optional(),
+    limiteUsosCliente: z.number().int().min(1).optional(),
+    requiereCodigo: z.boolean().default(false),
+    codigo: z.string().max(40).optional(),
+    productos: z
+      .array(
+        z.object({
+          productoId: z.string().min(1),
+          rol: z
+            .enum(["incluido", "excluido", "regalo", "comprado", "requerido"])
+            .default("incluido"),
+        }),
+      )
+      .optional(),
+  })
+  .refine((p) => !p.vigenciaFin || new Date(p.vigenciaFin) > new Date(p.vigenciaInicio), {
+    message: "vigenciaFin debe ser posterior a vigenciaInicio",
+    path: ["vigenciaFin"],
+  })
+  .refine((p) => !p.requiereCodigo || (p.codigo?.trim().length ?? 0) > 0, {
+    message: "requiereCodigo exige un codigo no vacío",
+    path: ["codigo"],
+  });
 
 export const promocionUpdateSchema = z.object({
   nombre: z.string().min(1).max(160).optional(),

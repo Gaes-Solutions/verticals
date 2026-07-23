@@ -205,6 +205,7 @@ function ProductoModal({
           {!editando && (
             <Field label="SKU">
               <input
+                data-tour="prod-f-sku"
                 value={skuPadre}
                 onChange={(e) => setSkuPadre(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
@@ -213,6 +214,7 @@ function ProductoModal({
           )}
           <Field label="Nombre">
             <input
+              data-tour="prod-f-nombre"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
@@ -223,6 +225,7 @@ function ProductoModal({
               <input
                 type="number"
                 step="0.01"
+                data-tour="prod-f-precio"
                 value={precioBase}
                 onChange={(e) => setPrecioBase(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
@@ -291,6 +294,7 @@ function ProductoModal({
           </button>
           <button
             type="button"
+            data-tour="prod-f-guardar"
             onClick={guardar}
             disabled={guardando || !nombre || (!editando && (!skuPadre || !precioBase))}
             className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"

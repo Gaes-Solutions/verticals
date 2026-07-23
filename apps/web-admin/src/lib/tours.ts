@@ -3,6 +3,9 @@ export interface TourStep {
   seccion?: string;
   /** data-tour del elemento a resaltar. Si falta, el paso solo muestra texto. */
   anchor?: string;
+  /** data-tour de un botón que se hace click para abrir un diálogo/modal antes
+   * de resaltar `anchor` (que suele estar dentro de ese diálogo). */
+  abrir?: string;
   titulo: string;
   texto: string;
 }
@@ -66,16 +69,28 @@ export const TOURS: TourDef[] = [
       {
         anchor: "prod-nuevo",
         titulo: "Agrega uno nuevo",
-        texto: "Toca “+ Nuevo producto” para abrir el formulario.",
+        texto: "Toca “+ Nuevo producto”. (Ahora te abro el formulario para mostrarte cómo.)",
       },
       {
-        titulo: "Llena lo básico",
-        texto:
-          "Nombre, precio y (si usas código de barras) su clave. Con eso ya puedes vender; el resto es opcional.",
+        abrir: "prod-nuevo",
+        anchor: "prod-f-nombre",
+        titulo: "1) El nombre",
+        texto: "Escribe aquí cómo se llama el producto. Es lo único obligatorio junto al precio.",
       },
       {
-        titulo: "¡Y guardas! ✅",
-        texto: "Al guardar, tu producto queda listo para venderse en el POS y en línea.",
+        anchor: "prod-f-precio",
+        titulo: "2) El precio de venta",
+        texto: "Aquí va a cuánto lo vendes. Con nombre y precio ya puedes cobrarlo.",
+      },
+      {
+        anchor: "prod-f-sku",
+        titulo: "3) Código de barras (opcional)",
+        texto: "Si lo escaneas en caja, captura aquí su clave/código. Si no, déjalo vacío.",
+      },
+      {
+        anchor: "prod-f-guardar",
+        titulo: "4) ¡Guarda! ✅",
+        texto: "Toca Guardar y tu producto queda listo para venderse en el POS y en línea.",
       },
     ],
   },
@@ -93,12 +108,18 @@ export const TOURS: TourDef[] = [
       {
         anchor: "inv-nuevo",
         titulo: "Registra una entrada",
-        texto: "Toca “+ Entrada de inventario” para sumar mercancía que llegó.",
+        texto: "Toca “+ Entrada de inventario”. (Ahora te abro la ventana para mostrarte.)",
       },
       {
-        titulo: "Elige producto y cantidad",
+        abrir: "inv-nuevo",
+        anchor: "inv-f-buscar",
+        titulo: "1) Busca el producto",
+        texto: "Escribe el nombre o código y elígelo de la lista que aparece.",
+      },
+      {
+        titulo: "2) Cantidad y guardar",
         texto:
-          "Busca el producto, escribe cuántas piezas entraron y, si quieres, el motivo (compra, ajuste…).",
+          "Una vez elegido, escribe cuántas piezas entraron y el motivo (compra, ajuste…), y toca Guardar.",
       },
       {
         titulo: "¡Guardado! ✅",
