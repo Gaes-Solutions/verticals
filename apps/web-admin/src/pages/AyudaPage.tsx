@@ -319,12 +319,13 @@ const MODULOS: ModuloAyuda[] = [
     seccion: "envios",
     perm: "ecommerce.envios_gestionar",
     titulo: "Envíos",
-    resumen: "Guías y paqueterías de tus pedidos.",
-    paraQue: "Genera las guías y elige paquetería para tus pedidos.",
+    resumen: "Zonas y tarifas de envío de tu tienda.",
+    paraQue:
+      "Define a qué zonas envías y cuánto cobras; ese costo le aparece solo al cliente al pagar en tu tienda.",
     guia: [
-      "Genera la guía del pedido.",
-      "Elige la paquetería; se registra el rastreo.",
-      "El cliente sigue su paquete.",
+      "Crea una zona de envío (ej. Nacional) con los estados que cubre.",
+      "Dentro de la zona, agrega sus tarifas: costo, envío gratis desde $ y días.",
+      "El checkout de tu tienda calcula el envío según la zona del cliente.",
     ],
   },
   {
@@ -470,12 +471,13 @@ const MODULOS: ModuloAyuda[] = [
     seccion: "configuracion",
     perm: "configuracion.leer",
     titulo: "Configuración",
-    resumen: "Ajusta tu negocio a tu medida.",
-    paraQue: "Ajusta tu negocio: datos, sucursales, impuestos e impresión.",
+    resumen: "Tope de descuento manual del POS.",
+    paraQue:
+      "Define el descuento máximo (%) que un cajero normal puede aplicar en una venta; los roles con permiso especial y el dueño pueden pasarlo.",
     guia: [
-      "Entra a la pestaña que quieras ajustar.",
-      "Cambia lo necesario.",
-      "Guarda; se aplica de inmediato.",
+      "Escribe el descuento máximo permitido (ej. 10%).",
+      "Usa 100 si no quieres tope.",
+      "Guarda; se aplica de inmediato en el POS.",
     ],
   },
 ];
