@@ -30,10 +30,26 @@ Tienda → Dominio propio**; el sistema le recomienda los registros DNS.
 
 | Var | Dónde | Para qué |
 |-----|-------|----------|
-| `STOREFRONT_APEX` | API | Apex de subdominios de plataforma (ej. `gaessoft.shop`). Si se define, el subdominio del tenant se registra como host verificado. |
+| `STOREFRONT_APEX` | API | Apex de subdominios de plataforma. Decisión 2026-07-22: `shop.angaes.com`. Si se define, el subdominio del tenant se registra como host verificado. |
 | `STOREFRONT_CNAME_TARGET` | API | Destino CNAME recomendado al dueño (default `stores.gaessoft.mx`). |
 | `TIENDA_SERVICE_ACCOUNTS` | web-tienda | JSON `{"slug":{"email":"..","password":".."}}` con la cuenta de servicio por tenant, para servir varias tiendas por dominio desde un mismo deployment. Si falta un slug, usa `TIENDA_USER_EMAIL/PASSWORD`. |
 | `TIENDA_TENANT_SLUG` / `TIENDA_USER_EMAIL` / `TIENDA_USER_PASSWORD` | web-tienda | Tenant + credenciales por defecto (deployment de una sola tienda). |
+
+## Activación en producción (decisión 2026-07-22: `shop.angaes.com`)
+
+Las tiendas de los tenants viven en `<slug>.shop.angaes.com` reutilizando el
+dominio ya comprado (angaes.com, Hostinger). Tres pasos, una sola vez:
+
+1. **Railway** (servicio web-tienda): variable `STOREFRONT_APEX=shop.angaes.com`
+   en el API, y en el servicio de tienda agregar el Custom Domain comodín
+   `*.shop.angaes.com` (Railway da un CNAME target).
+2. **Hostinger** (DNS de angaes.com): crear el CNAME comodín
+   `*.shop → <target de Railway>` (mismo target que ya usa `shop`).
+3. **Backfill** (registra las tiendas ya configuradas):
+   `pnpm --filter @gaespos/api backfill:tienda-dominios`.
+
+`shop.angaes.com` sin subdominio sigue sirviendo el tenant por env
+(`TIENDA_TENANT_SLUG`), igual que hoy.
 
 ## Lo que falta (Piezas 3 y 4 — requieren infra/decisión de Gaby)
 
