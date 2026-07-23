@@ -296,6 +296,7 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [cantRegalo, setCantRegalo] = useState("1");
   const [descPct, setDescPct] = useState("100");
   const [inicio, setInicio] = useState(ahoraLocalInput);
+  const [fin, setFin] = useState("");
   const [activar, setActivar] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -349,6 +350,7 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           tipo,
           acciones: buildAcciones(),
           vigenciaInicio: new Date(inicio).toISOString(),
+          ...(fin ? { vigenciaFin: new Date(fin).toISOString() } : {}),
           canales: ["todos"],
           ...(buildProductos() ? { productos: buildProductos() } : {}),
         },
@@ -517,6 +519,19 @@ function NuevaPromoModal({ onClose, onDone }: { onClose: () => void; onDone: () 
               onChange={(e) => setInicio(e.target.value)}
               className="gx-input"
             />
+          </label>
+          <label className="block">
+            <span className="gx-label">Termina (opcional)</span>
+            <input
+              type="datetime-local"
+              value={fin}
+              min={inicio}
+              onChange={(e) => setFin(e.target.value)}
+              className="gx-input"
+            />
+            <span className="mt-1 block text-slate-400 text-xs">
+              Déjalo vacío si la promo no tiene fecha de término.
+            </span>
           </label>
         </div>
 
