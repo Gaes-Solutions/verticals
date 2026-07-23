@@ -13,7 +13,7 @@ import {
   setToken,
   setUserId,
 } from "../lib/api.js";
-import { loginConPasskey, passkeyDisponible } from "../lib/passkey.js";
+import { huellaActivadaAqui, loginConPasskey, passkeyDisponible } from "../lib/passkey.js";
 import { BackupCodes } from "./BackupCodes.js";
 
 const SLUG_KEY = "gaespos_admin_slug";
@@ -214,7 +214,7 @@ export function Login({
             >
               {loading ? "Entrando…" : "Entrar"}
             </button>
-            {passkeyDisponible() && (
+            {passkeyDisponible() && huellaActivadaAqui() && (
               <>
                 <div className="my-3 flex items-center gap-3 text-slate-300 text-xs">
                   <span className="h-px flex-1 bg-slate-200" />o

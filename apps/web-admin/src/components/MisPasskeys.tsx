@@ -5,6 +5,7 @@ import {
   type PasskeyInfo,
   borrarPasskey,
   listarPasskeys,
+  marcarHuellaActivadaAqui,
   passkeyDisponible,
   registrarPasskey,
 } from "../lib/passkey.js";
@@ -61,6 +62,9 @@ export function MisPasskeys() {
 
   async function quitar(id: string) {
     await borrarPasskey(id).catch(() => undefined);
+    const quedan = lista.filter((p) => p.id !== id);
+    setLista(quedan);
+    if (quedan.length === 0) marcarHuellaActivadaAqui(false);
     cargar();
   }
 
