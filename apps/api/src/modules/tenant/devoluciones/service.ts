@@ -278,6 +278,28 @@ async function persistirDevolucion(
     },
   });
 
+  // El reembolso en efectivo sale del cajón: sin movimiento de caja, el corte
+  // reporta un faltante fantasma por el monto devuelto.
+  if (p.input.metodoReembolso === "efectivo" && p.input.cajaId) {
+    const apertura = await tx.cajaApertura.findFirst({
+      where: { cajaId: p.input.cajaId, estado: "abierta" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!apertura) {
+      throw new DevolucionError(409, "No hay apertura de caja abierta para reembolsar en efectivo");
+    }
+    await tx.cajaMovimiento.create({
+      data: {
+        aperturaId: apertura.id,
+        tipo: "salida_otro",
+        monto: p.totales.totalDev.toString(),
+        motivo: `Reembolso devolución ${folio}`,
+        referencia: folio,
+        usuarioId: p.usuarioId,
+      },
+    });
+  }
+
   for (const linea of p.lineasCalc) {
     await tx.devolucionLinea.create({
       data: {
