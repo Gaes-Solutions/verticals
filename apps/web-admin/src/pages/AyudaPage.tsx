@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { puede } from "../lib/api.js";
-import { lanzarTour } from "../lib/tours.js";
+import { lanzarTour, tourPorId } from "../lib/tours.js";
 
 interface ModuloAyuda {
   seccion: string;
@@ -524,78 +524,85 @@ export function AyudaPage() {
             No encontramos ayuda para “{q}”. Prueba con otra palabra.
           </p>
         ) : (
-          visibles.map((m) => (
-            <details key={m.seccion} className="group rounded-2xl bg-white p-4 shadow-sm">
-              <summary className="flex cursor-pointer items-center justify-between gap-3 list-none">
-                <span className="min-w-0">
-                  <span className="block font-semibold text-slate-800">{m.titulo}</span>
-                  <span className="block text-slate-500 text-sm">{m.resumen}</span>
-                </span>
-                <span className="text-slate-400 transition-transform group-open:rotate-180">⌄</span>
-              </summary>
+          visibles.map((m) => {
+            // Recorrido: el explícito, o el de orientación "ver-<sección>" si existe.
+            const tid =
+              m.tourId ?? (tourPorId(`ver-${m.seccion}`) ? `ver-${m.seccion}` : undefined);
+            return (
+              <details key={m.seccion} className="group rounded-2xl bg-white p-4 shadow-sm">
+                <summary className="flex cursor-pointer items-center justify-between gap-3 list-none">
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-800">{m.titulo}</span>
+                    <span className="block text-slate-500 text-sm">{m.resumen}</span>
+                  </span>
+                  <span className="text-slate-400 transition-transform group-open:rotate-180">
+                    ⌄
+                  </span>
+                </summary>
 
-              <div className="mt-3 border-slate-100 border-t pt-3">
-                <p className="mb-3 text-slate-600 text-sm">
-                  <b className="text-slate-700">¿Para qué sirve?</b> {m.paraQue}
-                </p>
+                <div className="mt-3 border-slate-100 border-t pt-3">
+                  <p className="mb-3 text-slate-600 text-sm">
+                    <b className="text-slate-700">¿Para qué sirve?</b> {m.paraQue}
+                  </p>
 
-                <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
-                  Cómo se hace
-                </p>
-                <ol className="mb-3 space-y-1.5">
-                  {m.guia.map((g, i) => (
-                    <li key={g} className="flex gap-2 text-slate-600 text-sm">
-                      <span className="font-semibold text-brand">{i + 1}.</span>
-                      <span>{g}</span>
-                    </li>
-                  ))}
-                </ol>
+                  <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                    Cómo se hace
+                  </p>
+                  <ol className="mb-3 space-y-1.5">
+                    {m.guia.map((g, i) => (
+                      <li key={g} className="flex gap-2 text-slate-600 text-sm">
+                        <span className="font-semibold text-brand">{i + 1}.</span>
+                        <span>{g}</span>
+                      </li>
+                    ))}
+                  </ol>
 
-                {m.tips?.length ? (
-                  <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
-                    {m.tips.map((t) => (
-                      <p key={t} className="text-amber-700 text-sm">
-                        💡 {t}
+                  {m.tips?.length ? (
+                    <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
+                      {m.tips.map((t) => (
+                        <p key={t} className="text-amber-700 text-sm">
+                          💡 {t}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {m.dudas?.length ? (
+                    <div className="mb-3">
+                      <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                        Dudas comunes
                       </p>
-                    ))}
-                  </div>
-                ) : null}
+                      {m.dudas.map(([pregunta, respuesta]) => (
+                        <div key={pregunta} className="mb-2">
+                          <p className="font-medium text-slate-700 text-sm">{pregunta}</p>
+                          <p className="text-slate-500 text-sm">{respuesta}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
-                {m.dudas?.length ? (
-                  <div className="mb-3">
-                    <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
-                      Dudas comunes
-                    </p>
-                    {m.dudas.map(([pregunta, respuesta]) => (
-                      <div key={pregunta} className="mb-2">
-                        <p className="font-medium text-slate-700 text-sm">{pregunta}</p>
-                        <p className="text-slate-500 text-sm">{respuesta}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-wrap gap-2">
-                  {m.tourId && (
+                  <div className="flex flex-wrap gap-2">
+                    {tid && (
+                      <button
+                        type="button"
+                        onClick={() => lanzarTour(tid)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                      >
+                        <Sparkles size={15} /> Guíame paso a paso
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => lanzarTour(m.tourId as string)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                      onClick={() => irA(m.seccion)}
+                      className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 text-sm hover:bg-slate-50"
                     >
-                      <Sparkles size={15} /> Guíame paso a paso
+                      Ir a la sección →
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => irA(m.seccion)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 text-sm hover:bg-slate-50"
-                  >
-                    Ir a la sección →
-                  </button>
+                  </div>
                 </div>
-              </div>
-            </details>
-          ))
+              </details>
+            );
+          })
         )}
       </div>
     </div>

@@ -474,7 +474,104 @@ export const TOURS: TourDef[] = [
       { titulo: "¡Guardada! ✅", texto: "Tu plan se cobrará automáticamente con esa tarjeta." },
     ],
   },
+  ...orientacion([
+    [
+      "importador",
+      "Carga masiva",
+      "Descarga la plantilla, llénala con tus productos y súbela para cargarlos todos de una vez.",
+    ],
+    [
+      "etiquetas",
+      "Etiquetas y códigos",
+      "Elige productos y formato, genera las etiquetas con código de barras e imprímelas.",
+    ],
+    [
+      "inventario-iq",
+      "Inteligencia de inventario",
+      "Elige un rango de días y revisa qué reponer y qué casi no se vende.",
+    ],
+    [
+      "ventas",
+      "Ventas",
+      "Consulta el detalle de cada venta. Para cobrar en mostrador usa la app de POS.",
+    ],
+    [
+      "monedero",
+      "Monedero y gift cards",
+      "Administra el saldo de lealtad de tus clientes y las tarjetas de regalo.",
+    ],
+    [
+      "devoluciones",
+      "Devoluciones",
+      "Busca la venta y registra la devolución; el producto puede volver a inventario.",
+    ],
+    [
+      "reportes",
+      "Reportes",
+      "Cambia el rango de fechas y revisa ventas por día, producto y vendedor.",
+    ],
+    [
+      "dashboard",
+      "Resumen",
+      "Un vistazo rápido a tus números de hoy; profundiza en Reportes cuando quieras.",
+    ],
+    [
+      "tienda",
+      "Tienda online",
+      "Configura tu tienda web y publica los productos que quieras vender en línea.",
+    ],
+    [
+      "pedidos",
+      "Pedidos online",
+      "Revisa los pedidos de tu tienda y cambia su estado (preparando, enviado, entregado).",
+    ],
+    [
+      "envios",
+      "Envíos",
+      "Genera la guía del pedido y elige paquetería; el cliente puede seguir su paquete.",
+    ],
+    ["resenas", "Reseñas", "Revisa y aprueba las reseñas; las aprobadas se muestran en tu tienda."],
+    ["preguntas", "Preguntas", "Responde las dudas que dejan tus compradores en los productos."],
+    [
+      "cfdi",
+      "Facturación (CFDI)",
+      "Genera la factura de una venta con los datos fiscales del cliente.",
+    ],
+    [
+      "contabilidad",
+      "Contabilidad",
+      "Sube o recibe las facturas de tus proveedores, listas para tu contador.",
+    ],
+    [
+      "configuracion",
+      "Configuración",
+      "Ajusta datos del negocio, sucursales, impuestos e impresión, y guarda.",
+    ],
+    [
+      "portal-b2b",
+      "Portal mayorista",
+      "Conecta un dominio propio y sigue las instrucciones de DNS para que tus clientes pidan en tu portal con tu marca.",
+    ],
+  ]),
 ];
+
+/** Genera recorridos de orientación (2 pasos) para apartados de solo consulta. */
+function orientacion(items: [string, string, string][]): TourDef[] {
+  return items.map(([seccion, titulo, texto]) => ({
+    id: `ver-${seccion}`,
+    nombre: titulo,
+    descripcion: "Un vistazo rápido a este apartado.",
+    pasos: [
+      {
+        seccion,
+        anchor: `nav-${seccion}`,
+        titulo,
+        texto: "Ya te traje a esta sección.",
+      },
+      { titulo: "¿Qué haces aquí?", texto },
+    ],
+  }));
+}
 
 export function tourPorId(id: string): TourDef | undefined {
   return TOURS.find((t) => t.id === id);
