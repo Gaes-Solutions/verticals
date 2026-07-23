@@ -44,6 +44,8 @@ export interface CrearPedidoInput {
   fechaEntregaEstimada?: Date;
   notas?: string;
   firmaDataUrl?: string;
+  /** Crédito disponible del cliente: un total que lo rebase exige aprobación interna. */
+  creditoDisponible?: string;
   lineas: PedidoLineaInput[];
 }
 
@@ -300,7 +302,9 @@ export async function crearPedido(
   const subtotal = new Decimal(ticket.subtotal.toString());
   const iva = lineas.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
   const descuento = Decimal.max(subtotal.minus(total), ZERO);
-  const estadoAprobacion = determinarAprobacion(cliente, total);
+  const excedeCredito =
+    input.creditoDisponible !== undefined && total.gt(new Decimal(input.creditoDisponible));
+  const estadoAprobacion = excedeCredito ? "pendiente" : determinarAprobacion(cliente, total);
   const configVendedores = await getConfigVendedores(client);
   if (configVendedores.firmaPedidoModo === "obligatoria" && !input.firmaDataUrl) {
     throw new PedidoError(422, "El negocio exige firma del cliente para levantar pedidos");

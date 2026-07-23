@@ -417,11 +417,21 @@ export async function crearPedidoPortal(
     resolverListaPrecioCliente(prisma, clienteB2bId),
   ]);
 
+  // Self-service: si el pedido rebasa el crédito disponible nace pendiente de
+  // aprobación para que el negocio decida antes de surtirlo (sin línea → contado).
+  let creditoDisponible: string | undefined;
+  try {
+    creditoDisponible = (await lineaCreditoDisponible(prisma, clienteB2bId)).disponible;
+  } catch (err) {
+    if (!(err instanceof CxcError)) throw err;
+  }
+
   try {
     return await crearPedido(prisma, vendedorId, {
       sucursalId: sucursal.id,
       clienteB2bId,
       lineas: input.lineas,
+      ...(creditoDisponible !== undefined ? { creditoDisponible } : {}),
       ...(listaPrecioCodigo ? { listaPrecioCodigo } : {}),
       ...(input.direccionEnvioId ? { direccionEnvioId: input.direccionEnvioId } : {}),
       ...(input.ordenCompraCliente ? { ordenCompraCliente: input.ordenCompraCliente } : {}),
