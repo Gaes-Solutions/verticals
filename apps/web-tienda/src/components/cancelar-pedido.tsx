@@ -49,7 +49,7 @@ export function CancelarPedido({ folio }: { folio: string }) {
 
       {abierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
             <h2 className="mb-1 font-bold text-lg">Cancelar compra</h2>
             <p className="mb-4 text-gray-500 text-sm">
               Si ya pagaste, te reembolsaremos. Solo se puede cancelar antes de que se envíe.
