@@ -704,13 +704,102 @@ function HelpPanel({
   onClose: () => void;
   onNavigate: (target: Seccion) => void;
 }) {
+  const manualChapters = [
+    {
+      title: "Cómo usar el sistema",
+      body: [
+        "El menú lateral izquierdo es para módulos de trabajo: ventas, inventario, tienda, clientes y administración.",
+        "El avatar de la esquina superior derecha es solo para tu usuario: mi cuenta, contraseña, ayuda, manual, idioma y salir.",
+        "Cada usuario ve únicamente las secciones permitidas por su rol. Si una opción no aparece, normalmente es por permisos.",
+      ],
+      targets: ["inicio", "ayuda"] as Seccion[],
+    },
+    {
+      title: "Antes de empezar a vender",
+      body: [
+        "Entra a Productos y da de alta lo que vendes. Lo mínimo para operar es nombre y precio.",
+        "Si manejas existencias, entra a Inventario y registra entradas para que el stock sea correcto.",
+        "Si tienes muchos productos, usa Carga masiva para subirlos desde archivo en lugar de capturarlos uno por uno.",
+        "Revisa Configuración, Seguridad y Usuarios si quieres definir reglas, accesos y protección de cuenta.",
+      ],
+      targets: ["productos", "inventario", "importador", "usuarios", "configuracion"] as Seccion[],
+    },
+    {
+      title: "Operación diaria",
+      body: [
+        "Al iniciar el día revisa Resumen para ver ventas, actividad y pendientes.",
+        "Consulta Ventas para revisar tickets ya generados; el cobro en mostrador se realiza desde el POS.",
+        "Usa Cobros / Links cuando quieras cobrar a distancia y enviar un link al cliente.",
+        "Si vendes a crédito, revisa Cuentas por cobrar y registra abonos conforme te paguen.",
+        "Si un cliente regresa mercancía, usa Devoluciones para dejar el movimiento registrado.",
+      ],
+      targets: ["dashboard", "ventas", "cobros", "cxc", "devoluciones"] as Seccion[],
+    },
+    {
+      title: "Inventario y compras",
+      body: [
+        "Productos define el catálogo comercial: nombre, precio, códigos y datos para vender.",
+        "Inventario controla cantidades disponibles por producto. Cada venta descuenta stock automáticamente.",
+        "Compras sirve para pedir mercancía al proveedor. El inventario sube cuando marcas la orden como recibida.",
+        "Etiquetas y códigos te ayuda a imprimir etiquetas para escanear productos en el POS.",
+        "Inteligencia de inventario sirve para detectar qué reponer y qué productos se están quedando parados.",
+      ],
+      targets: ["productos", "inventario", "compras", "etiquetas", "inventario-iq"] as Seccion[],
+    },
+    {
+      title: "Tienda online",
+      body: [
+        "Primero configura Tienda online con nombre, datos visibles, productos publicados y reglas básicas.",
+        "Los pedidos que lleguen desde internet se atienden en Pedidos online.",
+        "Configura Envíos para definir zonas, tarifas y condiciones de entrega.",
+        "Preguntas y Reseñas sirven para atender dudas de compradores y moderar opiniones visibles en la tienda.",
+      ],
+      targets: ["tienda", "pedidos", "envios", "preguntas", "resenas"] as Seccion[],
+    },
+    {
+      title: "Clientes, precios y marketing",
+      body: [
+        "Clientes mayoreo guarda clientes B2B con datos fiscales, crédito y condiciones comerciales.",
+        "Listas de precios define precios especiales por cliente o tipo de venta.",
+        "Promociones configura descuentos automáticos para POS y tienda cuando aplique.",
+        "Monedero / Gift cards ayuda a generar lealtad y saldos a favor.",
+        "Comisiones calcula cuánto gana cada vendedor según las reglas que definas.",
+        "Automatizaciones envía mensajes o campañas cuando ocurre un evento del negocio.",
+      ],
+      targets: [
+        "clientes-b2b",
+        "precios",
+        "promociones",
+        "monedero",
+        "comisiones",
+        "automatizaciones",
+      ] as Seccion[],
+    },
+    {
+      title: "Administración",
+      body: [
+        "Facturación emite o consulta CFDI relacionados con ventas.",
+        "Contabilidad concentra facturas recibidas y clasificación contable para facilitar revisión.",
+        "Usuarios y permisos define quién entra, qué rol tiene y qué puede hacer.",
+        "Seguridad protege cuentas con 2FA y passkeys cuando el rol lo permite.",
+        "Mi suscripción muestra plan, pagos y conexión para aceptar cobros con tarjeta.",
+      ],
+      targets: ["cfdi", "contabilidad", "usuarios", "seguridad", "suscripcion"] as Seccion[],
+    },
+  ];
+  const visibleByKey = new Map(
+    visibleGroups.flatMap((group) => group.items.map((item) => [item.key, item] as const)),
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-      <aside className="h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl">
+      <aside className="h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between border-slate-200 border-b bg-white px-5 py-4">
           <div>
-            <h2 className="font-bold text-slate-800 text-xl">Manual rápido</h2>
-            <p className="text-slate-500 text-sm">Índice práctico según tus permisos.</p>
+            <h2 className="font-bold text-slate-800 text-xl">Manual de uso</h2>
+            <p className="text-slate-500 text-sm">
+              Guia practica para operar el sistema por areas.
+            </p>
           </div>
           <button
             type="button"
@@ -721,36 +810,97 @@ function HelpPanel({
             <X size={20} />
           </button>
         </div>
-        <div className="space-y-4 p-5">
+        <div className="space-y-5 p-5">
           <button
             type="button"
             onClick={() => onNavigate("ayuda")}
             className="flex w-full items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-left text-brand text-sm hover:bg-brand/10"
           >
             <HelpCircle size={18} />
-            <span className="font-semibold">Abrir ayuda completa con buscador y guías</span>
+            <span className="font-semibold">
+              Abrir ayuda completa con buscador, preguntas y recorridos paso a paso
+            </span>
           </button>
 
-          {visibleGroups.map((group) => (
-            <section key={group.title}>
-              <h3 className="mb-2 font-semibold text-slate-500 text-xs uppercase tracking-wide">
-                {group.title}
-              </h3>
-              <div className="space-y-2">
-                {group.items.map((item) => (
-                  <button
-                    type="button"
-                    key={item.key}
-                    onClick={() => onNavigate(item.key)}
-                    className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-slate-700 text-sm hover:bg-slate-50"
-                  >
-                    <item.icon size={18} className="shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+          {manualChapters.map((chapter) => {
+            const targets = chapter.targets
+              .map((target) => visibleByKey.get(target))
+              .filter((item): item is NavItem => Boolean(item));
+            return (
+              <section key={chapter.title} className="rounded-lg border border-slate-200 p-4">
+                <h3 className="font-bold text-slate-800">{chapter.title}</h3>
+                <ol className="mt-3 space-y-2">
+                  {chapter.body.map((step, index) => (
+                    <li key={step} className="flex gap-2 text-slate-600 text-sm leading-6">
+                      <span className="font-semibold text-brand">{index + 1}.</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                {targets.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {targets.map((item) => (
+                      <button
+                        type="button"
+                        key={item.key}
+                        onClick={() => onNavigate(item.key)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-600 text-xs hover:bg-slate-50"
+                      >
+                        <item.icon size={15} className="shrink-0" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+
+          <section className="rounded-lg border border-slate-200 p-4">
+            <h3 className="font-bold text-slate-800">Referencia rapida de tu menu</h3>
+            <p className="mt-2 text-slate-500 text-sm">
+              Estas son las secciones disponibles para tu usuario en este momento.
+            </p>
+            <div className="mt-4 space-y-3">
+              {visibleGroups.map((group) => (
+                <div key={group.title}>
+                  <h4 className="mb-2 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                    {group.title}
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {group.items.map((item) => (
+                      <button
+                        type="button"
+                        key={item.key}
+                        onClick={() => onNavigate(item.key)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-slate-600 text-xs hover:bg-slate-50"
+                      >
+                        <item.icon size={15} className="shrink-0" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h3 className="font-bold text-slate-800">Diferencia entre Ayuda y Manual</h3>
+            <div className="mt-3 space-y-2 text-slate-600 text-sm leading-6">
+              <p>
+                <b>Manual:</b> explica el flujo general de trabajo y como se conectan los modulos.
+              </p>
+              <p>
+                <b>Ayuda completa:</b> sirve cuando buscas una funcion especifica, una pregunta o un
+                recorrido guiado dentro de una pantalla.
+              </p>
+              <p>
+                <b>Mi cuenta:</b> concentra acciones personales como cambiar contraseña, ayuda,
+                manual, idioma y salir.
+              </p>
+            </div>
+          </section>
         </div>
       </aside>
     </div>
