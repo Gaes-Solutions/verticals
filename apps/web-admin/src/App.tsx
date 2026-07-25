@@ -394,7 +394,7 @@ export function App() {
         <nav className="flex-1 overflow-y-auto px-2 pt-3 md:pt-0">
           {visibleGroups.map((group) => (
             <section key={group.title} className="mb-4">
-              <h2 className="px-3 pb-1.5 font-semibold text-[11px] text-slate-500 uppercase tracking-wide">
+              <h2 className="mb-1 rounded-md bg-slate-800/80 px-3 py-1.5 font-semibold text-[11px] text-slate-300 uppercase tracking-wide">
                 {group.title}
               </h2>
               {group.items.map((n) => (
@@ -421,19 +421,25 @@ export function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
-        <div className="mb-4 hidden items-center justify-end gap-2 md:flex">
-          <NotificacionesBell onOpenLink={abrirLink} />
-          <UserMenu
-            session={session}
-            open={userMenuOpen}
-            onToggle={() => setUserMenuOpen((v) => !v)}
-            onGoSecurity={() => navegar("seguridad")}
-            onChangePassword={abrirPassword}
-            onHelp={abrirAyuda}
-            onManual={abrirManual}
-            onLogout={handleLogout}
-            align="right"
-          />
+        <div className="mb-4 hidden items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm md:flex">
+          <div>
+            <p className="font-semibold text-slate-800 text-sm">Panel del negocio</p>
+            <p className="text-slate-500 text-xs">{session.tenantSlug || "GaesSoft Ventas"}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificacionesBell onOpenLink={abrirLink} />
+            <UserMenu
+              session={session}
+              open={userMenuOpen}
+              onToggle={() => setUserMenuOpen((v) => !v)}
+              onGoSecurity={() => navegar("seguridad")}
+              onChangePassword={abrirPassword}
+              onHelp={abrirAyuda}
+              onManual={abrirManual}
+              onLogout={handleLogout}
+              align="right"
+            />
+          </div>
         </div>
         <ActivePage />
       </main>
@@ -475,12 +481,15 @@ function UserMenu({
         onClick={onToggle}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 text-slate-700 shadow-sm hover:bg-slate-50 md:px-3"
+        className="flex h-10 items-center gap-2 rounded-lg border border-brand/30 bg-white px-2 text-slate-700 shadow-sm ring-2 ring-brand/10 hover:bg-slate-50 md:px-3"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand font-bold text-sm text-white">
           {inicial}
         </span>
-        <span className="hidden max-w-36 truncate text-sm md:inline">{session.nombre}</span>
+        <span className="max-w-36 truncate font-semibold text-sm">
+          <span className="md:hidden">Cuenta</span>
+          <span className="hidden md:inline">Cuenta: {session.nombre}</span>
+        </span>
         <ChevronDown size={16} className="hidden text-slate-400 md:block" />
       </button>
 
