@@ -134,20 +134,20 @@ interface NavGroup {
 // profundidad: el backend revalida igual con requirePerm.
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: "Operación diaria",
+    title: "Inicio",
     items: [
       { key: "inicio", label: "Guía de inicio", icon: Rocket, perm: "reportes.ventas" },
       { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
+      { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
+    ],
+  },
+  {
+    title: "Ventas",
+    items: [
       { key: "ventas", label: "Ventas", icon: Receipt, perm: "ventas.leer" },
       { key: "cobros", label: "Cobros / Links", icon: Link2, perm: "ventas.crear" },
-      {
-        key: "pedidos",
-        label: "Pedidos online",
-        icon: PackageCheck,
-        perm: "ecommerce.pedidos_leer",
-      },
-      { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
       { key: "cxc", label: "Cuentas por cobrar", icon: HandCoins, perm: "cxc.leer" },
+      { key: "devoluciones", label: "Devoluciones", icon: RotateCcw, perm: "ventas.leer" },
     ],
   },
   {
@@ -155,6 +155,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "productos", label: "Productos", icon: Package, perm: "productos.leer" },
       { key: "inventario", label: "Inventario", icon: Tags, perm: "inventario.leer" },
+      { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode, perm: "productos.leer" },
+      { key: "importador", label: "Carga masiva", icon: Upload, perm: "productos.bulk_import" },
       {
         key: "inventario-iq",
         label: "Inteligencia inventario",
@@ -162,14 +164,18 @@ const NAV_GROUPS: NavGroup[] = [
         perm: "reportes.ventas",
       },
       { key: "compras", label: "Compras (OC)", icon: ShoppingBag, perm: "compras_oc.leer" },
-      { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode, perm: "productos.leer" },
-      { key: "importador", label: "Carga masiva", icon: Upload, perm: "productos.bulk_import" },
     ],
   },
   {
     title: "Tienda online",
     items: [
       { key: "tienda", label: "Tienda online", icon: ShoppingCart, perm: "ecommerce.configurar" },
+      {
+        key: "pedidos",
+        label: "Pedidos online",
+        icon: PackageCheck,
+        perm: "ecommerce.pedidos_leer",
+      },
       { key: "envios", label: "Envíos", icon: Truck, perm: "ecommerce.envios_gestionar" },
       {
         key: "preguntas",
@@ -178,6 +184,27 @@ const NAV_GROUPS: NavGroup[] = [
         perm: "ecommerce.resenas_moderar",
       },
       { key: "resenas", label: "Reseñas", icon: Star, perm: "ecommerce.resenas_moderar" },
+    ],
+  },
+  {
+    title: "Clientes y marketing",
+    items: [
+      { key: "clientes-b2b", label: "Clientes mayoreo", icon: Building2, perm: "clientes.leer" },
+      { key: "precios", label: "Listas de precios", icon: DollarSign, perm: "precios.leer" },
+      {
+        key: "promociones",
+        label: "Promociones",
+        icon: BadgePercent,
+        perm: "promociones.gestionar",
+      },
+      { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
+      { key: "comisiones", label: "Comisiones", icon: Percent, perm: "comisiones.gestionar" },
+      {
+        key: "automatizaciones",
+        label: "Automatizaciones",
+        icon: Zap,
+        perm: "plantillas.gestionar",
+      },
       {
         key: "portal-b2b",
         label: "Portal mayorista",
@@ -187,30 +214,8 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Marketing y mayoreo",
+    title: "Administración",
     items: [
-      {
-        key: "promociones",
-        label: "Promociones",
-        icon: BadgePercent,
-        perm: "promociones.gestionar",
-      },
-      { key: "monedero", label: "Monedero / Gift cards", icon: Wallet, perm: "ventas.crear" },
-      {
-        key: "automatizaciones",
-        label: "Automatizaciones",
-        icon: Zap,
-        perm: "plantillas.gestionar",
-      },
-      { key: "precios", label: "Listas de precios", icon: DollarSign, perm: "precios.leer" },
-      { key: "clientes-b2b", label: "Clientes mayoreo", icon: Building2, perm: "clientes.leer" },
-      { key: "comisiones", label: "Comisiones", icon: Percent, perm: "comisiones.gestionar" },
-    ],
-  },
-  {
-    title: "Menú del sistema",
-    items: [
-      { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
       { key: "cfdi", label: "Facturación", icon: FileText, perm: "cfdi.leer" },
       { key: "contabilidad", label: "Contabilidad", icon: FileText, perm: "cfdis_recibidos.leer" },
       { key: "usuarios", label: "Usuarios y permisos", icon: Users, perm: "usuarios.leer" },
@@ -389,6 +394,17 @@ export function App() {
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
+        <div className="flex items-center justify-between px-4 py-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Cerrar menú del sistema"
+            className="rounded p-2 text-slate-100 hover:bg-slate-800"
+          >
+            <X size={22} />
+          </button>
+          <span className="text-lg font-bold text-brand">GaesSoft</span>
+        </div>
         <div className="hidden px-5 py-4 md:block">
           <p className="text-lg font-bold text-brand">GaesSoft</p>
           <p className="text-slate-400 text-xs">Ventas</p>
@@ -474,7 +490,14 @@ function UserMenu({
   onLogout: () => void;
   align?: "right" | "left";
 }) {
-  const inicial = session.nombre.trim().charAt(0).toUpperCase() || "U";
+  const iniciales =
+    session.nombre
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "US";
 
   return (
     <div className="relative">
@@ -486,11 +509,10 @@ function UserMenu({
         className="flex h-10 items-center gap-2 rounded-lg border border-brand/30 bg-white px-2 text-slate-700 shadow-sm ring-2 ring-brand/10 hover:bg-slate-50 md:px-3"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand font-bold text-sm text-white">
-          {inicial}
+          {iniciales}
         </span>
-        <span className="max-w-36 truncate font-semibold text-sm">
-          <span className="md:hidden">Cuenta</span>
-          <span className="hidden md:inline">Cuenta: {session.nombre}</span>
+        <span className="hidden max-w-36 truncate font-semibold text-sm md:inline">
+          {session.nombre}
         </span>
         <ChevronDown size={16} className="hidden text-slate-400 md:block" />
       </button>
