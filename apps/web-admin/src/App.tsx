@@ -347,7 +347,17 @@ export function App() {
     <div className="flex h-full flex-col md:flex-row">
       {/* Barra superior móvil */}
       <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-slate-100 md:hidden">
-        <span className="text-lg font-bold text-brand">GaesSoft</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Menú del sistema"
+            className="rounded p-2 hover:bg-slate-800"
+          >
+            <Menu size={22} />
+          </button>
+          <span className="text-lg font-bold text-brand">GaesSoft</span>
+        </div>
         <div className="flex items-center gap-1">
           <NotificacionesBell onOpenLink={abrirLink} />
           <UserMenu
@@ -361,14 +371,6 @@ export function App() {
             onLogout={handleLogout}
             align="right"
           />
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Menú"
-            className="rounded p-2 hover:bg-slate-800"
-          >
-            <Menu size={22} />
-          </button>
         </div>
       </header>
 
