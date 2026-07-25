@@ -82,6 +82,44 @@ describe("auth tenant", () => {
     expect(res.statusCode).toBe(401);
     expect(res.json().message).toMatch(/administrador/);
   });
+
+  it("usuario tenant cambia su propia contraseña validando la actual", async () => {
+    const newPassword = "ChangeMe!2026-New";
+    const badCurrent = await app.inject({
+      method: "POST",
+      url: "/t/usuarios/me/change-password",
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { currentPassword: "wrong", newPassword },
+    });
+    expect(badCurrent.statusCode).toBe(400);
+
+    const changed = await app.inject({
+      method: "POST",
+      url: "/t/usuarios/me/change-password",
+      headers: { authorization: `Bearer ${ownerToken}` },
+      payload: { currentPassword: OWNER_PASSWORD, newPassword },
+    });
+    expect(changed.statusCode).toBe(204);
+
+    const oldLogin = await app.inject({
+      method: "POST",
+      url: "/auth/tenant/login",
+      payload: { tenantSlug: TENANT_SLUG, email: OWNER_EMAIL, password: OWNER_PASSWORD },
+    });
+    expect(oldLogin.statusCode).toBe(401);
+
+    const newLogin = await loginTenantUser(app, TENANT_SLUG, OWNER_EMAIL, newPassword);
+    expect(newLogin.accessToken).toBeTruthy();
+
+    const restored = await app.inject({
+      method: "POST",
+      url: "/t/usuarios/me/change-password",
+      headers: { authorization: `Bearer ${newLogin.accessToken}` },
+      payload: { currentPassword: newPassword, newPassword: OWNER_PASSWORD },
+    });
+    expect(restored.statusCode).toBe(204);
+    ownerToken = (await loginTenantUser(app, TENANT_SLUG, OWNER_EMAIL, OWNER_PASSWORD)).accessToken;
+  });
 });
 
 describe("tenant CRUD — sucursales", () => {

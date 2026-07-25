@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 export interface Direccion {
   id: string;
@@ -35,13 +35,14 @@ export function DireccionesCuenta() {
   const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     const r = (await fetch("/api/cuenta/direcciones").then((x) => x.json())) as Direccion[];
     setDirs(Array.isArray(r) ? r : []);
-  }
+  }, []);
+
   useEffect(() => {
     cargar();
-  }, []);
+  }, [cargar]);
 
   function editar(d: Direccion) {
     setEditId(d.id);

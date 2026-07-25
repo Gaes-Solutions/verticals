@@ -212,3 +212,10 @@ export function putPolitica2fa(body: {
 }): Promise<Politica2fa> {
   return api("/t/seguridad/politica-2fa", { method: "PUT", body });
 }
+
+export function cambiarMiPassword(body: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  return api("/t/usuarios/me/change-password", { body });
+}

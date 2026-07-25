@@ -62,3 +62,8 @@ export const assignSucursalSchema = z.object({
 export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(200),
 });
+
+export const changeOwnPasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200),
+});

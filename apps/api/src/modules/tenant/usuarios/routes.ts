@@ -1,10 +1,11 @@
 import { PERMISSIONS } from "@gaespos/permissions";
-import { hash as argon2Hash } from "@node-rs/argon2";
+import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
 import type { FastifyPluginAsync } from "fastify";
 import {
   type UsuarioUpdateInput,
   assignRolSchema,
   assignSucursalSchema,
+  changeOwnPasswordSchema,
   resetPasswordSchema,
   usuarioCreateSchema,
   usuarioIdParamSchema,
@@ -47,6 +48,36 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
       roles: u.roles.map((r) => r.rol),
       sucursales: u.sucursales.map((s) => ({ ...s.sucursal, isPrimary: s.isPrimary })),
     }));
+  });
+
+  app.post("/me/change-password", async (req, reply) => {
+    const body = changeOwnPasswordSchema.parse(req.body);
+    const currentUserId = req.user.kind === "tenant" ? req.user.sub : null;
+    if (!currentUserId) {
+      return reply.code(401).send({
+        statusCode: 401,
+        error: "Unauthorized",
+        message: "Se requiere sesión de usuario",
+      });
+    }
+
+    const user = await req.tenantPrisma.usuario.findUnique({
+      where: { id: currentUserId },
+      select: { passwordHash: true },
+    });
+    if (!user || !(await argon2Verify(user.passwordHash, body.currentPassword))) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: "La contraseña actual no es correcta",
+      });
+    }
+
+    await req.tenantPrisma.usuario.update({
+      where: { id: currentUserId },
+      data: { passwordHash: await argon2Hash(body.newPassword) },
+    });
+    return reply.code(204).send();
   });
 
   app.get("/:id", async (req, reply) => {
