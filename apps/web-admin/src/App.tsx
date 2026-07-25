@@ -268,6 +268,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [helpPanel, setHelpPanel] = useState<"ayuda" | "manual" | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
@@ -334,15 +335,23 @@ export function App() {
   function abrirAyuda() {
     setHelpPanel("ayuda");
     setUserMenuOpen(false);
+    setAccountOpen(false);
   }
 
   function abrirManual() {
     setHelpPanel("manual");
     setUserMenuOpen(false);
+    setAccountOpen(false);
   }
 
   function abrirPassword() {
     setPasswordOpen(true);
+    setUserMenuOpen(false);
+    setAccountOpen(false);
+  }
+
+  function abrirCuenta() {
+    setAccountOpen(true);
     setUserMenuOpen(false);
   }
 
@@ -369,6 +378,7 @@ export function App() {
             session={session}
             open={userMenuOpen}
             onToggle={() => setUserMenuOpen((v) => !v)}
+            onOpenAccount={abrirCuenta}
             onGoSecurity={() => navegar("seguridad")}
             onChangePassword={abrirPassword}
             onHelp={abrirAyuda}
@@ -450,6 +460,7 @@ export function App() {
               session={session}
               open={userMenuOpen}
               onToggle={() => setUserMenuOpen((v) => !v)}
+              onOpenAccount={abrirCuenta}
               onGoSecurity={() => navegar("seguridad")}
               onChangePassword={abrirPassword}
               onHelp={abrirAyuda}
@@ -463,6 +474,19 @@ export function App() {
       </main>
 
       <Tour />
+      {accountOpen && (
+        <AccountPanel
+          session={session}
+          onClose={() => setAccountOpen(false)}
+          onChangePassword={abrirPassword}
+          onHelp={abrirAyuda}
+          onManual={abrirManual}
+          onGoSecurity={() => {
+            setAccountOpen(false);
+            navegar("seguridad");
+          }}
+        />
+      )}
       {helpPanel && <HelpPanel mode={helpPanel} onClose={() => setHelpPanel(null)} />}
       {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} />}
     </div>
@@ -473,6 +497,7 @@ function UserMenu({
   session,
   open,
   onToggle,
+  onOpenAccount,
   onGoSecurity,
   onChangePassword,
   onHelp,
@@ -483,6 +508,7 @@ function UserMenu({
   session: AdminSession;
   open: boolean;
   onToggle: () => void;
+  onOpenAccount: () => void;
   onGoSecurity: () => void;
   onChangePassword: () => void;
   onHelp: () => void;
@@ -528,11 +554,14 @@ function UserMenu({
             <p className="truncate font-semibold text-slate-800 text-sm">{session.nombre}</p>
             <p className="truncate text-slate-500 text-xs">{session.tenantSlug || "Mi negocio"}</p>
           </div>
-          <MenuItem icon={UserCircle} label="Mi cuenta y seguridad" onClick={onGoSecurity} />
+          <MenuItem icon={UserCircle} label="Mi cuenta" onClick={onOpenAccount} />
           <MenuItem icon={KeyRound} label="Cambiar contraseña" onClick={onChangePassword} />
           <MenuItem icon={HelpCircle} label="Ayuda" onClick={onHelp} />
           <MenuItem icon={BookOpen} label="Manual de uso" onClick={onManual} />
           <MenuItem icon={Languages} label="Idioma: Español" disabled />
+          {puede("configuracion.leer") && (
+            <MenuItem icon={ShieldCheck} label="Seguridad del sistema" onClick={onGoSecurity} />
+          )}
           <div className="mt-1 border-slate-100 border-t pt-1">
             <button
               type="button"
@@ -546,6 +575,88 @@ function UserMenu({
         </div>
       )}
     </div>
+  );
+}
+
+function AccountPanel({
+  session,
+  onClose,
+  onChangePassword,
+  onHelp,
+  onManual,
+  onGoSecurity,
+}: {
+  session: AdminSession;
+  onClose: () => void;
+  onChangePassword: () => void;
+  onHelp: () => void;
+  onManual: () => void;
+  onGoSecurity: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
+      <aside className="h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl">
+        <div className="sticky top-0 flex items-center justify-between border-slate-200 border-b bg-white px-5 py-4">
+          <div>
+            <h2 className="font-bold text-slate-800 text-xl">Mi cuenta</h2>
+            <p className="text-slate-500 text-sm">Preferencias y acceso de usuario.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="space-y-5 p-5">
+          <section className="rounded-lg border border-slate-200 p-4">
+            <p className="text-slate-500 text-xs uppercase tracking-wide">Usuario</p>
+            <p className="mt-1 truncate font-semibold text-slate-800">{session.nombre}</p>
+            <p className="truncate text-slate-500 text-sm">{session.tenantSlug || "Mi negocio"}</p>
+          </section>
+
+          <section className="space-y-2">
+            <AccountAction icon={KeyRound} label="Cambiar contraseña" onClick={onChangePassword} />
+            <AccountAction icon={HelpCircle} label="Ayuda" onClick={onHelp} />
+            <AccountAction icon={BookOpen} label="Manual de uso" onClick={onManual} />
+            <AccountAction icon={Languages} label="Idioma: Español" disabled />
+            {puede("configuracion.leer") && (
+              <AccountAction
+                icon={ShieldCheck}
+                label="Seguridad del sistema"
+                onClick={onGoSecurity}
+              />
+            )}
+          </section>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function AccountAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-slate-700 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+    >
+      <Icon size={18} />
+      <span className="font-medium">{label}</span>
+    </button>
   );
 }
 
