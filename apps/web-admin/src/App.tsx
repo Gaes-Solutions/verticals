@@ -139,6 +139,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "inicio", label: "Guía de inicio", icon: Rocket, perm: "reportes.ventas" },
       { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
       { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
+      { key: "ayuda", label: "Ayuda", icon: HelpCircle, perm: "public" },
     ],
   },
   {
@@ -286,7 +287,7 @@ export function App() {
 
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => puede(item.perm)),
+    items: group.items.filter((item) => item.perm === "public" || puede(item.perm)),
   })).filter((group) => group.items.length > 0);
   const visibleNav = visibleGroups.flatMap((group) => group.items);
 
@@ -333,7 +334,7 @@ export function App() {
   }
 
   function abrirAyuda() {
-    setHelpPanel("ayuda");
+    navegar("ayuda");
     setUserMenuOpen(false);
     setAccountOpen(false);
   }
@@ -487,7 +488,16 @@ export function App() {
           }}
         />
       )}
-      {helpPanel && <HelpPanel mode={helpPanel} onClose={() => setHelpPanel(null)} />}
+      {helpPanel && (
+        <HelpPanel
+          visibleGroups={visibleGroups}
+          onClose={() => setHelpPanel(null)}
+          onNavigate={(target) => {
+            setHelpPanel(null);
+            navegar(target);
+          }}
+        />
+      )}
       {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} />}
     </div>
   );
@@ -556,8 +566,8 @@ function UserMenu({
           </div>
           <MenuItem icon={UserCircle} label="Mi cuenta" onClick={onOpenAccount} />
           <MenuItem icon={KeyRound} label="Cambiar contraseña" onClick={onChangePassword} />
-          <MenuItem icon={HelpCircle} label="Ayuda" onClick={onHelp} />
-          <MenuItem icon={BookOpen} label="Manual de uso" onClick={onManual} />
+          <MenuItem icon={HelpCircle} label="Ayuda completa" onClick={onHelp} />
+          <MenuItem icon={BookOpen} label="Manual rápido" onClick={onManual} />
           <MenuItem icon={Languages} label="Idioma: Español" disabled />
           {puede("configuracion.leer") && (
             <MenuItem icon={ShieldCheck} label="Seguridad del sistema" onClick={onGoSecurity} />
@@ -619,8 +629,8 @@ function AccountPanel({
 
           <section className="space-y-2">
             <AccountAction icon={KeyRound} label="Cambiar contraseña" onClick={onChangePassword} />
-            <AccountAction icon={HelpCircle} label="Ayuda" onClick={onHelp} />
-            <AccountAction icon={BookOpen} label="Manual de uso" onClick={onManual} />
+            <AccountAction icon={HelpCircle} label="Ayuda completa" onClick={onHelp} />
+            <AccountAction icon={BookOpen} label="Manual rápido" onClick={onManual} />
             <AccountAction icon={Languages} label="Idioma: Español" disabled />
             {puede("configuracion.leer") && (
               <AccountAction
@@ -685,20 +695,22 @@ function MenuItem({
   );
 }
 
-function HelpPanel({ mode, onClose }: { mode: "ayuda" | "manual"; onClose: () => void }) {
-  const manual = mode === "manual";
-
+function HelpPanel({
+  visibleGroups,
+  onClose,
+  onNavigate,
+}: {
+  visibleGroups: NavGroup[];
+  onClose: () => void;
+  onNavigate: (target: Seccion) => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
       <aside className="h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between border-slate-200 border-b bg-white px-5 py-4">
           <div>
-            <h2 className="font-bold text-slate-800 text-xl">
-              {manual ? "Manual de uso" : "Ayuda"}
-            </h2>
-            <p className="text-slate-500 text-sm">
-              {manual ? "Guía rápida para operar ventas." : "Soporte y orientación del sistema."}
-            </p>
+            <h2 className="font-bold text-slate-800 text-xl">Manual rápido</h2>
+            <p className="text-slate-500 text-sm">Índice práctico según tus permisos.</p>
           </div>
           <button
             type="button"
@@ -709,72 +721,39 @@ function HelpPanel({ mode, onClose }: { mode: "ayuda" | "manual"; onClose: () =>
             <X size={20} />
           </button>
         </div>
-        <div className="space-y-5 p-5">
-          {manual ? (
-            <>
-              <HelpSection
-                title="Operación diaria"
-                items={[
-                  "Revisa la Guía de inicio y el Resumen al iniciar el día.",
-                  "Usa Ventas para consultar tickets y Devoluciones para ajustes.",
-                  "Los pedidos de tienda se atienden desde Pedidos online y Envíos.",
-                ]}
-              />
-              <HelpSection
-                title="Inventario"
-                items={[
-                  "Productos contiene el catálogo comercial.",
-                  "Inventario controla existencias y movimientos.",
-                  "Carga masiva sirve para importar productos por archivo.",
-                ]}
-              />
-              <HelpSection
-                title="Sistema"
-                items={[
-                  "Usuarios y permisos define accesos por rol.",
-                  "Seguridad administra 2FA.",
-                  "Configuración concentra reglas del negocio.",
-                ]}
-              />
-            </>
-          ) : (
-            <>
-              <HelpSection
-                title="Dónde encontrar cada cosa"
-                items={[
-                  "El menú lateral es para módulos de trabajo.",
-                  "El avatar de usuario es para cuenta, ayuda, manual, idioma y salir.",
-                  "La configuración sensible vive en Menú del sistema.",
-                ]}
-              />
-              <HelpSection
-                title="Primeros pasos"
-                items={[
-                  "Configura usuarios y permisos.",
-                  "Carga productos e inventario.",
-                  "Activa tienda online solo cuando catálogo, pagos y envíos estén listos.",
-                ]}
-              />
-            </>
-          )}
+        <div className="space-y-4 p-5">
+          <button
+            type="button"
+            onClick={() => onNavigate("ayuda")}
+            className="flex w-full items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-left text-brand text-sm hover:bg-brand/10"
+          >
+            <HelpCircle size={18} />
+            <span className="font-semibold">Abrir ayuda completa con buscador y guías</span>
+          </button>
+
+          {visibleGroups.map((group) => (
+            <section key={group.title}>
+              <h3 className="mb-2 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                {group.title}
+              </h3>
+              <div className="space-y-2">
+                {group.items.map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    onClick={() => onNavigate(item.key)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-slate-700 text-sm hover:bg-slate-50"
+                  >
+                    <item.icon size={18} className="shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </aside>
     </div>
-  );
-}
-
-function HelpSection({ title, items }: { title: string; items: string[] }) {
-  return (
-    <section>
-      <h3 className="mb-2 font-semibold text-slate-800">{title}</h3>
-      <ul className="space-y-2 text-slate-600 text-sm">
-        {items.map((item) => (
-          <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
-            {item}
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
