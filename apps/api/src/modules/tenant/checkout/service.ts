@@ -276,6 +276,17 @@ export async function procesarWebhookPago(
     };
   }
 
+  // Defensa en profundidad: el monto confirmado debe coincidir con el total del
+  // pedido. En proveedores reales el monto viene firmado por la pasarela; esto
+  // rechaza montos parciales o falsificados (p.ej. montoCentavos:1) para todos.
+  const totalCentavos = Math.round(new Decimal(pedido.total.toString()).times(100).toNumber());
+  if (evento.montoCentavos !== totalCentavos) {
+    throw new CheckoutError(422, "El monto confirmado no coincide con el total del pedido", {
+      esperadoCentavos: totalCentavos,
+      recibidoCentavos: evento.montoCentavos,
+    });
+  }
+
   const items = pedido.items as unknown as CarritoItem[];
   const sucursal = await resolverSucursal(client, pedido.sucursalPickupId);
 

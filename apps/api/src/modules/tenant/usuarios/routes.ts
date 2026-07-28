@@ -248,6 +248,9 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
         message: "rolId requerido",
       });
     }
+    if (!req.principal.isOwner && (await isTargetOwner(req, params.id))) {
+      throw new PermissionDeniedError([PERMISSIONS.USUARIOS_ASIGNAR_ROL]);
+    }
     await req.tenantPrisma.usuarioRol.deleteMany({
       where: { usuarioId: params.id, rolId },
     });
@@ -292,15 +295,19 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
         message: "Usuario no encontrado",
       });
     }
-    const targetIsOwner = target.roles.some(
-      (r) => Array.isArray(r.rol.permisos) && (r.rol.permisos as readonly string[]).includes("*"),
-    );
-    if (targetIsOwner && !req.principal.isOwner) {
-      return reply.code(403).send({
-        statusCode: 403,
-        error: "Forbidden",
-        message: "Solo un dueño puede restablecer la contraseña de otro dueño.",
+    if (!req.principal.isOwner) {
+      const actorPerms = new Set(req.principal.permissions);
+      const targetOutranksActor = target.roles.some((r) => {
+        const perms = Array.isArray(r.rol.permisos) ? (r.rol.permisos as readonly string[]) : [];
+        return perms.includes(OWNER_WILDCARD) || perms.some((p) => !actorPerms.has(p));
       });
+      if (targetOutranksActor) {
+        return reply.code(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "No puedes restablecer la contraseña de un usuario con mayor privilegio.",
+        });
+      }
     }
 
     const passwordHash = await argon2Hash(body.newPassword);

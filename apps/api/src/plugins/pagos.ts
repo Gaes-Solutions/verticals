@@ -45,6 +45,12 @@ const defaultFactory: PagoProviderFactory = (proveedor) => {
 };
 
 const pagosPlugin: FastifyPluginAsync<{ factory?: PagoProviderFactory }> = async (app, opts) => {
+  // Fail-fast: una mala config operativa (mock habilitado en prod) reabriría el
+  // bypass de pago. Preferimos romper el arranque de forma ruidosa antes que
+  // aceptar cobros-cero silenciosos en producción.
+  if (process.env.NODE_ENV === "production" && process.env.PAGOS_ALLOW_MOCK === "true") {
+    throw new Error("PAGOS_ALLOW_MOCK=true no permitido en producción: sería bypass de pago");
+  }
   app.decorate("pagoProviderFactory", opts.factory ?? defaultFactory);
 };
 

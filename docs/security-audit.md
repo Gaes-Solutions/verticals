@@ -45,3 +45,40 @@ Rama: `seguridad/auditoria`. 5 vulnerabilidades aprobadas por el panel y aplicad
 - **Fix aplicado**: `service.ts` (ya implementado): `aplicarVenta(prisma, principal, userId, op)` retorna `failed` si `!hasPermission(principal, VENTAS_CREAR)`; valida con `ventaCreateSchema.safeParse` (sin `as never`); pasa `{ permiteDescuentoAlto }` a `crearVenta`. `procesarPush` propaga `principal`. `routes.ts` (aplicado en esta ronda): tras `requirePerm(SYNC_USAR)`, si `body.operations.some(op => op.entityType === "venta")` → `req.requirePerm(PERMISSIONS.VENTAS_CREAR)` (fail-fast 403). Resultado: autorización cerrada en dos capas, validación con el esquema canónico (elimina el 500 por monto no-numérico) y paridad de descuento con la ruta directa.
 
 **Verificación**: `pnpm --filter @gaespos/api exec tsc -p tsconfig.json --noEmit` → 0 errores.
+
+---
+
+## Ronda 1 (refuerzo) — 2026-07-28
+
+Rama: `seguridad/auditoria`. El panel emitió el consenso definitivo (`fixConsensuado`) para las 5 vulnerabilidades de Ronda 1. Al contrastarlo con lo ya aplicado en `7af0b89`, tres fixes requerían endurecimiento adicional que cierra residuales reales (escalada lateral, reapertura por mala config, y un bypass del lockout). R1-04 y R1-05 ya estaban completos y se verificaron sin cambios.
+
+### R1-01 · HIGH · Reset-password: cerrar también la escalada lateral (broken-authorization)
+
+- **Archivo**: `apps/api/src/modules/tenant/usuarios/routes.ts` (`POST /t/usuarios/:id/reset-password`)
+- **Explotación residual**: El guard aplicado en `7af0b89` (`targetIsOwner && !isOwner`) bloqueaba solo el reset del dueño. Un `gerente` seguía pudiendo resetear la contraseña de un admin de MAYOR privilegio no-dueño (p.ej. alguien con permisos que el gerente no posee), tomando esa cuenta — escalada lateral gerente → admin-superior.
+- **Decisión del panel**: Ganadora propuesta 1 (mayoría 2/3, patrón inline-403). Sustituir el guard owner-only por la MISMA comparación de superset de permisos que ya protege `assertCanGrantRoles`: un actor no-dueño no puede resetear a un objetivo que porte el wildcard `*` NI ningún permiso que el actor no tenga. Reusa el `target` ya consultado (sin query extra), conserva 404/204 y el Zod.
+- **Fix aplicado**: En el handler, reemplazado el bloque owner-only por: si `!req.principal.isOwner`, construir `actorPerms = new Set(req.principal.permissions)` y calcular `targetOutranksActor` (algún rol del target incluye `OWNER_WILDCARD` o algún permiso `!actorPerms.has(p)`) → 403 "No puedes restablecer la contraseña de un usuario con mayor privilegio." El dueño sigue pudiendo resetear a cualquiera; un no-dueño solo a privilegio menor o igual. Cierra owner-takeover y escalada lateral, unificando el criterio con `assertCanGrantRoles`.
+
+### R1-02 · HIGH · Pago mock: fail-fast de arranque + verificación de monto (payment-bypass)
+
+- **Archivos**: `apps/api/src/plugins/pagos.ts`, `apps/api/src/modules/tenant/checkout/service.ts`
+- **Explotación residual**: El bypass principal ya está cerrado (gate `mockAllowed()` + `proveedorPago` requerido). Quedaban dos residuales: (1) reapertura por mala config operativa (`PAGOS_ALLOW_MOCK=true` en un box de prod), donde `simularWebhook` reusa el monto real del intent y una simple guarda de monto NO lo detendría; (2) ausencia de verificación de que el monto confirmado coincide con el total del pedido (defensa en profundidad para proveedores reales, recomendada por Stripe).
+- **Decisión del panel**: Ganadora propuesta 1 como principal (fail-fast boot guard, sella la única vía de reapertura) + propuesta 3 como capa complementaria (verificación de monto). NO añadir `requirePerm` a `/webhook` ni `/confirmar-mock` (la autorización del callback es la firma del proveedor, no RBAC). NO tocar el frontend.
+- **Fix aplicado**: `pagos.ts` — dentro de `pagosPlugin`, ANTES de `app.decorate`, `if (NODE_ENV === "production" && PAGOS_ALLOW_MOCK === "true") throw new Error("PAGOS_ALLOW_MOCK=true no permitido en producción: sería bypass de pago")`: convierte la mala config en fallo de arranque ruidoso en vez de cobro-cero silencioso (no afecta tests con `NODE_ENV=test` ni dev/BFF). `checkout/service.ts` — en `procesarWebhookPago`, tras el manejo de `status !== "confirmado"` y antes de leer items/`crearVenta`: `totalCentavos = Math.round(new Decimal(pedido.total.toString()).times(100).toNumber())`; si `evento.montoCentavos !== totalCentavos` → `CheckoutError(422, ...)` con `esperadoCentavos`/`recibidoCentavos`. Coincide por construcción con `iniciarCheckout` (`montoCentavos = total.times(100)`), así que no rompe webhooks legítimos (incluido MSI, cargo = total) y rechaza montos parciales/falsificados (`montoCentavos:1`) para TODOS los proveedores. **Operativo**: producción DEBE correr con `NODE_ENV=production` y NUNCA `PAGOS_ALLOW_MOCK=true` (ahora reforzado por el fail-fast).
+
+### R1-03 · MEDIUM · Lockout del dueño vía remoción de rol (broken-authorization / DoS)
+
+- **Archivo**: `apps/api/src/modules/tenant/usuarios/routes.ts` (`DELETE /t/usuarios/:id/roles/:rolId`)
+- **Explotación residual**: El vector directo (PATCH/DELETE `:id` → `isActive=false`) ya lo cierra `assertCanDeactivateTarget`. Pero seguía abierto un bypass: `DELETE /:id/roles/:rolId` solo validaba `USUARIOS_ASIGNAR_ROL` sin guard de objetivo (`assertCanGrantRoles` protege solo el OTORGAR, no el REMOVER). El preset `gerente` posee `USUARIOS_ASIGNAR_ROL`. Cadena: gerente hace `DELETE /:id/roles/<rolId 'dueno'>` quitándole al dueño el rol portador de `*`; con ello `isTargetOwner(dueño)` pasa a `false`; acto seguido `DELETE /:id` o `PATCH {isActive:false}` ya no dispara el guard → dueño desactivado → login rechaza inactivos → lockout de la cuenta de mayor privilegio.
+- **Decisión del panel**: Ganadora propuesta 1 (única correcta; verificó que la "mayoría" que declaraba "sin cambios" era técnicamente errónea por no auditar la remoción de rol). Añadir en `DELETE /:id/roles/:rolId` el mismo guard de objetivo-dueño: un no-dueño no puede quitar NINGÚN rol a un objetivo que es dueño. Reusa `isTargetOwner` y `PermissionDeniedError`/`PERMISSIONS` ya importados; sin Zod ni migraciones.
+- **Fix aplicado**: En el handler, tras validar `rolId` y antes del `deleteMany`: `if (!req.principal.isOwner && (await isTargetOwner(req, params.id))) throw new PermissionDeniedError([PERMISSIONS.USUARIOS_ASIGNAR_ROL]);` → 403. El dueño (`isOwner`) sigue gestionando roles libremente. Con esto un no-dueño ya no puede ni desactivar (R1-03 vigente) ni demotar (este fix) al dueño, cerrando de forma real el lockout. Nota de alcance (deliberadamente fuera de este ticket): la desactivación lateral admin-vs-admin bajo `usuarios.archivar` sigue permitida; endurecerla exigiría comparar permisos actor↔objetivo, no necesario para este reporte medium.
+
+### R1-04 · MEDIUM · Replay WebAuthn — verificado sin cambios
+
+- El fix single-use (jti + tabla master `webauthn_used_challenges`, `consumirChallenge` con INSERT atómico P2002, consumo tras verificación y antes del JWT) ya está completo en `passkey-routes.ts` + `schema.prisma` + migración `20260727000000`. **Pendiente operativo obligatorio**: aplicar la migración en la master DB de producción (`prisma migrate deploy`) antes o junto con el deploy; sin la tabla, `consumirChallenge` lanza P2021 en cada login por passkey.
+
+### R1-05 · MEDIUM · Sync /push bypass — verificado sin cambios
+
+- El fix de doble capa (gate por operación `VENTAS_CREAR` + `ventaCreateSchema.safeParse` en `aplicarVenta`, y fail-fast 403 a nivel de ruta cuando el batch trae `venta`) ya está completo en `sync/service.ts` + `sync/routes.ts`. Sin cambios en esta ronda.
+
+**Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
