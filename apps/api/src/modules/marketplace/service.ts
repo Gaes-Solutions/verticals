@@ -510,9 +510,10 @@ export async function registrarPacienteMaster(
 }
 
 /**
- * V1 stub de verificación. El reto OTP real (envío + storage del código) vive
- * en el portal paciente (Hito 4.4); aquí solo marca el email como verificado
- * para habilitar reseñas verificadas. Idempotente.
+ * Verifica el OTP de correo. Como el resultado emite una sesión PHR real
+ * (kind:"patient"), NO es idempotente: cada confirmación exige un código
+ * pendiente, vigente y coincidente. Tras verificar, consume el código
+ * (otpCodigo=null); volver a confirmar requiere solicitar uno nuevo.
  */
 export async function confirmarPacienteMaster(
   master: MasterPrismaClient,
@@ -521,7 +522,6 @@ export async function confirmarPacienteMaster(
 ): Promise<PacienteMaster> {
   const paciente = await master.pacienteMaster.findUnique({ where: { email } });
   if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
-  if (paciente.otpVerificadoAt && !paciente.otpCodigo) return paciente;
   if (!paciente.otpCodigo || !paciente.otpExpiraAt) {
     throw new MarketplaceError(409, "No hay un código pendiente; solicita uno nuevo");
   }
@@ -557,7 +557,7 @@ async function recalcularScoreProfesional(master: MasterPrismaClient, profession
 
 export interface CrearResenaInput {
   professionalId: string;
-  pacienteEmail: string;
+  pacienteMasterId: string;
   bookingId?: string | undefined;
   ratingGeneral: number;
   ratingPuntualidad?: number | undefined;
@@ -578,11 +578,29 @@ export async function crearResena(
     throw new MarketplaceError(404, "Profesional no disponible para reseñas");
   }
   const paciente = await master.pacienteMaster.findUnique({
-    where: { email: input.pacienteEmail },
+    where: { id: input.pacienteMasterId },
   });
   if (!paciente) throw new MarketplaceError(404, "Paciente no registrado");
   if (!paciente.otpVerificadoAt) {
     throw new MarketplaceError(403, "El paciente debe verificar su identidad antes de reseñar");
+  }
+
+  // El badge "visita verificada" solo se otorga si el bookingId es una cita real
+  // del propio paciente, con este profesional, y completada.
+  let verificada = false;
+  if (input.bookingId !== undefined) {
+    const booking = await master.publicBooking.findUnique({
+      where: { id: input.bookingId },
+      select: { pacienteMasterId: true, professionalId: true, status: true },
+    });
+    verificada =
+      booking !== null &&
+      booking.pacienteMasterId === paciente.id &&
+      booking.professionalId === input.professionalId &&
+      booking.status === "completada";
+    if (!verificada) {
+      throw new MarketplaceError(403, "La cita indicada no es válida para reseñar");
+    }
   }
 
   const existente = await master.publicReview.findFirst({
@@ -598,7 +616,7 @@ export async function crearResena(
     data: {
       professionalId: input.professionalId,
       pacienteMasterId: paciente.id,
-      verificada: Boolean(input.bookingId),
+      verificada,
       ratingGeneral: input.ratingGeneral,
       moderacionStatus: publicada ? "publicado" : "revision_humana",
       moderacionIaScore: {

@@ -577,23 +577,31 @@ async function aplicarCargoMonedero(
   tx: Tx,
   params: { clienteId: string; monto: Decimal; ventaId: string; folio: string; usuarioId: string },
 ): Promise<void> {
+  const montoStr = params.monto.toFixed(2);
+  // Compare-and-swap atómico: el decremento condicional toma lock de fila, así dos
+  // ventas concurrentes con pago monedero sobre el mismo cliente se serializan y la
+  // segunda re-evalúa el where contra el saldo ya descontado, cerrando el lost-update.
+  const debited = await tx.cliente.updateMany({
+    where: { id: params.clienteId, saldoMonedero: { gte: montoStr } },
+    data: { saldoMonedero: { decrement: montoStr } },
+  });
+  if (debited.count === 0) {
+    const clienteActual = await tx.cliente.findUnique({
+      where: { id: params.clienteId },
+      select: { saldoMonedero: true },
+    });
+    if (!clienteActual) throw new VentaError(404, "Cliente del monedero no encontrado");
+    throw new VentaError(409, "Saldo insuficiente en el monedero", {
+      saldo: new Decimal(clienteActual.saldoMonedero.toString()).toFixed(2),
+      requerido: params.monto.toFixed(2),
+    });
+  }
   const cliente = await tx.cliente.findUnique({
     where: { id: params.clienteId },
     select: { saldoMonedero: true },
   });
   if (!cliente) throw new VentaError(404, "Cliente del monedero no encontrado");
-  const saldoActual = new Decimal(cliente.saldoMonedero.toString());
-  const nuevo = saldoActual.minus(params.monto);
-  if (nuevo.lt(ZERO)) {
-    throw new VentaError(409, "Saldo insuficiente en el monedero", {
-      saldo: saldoActual.toFixed(2),
-      requerido: params.monto.toFixed(2),
-    });
-  }
-  await tx.cliente.update({
-    where: { id: params.clienteId },
-    data: { saldoMonedero: nuevo.toFixed(2) },
-  });
+  const nuevo = new Decimal(cliente.saldoMonedero.toString());
   await tx.monederoMovimiento.create({
     data: {
       clienteId: params.clienteId,

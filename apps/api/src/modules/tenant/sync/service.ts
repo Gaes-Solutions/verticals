@@ -111,6 +111,7 @@ async function aplicarVenta(
 
 async function aplicarCliente(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   op: SyncOperation,
 ): Promise<SyncOpResult> {
   const base = {
@@ -118,6 +119,20 @@ async function aplicarCliente(
     entityType: op.entityType,
     entityIdLocal: op.entityIdLocal,
   };
+
+  // Misma autorización que las rutas directas POST/PATCH /clientes: sync.usar no
+  // basta para crear/editar clientes; se exige clientes.crear / clientes.actualizar
+  // (defensa en profundidad, gate por operación como en aplicarVenta).
+  const permisoRequerido =
+    op.operation === "create" ? PERMISSIONS.CLIENTES_CREAR : PERMISSIONS.CLIENTES_ACTUALIZAR;
+  if (!hasPermission(principal, permisoRequerido)) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto ?? null,
+      status: "failed",
+      error: `Permiso requerido: ${permisoRequerido}`,
+    };
+  }
 
   if (op.operation === "create") {
     const cliente = await prisma.cliente.create({
@@ -147,6 +162,14 @@ async function aplicarCliente(
       entityIdRemoto: op.entityIdRemoto,
       status: "failed",
       error: "Cliente no encontrado",
+    };
+  }
+  if (current.isDefault) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto,
+      status: "failed",
+      error: "El cliente Público en general es de solo lectura",
     };
   }
 
@@ -218,7 +241,7 @@ export async function procesarPush(
     if (op.entityType === "venta") {
       result = await aplicarVenta(prisma, principal, userId, op);
     } else if (op.entityType === "cliente") {
-      result = await aplicarCliente(prisma, op);
+      result = await aplicarCliente(prisma, principal, op);
     } else {
       result = {
         idempotencyKey: op.idempotencyKey,

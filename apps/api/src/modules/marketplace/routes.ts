@@ -362,7 +362,12 @@ export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
       const body = pacienteConfirmarSchema.parse(req.body);
       try {
         const paciente = await confirmarPacienteMaster(app.masterPrisma, body.email, body.codigo);
-        return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt) };
+        const accessToken = await reply.jwtSign({
+          sub: paciente.id,
+          phoneE164: paciente.phoneE164 ?? "",
+          kind: "patient",
+        });
+        return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt), accessToken };
       } catch (err) {
         if (handleErr(reply, err)) return;
         throw err;
@@ -370,32 +375,47 @@ export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.post("/marketplace/profesionales/:id/resenas", async (req, reply) => {
-    const { id } = idParamSchema.parse(req.params);
-    const body = crearResenaPublicaSchema.parse(req.body);
-    try {
-      const review = await crearResena(app.masterPrisma, { professionalId: id, ...body });
-      return reply.code(201).send({
-        id: review.id,
-        moderacionStatus: review.moderacionStatus,
-        publicada: review.moderacionStatus === "publicado",
-      });
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+  app.post(
+    "/marketplace/profesionales/:id/resenas",
+    { preHandler: app.authenticatePatient },
+    async (req, reply) => {
+      const { id } = idParamSchema.parse(req.params);
+      const body = crearResenaPublicaSchema.parse(req.body);
+      try {
+        const review = await crearResena(app.masterPrisma, {
+          professionalId: id,
+          pacienteMasterId: req.user.sub,
+          ...body,
+        });
+        return reply.code(201).send({
+          id: review.id,
+          moderacionStatus: review.moderacionStatus,
+          publicada: review.moderacionStatus === "publicado",
+        });
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
 
   // El paciente reserva una cita con un profesional (queda pendiente hasta que
   // el tenant la confirme).
   app.post(
     "/marketplace/profesionales/:id/reservar",
-    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    {
+      preHandler: app.authenticatePatient,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
     async (req, reply) => {
       const { id } = idParamSchema.parse(req.params);
       const body = reservaCreateSchema.parse(req.body);
       try {
-        const booking = await reservarCita(app.masterPrisma, { professionalId: id, ...body });
+        const booking = await reservarCita(app.masterPrisma, {
+          professionalId: id,
+          pacienteMasterId: req.user.sub,
+          ...body,
+        });
         return reply.code(201).send({ id: booking.id, status: booking.status });
       } catch (err) {
         if (handleErr(reply, err)) return;
@@ -404,10 +424,21 @@ export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get("/marketplace/pacientes/:pacienteId/reservas", async (req) => {
-    const { pacienteId } = pacienteIdParamSchema.parse(req.params);
-    return listarReservasPaciente(app.masterPrisma, pacienteId);
-  });
+  app.get(
+    "/marketplace/pacientes/:pacienteId/reservas",
+    { preHandler: app.authenticatePatient },
+    async (req, reply) => {
+      const { pacienteId } = pacienteIdParamSchema.parse(req.params);
+      if (req.user.kind !== "patient" || req.user.sub !== pacienteId) {
+        return reply.code(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "No autorizado para ver estas reservas",
+        });
+      }
+      return listarReservasPaciente(app.masterPrisma, pacienteId);
+    },
+  );
 };
 
 export default marketplaceTenantRoutes;

@@ -156,24 +156,42 @@ async function aplicarMovimientoTx(
   input: MovimientoInput,
 ): Promise<{ saldo: string }> {
   if (input.monto <= 0) throw new MonederoError(400, "Monto inválido");
+  const montoStr = input.monto.toFixed(2);
+  // Compare-and-swap atómico: el decremento condicional (where saldoMonedero >= monto)
+  // toma lock de fila en Postgres, así dos cargos concurrentes se serializan y el
+  // segundo re-evalúa el where contra el saldo ya descontado (count=0 = insuficiente),
+  // cerrando el lost-update. El abono usa increment relativo por la misma razón.
+  if (input.tipo === "cargo") {
+    const debited = await tx.cliente.updateMany({
+      where: { id: clienteId, saldoMonedero: { gte: montoStr } },
+      data: { saldoMonedero: { decrement: montoStr } },
+    });
+    if (debited.count === 0) {
+      const exists = await tx.cliente.findUnique({
+        where: { id: clienteId },
+        select: { id: true },
+      });
+      if (!exists) throw new MonederoError(404, "Cliente no encontrado");
+      throw new MonederoError(409, "Saldo insuficiente en el monedero");
+    }
+  } else {
+    const credited = await tx.cliente.updateMany({
+      where: { id: clienteId },
+      data: { saldoMonedero: { increment: montoStr } },
+    });
+    if (credited.count === 0) throw new MonederoError(404, "Cliente no encontrado");
+  }
   const cliente = await tx.cliente.findUnique({
     where: { id: clienteId },
     select: { saldoMonedero: true },
   });
   if (!cliente) throw new MonederoError(404, "Cliente no encontrado");
-  const saldoActual = Number(cliente.saldoMonedero);
-  const delta = input.tipo === "abono" ? input.monto : -input.monto;
-  const nuevo = saldoActual + delta;
-  if (nuevo < 0) throw new MonederoError(409, "Saldo insuficiente en el monedero");
-  await tx.cliente.update({
-    where: { id: clienteId },
-    data: { saldoMonedero: nuevo.toFixed(2) },
-  });
+  const nuevo = Number(cliente.saldoMonedero);
   await tx.monederoMovimiento.create({
     data: {
       clienteId,
       tipo: input.tipo,
-      monto: input.monto.toFixed(2),
+      monto: montoStr,
       saldoResultante: nuevo.toFixed(2),
       motivo: input.motivo,
       refTipo: input.refTipo ?? null,
