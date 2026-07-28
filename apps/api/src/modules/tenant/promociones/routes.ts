@@ -12,7 +12,8 @@ const promocionesRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.PROMOCIONES_GESTIONAR);
     const q = promocionListQuerySchema.parse(req.query);
     const where: Record<string, unknown> = {};
-    if (q.status) where.status = q.status;
+    // Por defecto se ocultan las archivadas; se ven solo si se pide ese estado.
+    where.status = q.status ? q.status : { not: "cancelada" };
     if (q.tipo) where.tipo = q.tipo;
     return req.tenantPrisma.promocion.findMany({
       where,
@@ -107,6 +108,14 @@ const promocionesRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.PROMOCIONES_GESTIONAR);
     const { id } = promocionIdParamSchema.parse(req.params);
     return req.tenantPrisma.promocion.update({ where: { id }, data: { status: "pausada" } });
+  });
+
+  // Archivar: la promo deja de correr y se oculta de la lista, pero se conserva
+  // (respeta las que ya se aplicaron en ventas). Se puede consultar filtrando por estado.
+  app.post("/:id/archivar", async (req) => {
+    req.requirePerm(PERMISSIONS.PROMOCIONES_GESTIONAR);
+    const { id } = promocionIdParamSchema.parse(req.params);
+    return req.tenantPrisma.promocion.update({ where: { id }, data: { status: "cancelada" } });
   });
 };
 

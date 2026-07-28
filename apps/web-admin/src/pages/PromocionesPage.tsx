@@ -55,9 +55,15 @@ export function PromocionesPage() {
   }, []);
   useEffect(() => cargar(), [cargar]);
 
-  async function cambiarEstado(id: string, accion: "activar" | "pausar") {
+  async function cambiarEstado(id: string, accion: "activar" | "pausar" | "archivar") {
     await api(`/t/promociones/${id}/${accion}`, { method: "POST" }).catch(() => undefined);
     cargar();
+  }
+
+  function archivar(id: string) {
+    if (confirm("¿Archivar esta promoción? Dejará de correr y se quitará de la lista.")) {
+      void cambiarEstado(id, "archivar");
+    }
   }
 
   return (
@@ -145,6 +151,13 @@ export function PromocionesPage() {
                             </button>
                           )
                         )}
+                        <button
+                          type="button"
+                          onClick={() => archivar(p.id)}
+                          className="text-slate-400 hover:text-danger hover:underline"
+                        >
+                          Archivar
+                        </button>
                       </div>
                     )}
                   </td>
