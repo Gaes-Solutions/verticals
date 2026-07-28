@@ -49,6 +49,49 @@ interface SyncInput {
   dominioPropioAnterior?: string | null;
 }
 
+/** Un host (subdominio de plataforma o dominio propio) ya pertenece a otro negocio. */
+export class DominioEnUsoError extends Error {
+  constructor(readonly host: string) {
+    super(`El host ${host} ya está en uso por otro negocio`);
+    this.name = "DominioEnUsoError";
+  }
+}
+
+/**
+ * El registro global host→tenant es un namespace compartido por todos los
+ * tenants: nadie puede escribir un host que ya pertenece a otro negocio, o
+ * secuestraría su storefront. Mismo dueño = idempotente; host libre = permitido.
+ */
+async function asegurarHostDisponible(
+  master: MasterPrismaClient,
+  tenantSlug: string,
+  host: string,
+): Promise<void> {
+  const existente = await master.tiendaDominio.findUnique({
+    where: { host },
+    select: { tenantSlug: true },
+  });
+  if (existente && existente.tenantSlug !== tenantSlug) {
+    throw new DominioEnUsoError(host);
+  }
+}
+
+/** Pre-chequeo de disponibilidad de los hosts destino antes de tocar nada. */
+export async function asegurarHostsDisponibles(
+  master: MasterPrismaClient,
+  tenantSlug: string,
+  input: { subdominio: string; dominioPropio: string | null },
+): Promise<void> {
+  const apex = apexPlataforma();
+  if (apex) {
+    await asegurarHostDisponible(master, tenantSlug, `${input.subdominio}.${apex}`.toLowerCase());
+  }
+  const actual = input.dominioPropio?.toLowerCase() ?? null;
+  if (actual) {
+    await asegurarHostDisponible(master, tenantSlug, actual);
+  }
+}
+
 /**
  * Mantiene el registro global host→tenant (master) alineado con la config de la
  * tienda: el subdominio de plataforma queda verificado de inmediato; el dominio
@@ -62,6 +105,7 @@ export async function sincronizarDominioMaster(
   const apex = apexPlataforma();
   if (apex) {
     const host = `${input.subdominio}.${apex}`.toLowerCase();
+    await asegurarHostDisponible(master, tenantSlug, host);
     await master.tiendaDominio.upsert({
       where: { host },
       create: { host, tenantSlug, tipo: "subdominio", verificado: true },
@@ -75,6 +119,7 @@ export async function sincronizarDominioMaster(
     await master.tiendaDominio.deleteMany({ where: { host: anterior, tipo: "propio" } });
   }
   if (actual) {
+    await asegurarHostDisponible(master, tenantSlug, actual);
     await master.tiendaDominio.upsert({
       where: { host: actual },
       create: { host: actual, tenantSlug, tipo: "propio", verificado: input.dominioVerificado },

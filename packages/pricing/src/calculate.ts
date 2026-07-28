@@ -20,6 +20,19 @@ function dec(v: DecimalLike): Decimal {
   return v instanceof Decimal ? v : new Decimal(v);
 }
 
+// Defensa en profundidad: una regla con `condicion.montoMinimo`/`cantidadMinima`
+// no numérica (persistida antes de validarse en el borde) NUNCA debe tumbar el
+// motor. Un valor inválido se descarta en vez de lanzar DecimalError.
+function decOrNull(v: DecimalLike | undefined): Decimal | null {
+  if (v === undefined || v === null) return null;
+  try {
+    const d = v instanceof Decimal ? v : new Decimal(v);
+    return d.isFinite() ? d : null;
+  } catch {
+    return null;
+  }
+}
+
 function pickEscalonado(linea: LineaPrecioInput): {
   precio: Decimal;
   matched: boolean;
@@ -67,7 +80,8 @@ function reglaAplica(
       return false;
     }
   }
-  if (cond.cantidadMinima !== undefined && dec(linea.cantidad).lt(dec(cond.cantidadMinima))) {
+  const cantMin = decOrNull(cond.cantidadMinima);
+  if (cantMin !== null && dec(linea.cantidad).lt(cantMin)) {
     return false;
   }
   return true;
@@ -202,8 +216,8 @@ function aplicarMayoreoTotalTicket(
   const candidatas = reglas
     .filter((r) => r.tipo === "mayoreo_por_total_ticket")
     .filter((r) => {
-      const min = r.condicion.montoMinimo;
-      return min === undefined || subtotal.gte(dec(min));
+      const min = decOrNull(r.condicion.montoMinimo);
+      return min === null || subtotal.gte(min);
     })
     .sort((a, b) => a.prioridad - b.prioridad);
 

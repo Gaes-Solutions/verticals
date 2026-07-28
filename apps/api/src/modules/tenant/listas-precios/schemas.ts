@@ -60,6 +60,18 @@ export const escalonadoCreateSchema = z.object({
 
 export const escalonadoIdParamSchema = z.object({ id: z.string().min(1) });
 
+const condicionSchema = z
+  .object({
+    productosAplicables: z.array(z.string()).optional(),
+    categoriasAplicables: z.array(z.string()).optional(),
+    clientesAplicables: z.array(z.string()).optional(),
+    cantidadMinima: positiveDecimalString.optional(),
+    montoMinimo: positiveDecimalString.optional(),
+    bogoCompraCantidad: z.number().int().positive().optional(),
+    bogoLlevaCantidad: z.number().int().positive().optional(),
+  })
+  .strict();
+
 export const reglaCreateSchema = z.object({
   codigo: z
     .string()
@@ -81,7 +93,7 @@ export const reglaCreateSchema = z.object({
   stackable: z.boolean().default(false),
   excluyeProductosConEscalonado: z.boolean().default(true),
   aplicaA: z.enum(["pos_fisico", "ecommerce", "b2b", "todos"]).default("todos"),
-  condicion: z.record(z.string(), z.unknown()).default({}),
+  condicion: condicionSchema.default({}),
   accion: z.object({
     tipo: z.enum(["porcentaje", "monto_fijo", "precio_override"]),
     valor: decimalString,
@@ -99,7 +111,7 @@ export const reglaUpdateSchema = z.object({
   stackable: z.boolean().optional(),
   excluyeProductosConEscalonado: z.boolean().optional(),
   aplicaA: z.enum(["pos_fisico", "ecommerce", "b2b", "todos"]).optional(),
-  condicion: z.record(z.string(), z.unknown()).optional(),
+  condicion: condicionSchema.optional(),
   accion: z
     .object({
       tipo: z.enum(["porcentaje", "monto_fijo", "precio_override"]),

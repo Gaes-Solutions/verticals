@@ -1,3 +1,4 @@
+import { isSsrfSafeUrlSync } from "@gaespos/recargas";
 import { z } from "zod";
 
 const positiveDecimalString = z
@@ -40,7 +41,13 @@ export const recargaDisputarSchema = z.object({
 });
 
 export const proveedorConfigUpsertSchema = z.object({
-  apiUrl: z.string().url().optional(),
+  apiUrl: z
+    .string()
+    .url()
+    .refine(isSsrfSafeUrlSync, {
+      message: "apiUrl debe ser https y no apuntar a hosts internos/privados",
+    })
+    .optional(),
   apiKeyEncrypted: z.string().min(8).max(500).optional(),
   webhookSecretEncrypted: z.string().min(8).max(500).optional(),
   isPrimario: z.boolean().optional(),
