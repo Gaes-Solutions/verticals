@@ -41,28 +41,48 @@ export async function aplicarCargoFiado(tx: Tx, input: CargoFiadoInput): Promise
   }
 
   const fiado = await ensureFiado(tx, input.clienteId);
-  const totalActual = new Decimal(fiado.montoTotal.toString());
   const monto = new Decimal(input.monto);
-  const totalNuevo = totalActual.plus(monto);
   const limite = new Decimal(cliente.limiteFiado.toString());
 
-  if (limite.gt(ZERO) && totalNuevo.gt(limite)) {
-    throw new FiadoError(409, "Excede el límite de fiado autorizado", {
-      limite: limite.toString(),
-      totalActual: totalActual.toString(),
-      intentado: monto.toString(),
-      disponible: Decimal.max(limite.minus(totalActual), ZERO).toString(),
+  if (limite.gt(ZERO)) {
+    const maxActualPermitido = limite.minus(monto);
+    // Compare-and-swap atómico: el incremento condicional toma lock de fila, así dos
+    // ventas fiado concurrentes sobre el mismo cliente se serializan y la segunda
+    // re-evalúa el límite contra el saldo ya cargado, cerrando el lost-update y el
+    // bypass del límite.
+    const charged = maxActualPermitido.lt(ZERO)
+      ? { count: 0 }
+      : await tx.fiado.updateMany({
+          where: { id: fiado.id, montoTotal: { lte: maxActualPermitido.toString() } },
+          data: {
+            montoTotal: { increment: monto.toString() },
+            fechaUltimoMovimiento: new Date(),
+            estado: "activo",
+          },
+        });
+    if (charged.count === 0) {
+      const actual = await tx.fiado.findUnique({
+        where: { id: fiado.id },
+        select: { montoTotal: true },
+      });
+      const totalActual = new Decimal((actual?.montoTotal ?? ZERO).toString());
+      throw new FiadoError(409, "Excede el límite de fiado autorizado", {
+        limite: limite.toString(),
+        totalActual: totalActual.toString(),
+        intentado: monto.toString(),
+        disponible: Decimal.max(limite.minus(totalActual), ZERO).toString(),
+      });
+    }
+  } else {
+    await tx.fiado.update({
+      where: { id: fiado.id },
+      data: {
+        montoTotal: { increment: monto.toString() },
+        fechaUltimoMovimiento: new Date(),
+        estado: "activo",
+      },
     });
   }
-
-  await tx.fiado.update({
-    where: { id: fiado.id },
-    data: {
-      montoTotal: totalNuevo.toString(),
-      fechaUltimoMovimiento: new Date(),
-      estado: "activo",
-    },
-  });
   await tx.fiadoMovimiento.create({
     data: {
       fiadoId: fiado.id,

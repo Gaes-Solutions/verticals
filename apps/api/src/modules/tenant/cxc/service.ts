@@ -7,6 +7,15 @@ type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 
 const ZERO = new Decimal(0);
 
+// Namespace seed for pg_advisory_xact_lock keyed por cliente B2B: serializa
+// ventas a crédito concurrentes del mismo cliente y cierra el TOCTOU de la
+// línea de crédito (chequeo de disponible + alta de CxC en la misma tx).
+const CREDITO_B2B_LOCK_NAMESPACE = 9274183n;
+
+async function lockCreditoB2b(tx: Tx, clienteB2bId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clienteB2bId}, ${CREDITO_B2B_LOCK_NAMESPACE}))`;
+}
+
 export class CxcError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -64,7 +73,7 @@ function validateClienteRefs(input: { clienteId?: string; clienteB2bId?: string 
 }
 
 export async function lineaCreditoDisponible(
-  client: TenantClient,
+  client: TenantClient | Tx,
   clienteB2bId: string,
 ): Promise<{
   lineaAutorizada: string;
@@ -108,12 +117,20 @@ export async function lineaCreditoDisponible(
   };
 }
 
+/**
+ * Valida de forma autoritativa que la línea de crédito B2B alcanza. DEBE
+ * ejecutarse dentro de un `$transaction`: toma un advisory lock por cliente para
+ * serializar las ventas a crédito concurrentes y evaluar la disponibilidad
+ * contra el estado ya comprometido por la transacción que entra primero,
+ * cerrando el TOCTOU de sobregiro de la línea.
+ */
 export async function validarCreditoB2bSuficiente(
-  client: TenantClient,
+  tx: Tx,
   clienteB2bId: string,
   montoSolicitado: string,
 ): Promise<{ diasCredito: number; tasaInteresMoraPct: string | null }> {
-  const info = await lineaCreditoDisponible(client, clienteB2bId);
+  await lockCreditoB2b(tx, clienteB2bId);
+  const info = await lineaCreditoDisponible(tx, clienteB2bId);
   const monto = new Decimal(montoSolicitado);
   if (monto.gt(new Decimal(info.disponible))) {
     throw new CxcError(409, "Excede la línea de crédito disponible del cliente B2B", {

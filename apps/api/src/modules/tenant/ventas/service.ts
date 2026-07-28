@@ -485,22 +485,16 @@ export async function crearVenta(
     input.clienteB2bId,
   );
 
-  let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
-  if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
-    try {
-      creditoB2b = await validarCreditoB2bSuficiente(
-        client,
-        input.clienteB2bId,
-        pagoCreditoB2b.toString(),
-      );
-    } catch (err) {
-      if (err instanceof CxcError) throw new VentaError(err.statusCode, err.message, err.extra);
-      throw err;
-    }
-  }
-
   try {
     return await client.$transaction(async (tx) => {
+      let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
+      if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
+        creditoB2b = await validarCreditoB2bSuficiente(
+          tx,
+          input.clienteB2bId,
+          pagoCreditoB2b.toString(),
+        );
+      }
       const result = await persistirVenta(tx, {
         sucursalId: sucursal.id,
         sucursalCodigo: sucursal.codigo,
