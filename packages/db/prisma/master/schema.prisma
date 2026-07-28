@@ -544,6 +544,15 @@ enum ConsentSubjectType {
   pet
 }
 
+// Procedencia del consentimiento. Solo `patient_portal` (autorizado por el
+// paciente autenticado) desbloquea lectura cross-tenant del PHR;
+// `tenant_attested` (la clínica atestigua consent presencial) limita la lectura
+// a los registros que la propia clínica publicó.
+enum ConsentGrantedVia {
+  patient_portal
+  tenant_attested
+}
+
 enum FamilyRelationship {
   mother
   father
@@ -704,6 +713,7 @@ model PatientConsent {
   patientId    String             @map("patient_id")
   tenantId     String             @map("tenant_id")
   scope        ConsentScope       @default(full_phr)
+  grantedVia   ConsentGrantedVia  @default(patient_portal) @map("granted_via")
   revocable    Boolean            @default(true)
   termsVersion String             @default("v1") @map("terms_version")
   ipAtGrant    String?            @map("ip_at_grant")

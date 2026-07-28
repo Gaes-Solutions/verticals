@@ -125,9 +125,11 @@ export const publicarRegistroSchema = z.object({
   isVisibleToPatient: z.boolean().optional(),
 });
 
+// Un consent atestiguado por la clínica (sin verificación del paciente) NO puede
+// otorgarse `full_phr`: acota el blast radius a los tipos que declara.
 export const registrarConsentTenantSchema = z.object({
   patientId: z.string().min(1),
-  scope: consentScopeEnum,
+  scope: z.enum(["appointments_only", "prescriptions_only", "vaccines_only"]),
 });
 
 export const patientIdParamSchema = z.object({ patientId: z.string().min(1) });

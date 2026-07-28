@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import type { TenantPrismaClient } from "@gaespos/db";
 
+type MonederoTx = Parameters<Parameters<TenantPrismaClient["$transaction"]>[0]>[0];
+
 export class MonederoError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -138,48 +140,58 @@ export async function getMonedero(
   };
 }
 
+interface MovimientoInput {
+  tipo: "abono" | "cargo";
+  monto: number;
+  motivo: string;
+  refTipo?: string;
+  refId?: string;
+}
+
+/** Aplica un movimiento dentro de una transacción existente. */
+async function aplicarMovimientoTx(
+  tx: MonederoTx,
+  usuarioId: string,
+  clienteId: string,
+  input: MovimientoInput,
+): Promise<{ saldo: string }> {
+  if (input.monto <= 0) throw new MonederoError(400, "Monto inválido");
+  const cliente = await tx.cliente.findUnique({
+    where: { id: clienteId },
+    select: { saldoMonedero: true },
+  });
+  if (!cliente) throw new MonederoError(404, "Cliente no encontrado");
+  const saldoActual = Number(cliente.saldoMonedero);
+  const delta = input.tipo === "abono" ? input.monto : -input.monto;
+  const nuevo = saldoActual + delta;
+  if (nuevo < 0) throw new MonederoError(409, "Saldo insuficiente en el monedero");
+  await tx.cliente.update({
+    where: { id: clienteId },
+    data: { saldoMonedero: nuevo.toFixed(2) },
+  });
+  await tx.monederoMovimiento.create({
+    data: {
+      clienteId,
+      tipo: input.tipo,
+      monto: input.monto.toFixed(2),
+      saldoResultante: nuevo.toFixed(2),
+      motivo: input.motivo,
+      refTipo: input.refTipo ?? null,
+      refId: input.refId ?? null,
+      creadoPorId: usuarioId,
+    },
+  });
+  return { saldo: nuevo.toFixed(2) };
+}
+
 /** Aplica un movimiento (abono o cargo) en transacción y devuelve el saldo nuevo. */
 export async function moverMonedero(
   client: TenantPrismaClient,
   usuarioId: string,
   clienteId: string,
-  input: {
-    tipo: "abono" | "cargo";
-    monto: number;
-    motivo: string;
-    refTipo?: string;
-    refId?: string;
-  },
+  input: MovimientoInput,
 ): Promise<{ saldo: string }> {
-  if (input.monto <= 0) throw new MonederoError(400, "Monto inválido");
-  return client.$transaction(async (tx) => {
-    const cliente = await tx.cliente.findUnique({
-      where: { id: clienteId },
-      select: { saldoMonedero: true },
-    });
-    if (!cliente) throw new MonederoError(404, "Cliente no encontrado");
-    const saldoActual = Number(cliente.saldoMonedero);
-    const delta = input.tipo === "abono" ? input.monto : -input.monto;
-    const nuevo = saldoActual + delta;
-    if (nuevo < 0) throw new MonederoError(409, "Saldo insuficiente en el monedero");
-    await tx.cliente.update({
-      where: { id: clienteId },
-      data: { saldoMonedero: nuevo.toFixed(2) },
-    });
-    await tx.monederoMovimiento.create({
-      data: {
-        clienteId,
-        tipo: input.tipo,
-        monto: input.monto.toFixed(2),
-        saldoResultante: nuevo.toFixed(2),
-        motivo: input.motivo,
-        refTipo: input.refTipo ?? null,
-        refId: input.refId ?? null,
-        creadoPorId: usuarioId,
-      },
-    });
-    return { saldo: nuevo.toFixed(2) };
-  });
+  return client.$transaction((tx) => aplicarMovimientoTx(tx, usuarioId, clienteId, input));
 }
 
 /** Canjea una gift card abonando su saldo al monedero de un cliente. */
@@ -199,16 +211,24 @@ export async function canjearGiftCardAMonedero(
   const saldoCard = Number(card.saldoActual);
   if (saldoCard <= 0) throw new MonederoError(409, "La tarjeta no tiene saldo");
 
-  const res = await moverMonedero(client, usuarioId, clienteId, {
-    tipo: "abono",
-    monto: saldoCard,
-    motivo: `Canje tarjeta de regalo ${codigo}`,
-    refTipo: "gift_card",
-    refId: card.id,
+  return client.$transaction(async (tx) => {
+    // Compare-and-swap: solo un canje concurrente puede voltear activa→agotada.
+    // Postgres serializa el updateMany sobre la fila; el segundo request re-evalúa
+    // el where con status ya "agotada" y obtiene count=0, cerrando el TOCTOU. El
+    // abono al monedero va en la misma transacción: si falla, se revierte el consumo.
+    const consumed = await tx.tarjetaRegalo.updateMany({
+      where: { id: card.id, status: "activa" },
+      data: { saldoActual: "0", status: "agotada", canjeadaAt: new Date() },
+    });
+    if (consumed.count === 0) throw new MonederoError(409, "La tarjeta ya fue canjeada");
+
+    const res = await aplicarMovimientoTx(tx, usuarioId, clienteId, {
+      tipo: "abono",
+      monto: saldoCard,
+      motivo: `Canje tarjeta de regalo ${codigo}`,
+      refTipo: "gift_card",
+      refId: card.id,
+    });
+    return { saldo: res.saldo, abonado: saldoCard.toFixed(2) };
   });
-  await client.tarjetaRegalo.update({
-    where: { id: card.id },
-    data: { saldoActual: "0", status: "agotada", canjeadaAt: new Date() },
-  });
-  return { saldo: res.saldo, abonado: saldoCard.toFixed(2) };
 }

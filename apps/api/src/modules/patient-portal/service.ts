@@ -316,6 +316,7 @@ export async function otorgarConsent(
       subjectId,
       tenantId: input.tenantId,
       scope: input.scope,
+      grantedVia: "patient_portal",
       ...(input.ip !== undefined ? { ipAtGrant: input.ip } : {}),
     },
   });
@@ -672,6 +673,7 @@ export async function registrarConsentimientoTenant(
       subjectId: input.patientId,
       tenantId: input.tenantId,
       scope: input.scope,
+      grantedVia: "tenant_attested",
       ...(input.ip !== undefined ? { ipAtGrant: input.ip } : {}),
     },
   });
@@ -687,15 +689,27 @@ export async function leerExpedienteTenant(
   if (consents.length === 0) {
     throw new PhrError(403, "El paciente no ha otorgado consentimiento a este consultorio");
   }
-  const cubreTodo = consents.some((c) => c.scope === "full_phr");
-  const tiposPermitidos = consents
+  // Solo un consentimiento autorizado por el paciente (patient_portal) desbloquea
+  // lectura cross-tenant. Un consent atestiguado por la clínica (tenant_attested)
+  // solo permite releer los registros que la propia clínica publicó.
+  const consentsAutorizados = consents.filter((c) => c.grantedVia === "patient_portal");
+  const cubreTodo = consentsAutorizados.some((c) => c.scope === "full_phr");
+  const tiposPermitidos = consentsAutorizados
     .flatMap((c) =>
       SCOPE_CUBRE[c.scope] === "*" ? [] : (SCOPE_CUBRE[c.scope] as FhirResourceType[]),
     )
     .filter((t, i, arr) => arr.indexOf(t) === i);
 
-  const where: Record<string, unknown> = { patientId: input.patientId };
-  if (!cubreTodo) where.resourceType = { in: tiposPermitidos };
+  const propios = { tenantId: input.tenantId };
+  const where: Record<string, unknown> = cubreTodo
+    ? { patientId: input.patientId, OR: [propios, { isVisibleToPatient: true }] }
+    : {
+        patientId: input.patientId,
+        OR:
+          tiposPermitidos.length > 0
+            ? [propios, { resourceType: { in: tiposPermitidos }, isVisibleToPatient: true }]
+            : [propios],
+      };
 
   const records = await master.patientRecord.findMany({
     where,
