@@ -1,4 +1,5 @@
 import type { TenantPrismaClient } from "@gaespos/db";
+import { PERMISSIONS, type PermissionPrincipal, hasPermission } from "@gaespos/permissions";
 import {
   type SyncOpResult,
   type SyncOperation,
@@ -7,6 +8,7 @@ import {
   type SyncPushResult,
   decideUpdate,
 } from "@gaespos/sync";
+import { ventaCreateSchema } from "../ventas/schemas.js";
 import { VentaError, crearVenta } from "../ventas/service.js";
 
 /** Campos del Cliente que el sync compara para detectar conflictos field-level. */
@@ -47,12 +49,43 @@ async function storeProcessed(
 
 async function aplicarVenta(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   userId: string,
   op: SyncOperation,
 ): Promise<SyncOpResult> {
+  // Misma autorización que la ruta directa POST /ventas: sync.usar no basta para
+  // crear ventas; se exige ventas.crear (defensa en profundidad, RBAC en la capa
+  // de acceso, no dentro de crearVenta).
+  if (!hasPermission(principal, PERMISSIONS.VENTAS_CREAR)) {
+    return {
+      idempotencyKey: op.idempotencyKey,
+      entityType: op.entityType,
+      entityIdLocal: op.entityIdLocal,
+      entityIdRemoto: null,
+      status: "failed",
+      error: `Permiso requerido: ${PERMISSIONS.VENTAS_CREAR}`,
+    };
+  }
+
+  // El payload llega como JSON arbitrario; se valida con el mismo esquema que la
+  // ruta directa POST /ventas antes de tocar el motor de ventas.
+  const parsed = ventaCreateSchema.safeParse(op.payload);
+  if (!parsed.success) {
+    return {
+      idempotencyKey: op.idempotencyKey,
+      entityType: op.entityType,
+      entityIdLocal: op.entityIdLocal,
+      entityIdRemoto: null,
+      status: "failed",
+      error: parsed.error.issues[0]?.message ?? "payload de venta inválido",
+    };
+  }
+
+  const permiteDescuentoAlto = hasPermission(principal, PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO);
+
   // Ventas son inmutables: la idempotencia (dedup arriba) es la única garantía.
   try {
-    const venta = (await crearVenta(prisma, userId, op.payload as never)) as { ventaId: string };
+    const venta = await crearVenta(prisma, userId, parsed.data, { permiteDescuentoAlto });
     return {
       idempotencyKey: op.idempotencyKey,
       entityType: op.entityType,
@@ -157,6 +190,7 @@ async function aplicarCliente(
 
 export async function procesarPush(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   userId: string,
   ops: SyncOperation[],
   deviceId?: string,
@@ -182,7 +216,7 @@ export async function procesarPush(
 
     let result: SyncOpResult;
     if (op.entityType === "venta") {
-      result = await aplicarVenta(prisma, userId, op);
+      result = await aplicarVenta(prisma, principal, userId, op);
     } else if (op.entityType === "cliente") {
       result = await aplicarCliente(prisma, op);
     } else {

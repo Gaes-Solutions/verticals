@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { getTenantClient } from "@gaespos/db";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { type MasterPrismaClient, getTenantClient } from "@gaespos/db";
 import {
   type AuthenticationResponseJSON,
   type AuthenticatorTransportFuture,
@@ -29,6 +29,7 @@ function rp() {
 }
 
 interface ChallengePayload {
+  jti: string;
   challenge: string;
   purpose: "reg" | "login";
   tenantSlug: string;
@@ -58,6 +59,32 @@ function verificarChallenge(token: string): ChallengePayload | null {
     return payload.exp < Date.now() ? null : payload;
   } catch {
     return null;
+  }
+}
+
+// Marca el challenge como consumido de forma atómica: la inserción del jti
+// (PK único) falla con P2002 si ya se usó → replay rechazado. Cumple el
+// requisito WebAuthn de challenge de un solo uso.
+async function consumirChallenge(
+  masterPrisma: MasterPrismaClient,
+  jti: string,
+  exp: number,
+): Promise<boolean> {
+  try {
+    await masterPrisma.webauthnUsedChallenge.create({
+      data: { id: jti, expiresAt: new Date(exp) },
+    });
+    return true;
+  } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code: unknown }).code === "P2002"
+    ) {
+      return false;
+    }
+    throw err;
   }
 }
 
@@ -107,6 +134,7 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
         authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
       });
       const challengeToken = firmarChallenge({
+        jti: randomUUID(),
         challenge: options.challenge,
         purpose: "reg",
         tenantSlug,
@@ -147,6 +175,11 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
             .code(400)
             .send({ statusCode: 400, error: "Bad Request", message: "Credencial no verificada" });
         }
+        if (!(await consumirChallenge(app.masterPrisma, ch.jti, ch.exp))) {
+          return reply
+            .code(400)
+            .send({ statusCode: 400, error: "Bad Request", message: "Challenge inválido" });
+        }
         const cred = verification.registrationInfo.credential;
         await app.masterPrisma.webauthnCredential.create({
           data: {
@@ -180,6 +213,7 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
       allowCredentials: [],
     });
     const challengeToken = firmarChallenge({
+      jti: randomUUID(),
       challenge: options.challenge,
       purpose: "login",
       tenantSlug,
@@ -226,6 +260,10 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
         return unauthorized(reply);
       }
       if (!verified) return unauthorized(reply);
+
+      if (!(await consumirChallenge(app.masterPrisma, ch.jti, ch.exp))) {
+        return unauthorized(reply);
+      }
 
       await app.masterPrisma.webauthnCredential.update({
         where: { id: cred.id },
