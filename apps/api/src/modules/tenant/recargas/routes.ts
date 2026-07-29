@@ -53,6 +53,19 @@ interface ProcesarBody {
   proveedorCodigo?: "recargaki" | "mtscellular" | "pymeya" | "mock" | undefined;
 }
 
+function redactProveedorConfig(cfg: {
+  apiKeyEncrypted: string | null;
+  webhookSecretEncrypted: string | null;
+  [k: string]: unknown;
+}): Record<string, unknown> {
+  const { apiKeyEncrypted, webhookSecretEncrypted, ...rest } = cfg;
+  return {
+    ...rest,
+    apiKeyConfigurado: apiKeyEncrypted != null && apiKeyEncrypted.length > 0,
+    webhookSecretConfigurado: webhookSecretEncrypted != null && webhookSecretEncrypted.length > 0,
+  };
+}
+
 function buildProcesarExtras(body: ProcesarBody): Record<string, unknown> {
   return {
     ...(body.cajaAperturaId ? { cajaAperturaId: body.cajaAperturaId } : {}),
@@ -118,7 +131,7 @@ const recargasRoutes: FastifyPluginAsync = async (app) => {
       create: { proveedorCodigo: codigo, ...data },
       update: data,
     });
-    return reply.code(200).send(cfg);
+    return reply.code(200).send(redactProveedorConfig(cfg));
   });
 
   app.get("/", async (req) => {

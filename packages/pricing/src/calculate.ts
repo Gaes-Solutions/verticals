@@ -196,7 +196,7 @@ export function calcularLinea(
   descuentos.push(...paso3.descuentos);
 
   const precioFinal = paso3.precio;
-  const subtotal = precioFinal.mul(cantidad);
+  const subtotal = Decimal.max(precioFinal.mul(cantidad), ZERO);
 
   return {
     productoVarianteId: linea.productoVarianteId,

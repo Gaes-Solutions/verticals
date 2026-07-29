@@ -4,7 +4,7 @@ const TIPO_VENTA = z.enum(["unidad", "peso", "volumen", "tiempo", "servicio"]);
 const UNIDAD_MEDIDA = z.enum(["pza", "kg", "g", "lt", "ml", "m", "m2", "hora", "servicio"]);
 
 const decimalString = z
-  .union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/)])
+  .union([z.number().finite().min(0), z.string().regex(/^\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 export const productoCreateSchema = z.object({
