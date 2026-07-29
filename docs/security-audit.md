@@ -345,3 +345,24 @@ Rama: `seguridad/auditoria`. 1 vulnerabilidad aprobada por el panel y aplicada.
 **Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores. Las únicas referencias residuales a `registrarUsoCupon` viven en `apps/api/dist` (artefactos compilados, se regeneran en el build); la fuente está limpia.
 
 ---
+
+## Ronda 10 — 2026-07-28
+
+Rama: `seguridad/auditoria`. 1 vulnerabilidad aprobada por el panel y aplicada.
+
+### R10-01 · MEDIUM · Las sesiones de los portales B2B/cliente/partner nunca se re-validan contra el estado activo de la cuenta o del tenant (sin ruta de revocación) (broken-access-control)
+
+- **Archivos**: `apps/api/src/plugins/auth.ts`
+- **Explotación**: A diferencia de la superficie POS/admin del tenant (`plugins/tenant-context.ts:48-67`), que recarga el usuario en cada request y rechaza usuarios inactivos y tenants cancelados, los portales de cliente/partner/B2B se apoyaban únicamente en los decoradores JWT `authenticateClienteB2b` / `authenticateCliente` / `authenticatePartner`. Esos decoradores solo ejecutaban `req.jwtVerify()` y comprobaban `req.user.kind`; nunca recargaban el principal para confirmar `clienteB2bUsuario.isActive` / `clienteB2b.isActive` / `partner.estado==='activo'` / `tenant.status!=='cancelled'`. `loginUsuarioB2b` aplicaba esos flags solo al momento del login, y no existía revocación server-side de tokens. Impacto concreto: una empresa mayorista da de baja a un comprador que dejó la compañía (`clienteB2bUsuario.isActive=false`), o el tenant se cancela por falta de pago, y cualquier JWT `cliente_b2b` ya emitido conservaba acceso total al portal — `POST /b2b-portal/pedidos` para colocar pedidos contra la línea de crédito de la empresa, leer estado-de-cuenta y precios personalizados — hasta que el token expirara naturalmente (`ACCESS_TOKEN_TTL_MIN`, default 15 min), sin forma de forzar el logout. El mismo patrón permitía a un partner suspendido seguir pegándole a `/partner/me`, `/commissions`, `/payouts`.
+- **Decisión del panel**: Ganadora propuesta 1 (consenso unánime 3/3). Re-validar el principal en CADA request dentro de los decoradores de auth de portal, replicando el patrón ya probado en `plugins/tenant-context.ts`. Se corrige en el ÚNICO choke-point común a los tres portales, cubriendo todos los call sites (`b2b-portal/routes.ts:109`, cliente-portal, partner-portal) sin tocar handlers, rutas, servicios ni el shape de los tokens. Mínimo riesgo de regresión (un solo archivo, solo lecturas y condicionales, sin refresh/session store). Respeta la separación tenantPrisma/masterPrisma y usa campos verificados en schema (`Cliente.isActive`, `ClienteB2b.isActive`, `ClienteB2bUsuario.isActive`, `Partner.estado`, `Tenant.status`). Fuera de scope (no incluido): comparación `usuario.clienteB2bId` vs `req.user.clienteB2bId` para reasignación de empresa — no es la brecha reportada.
+- **Fix aplicado**:
+  - Import único `import { getTenantClient } from "@gaespos/db"` (`auth.ts:1`); `masterPrisma` vía `app.masterPrisma` (el plugin `auth` ya declara `dependencies: ["db"]`).
+  - Helper local `tenantActivo(slug): Promise<boolean>` (línea 188) dentro de `authPlugin`, antes de los decoradores de portal: `app.masterPrisma.tenant.findUnique({ where: { slug } })` → `!!tenant && tenant.status !== "cancelled"` (mismo criterio que `tenant-context.ts:51`).
+  - `authenticateCliente` (línea 193): tras `jwtVerify()` y check `kind === "cliente"`, rechaza si `!tenantActivo(tenantSlug)` ("Portal no disponible") y recarga `getTenantClient(tenantSlug).cliente.findUnique({ where: { id: sub }, select: { isActive: true } })`, rechazando si `!cliente || !cliente.isActive`.
+  - `authenticatePartner` (línea 214): tras check `kind === "partner"` (partner es master-level, NO aplica tenant), recarga `app.masterPrisma.partner.findUnique({ where: { id: sub }, select: { estado: true } })`, rechazando si `!partner || partner.estado !== "activo"`.
+  - `authenticateClienteB2b` (línea 232): tras check `kind === "cliente_b2b"`, rechaza si `!tenantActivo(tenantSlug)` y recarga `getTenantClient(tenantSlug).clienteB2bUsuario.findUnique({ where: { id: sub }, select: { isActive: true, clienteB2b: { select: { isActive: true } } } })`, rechazando si `!usuario || !usuario.isActive || !usuario.clienteB2b.isActive`. Cierra el impacto concreto: `POST /b2b-portal/pedidos`, `/estado-cuenta` y precios personalizados.
+  - `getTenantClient(slug)` retorna el client de forma síncrona (sin `await`), igual que `tenant-context.ts:59`. `req.user` queda narrow por el check de `kind`, por lo que `tenantSlug`/`sub` están disponibles con TS strict sin `any`. No se toca Zod, rutas, servicios ni el shape de los tokens. Efecto: comprador dado de baja, empresa desactivada, cliente B2C inactivo, partner suspendido o tenant cancelado pierden acceso al portal en el próximo request, sin esperar al TTL del access token.
+
+**Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
+
+---

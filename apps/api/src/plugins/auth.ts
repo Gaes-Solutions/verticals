@@ -1,5 +1,6 @@
 import fastifyCookie from "@fastify/cookie";
 import fastifyJwt from "@fastify/jwt";
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "../config.js";
@@ -182,6 +183,13 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
   });
 
+  // Rechaza tokens de tenants cancelados: la sesión del portal (B2C/B2B) muere
+  // en cuanto el tenant se cancela, no al expirar el access token.
+  const tenantActivo = async (slug: string): Promise<boolean> => {
+    const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
+    return !!tenant && tenant.status !== "cancelled";
+  };
+
   app.decorate("authenticateCliente", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
@@ -190,6 +198,16 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente");
+    }
+    if (!(await tenantActivo(req.user.tenantSlug))) {
+      return rejectUnauthorized(reply, "Portal no disponible");
+    }
+    const cliente = await getTenantClient(req.user.tenantSlug).cliente.findUnique({
+      where: { id: req.user.sub },
+      select: { isActive: true },
+    });
+    if (!cliente || !cliente.isActive) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
     }
   });
 
@@ -202,6 +220,13 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     if (req.user.kind !== "partner") {
       return rejectUnauthorized(reply, "Se requiere sesión de partner");
     }
+    const partner = await app.masterPrisma.partner.findUnique({
+      where: { id: req.user.sub },
+      select: { estado: true },
+    });
+    if (!partner || partner.estado !== "activo") {
+      return rejectUnauthorized(reply, "Cuenta de partner inactiva o no encontrada");
+    }
   });
 
   app.decorate("authenticateClienteB2b", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -212,6 +237,16 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente_b2b") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente mayorista");
+    }
+    if (!(await tenantActivo(req.user.tenantSlug))) {
+      return rejectUnauthorized(reply, "Portal no disponible");
+    }
+    const usuario = await getTenantClient(req.user.tenantSlug).clienteB2bUsuario.findUnique({
+      where: { id: req.user.sub },
+      select: { isActive: true, clienteB2b: { select: { isActive: true } } },
+    });
+    if (!usuario || !usuario.isActive || !usuario.clienteB2b.isActive) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
     }
   });
 };
