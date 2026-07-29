@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { TenantPrismaClient } from "@gaespos/db";
 
-type MonederoTx = Parameters<Parameters<TenantPrismaClient["$transaction"]>[0]>[0];
+export type MonederoTx = Parameters<Parameters<TenantPrismaClient["$transaction"]>[0]>[0];
 
 export class MonederoError extends Error {
   constructor(
@@ -149,7 +149,7 @@ interface MovimientoInput {
 }
 
 /** Aplica un movimiento dentro de una transacción existente. */
-async function aplicarMovimientoTx(
+export async function aplicarMovimientoTx(
   tx: MonederoTx,
   usuarioId: string,
   clienteId: string,

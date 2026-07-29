@@ -16,10 +16,11 @@ import {
   findTenantBySlug,
   loadTenantUserById,
   loadTenantUserMfa,
+  recordTenantMfaStep,
   require2faParaUsuario,
   updateLastLogin,
   verifyPassword,
-  verifyTenantTotp,
+  verifyTenantTotpStep,
 } from "./service.js";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -214,9 +215,13 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
       }
       const mfa = await loadTenantUserMfa(tenantPrisma, { id: usuarioId });
       if (mfa?.mfaEnabled && mfa.mfaSecret && mfa.mfaVerifiedAt) {
-        if (!totp || !verifyTenantTotp(totp, mfa.mfaSecret)) {
+        const totpStep = totp ? verifyTenantTotpStep(totp, mfa.mfaSecret) : null;
+        const totpOk =
+          totpStep !== null && (mfa.mfaLastStep === null || totpStep > mfa.mfaLastStep);
+        if (!totpOk || totpStep === null) {
           return unauthorized(reply, "Código incorrecto");
         }
+        await recordTenantMfaStep(tenantPrisma, usuarioId, totpStep);
       }
       const existentes = await app.masterPrisma.webauthnCredential.findMany({
         where: { tenantSlug, usuarioId },

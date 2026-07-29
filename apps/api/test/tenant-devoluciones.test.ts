@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import { MockFacturamaClient } from "@gaespos/fiscal";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +13,7 @@ const CASHIER_PASSWORD = "ChangeMe!2026";
 let app: FastifyInstance;
 let ownerToken: string;
 let cashierToken: string;
+let cashierUserId: string;
 let sucursalId: string;
 let cajaId: string;
 let varianteId: string;
@@ -54,8 +56,9 @@ beforeAll(async () => {
     nombre: "Cajero Dev",
   });
   ownerToken = (await loginTenantUser(app, TENANT_SLUG, OWNER_EMAIL, OWNER_PASSWORD)).accessToken;
-  cashierToken = (await loginTenantUser(app, TENANT_SLUG, CASHIER_EMAIL, CASHIER_PASSWORD))
-    .accessToken;
+  const cashierLogin = await loginTenantUser(app, TENANT_SLUG, CASHIER_EMAIL, CASHIER_PASSWORD);
+  cashierToken = cashierLogin.accessToken;
+  cashierUserId = cashierLogin.userId;
 
   const sucs = await app.inject({ method: "GET", url: "/t/sucursales", headers: authOwner() });
   const suc = (sucs.json() as Array<{ id: string; codigo: string }>).find(
@@ -536,6 +539,109 @@ describe("CFDI Egreso sobre venta facturada", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().cfdiEgresoId).toBeNull();
+  });
+});
+
+describe("reembolso a saldo a favor (monedero)", () => {
+  async function ventaConCliente(cantidad: string, precio: string): Promise<string> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/ventas",
+      headers: authCashier(),
+      payload: {
+        sucursalId,
+        cajaId,
+        clienteId,
+        lineas: [{ varianteId: varianteIdSinIva, cantidad }],
+        pagos: [{ metodo: "efectivo", monto: precio }],
+      },
+    });
+    if (res.statusCode !== 201) throw new Error(`venta failed: ${res.body}`);
+    return res.json().ventaId as string;
+  }
+
+  async function getSaldo(): Promise<number> {
+    const res = await app.inject({
+      method: "GET",
+      url: `/t/monedero/clientes/${clienteId}`,
+      headers: authOwner(),
+    });
+    return Number(res.json().saldo);
+  }
+
+  it("saldo_a_favor acredita el monedero del cliente por el total devuelto", async () => {
+    const ventaId = await ventaConCliente("3", "300");
+    const [vl1] = await getVentaLineaIds(ventaId);
+    const saldoBefore = await getSaldo();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/ventas/${ventaId}/devolver`,
+      headers: authCashier(),
+      payload: {
+        motivo: "cambio_opinion",
+        metodoReembolso: "saldo_a_favor",
+        lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "2" }],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as {
+      devolucionId: string;
+      reembolso: { metodo: string; aplicado: string };
+    };
+    // (c) la respuesta reporta el reembolso aplicado
+    expect(body.reembolso.metodo).toBe("saldo_a_favor");
+    expect(Number(body.reembolso.aplicado)).toBe(200);
+
+    // (a) el saldo del monedero subió exactamente por el total devuelto
+    const saldoAfter = await getSaldo();
+    expect(saldoAfter).toBe(saldoBefore + 200);
+
+    // (b) existe un MonederoMovimiento abono/devolucion vinculado a la devolución
+    const tenant = getTenantClient(TENANT_SLUG);
+    const mov = await tenant.monederoMovimiento.findFirst({
+      where: { clienteId, refTipo: "devolucion", tipo: "abono" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(mov).not.toBeNull();
+    expect(Number(mov?.monto)).toBe(200);
+    expect(mov?.creadoPorId).toBe(cashierUserId);
+  });
+
+  it("'vale' también acredita el monedero (mismo tratamiento que saldo_a_favor)", async () => {
+    const ventaId = await ventaConCliente("2", "200");
+    const [vl1] = await getVentaLineaIds(ventaId);
+    const saldoBefore = await getSaldo();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/ventas/${ventaId}/devolver`,
+      headers: authCashier(),
+      payload: {
+        motivo: "cambio_opinion",
+        metodoReembolso: "vale",
+        lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(Number(res.json().reembolso.aplicado)).toBe(100);
+    expect(await getSaldo()).toBe(saldoBefore + 100);
+  });
+
+  it("saldo_a_favor sobre venta SIN cliente B2C → 400 (no hay monedero destino)", async () => {
+    const ventaId = await ventaContado(varianteIdSinIva, "1", "100");
+    const [vl1] = await getVentaLineaIds(ventaId);
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/ventas/${ventaId}/devolver`,
+      headers: authCashier(),
+      payload: {
+        motivo: "otro",
+        metodoReembolso: "saldo_a_favor",
+        lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 

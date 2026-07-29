@@ -4,7 +4,12 @@ import type { FastifyRequest } from "fastify";
 import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
 import { cancelarComisionesVenta } from "../comisiones/service.js";
 import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
-import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
+import {
+  CxcError,
+  condonarCxcTx,
+  crearCxcDesdeVentaB2b,
+  validarCreditoB2bSuficiente,
+} from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
@@ -620,6 +625,69 @@ async function aplicarCargoMonedero(
   });
 }
 
+// Re-acredita al monedero del cliente el valor consumido en una venta cancelada.
+// El increment relativo toma lock de fila y es idempotente frente a cargos/abonos
+// concurrentes del mismo cliente.
+async function revertirCargoMonedero(
+  tx: Tx,
+  params: { clienteId: string; monto: Decimal; ventaId: string; usuarioId: string; motivo: string },
+): Promise<void> {
+  await tx.cliente.update({
+    where: { id: params.clienteId },
+    data: { saldoMonedero: { increment: params.monto.toFixed(2) } },
+  });
+  const cliente = await tx.cliente.findUnique({
+    where: { id: params.clienteId },
+    select: { saldoMonedero: true },
+  });
+  if (!cliente) throw new VentaError(404, "Cliente del monedero no encontrado");
+  await tx.monederoMovimiento.create({
+    data: {
+      clienteId: params.clienteId,
+      tipo: "abono",
+      monto: params.monto.toFixed(2),
+      saldoResultante: new Decimal(cliente.saldoMonedero.toString()).toFixed(2),
+      motivo: params.motivo,
+      refTipo: "venta_cancelada",
+      refId: params.ventaId,
+      creadoPorId: params.usuarioId,
+    },
+  });
+}
+
+// Reversa el cargo de fiado que generó una venta cancelada. Se limita al saldo
+// deudor vigente para no dejar el fiado en negativo si el cliente ya abonó parte.
+async function revertirCargoFiado(
+  tx: Tx,
+  params: { clienteId: string; monto: Decimal; ventaId: string; usuarioId: string },
+): Promise<void> {
+  const fiado = await tx.fiado.findUnique({ where: { clienteId: params.clienteId } });
+  if (!fiado) return;
+  const saldoActual = new Decimal(fiado.montoTotal.toString());
+  const reversa = Decimal.min(params.monto, saldoActual);
+  if (reversa.lte(ZERO)) return;
+  const saldoNuevo = saldoActual.minus(reversa);
+  await tx.fiado.update({
+    where: { id: fiado.id },
+    data: {
+      montoTotal: saldoNuevo.toString(),
+      fechaUltimoMovimiento: new Date(),
+      estado: saldoNuevo.eq(ZERO) ? "liquidado" : "activo",
+    },
+  });
+  await tx.fiadoMovimiento.create({
+    data: {
+      fiadoId: fiado.id,
+      tipo: "ajuste_negativo",
+      monto: reversa.toString(),
+      ventaId: params.ventaId,
+      referenciaTipo: "venta_cancelada",
+      referenciaId: params.ventaId,
+      usuarioId: params.usuarioId,
+    },
+  });
+}
+
 async function descontarStockLineas(
   tx: Tx,
   params: { lineasCalc: LineaCalculo[]; sucursalId: string; usuarioId: string; folio: string },
@@ -831,7 +899,12 @@ export async function cancelarVenta(
 ): Promise<void> {
   const venta = await client.venta.findUnique({
     where: { id: ventaId },
-    include: { lineas: true, sucursal: { select: { codigo: true } } },
+    include: {
+      lineas: true,
+      pagos: true,
+      cuentaCobrar: { select: { id: true, estado: true } },
+      sucursal: { select: { codigo: true } },
+    },
   });
   if (!venta) throw new VentaError(404, "Venta no encontrada");
   if (venta.estado === "cancelada") {
@@ -842,6 +915,17 @@ export async function cancelarVenta(
   }
 
   await client.$transaction(async (tx) => {
+    await lockVenta(tx, ventaId);
+    const claimed = await tx.venta.findUnique({
+      where: { id: ventaId },
+      select: { estado: true },
+    });
+    if (!claimed) throw new VentaError(404, "Venta no encontrada");
+    if (claimed.estado !== "cobrada") {
+      throw new VentaError(409, `No se puede cancelar venta en estado "${claimed.estado}"`, {
+        estado: claimed.estado,
+      });
+    }
     for (const linea of venta.lineas) {
       await aplicarAjuste(tx, {
         varianteId: linea.varianteId,
@@ -872,6 +956,42 @@ export async function cancelarVenta(
       }
     }
     await cancelarComisionesVenta(tx, venta.id, "venta_cancelada");
+
+    // Reversa del valor cobrado a métodos que mueven saldo real del cliente:
+    // monedero se re-acredita, el cargo de fiado se anula y la CxC del crédito
+    // B2B se condona. Sin esto, cancelar confiscaba el saldo del cliente y dejaba
+    // deudas fantasma por una venta que ya no existe.
+    const pagoMonedero = venta.pagos
+      .filter((p) => p.metodo === "monedero")
+      .reduce((acc, p) => acc.plus(new Decimal(p.monto.toString())), ZERO);
+    const pagoFiado = venta.pagos
+      .filter((p) => p.metodo === "credito_fiado")
+      .reduce((acc, p) => acc.plus(new Decimal(p.monto.toString())), ZERO);
+    if (pagoMonedero.gt(ZERO) && venta.clienteId) {
+      await revertirCargoMonedero(tx, {
+        clienteId: venta.clienteId,
+        monto: pagoMonedero,
+        ventaId: venta.id,
+        usuarioId,
+        motivo: `Cancelación venta ${venta.folio}: ${motivo}`,
+      });
+    }
+    if (pagoFiado.gt(ZERO) && venta.clienteId) {
+      await revertirCargoFiado(tx, {
+        clienteId: venta.clienteId,
+        monto: pagoFiado,
+        ventaId: venta.id,
+        usuarioId,
+      });
+    }
+    if (
+      venta.cuentaCobrar &&
+      venta.cuentaCobrar.estado !== "liquidada" &&
+      venta.cuentaCobrar.estado !== "condonada"
+    ) {
+      await condonarCxcTx(tx, venta.cuentaCobrar.id, `Cancelación venta ${venta.folio}: ${motivo}`);
+    }
+
     await tx.venta.update({
       where: { id: ventaId },
       data: {

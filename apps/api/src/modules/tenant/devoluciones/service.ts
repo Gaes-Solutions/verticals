@@ -12,6 +12,7 @@ import { FiadoError, aplicarAbonoFiadoTx } from "../clientes/fiado-service.js";
 import { castigarComisionesDevolucion } from "../comisiones/service.js";
 import { CxcError, registrarPagoTx as registrarPagoCxcTx } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
+import { MonederoError, aplicarMovimientoTx } from "../monedero/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -244,6 +245,11 @@ function validarMetodoReembolso(input: ProcesarDevolucionInput, venta: VentaCarg
       );
     }
   }
+  if (input.metodoReembolso === "saldo_a_favor" || input.metodoReembolso === "vale") {
+    if (!venta.clienteId) {
+      throw new DevolucionError(400, "Reembolso a saldo a favor requiere venta con cliente B2C");
+    }
+  }
 }
 
 interface PersistirDevolucionParams {
@@ -386,6 +392,25 @@ async function aplicarReembolso(
     } catch (err) {
       if (err instanceof CxcError) {
         throw new DevolucionError(err.statusCode, err.message, err.extra);
+      }
+      throw err;
+    }
+    return;
+  }
+  if (
+    (input.metodoReembolso === "saldo_a_favor" || input.metodoReembolso === "vale") &&
+    venta.clienteId
+  ) {
+    try {
+      await aplicarMovimientoTx(tx, usuarioId, venta.clienteId, {
+        tipo: "abono",
+        monto: totalDev.toNumber(),
+        motivo: `Reembolso devolución${input.referenciaReembolso ? ` ${input.referenciaReembolso}` : ""}`,
+        refTipo: "devolucion",
+      });
+    } catch (err) {
+      if (err instanceof MonederoError) {
+        throw new DevolucionError(err.statusCode, err.message);
       }
       throw err;
     }

@@ -312,32 +312,39 @@ export async function registrarPago(
   return client.$transaction((tx) => registrarPagoTx(tx, input));
 }
 
+export async function condonarCxcTx(
+  tx: Tx,
+  cuentaCobrarId: string,
+  motivo: string,
+): Promise<{ pendienteCondonado: string }> {
+  await lockCxc(tx, cuentaCobrarId);
+  const cxc = await tx.cuentaCobrar.findUnique({ where: { id: cuentaCobrarId } });
+  if (!cxc) throw new CxcError(404, "CxC no encontrada");
+  if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
+    throw new CxcError(409, `CxC ya está "${cxc.estado}"`);
+  }
+  const total = new Decimal(cxc.montoOriginal.toString()).plus(
+    new Decimal(cxc.interesAcumulado.toString()),
+  );
+  const pagado = new Decimal(cxc.montoPagado.toString());
+  const pendiente = total.minus(pagado);
+  await tx.cuentaCobrar.update({
+    where: { id: cxc.id },
+    data: {
+      estado: "condonada",
+      condonadaAt: new Date(),
+      notas: cxc.notas ? `${cxc.notas}\n[CONDONADA] ${motivo}` : `[CONDONADA] ${motivo}`,
+    },
+  });
+  return { pendienteCondonado: pendiente.toString() };
+}
+
 export async function condonarCxc(
   client: TenantClient,
   cuentaCobrarId: string,
   motivo: string,
 ): Promise<{ pendienteCondonado: string }> {
-  return client.$transaction(async (tx) => {
-    const cxc = await tx.cuentaCobrar.findUnique({ where: { id: cuentaCobrarId } });
-    if (!cxc) throw new CxcError(404, "CxC no encontrada");
-    if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
-      throw new CxcError(409, `CxC ya está "${cxc.estado}"`);
-    }
-    const total = new Decimal(cxc.montoOriginal.toString()).plus(
-      new Decimal(cxc.interesAcumulado.toString()),
-    );
-    const pagado = new Decimal(cxc.montoPagado.toString());
-    const pendiente = total.minus(pagado);
-    await tx.cuentaCobrar.update({
-      where: { id: cxc.id },
-      data: {
-        estado: "condonada",
-        condonadaAt: new Date(),
-        notas: cxc.notas ? `${cxc.notas}\n[CONDONADA] ${motivo}` : `[CONDONADA] ${motivo}`,
-      },
-    });
-    return { pendienteCondonado: pendiente.toString() };
-  });
+  return client.$transaction((tx) => condonarCxcTx(tx, cuentaCobrarId, motivo));
 }
 
 export async function marcarIncobrable(

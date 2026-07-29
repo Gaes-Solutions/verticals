@@ -149,6 +149,7 @@ model Usuario {
   mfaSecret           String?     @map("mfa_secret")
   mfaVerifiedAt       DateTime?   @map("mfa_verified_at")
   mfaBackupCodes      String[]    @default([]) @map("mfa_backup_codes")
+  mfaLastStep         Int?        @map("mfa_last_step")
   tipoUsuario         UsuarioTipo @default(empleado) @map("tipo_usuario")
   languagePreferred   String      @default("es-MX") @map("language_preferred")
   isActive            Boolean     @default(true) @map("is_active")
