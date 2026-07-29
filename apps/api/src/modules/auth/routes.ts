@@ -240,6 +240,15 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .code(409)
           .send({ statusCode: 409, error: "Conflict", message: "MFA no está activo" });
       }
+      const { code } = mfaCodeSchema.parse(req.body);
+      const step = admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null;
+      const stepOk = step !== null && (admin.mfaLastStep === null || step > admin.mfaLastStep);
+      if (step === null || !stepOk) {
+        return reply
+          .code(401)
+          .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
+      }
+      await recordMfaStep(admin.id, step, app.masterPrisma);
       const backupCodes = await resetAdminBackupCodes(admin.id, app.masterPrisma);
       await writeAudit(app.masterPrisma, {
         actor: admin.email,

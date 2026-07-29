@@ -524,3 +524,18 @@ Rama: `seguridad/auditoria`. 4 vulnerabilidades aprobadas por el panel y aplicad
 **Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
 
 ---
+
+## Ronda 3 — 2026-07-29
+
+> Nota de numeración: este ciclo del workflow lo rotula "ronda 3"; se conserva ese rótulo para alinear con el mensaje de commit. Cronológicamente es posterior a la Ronda 14 de arriba.
+
+### R3-01 · LOW · Regenerar backup codes del superadmin no exigía step-up re-autenticación (mfa)
+
+- **Archivo**: `apps/api/src/modules/auth/routes.ts` (`POST /auth/mfa/backup-codes/regenerate`, línea ~228)
+- **Explotación**: El endpoint del panel superadmin estaba protegido únicamente por `app.authenticateAdmin` (validación de un access token vivo) y llamaba directo a `resetAdminBackupCodes()`, emitiendo 10 backup codes nuevos sin re-verificar contraseña ni un TOTP actual. Asimétrico frente al flujo tenant equivalente (`auth-tenant/routes.ts:286`), que sí exige un TOTP fresco con anti-replay antes de regenerar. Para la cuenta de mayor privilegio esto debilita la garantía de 2FA: quien obtenga una sesión admin válida momentánea (robo de token / XSS, o una consola desatendida) puede acuñar backup codes funcionales que evitan el requisito de TOTP en logins futuros; combinado con la contraseña, otorga una ruta durable de bypass de 2FA incluso tras expirar la sesión original y sin tocar el authenticator de la víctima.
+- **Decisión del panel**: Ganadora propuesta 1 (consenso unánime 3/3). Exigir un TOTP fresco con anti-replay antes de regenerar los backup codes del superadmin, replicando el patrón ya usado en admin login (`/mfa/verify`, `/mfa/activate`) y en el flujo tenant. La verificación confirmó que la remediación YA estaba presente y correcta en el árbol de trabajo.
+- **Fix aplicado** (verificado en el working tree, conservado sin re-editar): antes de `resetAdminBackupCodes(admin.id, …)`, el handler ahora: (a) parsea el body con `mfaCodeSchema` (`{ code }`); (b) calcula `step = admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null`; (c) impone la guarda anti-replay `stepOk = step !== null && (admin.mfaLastStep === null || step > admin.mfaLastStep)`; (d) responde 401 "Código incorrecto" si `step === null || !stepOk`; (e) persiste el step consumido con `await recordMfaStep(admin.id, step, app.masterPrisma)` para bloquear la reutilización del mismo código. Solo entonces regenera los backup codes y escribe la auditoría `admin.mfa_backup_regenerated`. Queda simétrico con el flujo tenant (`verifyTenantTotpStep` + comparación monótona contra `mfaLastStep`).
+
+**Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
+
+---
