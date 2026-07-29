@@ -6,7 +6,7 @@ import type { FastifyRequest } from "fastify";
 import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
 import { notificarCliente, notificarUsuariosConPermiso } from "../notificaciones/service.js";
 import { crearVenta } from "../ventas/service.js";
-import { evaluarCupon, registrarUsoCupon } from "./cupon-service.js";
+import { evaluarCupon, liberarUsoCupon, reservarUsoCupon } from "./cupon-service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 
@@ -115,11 +115,16 @@ export async function iniciarCheckout(
     }
   }
   // Cupón (si el carrito trae uno válido): descuenta del subtotal o libera el envío.
+  // La reserva del uso es atómica y va ANTES de aplicar el descuento: si dos
+  // checkouts concurrentes corren contra el mismo cupón, solo el que gana el
+  // compare-and-swap obtiene el descuento; el otro ve `agotado` y paga completo.
   let descuentoTotal = new Decimal(0);
   const cuponesSnapshot: Array<Record<string, unknown>> = [];
+  let cuponReservado: string | undefined;
   if (carrito.cuponCodigo) {
     const ev = await evaluarCupon(client, carrito.cuponCodigo, subtotal.toNumber());
-    if (ev.valido) {
+    if (ev.valido && (await reservarUsoCupon(client, carrito.cuponCodigo))) {
+      cuponReservado = carrito.cuponCodigo;
       descuentoTotal = new Decimal(ev.descuentoSubtotal);
       if (ev.envioGratis) costoEnvio = new Decimal(0);
       cuponesSnapshot.push({
@@ -131,6 +136,38 @@ export async function iniciarCheckout(
   }
   const total = Decimal.max(new Decimal(0), subtotal.minus(descuentoTotal)).plus(costoEnvio);
 
+  try {
+    return await crearPedidoConIntent(client, provider, input, carrito, {
+      subtotal,
+      costoEnvio,
+      descuentoTotal,
+      total,
+      paqueteria,
+      cuponesSnapshot,
+    });
+  } catch (err) {
+    if (cuponReservado) await liberarUsoCupon(client, cuponReservado);
+    throw err;
+  }
+}
+
+interface CrearPedidoParams {
+  subtotal: Decimal;
+  costoEnvio: Decimal;
+  descuentoTotal: Decimal;
+  total: Decimal;
+  paqueteria: string | undefined;
+  cuponesSnapshot: Array<Record<string, unknown>>;
+}
+
+async function crearPedidoConIntent(
+  client: TenantClient,
+  provider: PaymentProvider,
+  input: IniciarCheckoutInput,
+  carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
+  params: CrearPedidoParams,
+): Promise<IniciarCheckoutResult> {
+  const { subtotal, costoEnvio, descuentoTotal, total, paqueteria, cuponesSnapshot } = params;
   const folioPublico = await nextFolioPublico(client);
   const pedido = await client.pedidoEcommerce.create({
     data: {
@@ -201,10 +238,6 @@ export async function iniciarCheckout(
     where: { id: pedido.id },
     data: { paymentIntentId: intent.intentId },
   });
-
-  if (cuponesSnapshot.length && carrito.cuponCodigo) {
-    await registrarUsoCupon(client, carrito.cuponCodigo);
-  }
 
   return {
     pedidoId: pedido.id,

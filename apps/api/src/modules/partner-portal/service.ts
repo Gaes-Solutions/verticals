@@ -13,7 +13,8 @@ export interface ComisionesPartnerResult {
 }
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
 import { consumeBackupCode, generateBackupCodes, hashBackupCodes } from "../../lib/mfa-backup.js";
-import { generateTotpSecret, totpKeyUri, verifyTotpCode } from "../auth/service.js";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
+import { generateTotpSecret, totpKeyUri, verifyTotpStep } from "../auth/service.js";
 import { comisionPctEfectivo } from "../partners/service.js";
 
 export class PartnerPortalError extends Error {
@@ -79,6 +80,7 @@ export async function validarLoginPartner(
 ): Promise<Partner> {
   const partner = await master.partner.findUnique({ where: { emailContacto: email } });
   if (!partner?.passwordHash || partner.estado !== "activo") {
+    await burnPasswordTiming(password);
     throw new PartnerPortalError(401, "Credenciales inválidas");
   }
   const ok = await argon2Verify(partner.passwordHash, password);
@@ -111,13 +113,18 @@ export async function activarMfaPartner(
 ): Promise<{ backupCodes: string[] }> {
   const partner = await master.partner.findUnique({ where: { id: partnerId } });
   if (!partner?.mfaSecret) throw new PartnerPortalError(409, "No hay setup 2FA pendiente");
-  if (!verifyTotpCode(code, partner.mfaSecret)) {
+  const totpStep = verifyTotpStep(code, partner.mfaSecret);
+  if (totpStep === null) {
     throw new PartnerPortalError(401, "Código incorrecto");
   }
   const backupCodes = generateBackupCodes();
   await master.partner.update({
     where: { id: partnerId },
-    data: { mfaVerifiedAt: new Date(), mfaBackupCodes: await hashBackupCodes(backupCodes) },
+    data: {
+      mfaVerifiedAt: new Date(),
+      mfaLastStep: totpStep,
+      mfaBackupCodes: await hashBackupCodes(backupCodes),
+    },
   });
   return { backupCodes };
 }
@@ -131,13 +138,21 @@ export async function verificarMfaPartner(
   if (!partner?.mfaSecret || !partner.mfaVerifiedAt) {
     throw new PartnerPortalError(409, "El partner no tiene 2FA activo");
   }
-  if (verifyTotpCode(code, partner.mfaSecret)) return;
+  const totpStep = verifyTotpStep(code, partner.mfaSecret);
+  if (totpStep !== null && (partner.mfaLastStep === null || totpStep > partner.mfaLastStep)) {
+    await master.partner.update({
+      where: { id: partnerId },
+      data: { mfaLastStep: totpStep },
+    });
+    return;
+  }
   const consumo = await consumeBackupCode(partner.mfaBackupCodes, code);
-  if (!consumo.ok) throw new PartnerPortalError(401, "Código incorrecto");
-  await master.partner.update({
-    where: { id: partnerId },
+  if (!consumo.ok || !consumo.matchedHash) throw new PartnerPortalError(401, "Código incorrecto");
+  const result = await master.partner.updateMany({
+    where: { id: partnerId, mfaBackupCodes: { has: consumo.matchedHash } },
     data: { mfaBackupCodes: consumo.remaining },
   });
+  if (result.count !== 1) throw new PartnerPortalError(401, "Código incorrecto");
 }
 
 export async function registrarLoginPartner(

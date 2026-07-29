@@ -1,5 +1,9 @@
 import type { TenantPrismaClient } from "@gaespos/db";
-import { PaqueteriaError, type ShippingProvider } from "@gaespos/paqueterias";
+import {
+  PaqueteriaError,
+  type ShippingProvider,
+  type ShippingWebhookEvento,
+} from "@gaespos/paqueterias";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
@@ -262,9 +266,9 @@ const enviosRoutes: FastifyPluginAsync = async (app) => {
   // Webhook de la paquetería (sin permiso; se valida la firma del proveedor).
   app.post("/webhook", async (req, reply) => {
     const body = webhookEnvioSchema.parse(req.body);
-    const provider = app.shippingProviderFactory(body.paqueteria);
-    let evento: ReturnType<typeof provider.parseWebhook>;
+    let evento: ShippingWebhookEvento;
     try {
+      const provider = app.shippingProviderFactory(body.paqueteria);
       evento = provider.parseWebhook(body.payload, body.signature);
     } catch {
       return reply

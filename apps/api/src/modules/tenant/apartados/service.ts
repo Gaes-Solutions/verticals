@@ -330,20 +330,35 @@ export async function registrarAbono(
       throw new ApartadoError(409, `Apartado en estado ${apartado.estado} no acepta abonos`);
     }
     const monto = new Decimal(input.monto);
-    const pagadoActual = new Decimal(apartado.montoPagado.toString());
     const total = new Decimal(apartado.total.toString());
-    const saldoActual = total.minus(pagadoActual);
-    if (monto.gt(saldoActual)) {
+    // Compare-and-swap atómico: el incremento condicional (where montoPagado <= total - monto)
+    // toma lock de fila en Postgres, serializa abonos concurrentes de un mismo apartado y
+    // re-evalúa el saldo contra el valor ya abonado tras el primer commit (count=0 = excede),
+    // cerrando el lost-update. Mismo patrón que monedero/ventas.
+    const maxPagadoPrevio = total.minus(monto);
+    const abonado = await tx.apartado.updateMany({
+      where: {
+        id: apartado.id,
+        estado: "activo",
+        montoPagado: { lte: maxPagadoPrevio.toString() },
+      },
+      data: { montoPagado: { increment: monto.toString() } },
+    });
+    if (abonado.count === 0) {
+      const actual = await tx.apartado.findUnique({
+        where: { id: apartado.id },
+        select: { montoPagado: true, total: true, estado: true },
+      });
+      if (!actual) throw new ApartadoError(404, "Apartado no encontrado");
+      if (actual.estado !== "activo") {
+        throw new ApartadoError(409, `Apartado en estado ${actual.estado} no acepta abonos`);
+      }
+      const saldoActual = new Decimal(actual.total.toString()).minus(actual.montoPagado.toString());
       throw new ApartadoError(409, "El abono excede el saldo del apartado", {
         saldoRestante: saldoActual.toString(),
         intentado: monto.toString(),
       });
     }
-    const nuevoPagado = pagadoActual.plus(monto);
-    await tx.apartado.update({
-      where: { id: apartado.id },
-      data: { montoPagado: nuevoPagado.toString() },
-    });
     await tx.apartadoAbono.create({
       data: {
         apartadoId: apartado.id,
@@ -354,6 +369,11 @@ export async function registrarAbono(
         usuarioId: input.usuarioId,
       },
     });
+    const actualizado = await tx.apartado.findUnique({
+      where: { id: apartado.id },
+      select: { montoPagado: true },
+    });
+    const nuevoPagado = new Decimal((actualizado?.montoPagado ?? apartado.montoPagado).toString());
     return {
       saldoRestante: total.minus(nuevoPagado).toString(),
       montoPagado: nuevoPagado.toString(),

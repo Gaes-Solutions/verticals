@@ -1,24 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 
+interface DnsRecord {
+  tipo: string;
+  nombre: string;
+  valor: string;
+}
 interface DominioB2b {
   host: string;
   verificado: boolean;
+  txt?: DnsRecord;
 }
 interface Config {
   dominios: DominioB2b[];
   cname: string;
   automatico: boolean;
 }
-interface DnsRecord {
-  tipo: string;
-  nombre: string;
-  valor: string;
-}
 interface ConectarResult {
   host: string;
-  automatico: boolean;
-  aviso: string | null;
+  verificado: boolean;
+  automatico?: boolean;
+  aviso?: string | null;
   dns: { records: DnsRecord[] };
 }
 
@@ -54,6 +56,19 @@ export function DominioB2bPage() {
     }
   }
 
+  async function verificar(h: string) {
+    setError(null);
+    try {
+      const r = await api<ConectarResult>(`/t/b2b-dominio/${encodeURIComponent(h)}/verificar`, {
+        method: "POST",
+      });
+      setResult(r);
+      await cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Aún no se pudo verificar el dominio");
+    }
+  }
+
   async function quitar(h: string) {
     await api(`/t/b2b-dominio/${encodeURIComponent(h)}`, { method: "DELETE" }).catch(
       () => undefined,
@@ -85,27 +100,46 @@ export function DominioB2bPage() {
             {config.dominios.map((d) => (
               <li
                 key={d.host}
-                className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
+                className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2"
               >
-                <span className="font-mono text-sm text-slate-700">{d.host}</span>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      d.verificado
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {d.verificado ? "Activo" : "Pendiente"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => quitar(d.host)}
-                    className="text-sm text-slate-400 hover:text-red-500"
-                  >
-                    Quitar
-                  </button>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm text-slate-700">{d.host}</span>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        d.verificado
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {d.verificado ? "Activo" : "Pendiente"}
+                    </span>
+                    {!d.verificado && (
+                      <button
+                        type="button"
+                        onClick={() => verificar(d.host)}
+                        className="text-sm font-medium text-brand hover:text-brand-dark"
+                      >
+                        Verificar
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => quitar(d.host)}
+                      className="text-sm text-slate-400 hover:text-red-500"
+                    >
+                      Quitar
+                    </button>
+                  </div>
                 </div>
+                {!d.verificado && d.txt && (
+                  <p className="text-xs text-slate-500">
+                    Agrega este TXT en tu DNS para probar que el dominio es tuyo:{" "}
+                    <span className="font-mono break-all">{d.txt.nombre}</span> ={" "}
+                    <span className="font-mono break-all">{d.txt.valor}</span>. Luego pulsa{" "}
+                    <strong>Verificar</strong>.
+                  </p>
+                )}
               </li>
             ))}
           </ul>

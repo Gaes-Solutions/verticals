@@ -759,22 +759,16 @@ export async function convertirAVenta(
   const total = new Decimal(ped.total.toString());
   const { totalCobrado, pagoCreditoB2b } = validarPagosConvertir(total, input.pagos);
 
-  let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
-  if (pagoCreditoB2b.gt(ZERO)) {
-    try {
-      creditoB2b = await validarCreditoB2bSuficiente(
-        client,
-        ped.clienteB2bId,
-        pagoCreditoB2b.toString(),
-      );
-    } catch (err) {
-      if (err instanceof CxcError) throw new PedidoError(err.statusCode, err.message, err.extra);
-      throw err;
-    }
-  }
-
   try {
     return await client.$transaction(async (tx) => {
+      let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
+      if (pagoCreditoB2b.gt(ZERO)) {
+        creditoB2b = await validarCreditoB2bSuficiente(
+          tx,
+          ped.clienteB2bId,
+          pagoCreditoB2b.toString(),
+        );
+      }
       const { ventaId, folioVenta } = await persistirVentaDesdePedido(
         tx,
         ped,
@@ -810,6 +804,9 @@ export async function convertirAVenta(
         stockActual: err.stockActual,
         intentado: err.intentado,
       });
+    }
+    if (err instanceof CxcError) {
+      throw new PedidoError(err.statusCode, err.message, err.extra);
     }
     throw err;
   }

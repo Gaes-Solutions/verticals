@@ -112,6 +112,9 @@ const clientesRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.CLIENTES_CREAR);
     const body = clienteCreateSchema.parse(req.body);
+    if (body.permiteFiado || body.limiteFiado !== "0") {
+      req.requirePerm(PERMISSIONS.CLIENTES_FIADO_GESTIONAR);
+    }
     const data: Record<string, unknown> = stripUndefined(body);
     if (body.fechaNacimiento) {
       data.fechaNacimiento = new Date(body.fechaNacimiento);
@@ -126,6 +129,12 @@ const clientesRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.CLIENTES_ACTUALIZAR);
     const { id } = clienteIdParamSchema.parse(req.params);
     const body = clienteUpdateSchema.parse(req.body);
+    if (
+      body.permiteFiado === true ||
+      (body.limiteFiado !== undefined && body.limiteFiado !== "0")
+    ) {
+      req.requirePerm(PERMISSIONS.CLIENTES_FIADO_GESTIONAR);
+    }
     const existing = await req.tenantPrisma.cliente.findUnique({ where: { id } });
     if (!existing) {
       return reply

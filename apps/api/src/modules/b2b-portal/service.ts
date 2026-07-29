@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient, masterPrisma } from "@gaespos/db";
 import { verify as argon2Verify } from "@node-rs/argon2";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import {
   CotizacionError,
   aceptarCotizacion,
@@ -51,6 +52,7 @@ export async function loginUsuarioB2b(input: {
     include: { clienteB2b: { select: { razonSocial: true, isActive: true } } },
   });
   if (!usuario || !usuario.isActive || !usuario.clienteB2b.isActive) {
+    await burnPasswordTiming(input.password);
     throw new B2bPortalError(401, "Credenciales inválidas");
   }
   const ok = await argon2Verify(usuario.passwordHash, input.password);

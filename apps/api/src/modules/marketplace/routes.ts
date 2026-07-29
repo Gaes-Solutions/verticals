@@ -257,6 +257,14 @@ const marketplaceTenantRoutes: FastifyPluginAsync = async (app) => {
  */
 export const marketplaceAdminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
+  app.addHook("preHandler", async (req, reply) => {
+    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    return reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo un superadmin puede administrar el marketplace de salud",
+    });
+  });
 
   app.get("/marketplace/admin/pendientes", async () => {
     const [perfiles, resenas] = await Promise.all([

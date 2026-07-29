@@ -98,7 +98,36 @@ export async function cargarPromocionesAplicables(
     include: { productos: { select: { productoId: true, rol: true } } },
     orderBy: { prioridad: "asc" },
   });
+
+  // Redenciones por cliente (no revocadas) para promos con tope por cliente.
+  const usosPorCliente = new Map<string, number>();
+  if (ctx.clienteId) {
+    const conTopeCliente = promos.filter((p) => p.limiteUsosCliente != null).map((p) => p.id);
+    if (conTopeCliente.length > 0) {
+      const grupos = await client.promocionAplicacion.groupBy({
+        by: ["promocionId"],
+        where: {
+          promocionId: { in: conTopeCliente },
+          clienteId: ctx.clienteId,
+          revocadaAt: null,
+        },
+        _count: { _all: true },
+      });
+      for (const g of grupos) usosPorCliente.set(g.promocionId, g._count._all);
+    }
+  }
+
   return promos
+    .filter((p) => {
+      if (p.limiteUsosTotal != null && p.usosActuales >= p.limiteUsosTotal) return false;
+      if (p.limiteUsosCliente != null) {
+        // Un tope por cliente es inaplicable sin cliente identificado: no se
+        // puede acotar el abuso en ventas anónimas, así que la promo no aplica.
+        if (!ctx.clienteId) return false;
+        if ((usosPorCliente.get(p.id) ?? 0) >= p.limiteUsosCliente) return false;
+      }
+      return true;
+    })
     .map((p) => ({
       id: p.id,
       tipo: p.tipo,

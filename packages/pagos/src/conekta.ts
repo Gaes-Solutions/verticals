@@ -147,6 +147,9 @@ export class ConektaClient implements PaymentProvider {
 
   /** Firma propia: header `sha256=<hmac-sha256(webhookSecret, payload)>`. */
   parseWebhook(payload: string, signature: string): WebhookEvento {
+    if (!this.webhookSecret) {
+      throw new PagoError("Webhook Conekta sin secreto configurado", "INVALID_WEBHOOK");
+    }
     const v = signature.startsWith("sha256=") ? signature.slice(7) : signature;
     const esperada = createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const a = Buffer.from(esperada);

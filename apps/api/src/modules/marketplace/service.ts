@@ -477,6 +477,7 @@ export async function obtenerPerfilPublico(
 }
 
 const OTP_TTL_MIN = 10;
+const OTP_MAX_ATTEMPTS = 5;
 
 /**
  * Registra (o actualiza) al paciente y genera un OTP de 6 dígitos con caducidad.
@@ -498,6 +499,7 @@ export async function registrarPacienteMaster(
     nombre: input.nombre,
     otpCodigo: codigo,
     otpExpiraAt,
+    otpIntentos: 0,
     ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
     ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
   };
@@ -528,12 +530,23 @@ export async function confirmarPacienteMaster(
   if (paciente.otpExpiraAt.getTime() < Date.now()) {
     throw new MarketplaceError(410, "El código expiró; solicita uno nuevo");
   }
+  if (paciente.otpIntentos >= OTP_MAX_ATTEMPTS) {
+    await master.pacienteMaster.update({
+      where: { email },
+      data: { otpCodigo: null, otpExpiraAt: null },
+    });
+    throw new MarketplaceError(429, "Demasiados intentos; solicita un código nuevo");
+  }
   if (paciente.otpCodigo !== codigo) {
+    await master.pacienteMaster.update({
+      where: { email },
+      data: { otpIntentos: { increment: 1 } },
+    });
     throw new MarketplaceError(401, "Código incorrecto");
   }
   return master.pacienteMaster.update({
     where: { email },
-    data: { otpVerificadoAt: new Date(), otpCodigo: null, otpExpiraAt: null },
+    data: { otpVerificadoAt: new Date(), otpCodigo: null, otpExpiraAt: null, otpIntentos: 0 },
   });
 }
 

@@ -16,6 +16,15 @@ async function lockCreditoB2b(tx: Tx, clienteB2bId: string): Promise<void> {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clienteB2bId}, ${CREDITO_B2B_LOCK_NAMESPACE}))`;
 }
 
+// Namespace seed para pg_advisory_xact_lock keyed por CxC: serializa los pagos
+// concurrentes sobre la misma cuenta y cierra el lost-update/TOCTOU (lee saldo +
+// escribe montoPagado absoluto en la misma tx bajo READ COMMITTED).
+const CXC_PAGO_LOCK_NAMESPACE = 5518427n;
+
+async function lockCxc(tx: Tx, cuentaCobrarId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${cuentaCobrarId}, ${CXC_PAGO_LOCK_NAMESPACE}))`;
+}
+
 export class CxcError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -240,6 +249,7 @@ export async function registrarPago(
   input: RegistrarPagoInput,
 ): Promise<RegistrarPagoResult> {
   return client.$transaction(async (tx) => {
+    await lockCxc(tx, input.cuentaCobrarId);
     const cxc = await tx.cuentaCobrar.findUnique({ where: { id: input.cuentaCobrarId } });
     if (!cxc) throw new CxcError(404, "CxC no encontrada");
     if (cxc.estado === "liquidada" || cxc.estado === "condonada") {

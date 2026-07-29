@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import { tenantLoginBodySchema, tenantMfaCodeSchema, tenantMfaDisableSchema } from "./schemas.js";
 import {
   type TenantPrincipal,
@@ -110,7 +111,10 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
 
       const tenantPrisma = getTenantClient(body.tenantSlug);
       const user = await loadTenantUserForLogin(body.email, tenantPrisma);
-      if (!user || !user.isActive) return unauthorized(reply);
+      if (!user || !user.isActive) {
+        await burnPasswordTiming(body.password);
+        return unauthorized(reply);
+      }
       if (!(await verifyPassword(body.password, user.passwordHash))) return unauthorized(reply);
 
       const principal = buildTenantPrincipal(user, body.tenantSlug);

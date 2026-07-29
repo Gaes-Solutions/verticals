@@ -16,6 +16,7 @@ import {
   seedTenantDefaults,
 } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import { stripeBilling } from "./stripe.js";
 
 export class BillingError extends Error {
@@ -249,11 +250,17 @@ export async function loginAdminTenant(
   input: { tenantSlug: string; email: string; password: string },
 ): Promise<AdminTenantPrincipal> {
   const tenant = await master.tenant.findUnique({ where: { slug: input.tenantSlug } });
-  if (!tenant) throw new BillingError(401, "Credenciales inválidas");
+  if (!tenant) {
+    await burnPasswordTiming(input.password);
+    throw new BillingError(401, "Credenciales inválidas");
+  }
   const admin = await master.tenantUserAdmin.findUnique({
     where: { tenantId_email: { tenantId: tenant.id, email: input.email } },
   });
-  if (!admin || admin.archivedAt) throw new BillingError(401, "Credenciales inválidas");
+  if (!admin || admin.archivedAt) {
+    await burnPasswordTiming(input.password);
+    throw new BillingError(401, "Credenciales inválidas");
+  }
   const ok = await argon2Verify(admin.passwordHash, input.password);
   if (!ok) throw new BillingError(401, "Credenciales inválidas");
   await master.tenantUserAdmin.update({

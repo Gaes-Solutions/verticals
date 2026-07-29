@@ -65,58 +65,66 @@ const partnerPortalRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/auth/login", async (req, reply) => {
-    const body = loginSchema.parse(req.body);
-    try {
-      const partner = await validarLoginPartner(app.masterPrisma, body.email, body.password);
-      if (partnerRequiereMfa(partner)) {
-        const mfaToken = app.jwt.sign(
-          { sub: partner.id, email: partner.emailContacto, kind: "partner_mfa" },
-          { expiresIn: "5m" },
-        );
-        return { mfaRequired: true, mfaToken };
+  app.post(
+    "/auth/login",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = loginSchema.parse(req.body);
+      try {
+        const partner = await validarLoginPartner(app.masterPrisma, body.email, body.password);
+        if (partnerRequiereMfa(partner)) {
+          const mfaToken = app.jwt.sign(
+            { sub: partner.id, email: partner.emailContacto, kind: "partner_mfa" },
+            { expiresIn: "5m" },
+          );
+          return { mfaRequired: true, mfaToken };
+        }
+        await registrarLoginPartner(app.masterPrisma, partner.id);
+        const accessToken = app.jwt.sign({
+          sub: partner.id,
+          email: partner.emailContacto,
+          kind: "partner",
+        });
+        return { accessToken, partner: await perfilPartner(app.masterPrisma, partner.id) };
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
       }
-      await registrarLoginPartner(app.masterPrisma, partner.id);
-      const accessToken = app.jwt.sign({
-        sub: partner.id,
-        email: partner.emailContacto,
-        kind: "partner",
-      });
-      return { accessToken, partner: await perfilPartner(app.masterPrisma, partner.id) };
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+    },
+  );
 
-  app.post("/auth/mfa/verify", async (req, reply) => {
-    const body = codeSchema.parse(req.body);
-    try {
-      await req.jwtVerify();
-    } catch {
-      return reply
-        .code(401)
-        .send({ statusCode: 401, error: "Unauthorized", message: "Token inválido o expirado" });
-    }
-    if (req.user.kind !== "partner_mfa") {
-      return reply
-        .code(401)
-        .send({ statusCode: 401, error: "Unauthorized", message: "Se requiere reto 2FA" });
-    }
-    try {
-      await verificarMfaPartner(app.masterPrisma, req.user.sub, body.code);
-      await registrarLoginPartner(app.masterPrisma, req.user.sub);
-      const accessToken = app.jwt.sign({
-        sub: req.user.sub,
-        email: req.user.email,
-        kind: "partner",
-      });
-      return { accessToken, partner: await perfilPartner(app.masterPrisma, req.user.sub) };
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+  app.post(
+    "/auth/mfa/verify",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = codeSchema.parse(req.body);
+      try {
+        await req.jwtVerify();
+      } catch {
+        return reply
+          .code(401)
+          .send({ statusCode: 401, error: "Unauthorized", message: "Token inválido o expirado" });
+      }
+      if (req.user.kind !== "partner_mfa") {
+        return reply
+          .code(401)
+          .send({ statusCode: 401, error: "Unauthorized", message: "Se requiere reto 2FA" });
+      }
+      try {
+        await verificarMfaPartner(app.masterPrisma, req.user.sub, body.code);
+        await registrarLoginPartner(app.masterPrisma, req.user.sub);
+        const accessToken = app.jwt.sign({
+          sub: req.user.sub,
+          email: req.user.email,
+          kind: "partner",
+        });
+        return { accessToken, partner: await perfilPartner(app.masterPrisma, req.user.sub) };
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
 
   app.register(async (portal) => {
     portal.addHook("preHandler", portal.authenticatePartner);

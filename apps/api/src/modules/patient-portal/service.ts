@@ -631,6 +631,10 @@ export async function publicarRegistro(
       "El paciente no ha otorgado consentimiento que cubra este tipo de registro",
     );
   }
+  // Simétrico con leerExpedienteTenant: un consent atestiguado por la propia clínica
+  // (tenant_attested) NO desbloquea escritura cross-tenant ni visible al paciente; solo
+  // un consent autorizado por el paciente (patient_portal) permite propagar el registro.
+  const patientAuthorized = consent.grantedVia === "patient_portal";
   const record = await master.patientRecord.create({
     data: {
       patientId: input.patientId,
@@ -639,8 +643,8 @@ export async function publicarRegistro(
       resourceType: input.resourceType,
       effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : new Date(),
       data: input.data,
-      isCritical: input.isCritical ?? false,
-      isVisibleToPatient: input.isVisibleToPatient ?? true,
+      isCritical: patientAuthorized ? (input.isCritical ?? false) : false,
+      isVisibleToPatient: patientAuthorized ? (input.isVisibleToPatient ?? true) : false,
       ...(input.resourceSubtype !== undefined ? { resourceSubtype: input.resourceSubtype } : {}),
       ...(input.summaryText !== undefined ? { summaryText: input.summaryText } : {}),
     },

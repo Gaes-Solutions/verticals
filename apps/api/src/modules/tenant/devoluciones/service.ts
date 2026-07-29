@@ -18,6 +18,14 @@ type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 
 const ZERO = new Decimal(0);
 
+// Namespace seed for pg_advisory_xact_lock keyed por venta: serializa
+// devoluciones concurrentes de la misma venta y cierra el TOCTOU de yaDevuelto.
+const DEVOLUCION_LOCK_NAMESPACE = 6841655n;
+
+async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${DEVOLUCION_LOCK_NAMESPACE}))`;
+}
+
 export class DevolucionError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -105,7 +113,7 @@ interface LineaCalc {
 }
 
 async function validateAndCalcLineas(
-  client: TenantClient,
+  client: Tx,
   ventaId: string,
   input: ProcesarDevolucionInput,
 ): Promise<LineaCalc[]> {
@@ -541,30 +549,43 @@ export async function procesarDevolucion(
   const venta = await cargarVenta(client, ventaId);
   validarMetodoReembolso(input, venta);
 
-  const lineasCalc = await validateAndCalcLineas(client, ventaId, input);
-
-  const subtotalDev = lineasCalc.reduce((acc, l) => acc.plus(l.subtotal), ZERO);
-  const ivaDev = lineasCalc.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
-  const iepsDev = lineasCalc.reduce((acc, l) => acc.plus(l.iepsTotal), ZERO);
-  const totalDev = lineasCalc.reduce((acc, l) => acc.plus(l.totalLinea), ZERO);
-  const tipo = determinarTipo(lineasCalc);
-
-  let persisted: { devolucionId: string; folio: string };
+  let persisted: {
+    devolucionId: string;
+    folio: string;
+    tipo: "total" | "parcial";
+    lineasCalc: LineaCalc[];
+    totales: { subtotalDev: Decimal; ivaDev: Decimal; iepsDev: Decimal; totalDev: Decimal };
+  };
   try {
     persisted = await client.$transaction(async (tx) => {
+      // Serializa devoluciones concurrentes de la misma venta: sin el lock, dos
+      // requests leen yaDevuelto=0 (TOCTOU) y persisten dos devoluciones completas,
+      // provocando doble reembolso y doble reposición de stock. El advisory lock
+      // es transaccional (se libera al commit/rollback); el segundo request espera y
+      // re-valida yaDevuelto ya committeado dentro de esta misma transacción.
+      await lockVenta(tx, ventaId);
+
+      const lineasCalc = await validateAndCalcLineas(tx, ventaId, input);
+      const subtotalDev = lineasCalc.reduce((acc, l) => acc.plus(l.subtotal), ZERO);
+      const ivaDev = lineasCalc.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
+      const iepsDev = lineasCalc.reduce((acc, l) => acc.plus(l.iepsTotal), ZERO);
+      const totalDev = lineasCalc.reduce((acc, l) => acc.plus(l.totalLinea), ZERO);
+      const tipo = determinarTipo(lineasCalc);
+      const totales = { subtotalDev, ivaDev, iepsDev, totalDev };
+
       const result = await persistirDevolucion(tx, {
         venta,
         input,
         lineasCalc,
         usuarioId,
         tipo,
-        totales: { subtotalDev, ivaDev, iepsDev, totalDev },
+        totales,
       });
       await castigarComisionesDevolucion(tx, {
         ventaId: venta.id,
         montoDevuelto: subtotalDev.toString(),
       });
-      return result;
+      return { ...result, tipo, lineasCalc, totales };
     });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
@@ -578,6 +599,9 @@ export async function procesarDevolucion(
     throw err;
   }
 
+  const { tipo, lineasCalc, totales } = persisted;
+  const totalDev = totales.totalDev;
+
   await aplicarReembolso(client, venta, input, totalDev, usuarioId);
 
   let cfdiEgresoId: string | null = null;
@@ -586,7 +610,7 @@ export async function procesarDevolucion(
     cfdiEgresoId = await emitirCfdiEgreso(client, provider, {
       devolucionId: persisted.devolucionId,
       ventaId: venta.id,
-      totales: { subtotalDev, ivaDev, iepsDev, totalDev },
+      totales,
       lineasCalc,
       cfdiInput: input.cfdiEgreso,
       ingresoVigente,

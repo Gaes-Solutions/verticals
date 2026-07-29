@@ -64,9 +64,31 @@ export async function evaluarCupon(
   return { ...base, mensaje: "Este cupón no aplica en compras en línea" };
 }
 
-/** Registra un uso del cupón (best-effort, tras crear el pedido). */
-export async function registrarUsoCupon(client: TenantClient, codigo: string): Promise<void> {
+/**
+ * Reserva atómica de un uso del cupón: incrementa el contador SOLO si aún no se
+ * agotó el tope global (`usosActuales < usosTotal`, o `usosTotal` nulo = ilimitado).
+ * El guard `WHERE` + `increment` es un compare-and-swap que Postgres serializa a
+ * nivel de fila, así que dos checkouts concurrentes no pueden redimir el mismo
+ * cupón por encima de su tope (cierra el TOCTOU del check-then-increment).
+ * Devuelve `true` si obtuvo el uso; `false` si el cupón ya estaba agotado.
+ */
+export async function reservarUsoCupon(client: TenantClient, codigo: string): Promise<boolean> {
+  const res = await client.cuponTenant.updateMany({
+    where: {
+      codigo,
+      OR: [{ usosTotal: null }, { usosActuales: { lt: client.cuponTenant.fields.usosTotal } }],
+    },
+    data: { usosActuales: { increment: 1 } },
+  });
+  return res.count === 1;
+}
+
+/** Libera una reserva de cupón si el checkout falla tras reservarla (best-effort). */
+export async function liberarUsoCupon(client: TenantClient, codigo: string): Promise<void> {
   await client.cuponTenant
-    .updateMany({ where: { codigo }, data: { usosActuales: { increment: 1 } } })
+    .updateMany({
+      where: { codigo, usosActuales: { gt: 0 } },
+      data: { usosActuales: { decrement: 1 } },
+    })
     .catch(() => {});
 }

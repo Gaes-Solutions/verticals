@@ -218,13 +218,13 @@ export async function consumeTenantBackupCode(
   user: TenantUserMfa,
   code: string,
 ): Promise<boolean> {
-  const { ok, remaining } = await consumeBackupCode(user.mfaBackupCodes, code);
-  if (!ok) return false;
-  await tenantPrisma.usuario.update({
-    where: { id: user.id },
+  const { ok, remaining, matchedHash } = await consumeBackupCode(user.mfaBackupCodes, code);
+  if (!ok || !matchedHash) return false;
+  const result = await tenantPrisma.usuario.updateMany({
+    where: { id: user.id, mfaBackupCodes: { has: matchedHash } },
     data: { mfaBackupCodes: remaining },
   });
-  return true;
+  return result.count === 1;
 }
 
 export async function disableTenantMfa(

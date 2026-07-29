@@ -16,6 +16,16 @@ type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 const ZERO = new Decimal(0);
 const HUNDRED = new Decimal(100);
 
+// Namespace seed para pg_advisory_xact_lock keyed por venta: serializa las
+// finalizaciones concurrentes del mismo borrador (doble clic o retry del cliente)
+// y cierra el TOCTOU entre el chequeo de estado y el alta de pagos + update a
+// 'cobrada', evitando pagos duplicados que inflarían el corte X/Z.
+const COBRO_VENTA_LOCK_NAMESPACE = 4820917n;
+
+async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${COBRO_VENTA_LOCK_NAMESPACE}))`;
+}
+
 export class VentaError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -770,6 +780,15 @@ export async function cobrarVenta(
   );
 
   const actualizada = await client.$transaction(async (tx) => {
+    await lockVenta(tx, ventaId);
+    const claimed = await tx.venta.findUnique({
+      where: { id: ventaId },
+      select: { estado: true },
+    });
+    if (!claimed) throw new VentaError(404, "Venta no encontrada");
+    if (claimed.estado !== "borrador") {
+      throw new VentaError(409, `La venta ya está ${claimed.estado}`, { estado: claimed.estado });
+    }
     for (const p of input.pagos) {
       await tx.ventaPago.create({
         data: {

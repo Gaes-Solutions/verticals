@@ -12,6 +12,9 @@ export function verificarFirmaStripe(
   secret: string,
   toleranciaSeg: number,
 ): void {
+  // Sin secreto, el HMAC se computa con clave "" (determinista y reproducible por
+  // cualquiera): la firma dejaría de autenticar el origen. Fail-closed, no fail-open.
+  if (!secret) throw new PagoError("Webhook Stripe sin secreto configurado", "INVALID_WEBHOOK");
   const partes = new Map(signature.split(",").map((p) => p.split("=", 2) as [string, string]));
   const t = partes.get("t");
   const v1 = partes.get("v1");
