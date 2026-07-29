@@ -3,6 +3,10 @@ import Decimal from "decimal.js";
 
 type TenantClient = TenantPrismaClient;
 
+// Solo requiere el delegate `cuponTenant`, así el compare-and-swap puede correr
+// tanto con el cliente base como dentro de un `$transaction` (interactive tx).
+type CuponReserveClient = Pick<TenantPrismaClient, "cuponTenant">;
+
 export interface CuponEvaluado {
   valido: boolean;
   mensaje: string;
@@ -72,7 +76,10 @@ export async function evaluarCupon(
  * cupón por encima de su tope (cierra el TOCTOU del check-then-increment).
  * Devuelve `true` si obtuvo el uso; `false` si el cupón ya estaba agotado.
  */
-export async function reservarUsoCupon(client: TenantClient, codigo: string): Promise<boolean> {
+export async function reservarUsoCupon(
+  client: CuponReserveClient,
+  codigo: string,
+): Promise<boolean> {
   const res = await client.cuponTenant.updateMany({
     where: {
       codigo,

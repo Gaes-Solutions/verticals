@@ -1,6 +1,7 @@
 import type { TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { reservarUsoCupon } from "../checkout/cupon-service.js";
 import {
   InsufficientStockError,
   aplicarAjuste,
@@ -209,6 +210,8 @@ export async function crearApartado(
     throw err;
   }
 
+  const cuponAplicado = ticket.descuentosTicket.some((d) => d.fuente === "cupon");
+
   const snapshots = await loadSnapshots(
     client,
     ticket.lineas.map((l) => l.productoVarianteId),
@@ -228,6 +231,15 @@ export async function crearApartado(
 
   try {
     return await client.$transaction(async (tx) => {
+      // Consume el tope global del cupón (usosTotal) con el mismo compare-and-swap
+      // atómico que el checkout de tienda y la venta POS. Si otro canal ya lo agotó
+      // entre el preview y aquí, el reserve devuelve false y abortamos el apartado.
+      if (cuponAplicado && input.cuponCodigo) {
+        const reservado = await reservarUsoCupon(tx, input.cuponCodigo);
+        if (!reservado) {
+          throw new ApartadoError(409, `Cupón "${input.cuponCodigo}" agotado`);
+        }
+      }
       const folio = await nextFolio(tx, sucursal.id, sucursal.codigo);
       const apartado = await tx.apartado.create({
         data: {

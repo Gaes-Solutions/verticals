@@ -167,9 +167,17 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Token MFA inválido" });
       }
+      if (admin.mfaVerifiedAt) {
+        return reply
+          .code(409)
+          .send({ statusCode: 409, error: "Conflict", message: "MFA ya configurado" });
+      }
       const { code } = mfaCodeSchema.parse(req.body);
       const activateStep = admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null;
-      if (activateStep === null) {
+      if (
+        activateStep === null ||
+        (admin.mfaLastStep !== null && activateStep <= admin.mfaLastStep)
+      ) {
         return reply
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });

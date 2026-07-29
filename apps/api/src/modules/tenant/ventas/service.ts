@@ -1,6 +1,7 @@
 import type { LineaCalculada, TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { reservarUsoCupon } from "../checkout/cupon-service.js";
 import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
 import { cancelarComisionesVenta } from "../comisiones/service.js";
 import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
@@ -472,6 +473,8 @@ export async function crearVenta(
     });
   }
 
+  const cuponAplicado = ticket.descuentosTicket.some((d) => d.fuente === "cupon");
+
   const snapshots = await loadSnapshots(
     client,
     ticket.lineas.map((l) => l.productoVarianteId),
@@ -502,6 +505,15 @@ export async function crearVenta(
 
   try {
     return await client.$transaction(async (tx) => {
+      // Consume el tope global del cupón (usosTotal) con el mismo compare-and-swap
+      // atómico que usa el checkout de tienda. Si otro canal ya lo agotó entre el
+      // preview y aquí, el reserve devuelve false y abortamos la venta.
+      if (cuponAplicado && input.cuponCodigo) {
+        const reservado = await reservarUsoCupon(tx, input.cuponCodigo);
+        if (!reservado) {
+          throw new VentaError(409, `Cupón "${input.cuponCodigo}" agotado`);
+        }
+      }
       let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
       if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
         creditoB2b = await validarCreditoB2bSuficiente(
