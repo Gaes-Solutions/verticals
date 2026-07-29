@@ -15,9 +15,20 @@ const auditQuery = z.object({
     .default(50),
 });
 
-/** Audit log global: who/when/what/from-where. Solo lectura. */
+/** Audit log global: who/when/what/from-where. Solo lectura, solo superadmin. */
 const adminAuditRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
+
+  // El log de seguridad de plataforma (logins, MFA, IPs, correos de dueños)
+  // es privilegio de superadmin; support/billing no deben leerlo.
+  app.addHook("preHandler", async (req, reply) => {
+    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    return reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo un superadmin puede consultar el log de auditoría",
+    });
+  });
 
   app.get("/", async (req) => {
     const q = auditQuery.parse(req.query);

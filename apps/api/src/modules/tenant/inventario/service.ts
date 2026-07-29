@@ -53,23 +53,39 @@ export async function aplicarAjuste(tx: Tx, input: AjusteInput): Promise<void> {
   const cantidadAbs = new Decimal(input.cantidad);
   const delta = cantidadAbs.mul(signo);
 
-  const inv = await ensureInventario(tx, input.varianteId, input.sucursalId);
-  const stockNuevo = new Decimal(inv.stockActual.toString()).plus(delta);
-  if (stockNuevo.lt(ZERO)) {
-    throw new InsufficientStockError(
-      input.varianteId,
-      input.sucursalId,
-      inv.stockActual.toString(),
-      cantidadAbs.toString(),
-    );
-  }
+  await ensureInventario(tx, input.varianteId, input.sucursalId);
 
-  await tx.inventarioSucursal.update({
-    where: {
-      varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
-    },
-    data: { stockActual: stockNuevo.toString() },
-  });
+  if (delta.lt(ZERO)) {
+    const { count } = await tx.inventarioSucursal.updateMany({
+      where: {
+        varianteId: input.varianteId,
+        sucursalId: input.sucursalId,
+        stockActual: { gte: cantidadAbs.toString() },
+      },
+      data: { stockActual: { decrement: cantidadAbs.toString() } },
+    });
+    if (count === 0) {
+      const actual = await tx.inventarioSucursal.findUnique({
+        where: {
+          varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+        },
+        select: { stockActual: true },
+      });
+      throw new InsufficientStockError(
+        input.varianteId,
+        input.sucursalId,
+        actual?.stockActual.toString() ?? "0",
+        cantidadAbs.toString(),
+      );
+    }
+  } else if (delta.gt(ZERO)) {
+    await tx.inventarioSucursal.update({
+      where: {
+        varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+      },
+      data: { stockActual: { increment: delta.toString() } },
+    });
+  }
 
   await tx.inventarioMovimiento.create({
     data: {
@@ -105,26 +121,32 @@ export async function aplicarTransferencia(
   }
   const cantidad = new Decimal(input.cantidad);
 
-  const invOrigen = await ensureInventario(tx, input.varianteId, input.sucursalOrigenId);
-  const stockOrigenNuevo = new Decimal(invOrigen.stockActual.toString()).minus(cantidad);
-  if (stockOrigenNuevo.lt(ZERO)) {
+  await ensureInventario(tx, input.varianteId, input.sucursalOrigenId);
+  const { count } = await tx.inventarioSucursal.updateMany({
+    where: {
+      varianteId: input.varianteId,
+      sucursalId: input.sucursalOrigenId,
+      stockActual: { gte: cantidad.toString() },
+    },
+    data: { stockActual: { decrement: cantidad.toString() } },
+  });
+  if (count === 0) {
+    const invOrigen = await tx.inventarioSucursal.findUnique({
+      where: {
+        varianteId_sucursalId: {
+          varianteId: input.varianteId,
+          sucursalId: input.sucursalOrigenId,
+        },
+      },
+      select: { stockActual: true },
+    });
     throw new InsufficientStockError(
       input.varianteId,
       input.sucursalOrigenId,
-      invOrigen.stockActual.toString(),
+      invOrigen?.stockActual.toString() ?? "0",
       cantidad.toString(),
     );
   }
-
-  await tx.inventarioSucursal.update({
-    where: {
-      varianteId_sucursalId: {
-        varianteId: input.varianteId,
-        sucursalId: input.sucursalOrigenId,
-      },
-    },
-    data: { stockActual: stockOrigenNuevo.toString() },
-  });
   await ensureInventario(tx, input.varianteId, input.sucursalDestinoId);
   await tx.inventarioSucursal.update({
     where: {
@@ -195,24 +217,37 @@ export interface ReservaApartadoInput {
 
 export async function aplicarReservaApartado(tx: Tx, input: ReservaApartadoInput): Promise<void> {
   const cantidad = new Decimal(input.cantidad);
-  const inv = await ensureInventario(tx, input.varianteId, input.sucursalId);
-  const stockActual = new Decimal(inv.stockActual.toString());
-  const stockReservado = new Decimal(inv.stockReservado.toString());
-  const stockDisponible = stockActual.minus(stockReservado);
-  if (stockDisponible.lt(cantidad)) {
+  await ensureInventario(tx, input.varianteId, input.sucursalId);
+
+  // Compare-and-swap atómico sobre el invariante de dos columnas
+  // (stock_actual - stock_reservado >= cantidad), que Prisma no puede expresar en
+  // updateMany. El UPDATE condicional se re-evalúa contra la fila commiteada tras
+  // esperar cualquier bloqueo concurrente, así que serializa reservas entre sí y
+  // frente a ventas que decrementan stock_actual sin necesitar un advisory lock.
+  const reservadas = await tx.$executeRaw`
+    UPDATE inventario_sucursal
+    SET stock_reservado = stock_reservado + ${input.cantidad}::numeric
+    WHERE variante_id = ${input.varianteId}
+      AND sucursal_id = ${input.sucursalId}
+      AND stock_actual - stock_reservado >= ${input.cantidad}::numeric
+  `;
+  if (reservadas === 0) {
+    const inv = await tx.inventarioSucursal.findUnique({
+      where: {
+        varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+      },
+      select: { stockActual: true, stockReservado: true },
+    });
+    const disponible = inv
+      ? new Decimal(inv.stockActual.toString()).minus(inv.stockReservado.toString())
+      : ZERO;
     throw new InsufficientStockError(
       input.varianteId,
       input.sucursalId,
-      stockDisponible.toString(),
+      disponible.toString(),
       cantidad.toString(),
     );
   }
-  await tx.inventarioSucursal.update({
-    where: {
-      varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
-    },
-    data: { stockReservado: stockReservado.plus(cantidad).toString() },
-  });
   await tx.inventarioMovimiento.create({
     data: {
       varianteId: input.varianteId,
@@ -229,17 +264,17 @@ export async function aplicarReservaApartado(tx: Tx, input: ReservaApartadoInput
 
 export async function liberarReservaApartado(tx: Tx, input: ReservaApartadoInput): Promise<void> {
   const cantidad = new Decimal(input.cantidad);
-  const inv = await ensureInventario(tx, input.varianteId, input.sucursalId);
-  const nuevoReservado = Decimal.max(
-    new Decimal(inv.stockReservado.toString()).minus(cantidad),
-    ZERO,
-  );
-  await tx.inventarioSucursal.update({
-    where: {
-      varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
-    },
-    data: { stockReservado: nuevoReservado.toString() },
-  });
+  await ensureInventario(tx, input.varianteId, input.sucursalId);
+
+  // Decremento relativo atómico con clamp en 0 (GREATEST): un único UPDATE que se
+  // re-evalúa contra la fila commiteada, así que serializa liberaciones concurrentes
+  // entre sí y frente a las reservas sin advisory lock.
+  await tx.$executeRaw`
+    UPDATE inventario_sucursal
+    SET stock_reservado = GREATEST(stock_reservado - ${input.cantidad}::numeric, 0)
+    WHERE variante_id = ${input.varianteId}
+      AND sucursal_id = ${input.sucursalId}
+  `;
   await tx.inventarioMovimiento.create({
     data: {
       varianteId: input.varianteId,
