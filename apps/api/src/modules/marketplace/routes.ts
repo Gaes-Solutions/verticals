@@ -374,6 +374,7 @@ export const marketplacePublicRoutes: FastifyPluginAsync = async (app) => {
           sub: paciente.id,
           phoneE164: paciente.phoneE164 ?? "",
           kind: "patient",
+          scope: "marketplace",
         });
         return { id: paciente.id, verificado: Boolean(paciente.otpVerificadoAt), accessToken };
       } catch (err) {

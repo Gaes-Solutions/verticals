@@ -49,7 +49,7 @@ export const configTiendaSchema = z.object({
   paqueteriaAutoGuia: z.boolean().optional(),
   tarifasEnVivo: z.boolean().optional(),
   paqueteriaPesoDefaultKg: z
-    .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
     .transform((v) => String(v))
     .optional(),
   pushHabilitado: z.boolean().optional(),

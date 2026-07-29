@@ -389,29 +389,8 @@ export async function reembolsarRecarga(
       );
     }
     const costo = new Decimal(r.costoRealTenant.toString());
-    if (costo.lte(ZERO)) {
-      await tx.recarga.update({
-        where: { id: recargaId },
-        data: {
-          estado: "reembolsada",
-          reembolsadaAt: new Date(),
-          reembolsadaPorId: usuarioId,
-          reembolsoMotivo: motivo,
-        },
-      });
-      return {
-        saldoDevuelto: "0",
-        nuevoSaldoPrefondeado: r.proveedorConfig.saldoPrefondeado.toString(),
-      };
-    }
-    const saldoActual = new Decimal(r.proveedorConfig.saldoPrefondeado.toString());
-    const nuevoSaldo = saldoActual.plus(costo);
-    await tx.recargaProveedorConfig.update({
-      where: { id: r.proveedorConfigId },
-      data: { saldoPrefondeado: nuevoSaldo.toString() },
-    });
-    await tx.recarga.update({
-      where: { id: recargaId },
+    const claimed = await tx.recarga.updateMany({
+      where: { id: recargaId, estado: { in: ["fallida", "disputada"] } },
       data: {
         estado: "reembolsada",
         reembolsadaAt: new Date(),
@@ -419,7 +398,26 @@ export async function reembolsarRecarga(
         reembolsoMotivo: motivo,
       },
     });
-    return { saldoDevuelto: costo.toString(), nuevoSaldoPrefondeado: nuevoSaldo.toString() };
+    if (claimed.count === 0) {
+      throw new RecargaError(
+        409,
+        `Solo se reembolsan recargas fallidas o disputadas (actual: ${r.estado})`,
+      );
+    }
+    if (costo.lte(ZERO)) {
+      return {
+        saldoDevuelto: "0",
+        nuevoSaldoPrefondeado: r.proveedorConfig.saldoPrefondeado.toString(),
+      };
+    }
+    const updated = await tx.recargaProveedorConfig.update({
+      where: { id: r.proveedorConfigId },
+      data: { saldoPrefondeado: { increment: costo.toString() } },
+    });
+    return {
+      saldoDevuelto: costo.toString(),
+      nuevoSaldoPrefondeado: updated.saldoPrefondeado.toString(),
+    };
   });
 }
 

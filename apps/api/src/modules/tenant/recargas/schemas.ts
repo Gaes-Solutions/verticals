@@ -2,7 +2,7 @@ import { isSsrfSafeUrlSync } from "@gaespos/recargas";
 import { z } from "zod";
 
 const positiveDecimalString = z
-  .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 const companiaEnum = z.enum([

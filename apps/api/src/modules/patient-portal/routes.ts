@@ -116,6 +116,7 @@ export const patientAuthRoutes: FastifyPluginAsync = async (app) => {
           sub: patient.id,
           phoneE164: patient.phoneE164 ?? body.phoneE164,
           kind: "patient",
+          scope: "phr",
         });
         return reply.code(200).send({
           accessToken,
@@ -135,7 +136,7 @@ export const patientAuthRoutes: FastifyPluginAsync = async (app) => {
  * ownership + scope familiar; toda lectura del expediente registra audit.
  */
 export const patientPortalRoutes: FastifyPluginAsync = async (app) => {
-  app.addHook("preHandler", app.authenticatePatient);
+  app.addHook("preHandler", app.authenticatePatientPhr);
 
   app.get("/me", async (req) => getPacienteSelf(app.masterPrisma, patientId(req)));
 

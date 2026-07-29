@@ -35,10 +35,14 @@ type TenantMfaTokenPayload = {
   kind: "tenant_mfa";
 };
 
+// scope distingue el factor de posesión con el que se emitió la sesión:
+// - "phr": OTP por teléfono (WhatsApp/SMS) + device-trust → acceso al expediente.
+// - "marketplace": OTP por correo → solo reservar/reseñar, nunca el PHR.
 type PatientTokenPayload = {
   sub: string;
   phoneE164: string;
   kind: "patient";
+  scope: "phr" | "marketplace";
 };
 
 type AdminTenantTokenPayload = {
@@ -97,6 +101,7 @@ declare module "fastify" {
     authenticateAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticatePatient: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticatePatientPhr: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateAdminTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateCliente: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateClienteB2b: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -169,6 +174,20 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "patient") {
       return rejectUnauthorized(reply, "Se requiere sesión de paciente");
+    }
+  });
+
+  // Guard del portal PHR: fail-closed. Solo acepta la sesión de factor fuerte
+  // (scope "phr", emitida por OTP de teléfono + device-trust). Rechaza la sesión
+  // de marketplace (OTP por correo), que no debe leer el expediente cross-tenant.
+  app.decorate("authenticatePatientPhr", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "patient" || req.user.scope !== "phr") {
+      return rejectUnauthorized(reply, "Se requiere sesión de paciente del portal");
     }
   });
 

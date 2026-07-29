@@ -12,11 +12,11 @@ const medicoUpsertSchema = z.object({
   fotoPerfilUrl: z.string().url().max(500).optional(),
   consultorios: z.array(z.record(z.string(), z.unknown())).optional(),
   precioConsultaPrimera: z
-    .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
     .transform((v) => String(v))
     .optional(),
   precioConsultaSeguimiento: z
-    .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
     .transform((v) => String(v))
     .optional(),
   aceptaSeguros: z.array(z.string()).optional(),
