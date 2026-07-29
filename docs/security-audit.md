@@ -265,3 +265,22 @@ Rama: `seguridad/auditoria`. 3 vulnerabilidades aprobadas por el panel y aplicad
 - **Fix aplicado**: En `recargas/routes.ts`, helper `redactProveedorConfig` (líneas 56-67) que elimina los dos campos sensibles del payload y los reemplaza por `apiKeyConfigurado`/`webhookSecretConfigurado` (booleanos, `string | null` siempre presentes → sin conditional spread, compatible con `exactOptionalPropertyTypes`). El handler `PUT /proveedores/:codigo/config` (línea 134) devuelve `reply.code(200).send(redactProveedorConfig(cfg))` en lugar de `send(cfg)`. `buildUpsertConfigData` y el upsert intactos; el provider factory (`POST /`) sigue leyendo `cfg.apiKeyEncrypted` directo de DB, las recargas no se rompen. Único helper de redacción, sin duplicados. **Fuera de alcance (backlog, no bloquea)**: las columnas se guardan en texto plano en reposo; el cifrado at-rest (`createCipheriv`/AES) es un cambio mayor separado a rastrear como issue propio.
 
 **Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores. `pnpm --filter @gaespos/pricing exec tsc --noEmit` → 0 errores.
+
+---
+
+## Ronda 7 — 2026-07-28
+
+Rama: `seguridad/auditoria`. 1 vulnerabilidad aprobada por el panel y aplicada.
+
+### R7-01 · LOW · Endpoints de wishlist sin gate de permiso y sin object-scoping (broken-authorization / IDOR horizontal)
+
+- **Archivo**: `apps/api/src/modules/tenant/wishlists/routes.ts`
+- **Explotación**: El módulo se registra bajo `/t/wishlists` (autenticado por tenant/staff) pero ninguno de los 4 handlers llamaba `req.requirePerm(...)` — era uno de los pocos módulos tenant sin gate. `GET /` lista wishlists de cualquier cliente filtrando solo por el `clienteId` que envía el atacante; `POST /` crea wishlist para cualquier `clienteId`; `POST /:id/items` agrega ítems a cualquier wishlist; y `DELETE /:id/items/:itemId` borraba el `wishlistItem` puramente por `itemId` (`req.tenantPrisma.wishlistItem.delete({ where: { id: params.itemId } })`) sin verificar que el ítem perteneciera a la wishlist `:id`. Residual explotable HOY (least-privilege interno): un empleado de baja jerarquía autenticado (p.ej. cajero) sin permiso de ecommerce podía enumerar/borrar wishlists de clientes dentro de su propio tenant. El vector comprador-a-comprador vía BFF del storefront quedó REFUTADO en verify: el storefront usa `/cliente-portal/wishlist`, ya scopeado por el `clienteId` autenticado y con verificación `item.wishlistId===wishlistId` antes de borrar; `tenant-context.ts` exige `kind==='tenant'` (rechaza JWT de comprador con 401) y `getTenantClient` aísla por schema. Datos de baja sensibilidad, requiere insider autenticado, confinado a un tenant → severidad low.
+- **Decisión del panel**: Ganadora propuesta 2 (consenso unánime 3/3, `riesgoRegresion=bajo`). Gatear los 4 handlers con la familia `ECOMMERCE_PEDIDOS_*` A PROPÓSITO y NO con `CLIENTES_LEER`: un cajero típicamente YA tiene `CLIENTES_LEER`, por lo que gatear con ese permiso NO detendría el exploit; `ECOMMERCE_PEDIDOS_*` sí lo bloquea con 403. Además cerrar el IDOR de object-scoping en `DELETE` acotando el borrado a la wishlist `:id` con `deleteMany` y 404 si no pertenece (mismo criterio que `quitarDeWishlist` en cliente-portal). NO se toca `cliente-portal` (ya scopeado por `clienteId` autenticado) ni se agrega scoping por `clienteId` en la ruta tenant (el contexto es staff, no comprador). Sin permiso nuevo, sin migraciones.
+- **Fix aplicado**: En `wishlists/routes.ts`:
+  - Import `import { PERMISSIONS } from "@gaespos/permissions";` (una sola línea; códigos verificados en `packages/permissions/src/catalog.ts:121-122`).
+  - Gate como primera línea de cada handler: `GET /` → `req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER)`; `POST /`, `POST /:id/items`, `DELETE /:id/items/:itemId` → `req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR)`.
+  - `DELETE /:id/items/:itemId`: reemplazado el `delete({ where: { id: itemId } })` por `deleteMany({ where: { id: params.itemId, wishlistId: params.id } })`; si `count === 0` responde 404 (`Item no encontrado`), si no 204. Cierra el IDOR de object-scoping.
+  - Se mantiene `req.tenantPrisma` (recurso por-tenant, aislado por schema); conditional spreads de `POST /` intactos (`exactOptionalPropertyTypes`); sin `any`, TS strict.
+
+**Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores (tras regenerar el cliente Prisma, que estaba desactualizado por trabajo no commiteado de otra ronda — no relacionado con este fix).
