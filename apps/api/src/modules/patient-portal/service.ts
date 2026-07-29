@@ -613,12 +613,39 @@ export interface PublicarRegistroInput {
   isVisibleToPatient?: boolean | undefined;
 }
 
+/**
+ * Un tenant solo puede atestiguar consentimientos o escribir en el PHR de un
+ * paciente con el que tiene una relación real: una cita agendada (PublicBooking)
+ * o un consentimiento previo otorgado por el propio paciente vía portal. Sin esto
+ * cualquier tenant podría auto-atestiguar consent e inyectar registros clínicos en
+ * el expediente master de un paciente arbitrario. La respuesta genérica evita
+ * además el oráculo de existencia (404 vs 201) sobre pacientes del master.
+ */
+async function assertPacienteVinculadoAlTenant(
+  master: MasterPrismaClient,
+  patientId: string,
+  tenantId: string,
+): Promise<void> {
+  const [booking, consentDelPaciente] = await Promise.all([
+    master.publicBooking.findFirst({
+      where: { pacienteMasterId: patientId, tenantId },
+      select: { id: true },
+    }),
+    master.patientConsent.findFirst({
+      where: { subjectId: patientId, tenantId, grantedVia: "patient_portal", revokedAt: null },
+      select: { id: true },
+    }),
+  ]);
+  if (!booking && !consentDelPaciente) {
+    throw new PhrError(403, "El paciente no tiene una relación con este consultorio");
+  }
+}
+
 export async function publicarRegistro(
   master: MasterPrismaClient,
   input: PublicarRegistroInput,
 ): Promise<PatientRecord> {
-  const paciente = await master.pacienteMaster.findUnique({ where: { id: input.patientId } });
-  if (!paciente) throw new PhrError(404, "Paciente no encontrado");
+  await assertPacienteVinculadoAlTenant(master, input.patientId, input.tenantId);
   const consent = await consentActivoQueCubre(
     master,
     input.patientId,
@@ -665,8 +692,7 @@ export async function registrarConsentimientoTenant(
   master: MasterPrismaClient,
   input: { patientId: string; tenantId: string; scope: ConsentScope; userId: string; ip?: string },
 ): Promise<PatientConsent> {
-  const paciente = await master.pacienteMaster.findUnique({ where: { id: input.patientId } });
-  if (!paciente) throw new PhrError(404, "Paciente no encontrado");
+  await assertPacienteVinculadoAlTenant(master, input.patientId, input.tenantId);
   await master.patientConsent.updateMany({
     where: { subjectId: input.patientId, tenantId: input.tenantId, revokedAt: null },
     data: { revokedAt: new Date() },
