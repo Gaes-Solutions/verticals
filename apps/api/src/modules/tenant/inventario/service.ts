@@ -30,6 +30,7 @@ export interface AjusteInput {
   serieId?: string;
   motivo: string;
   usuarioId: string;
+  respetarReservado?: boolean;
 }
 
 async function ensureInventario(tx: Tx, varianteId: string, sucursalId: string) {
@@ -56,27 +57,58 @@ export async function aplicarAjuste(tx: Tx, input: AjusteInput): Promise<void> {
   await ensureInventario(tx, input.varianteId, input.sucursalId);
 
   if (delta.lt(ZERO)) {
-    const { count } = await tx.inventarioSucursal.updateMany({
-      where: {
-        varianteId: input.varianteId,
-        sucursalId: input.sucursalId,
-        stockActual: { gte: cantidadAbs.toString() },
-      },
-      data: { stockActual: { decrement: cantidadAbs.toString() } },
-    });
-    if (count === 0) {
-      const actual = await tx.inventarioSucursal.findUnique({
+    const cantidadStr = cantidadAbs.toString();
+    if (input.respetarReservado) {
+      // Ventas: descontar stock físico sin invadir unidades apartadas. Compare-and-swap
+      // atómico sobre el invariante de dos columnas (stock_actual - stock_reservado >=
+      // cantidad), que Prisma no puede expresar en updateMany, igual que aplicarReservaApartado.
+      const count = await tx.$executeRaw`
+        UPDATE inventario_sucursal
+        SET stock_actual = stock_actual - ${cantidadStr}::numeric
+        WHERE variante_id = ${input.varianteId}
+          AND sucursal_id = ${input.sucursalId}
+          AND stock_actual - stock_reservado >= ${cantidadStr}::numeric
+      `;
+      if (count === 0) {
+        const inv = await tx.inventarioSucursal.findUnique({
+          where: {
+            varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+          },
+          select: { stockActual: true, stockReservado: true },
+        });
+        const disponible = inv
+          ? new Decimal(inv.stockActual.toString()).minus(inv.stockReservado.toString())
+          : ZERO;
+        throw new InsufficientStockError(
+          input.varianteId,
+          input.sucursalId,
+          disponible.toString(),
+          cantidadStr,
+        );
+      }
+    } else {
+      const { count } = await tx.inventarioSucursal.updateMany({
         where: {
-          varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+          varianteId: input.varianteId,
+          sucursalId: input.sucursalId,
+          stockActual: { gte: cantidadStr },
         },
-        select: { stockActual: true },
+        data: { stockActual: { decrement: cantidadStr } },
       });
-      throw new InsufficientStockError(
-        input.varianteId,
-        input.sucursalId,
-        actual?.stockActual.toString() ?? "0",
-        cantidadAbs.toString(),
-      );
+      if (count === 0) {
+        const actual = await tx.inventarioSucursal.findUnique({
+          where: {
+            varianteId_sucursalId: { varianteId: input.varianteId, sucursalId: input.sucursalId },
+          },
+          select: { stockActual: true },
+        });
+        throw new InsufficientStockError(
+          input.varianteId,
+          input.sucursalId,
+          actual?.stockActual.toString() ?? "0",
+          cantidadStr,
+        );
+      }
     }
   } else if (delta.gt(ZERO)) {
     await tx.inventarioSucursal.update({

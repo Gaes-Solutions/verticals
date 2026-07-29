@@ -714,6 +714,7 @@ async function descontarStockLineas(
       ...(linea.serieId ? { serieId: linea.serieId } : {}),
       motivo: `Venta ${params.folio} línea ${linea.numero}`,
       usuarioId: params.usuarioId,
+      respetarReservado: true,
     });
   }
 }

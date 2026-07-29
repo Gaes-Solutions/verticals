@@ -674,6 +674,7 @@ async function persistirVentaDesdePedido(
       cantidad: linea.cantidad.toString(),
       motivo: `Venta ${ventaFolio} desde pedido ${ped.folio} línea ${linea.numero}`,
       usuarioId,
+      respetarReservado: true,
     });
   }
 

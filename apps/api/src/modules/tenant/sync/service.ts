@@ -8,6 +8,7 @@ import {
   type SyncPushResult,
   decideUpdate,
 } from "@gaespos/sync";
+import { clienteCreateSchema, clienteUpdateSchema } from "../clientes/schemas.js";
 import { ventaCreateSchema } from "../ventas/schemas.js";
 import { VentaError, crearVenta } from "../ventas/service.js";
 
@@ -21,6 +22,26 @@ const CLIENTE_SYNC_FIELDS = [
   "notas",
   "aceptaMarketing",
 ] as const;
+
+// Validación de valores idéntica a las rutas directas POST/PATCH /clientes, pero
+// acotada a los campos que el sync tiene permitido escribir. `pick()` sólo filtra
+// NOMBRES; estos esquemas aplican los topes de longitud + email + RFC que la ruta
+// directa exige, para que el camino offline no persista datos inválidos.
+const CLIENTE_SYNC_SCHEMA_SHAPE = {
+  nombre: true,
+  apellidos: true,
+  emailPrincipal: true,
+  telefonoPrincipal: true,
+  rfc: true,
+  notas: true,
+  aceptaMarketing: true,
+} as const;
+
+const clienteSyncCreateSchema = clienteCreateSchema.pick({
+  ...CLIENTE_SYNC_SCHEMA_SHAPE,
+  tipo: true,
+});
+const clienteSyncUpdateSchema = clienteUpdateSchema.pick(CLIENTE_SYNC_SCHEMA_SHAPE);
 
 function pick(obj: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -135,8 +156,21 @@ async function aplicarCliente(
   }
 
   if (op.operation === "create") {
+    // Mismo esquema que la ruta directa POST /clientes: el whitelist de campos
+    // no valida VALORES (longitudes, email, RFC); se valida antes de persistir.
+    const parsed = clienteSyncCreateSchema.safeParse(op.payload);
+    if (!parsed.success) {
+      return {
+        ...base,
+        entityIdRemoto: null,
+        status: "failed",
+        error: parsed.error.issues[0]?.message ?? "payload de cliente inválido",
+      };
+    }
     const cliente = await prisma.cliente.create({
-      data: pick(op.payload, [...CLIENTE_SYNC_FIELDS, "tipo"]) as { nombre: string },
+      data: pick(parsed.data as Record<string, unknown>, [...CLIENTE_SYNC_FIELDS, "tipo"]) as {
+        nombre: string;
+      },
     });
     return {
       ...base,
@@ -155,6 +189,18 @@ async function aplicarCliente(
       error: "entityIdRemoto requerido para update",
     };
   }
+  // Mismo esquema que la ruta directa PATCH /clientes: valida VALORES antes de
+  // usar el payload en la resolución de conflictos y en la persistencia.
+  const parsed = clienteSyncUpdateSchema.safeParse(op.payload);
+  if (!parsed.success) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto,
+      status: "failed",
+      error: parsed.error.issues[0]?.message ?? "payload de cliente inválido",
+    };
+  }
+  const payload = parsed.data as Record<string, unknown>;
   const current = await prisma.cliente.findUnique({ where: { id: op.entityIdRemoto } });
   if (!current) {
     return {
@@ -175,7 +221,7 @@ async function aplicarCliente(
 
   const decision = decideUpdate({
     base: op.baseSnapshot ?? null,
-    local: op.payload,
+    local: payload,
     remote: current as unknown as Record<string, unknown>,
     fields: [...CLIENTE_SYNC_FIELDS],
     baseUpdatedAt: op.baseUpdatedAt ?? null,
@@ -201,7 +247,7 @@ async function aplicarCliente(
   }
   const updated = await prisma.cliente.update({
     where: { id: op.entityIdRemoto },
-    data: pick(op.payload, CLIENTE_SYNC_FIELDS) as object,
+    data: pick(payload, CLIENTE_SYNC_FIELDS) as object,
   });
   return {
     ...base,
