@@ -153,6 +153,18 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     if (req.user.kind !== "admin") {
       return rejectUnauthorized(reply, "Se requiere sesión de administrador");
     }
+    // Recarga el AdminUser en cada request: el plano de mayor privilegio no puede
+    // autorizar desde el claim del access token. Una degradación de rol o
+    // desactivación debe aplicar de inmediato, no al expirar el token (revocar los
+    // refresh tokens solo frena reemitir, no invalida el access token vivo).
+    const admin = await app.masterPrisma.adminUser.findUnique({
+      where: { id: req.user.sub },
+      select: { active: true, role: true },
+    });
+    if (!admin || !admin.active) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
+    }
+    req.user.role = admin.role;
   });
 
   app.decorate("authenticateTenant", async (req: FastifyRequest, reply: FastifyReply) => {
