@@ -53,8 +53,6 @@ export const pedidoConvertirVentaSchema = z.object({
           "tarjeta_debito",
           "tarjeta_credito",
           "transferencia",
-          "vale",
-          "monedero",
           "credito_b2b",
           "otro",
         ]),

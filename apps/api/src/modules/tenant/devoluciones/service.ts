@@ -8,7 +8,7 @@ import {
 } from "@gaespos/fiscal";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
-import { FiadoError, aplicarAbonoFiadoTx } from "../clientes/fiado-service.js";
+import { FiadoError, aplicarAbonoFiadoTx, ensureFiado } from "../clientes/fiado-service.js";
 import { castigarComisionesDevolucion } from "../comisiones/service.js";
 import { CxcError, registrarPagoTx as registrarPagoCxcTx } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
@@ -401,18 +401,58 @@ async function aplicarReembolso(
     (input.metodoReembolso === "saldo_a_favor" || input.metodoReembolso === "vale") &&
     venta.clienteId
   ) {
-    try {
-      await aplicarMovimientoTx(tx, usuarioId, venta.clienteId, {
-        tipo: "abono",
-        monto: totalDev.toNumber(),
-        motivo: `Reembolso devolución${input.referenciaReembolso ? ` ${input.referenciaReembolso}` : ""}`,
-        refTipo: "devolucion",
-      });
-    } catch (err) {
-      if (err instanceof MonederoError) {
-        throw new DevolucionError(err.statusCode, err.message);
+    // La porción de la mercancía devuelta que se pagó a credito_fiado nunca entró a
+    // caja: acreditarla al monedero sobre-acredita al cliente mientras su deuda de
+    // fiado sobrevive. Reconciliar primero abonando esa porción (capada al saldo
+    // deudor real, como nota_credito_fiado) contra el fiado, y solo lo efectivamente
+    // pagado va al monedero.
+    const totalPagado = venta.pagos.reduce(
+      (acc, p) => acc.plus(new Decimal(p.monto.toString())),
+      ZERO,
+    );
+    const fiadoPagado = venta.pagos
+      .filter((p) => p.metodo === "credito_fiado")
+      .reduce((acc, p) => acc.plus(new Decimal(p.monto.toString())), ZERO);
+
+    let montoMonedero = totalDev;
+    if (fiadoPagado.gt(ZERO) && totalPagado.gt(ZERO)) {
+      const fiadoShare = totalDev.mul(fiadoPagado).div(totalPagado);
+      const fiado = await ensureFiado(tx, venta.clienteId);
+      const saldoFiado = new Decimal(fiado.montoTotal.toString());
+      const abonoFiado = Decimal.min(fiadoShare, saldoFiado).toDecimalPlaces(2);
+      if (abonoFiado.gt(ZERO)) {
+        try {
+          await aplicarAbonoFiadoTx(tx, {
+            clienteId: venta.clienteId,
+            monto: abonoFiado.toString(),
+            metodoPago: "otro",
+            referencia: `Devolución ${input.referenciaReembolso ?? ""}`.trim(),
+            usuarioId,
+          });
+        } catch (err) {
+          if (err instanceof FiadoError) {
+            throw new DevolucionError(err.statusCode, err.message, err.extra);
+          }
+          throw err;
+        }
+        montoMonedero = totalDev.minus(abonoFiado);
       }
-      throw err;
+    }
+
+    if (montoMonedero.gt(ZERO)) {
+      try {
+        await aplicarMovimientoTx(tx, usuarioId, venta.clienteId, {
+          tipo: "abono",
+          monto: montoMonedero.toNumber(),
+          motivo: `Reembolso devolución${input.referenciaReembolso ? ` ${input.referenciaReembolso}` : ""}`,
+          refTipo: "devolucion",
+        });
+      } catch (err) {
+        if (err instanceof MonederoError) {
+          throw new DevolucionError(err.statusCode, err.message);
+        }
+        throw err;
+      }
     }
   }
 }
@@ -589,6 +629,18 @@ export async function procesarDevolucion(
       // es transaccional (se libera al commit/rollback); el segundo request espera y
       // re-valida yaDevuelto ya committeado dentro de esta misma transacción.
       await lockVenta(tx, ventaId);
+
+      const estadoActual = await tx.venta.findUnique({
+        where: { id: ventaId },
+        select: { estado: true },
+      });
+      if (!estadoActual) throw new DevolucionError(404, "Venta no encontrada");
+      if (estadoActual.estado !== "cobrada") {
+        throw new DevolucionError(
+          409,
+          `Venta en estado "${estadoActual.estado}" no admite devolución`,
+        );
+      }
 
       const lineasCalc = await validateAndCalcLineas(tx, ventaId, input);
       const subtotalDev = lineasCalc.reduce((acc, l) => acc.plus(l.subtotal), ZERO);

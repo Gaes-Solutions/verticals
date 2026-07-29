@@ -51,12 +51,9 @@ import {
 } from "./service.js";
 
 const pushSubscribeSchema = z.object({
-  endpoint: z
-    .string()
-    .url()
-    .refine(isPushEndpointSafeSync, {
-      message: "endpoint de push no permitido (https público requerido)",
-    }),
+  endpoint: z.string().url().refine(isPushEndpointSafeSync, {
+    message: "endpoint de push no permitido (https público requerido)",
+  }),
   keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
 });
 const pushUnsubscribeSchema = z.object({ endpoint: z.string().url() });
@@ -328,12 +325,13 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
         items: z
           .array(
             z.object({
-              varianteId: z.string().min(1),
-              nombre: z.string(),
-              cantidad: z.number().int().positive(),
+              varianteId: z.string().min(1).max(64),
+              nombre: z.string().max(200),
+              cantidad: z.number().int().positive().max(100000),
             }),
           )
-          .min(1),
+          .min(1)
+          .max(200),
         fotos: z.array(z.string().url()).max(6).optional(),
       })
       .parse(req.body);
