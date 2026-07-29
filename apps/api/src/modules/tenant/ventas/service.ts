@@ -46,7 +46,7 @@ export interface VentaOpts {
  * dueño (config_ventas.descuentoMaximoPct, default 100 = sin tope). Quien tiene
  * `permiteDescuentoAlto` lo sobrepasa. Bloquea antes de calcular precios.
  */
-async function validarTopeDescuento(
+export async function validarTopeDescuento(
   client: TenantClient,
   descuentoGlobalPct: number | string | null | undefined,
   permiteDescuentoAlto: boolean,

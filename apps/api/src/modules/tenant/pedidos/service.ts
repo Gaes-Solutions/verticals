@@ -9,6 +9,7 @@ import {
 import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
+import { VentaError, validarTopeDescuento } from "../ventas/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -39,6 +40,8 @@ export interface CrearPedidoInput {
   cuponCodigo?: string;
   descuentoGlobalPct?: string | null;
   descuentoGlobalMotivo?: string;
+  /** Capacidad RBAC (resuelta en la ruta) para exceder el tope de descuento global. */
+  permiteDescuentoAlto?: boolean;
   ordenCompraCliente?: string;
   direccionEnvioId?: string;
   fechaEntregaEstimada?: Date;
@@ -273,6 +276,17 @@ export async function crearPedido(
     if (!dir || dir.clienteB2bId !== cliente.id) {
       throw new PedidoError(400, "Dirección de envío no pertenece al cliente B2B");
     }
+  }
+
+  try {
+    await validarTopeDescuento(
+      client,
+      input.descuentoGlobalPct ?? null,
+      input.permiteDescuentoAlto ?? false,
+    );
+  } catch (err) {
+    if (err instanceof VentaError) throw new PedidoError(err.statusCode, err.message, err.extra);
+    throw err;
   }
 
   let ticket: TicketCalculado;

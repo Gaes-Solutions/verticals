@@ -19,6 +19,12 @@ const configSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
+  // Número EXACTO de proxies de confianza frente al API (Railway = 1). Fastify lo
+  // pasa a proxy-addr para tomar solo el último salto de X-Forwarded-For como
+  // req.ip; nunca la IP más a la izquierda que el cliente puede falsificar. Con
+  // `trustProxy: true` (cadena completa) el rate-limit por IP se evade con un XFF
+  // aleatorio por request. 0 = ignorar XFF (usar socket, p.ej. sin proxy).
+  TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(1),
   FLOWS_SCHEDULER_ENABLED: z
     .enum(["true", "false"])
     .default("false")

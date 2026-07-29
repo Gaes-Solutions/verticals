@@ -27,6 +27,39 @@ export class ApartadoError extends Error {
   }
 }
 
+/**
+ * Valida que el descuento global manual del apartado no exceda el tope
+ * configurado por el dueño (config_ventas.descuentoMaximoPct, default 100 = sin
+ * tope). Mismo control que crearVenta: quien tiene `permiteDescuentoAlto`
+ * (ventas.aplicar_descuento_alto o dueño) lo sobrepasa. Bloquea antes de
+ * calcular precios, cerrando el bypass del tope vía el flujo de apartados.
+ */
+async function validarTopeDescuento(
+  client: TenantClient,
+  descuentoGlobalPct: number | string | null | undefined,
+  permiteDescuentoAlto: boolean,
+): Promise<void> {
+  if (permiteDescuentoAlto || descuentoGlobalPct === null || descuentoGlobalPct === undefined) {
+    return;
+  }
+  const pct = new Decimal(String(descuentoGlobalPct));
+  if (pct.lte(ZERO)) return;
+  const cfg = await client.configVentas.findFirst();
+  const max = new Decimal(cfg ? cfg.descuentoMaximoPct.toString() : "100");
+  if (pct.gt(max)) {
+    throw new ApartadoError(
+      400,
+      `El descuento máximo permitido es ${max.toString()}%. Pide autorización para aplicar un descuento mayor.`,
+      { descuentoMaximoPct: max.toString(), solicitado: pct.toString() },
+    );
+  }
+}
+
+export interface CrearApartadoOpts {
+  /** Permite sobrepasar el tope de descuento configurado (ventas.aplicar_descuento_alto o dueño). */
+  permiteDescuentoAlto?: boolean;
+}
+
 interface VarianteSnapshot {
   id: string;
   sku: string;
@@ -150,9 +183,12 @@ export async function crearApartado(
   client: TenantClient,
   usuarioId: string,
   input: ApartadoCreateInput,
+  opts: CrearApartadoOpts = {},
 ): Promise<CrearApartadoResult> {
   const sucursal = await client.sucursal.findUnique({ where: { id: input.sucursalId } });
   if (!sucursal) throw new ApartadoError(404, "Sucursal no encontrada");
+
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
 
   let ticket: TicketCalculado;
   try {

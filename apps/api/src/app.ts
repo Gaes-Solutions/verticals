@@ -146,7 +146,7 @@ export async function buildApp(
           }
         : { level: config.LOG_LEVEL },
     disableRequestLogging: false,
-    trustProxy: true,
+    trustProxy: config.TRUST_PROXY_HOPS,
   });
 
   await app.register(errorHandlerPlugin);

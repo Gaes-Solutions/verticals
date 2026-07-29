@@ -2,6 +2,7 @@ import type { TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
+import { VentaError, validarTopeDescuento } from "../ventas/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -34,6 +35,8 @@ export interface CrearCotizacionInput {
   cuponCodigo?: string;
   descuentoGlobalPct?: string | null;
   descuentoGlobalMotivo?: string;
+  /** Capacidad RBAC (resuelta en la ruta) para exceder el tope de descuento global. */
+  permiteDescuentoAlto?: boolean;
   diasVigencia: number;
   condicionesPago?: string;
   notas?: string;
@@ -174,6 +177,18 @@ export async function crearCotizacion(
   if (!sucursal) throw new CotizacionError(404, "Sucursal no encontrada");
   const cliente = await client.clienteB2b.findUnique({ where: { id: input.clienteB2bId } });
   if (!cliente) throw new CotizacionError(404, "Cliente B2B no encontrado");
+
+  try {
+    await validarTopeDescuento(
+      client,
+      input.descuentoGlobalPct ?? null,
+      input.permiteDescuentoAlto ?? false,
+    );
+  } catch (err) {
+    if (err instanceof VentaError)
+      throw new CotizacionError(err.statusCode, err.message, err.extra);
+    throw err;
+  }
 
   let ticket: TicketCalculado;
   try {

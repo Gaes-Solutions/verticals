@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
   type ApartadoListQuery,
@@ -97,8 +97,14 @@ const apartadosRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.APARTADOS_CREAR);
     const body = apartadoCreateSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
-      const result = await crearApartado(req.tenantPrisma, req.principal.userId, body);
+      const result = await crearApartado(req.tenantPrisma, req.principal.userId, body, {
+        permiteDescuentoAlto,
+      });
       return reply.code(201).send(result);
     } catch (err) {
       const handled = handleErr(reply, err);
