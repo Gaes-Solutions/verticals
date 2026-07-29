@@ -8,9 +8,9 @@ import {
 } from "@gaespos/fiscal";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
-import { FiadoError, aplicarAbonoFiado } from "../clientes/fiado-service.js";
+import { FiadoError, aplicarAbonoFiadoTx } from "../clientes/fiado-service.js";
 import { castigarComisionesDevolucion } from "../comisiones/service.js";
-import { CxcError, registrarPago as registrarPagoCxc } from "../cxc/service.js";
+import { CxcError, registrarPagoTx as registrarPagoCxcTx } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -351,7 +351,7 @@ async function persistirDevolucion(
 }
 
 async function aplicarReembolso(
-  client: TenantClient,
+  tx: Tx,
   venta: VentaCargada,
   input: ProcesarDevolucionInput,
   totalDev: Decimal,
@@ -359,7 +359,7 @@ async function aplicarReembolso(
 ): Promise<void> {
   if (input.metodoReembolso === "nota_credito_fiado" && venta.clienteId) {
     try {
-      await aplicarAbonoFiado(client, {
+      await aplicarAbonoFiadoTx(tx, {
         clienteId: venta.clienteId,
         monto: totalDev.toString(),
         metodoPago: "otro",
@@ -376,7 +376,7 @@ async function aplicarReembolso(
   }
   if (input.metodoReembolso === "nota_credito_cxc" && venta.cuentaCobrar) {
     try {
-      await registrarPagoCxc(client, {
+      await registrarPagoCxcTx(tx, {
         cuentaCobrarId: venta.cuentaCobrar.id,
         monto: totalDev.toString(),
         metodo: "otro",
@@ -585,6 +585,7 @@ export async function procesarDevolucion(
         ventaId: venta.id,
         montoDevuelto: subtotalDev.toString(),
       });
+      await aplicarReembolso(tx, venta, input, totalDev, usuarioId);
       return { ...result, tipo, lineasCalc, totales };
     });
   } catch (err) {
@@ -601,8 +602,6 @@ export async function procesarDevolucion(
 
   const { tipo, lineasCalc, totales } = persisted;
   const totalDev = totales.totalDev;
-
-  await aplicarReembolso(client, venta, input, totalDev, usuarioId);
 
   let cfdiEgresoId: string | null = null;
   const ingresoVigente = findIngresoVigente(venta);

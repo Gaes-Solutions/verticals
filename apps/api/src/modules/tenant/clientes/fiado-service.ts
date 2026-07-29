@@ -105,48 +105,53 @@ export interface AbonoFiadoInput {
   usuarioId: string;
 }
 
+export async function aplicarAbonoFiadoTx(
+  tx: Tx,
+  input: AbonoFiadoInput,
+): Promise<{ saldoRestante: string; estado: string }> {
+  const cliente = await tx.cliente.findUnique({ where: { id: input.clienteId } });
+  if (!cliente) throw new FiadoError(404, "Cliente no encontrado");
+
+  const fiado = await ensureFiado(tx, input.clienteId);
+  const saldoActual = new Decimal(fiado.montoTotal.toString());
+  const monto = new Decimal(input.monto);
+  if (monto.gt(saldoActual)) {
+    throw new FiadoError(409, "El abono excede el saldo deudor del cliente", {
+      saldoActual: saldoActual.toString(),
+      intentado: monto.toString(),
+    });
+  }
+
+  const saldoNuevo = saldoActual.minus(monto);
+  const estado = saldoNuevo.eq(ZERO) ? "liquidado" : "activo";
+  await tx.fiado.update({
+    where: { id: fiado.id },
+    data: {
+      montoTotal: saldoNuevo.toString(),
+      fechaUltimoMovimiento: new Date(),
+      estado,
+    },
+  });
+  await tx.fiadoMovimiento.create({
+    data: {
+      fiadoId: fiado.id,
+      tipo: "abono_pago",
+      monto: monto.toString(),
+      metodoPago: input.metodoPago,
+      ...(input.referencia ? { referenciaTipo: "abono_directo" } : {}),
+      ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
+      usuarioId: input.usuarioId,
+    },
+  });
+
+  return { saldoRestante: saldoNuevo.toString(), estado };
+}
+
 export async function aplicarAbonoFiado(
   client: TenantClient,
   input: AbonoFiadoInput,
 ): Promise<{ saldoRestante: string; estado: string }> {
-  return client.$transaction(async (tx) => {
-    const cliente = await tx.cliente.findUnique({ where: { id: input.clienteId } });
-    if (!cliente) throw new FiadoError(404, "Cliente no encontrado");
-
-    const fiado = await ensureFiado(tx, input.clienteId);
-    const saldoActual = new Decimal(fiado.montoTotal.toString());
-    const monto = new Decimal(input.monto);
-    if (monto.gt(saldoActual)) {
-      throw new FiadoError(409, "El abono excede el saldo deudor del cliente", {
-        saldoActual: saldoActual.toString(),
-        intentado: monto.toString(),
-      });
-    }
-
-    const saldoNuevo = saldoActual.minus(monto);
-    const estado = saldoNuevo.eq(ZERO) ? "liquidado" : "activo";
-    await tx.fiado.update({
-      where: { id: fiado.id },
-      data: {
-        montoTotal: saldoNuevo.toString(),
-        fechaUltimoMovimiento: new Date(),
-        estado,
-      },
-    });
-    await tx.fiadoMovimiento.create({
-      data: {
-        fiadoId: fiado.id,
-        tipo: "abono_pago",
-        monto: monto.toString(),
-        metodoPago: input.metodoPago,
-        ...(input.referencia ? { referenciaTipo: "abono_directo" } : {}),
-        ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
-        usuarioId: input.usuarioId,
-      },
-    });
-
-    return { saldoRestante: saldoNuevo.toString(), estado };
-  });
+  return client.$transaction((tx) => aplicarAbonoFiadoTx(tx, input));
 }
 
 export interface RegularizarFiadoInput {

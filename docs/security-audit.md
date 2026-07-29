@@ -448,3 +448,41 @@ Rama: `seguridad/auditoria`. 4 vulnerabilidades aprobadas por el panel y aplicad
 **Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
 
 ---
+
+## Ronda 13 — 2026-07-29
+
+### R13-01 · HIGH · Condición de carrera en devoluciones: reembolso fiado/CxC fuera de la transacción (atomicidad) (race-condition)
+
+- **Archivos**: `apps/api/src/modules/tenant/devoluciones/service.ts`, `apps/api/src/modules/tenant/clientes/fiado-service.ts`, `apps/api/src/modules/tenant/cxc/service.ts`
+- **Explotación**: El TOCTOU de doble-reembolso/doble-stock YA estaba cerrado por `pg_advisory_xact_lock` (service.ts) + `validateAndCalcLineas` dentro del `$transaction`. El residuo real era de ATOMICIDAD: `aplicarReembolso` (notas de crédito `nota_credito_fiado`/`nota_credito_cxc`) corría FUERA de la transacción, así que la devolución + reposición de stock + castigo de comisiones quedaban committeados aunque el abono a fiado o el pago CxC fallara, dejando al cliente sin su crédito de forma permanente (un reintento del POST es rechazado por `disponible=0`).
+- **Decisión del panel**: Ganadora propuesta 3 (mayoría 2/3 con la 2, mismo enfoque). Extraer funciones tx-aware exportadas (`aplicarAbonoFiadoTx`, `registrarPagoTx`) y convertir las públicas en wrappers delgados que preservan la firma para los callers existentes (routes). Meter `aplicarReembolso` DENTRO del `$transaction` ya existente, bajo el advisory lock de venta que ya se toma. NO se toca el lock ni la revalidación de `yaDevuelto`. El CFDI Egreso permanece FUERA de la transacción a propósito (llamada de red a Facturama, budget 3s, re-emitible; un fallo de timbrado no debe revertir una devolución válida).
+- **Fix aplicado**:
+  - `fiado-service.ts`: extraído `aplicarAbonoFiadoTx(tx, input)` con el cuerpo del callback; `aplicarAbonoFiado(client, input)` ahora es wrapper (`client.$transaction((tx) => aplicarAbonoFiadoTx(tx, input))`). Caller `clientes/routes.ts` sin cambios.
+  - `cxc/service.ts`: extraído `registrarPagoTx(tx, input)` conservando `lockCxc(tx, ...)` DENTRO (advisory lock de CxC anidado bajo el de venta; orden venta→cxc, ambos xact, sin ciclo de deadlock); `registrarPago(client, input)` ahora es wrapper. Caller `cxc/routes.ts` sin cambios.
+  - `devoluciones/service.ts`: imports cambiados a `aplicarAbonoFiadoTx` y `registrarPagoCxcTx`; `aplicarReembolso` recibe `tx: Tx` (antes `client: TenantClient`) y llama a las variantes tx-aware; la invocación se movió DENTRO del `$transaction` (tras `castigarComisionesDevolucion`, antes del return) y se eliminó la llamada suelta fuera de la transacción. Bloque `emitirCfdiEgreso` sin cambios (fuera de la tx, intencional).
+  - Resultado: devolución + reposición de stock + castigo de comisiones + abono fiado/pago CxC son atómicos bajo el lock de venta; si el reembolso falla, TODO hace rollback. Sin `any`, conditional spreads por `exactOptionalPropertyTypes` intactos, firmas públicas preservadas.
+
+### R13-02 · MEDIUM · Non-owner puede archivar/desactivar al dueño del tenant (lockout / DoS) (broken-authorization)
+
+- **Archivos**: `apps/api/src/modules/tenant/usuarios/routes.ts`
+- **Explotación**: `DELETE /t/usuarios/:id` (solo `USUARIOS_ARCHIVAR`) y `PATCH /t/usuarios/:id` con `{isActive:false}` (solo `USUARIOS_ACTUALIZAR`) no verifican el privilegio del target. El preset `gerente` tiene ambos permisos, así que un no-dueño puede desactivar al dueño del tenant (usuario con rol `dueno`), y como el login rechaza usuarios inactivos, esto es un lockout duro de las cuentas más privilegiadas.
+- **Decisión del panel**: Ganadora propuesta 1, pero el `fixConsensuado` entregado por el panel es un placeholder no accionable (literal `"TEST"`, justificación `"test"`).
+- **Fix aplicado**: NINGUNO. El `fixConsensuado` aprobado no contiene una especificación implementable (`"TEST"`). No se improvisó un remedio no aprobado (regla CLAUDE.md: no improvisar decisiones de arquitectura/seguridad sin especificación). **PENDIENTE / BLOQUEADO**: requiere que el panel emita un `fixConsensuado` real — enfoque esperado: guardia de target-privilege en `DELETE`/`PATCH` de usuarios que impida desactivar/archivar a un usuario con rol dueño (o `*`) por parte de no-dueños, más guardia anti-self-lockout. No incluido en el commit de esta ronda.
+
+### R13-03 · MEDIUM · Challenge WebAuthn stateless nunca consumido → replay de aserción (auth-webauthn)
+
+- **Archivos**: `apps/api/src/modules/auth-tenant/passkey-routes.ts`, `packages/db/prisma/master/schema.prisma`, `packages/db/prisma/master/migrations/20260727000000_add_webauthn_used_challenges/migration.sql`
+- **Explotación**: El challenge de login/register era un token HMAC stateless nunca marcado como usado, permitiendo replay de `{tenantSlug, response, challengeToken}` durante la ventana de 5 min (agravado por passkeys de plataforma con `signCount=0` que evaden la detección de counter regression).
+- **Decisión del panel**: Ganadora propuesta 2 (unánime 3/3). La vulnerabilidad YA está remediada en el árbol actual: challenge de un solo uso consumido atómicamente en master DB por PK única (`WebauthnUsedChallenge`), verificado end-to-end.
+- **Fix aplicado**: NINGUNO (ya remediado, verificado y conservado sin editar). Confirmado en código: `ChallengePayload` incluye `jti`; `firmarChallenge` embebe `jti=randomUUID()` en `/login/options` y `/register/options`; `consumirChallenge(masterPrisma, jti, exp)` hace `create` atómico y retorna `false` ante P2002 (narrowing tipado, sin `any`); en `/passkey/login/verify` se llama DESPUÉS de verificar la aserción y ANTES de actualizar counter/emitir JWT; `/register/verify` consume tras `verifyRegistrationResponse`. Modelo `WebauthnUsedChallenge` (schema.prisma) y migración `20260727000000` existentes con PK en `id` e índice en `expires_at`. **Acción para el juez**: confirmar que la migración `20260727000000` está aplicada en producción (Railway). Mejora opcional no-crítica (no bloqueante, fuera de alcance): job BullMQ periódico que purgue filas expiradas (`deleteMany where expiresAt < now`).
+
+### R13-04 · MEDIUM · Login y 2FA-verify del portal partner sin rate limit por-ruta (auth-rate-limit)
+
+- **Archivos**: `apps/api/src/modules/partner-portal/routes.ts`
+- **Explotación**: `/partner/auth/login` y `/partner/auth/mfa/verify` no declaraban `config.rateLimit`, cayendo al limiter global (~100/min, ~10x más laxo que el resto de endpoints auth), habilitando password-spraying y brute-force de TOTP/backup-code sin lockout.
+- **Decisión del panel**: Ganadora propuesta 1 (mayoría 3/3 en diagnóstico). La vulnerabilidad reportada YA está remediada y committeada en HEAD (commit 50deb4f, ronda 9): `/auth/login` y `/auth/mfa/verify` tienen `{ config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }`. HARDENING ADICIONAL (residuo real, mínimo cambio): aplicar el mismo limiter a `/auth/aceptar-invitacion` (endpoint token+password que fija credencial, sin rate limit por-ruta). NO añadir lockout/failedAttempt solo a partner (ningún endpoint del codebase lo tiene; sería inconsistencia + scope-creep).
+- **Fix aplicado**: Vulnerabilidad reportada — sin cambios (ya remediada en ronda 9, verificada). Hardening — en `partner-portal/routes.ts`, `/auth/aceptar-invitacion` ahora declara `{ config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }`, idéntico al patrón de login/mfa/verify. Sin tocar Zod ni el handler.
+
+**Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → 0 errores.
+
+---

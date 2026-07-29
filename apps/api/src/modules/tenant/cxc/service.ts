@@ -244,67 +244,72 @@ export interface RegistrarPagoResult {
   estado: "activa" | "vencida" | "liquidada" | "incobrable" | "condonada";
 }
 
+export async function registrarPagoTx(
+  tx: Tx,
+  input: RegistrarPagoInput,
+): Promise<RegistrarPagoResult> {
+  await lockCxc(tx, input.cuentaCobrarId);
+  const cxc = await tx.cuentaCobrar.findUnique({ where: { id: input.cuentaCobrarId } });
+  if (!cxc) throw new CxcError(404, "CxC no encontrada");
+  if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
+    throw new CxcError(409, `CxC en estado "${cxc.estado}" no acepta pagos`);
+  }
+
+  const monto = new Decimal(input.monto);
+  const pagadoActual = new Decimal(cxc.montoPagado.toString());
+  const total = new Decimal(cxc.montoOriginal.toString()).plus(
+    new Decimal(cxc.interesAcumulado.toString()),
+  );
+  const saldoActual = total.minus(pagadoActual);
+  if (monto.gt(saldoActual)) {
+    throw new CxcError(409, "El pago excede el saldo de la CxC", {
+      saldoActual: saldoActual.toString(),
+      intentado: monto.toString(),
+    });
+  }
+
+  const nuevoPagado = pagadoActual.plus(monto);
+  const saldoNuevo = total.minus(nuevoPagado);
+  const estado = saldoNuevo.eq(ZERO) ? "liquidada" : cxc.estado;
+
+  await tx.cuentaCobrar.update({
+    where: { id: cxc.id },
+    data: {
+      montoPagado: nuevoPagado.toString(),
+      estado,
+      ...(estado === "liquidada" ? { liquidadaAt: new Date() } : {}),
+    },
+  });
+  const pago = await tx.cxcPago.create({
+    data: {
+      cuentaCobrarId: cxc.id,
+      metodo: input.metodo,
+      monto: monto.toString(),
+      ...(input.referencia ? { referencia: input.referencia } : {}),
+      ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
+      usuarioId: input.usuarioId,
+    },
+  });
+  if (cxc.vendedorId) {
+    await devengarComisionCobro(tx, {
+      vendedorId: cxc.vendedorId,
+      cxcPagoId: pago.id,
+      monto: monto.toString(),
+    });
+  }
+
+  return {
+    saldoRestante: saldoNuevo.toString(),
+    montoPagado: nuevoPagado.toString(),
+    estado,
+  };
+}
+
 export async function registrarPago(
   client: TenantClient,
   input: RegistrarPagoInput,
 ): Promise<RegistrarPagoResult> {
-  return client.$transaction(async (tx) => {
-    await lockCxc(tx, input.cuentaCobrarId);
-    const cxc = await tx.cuentaCobrar.findUnique({ where: { id: input.cuentaCobrarId } });
-    if (!cxc) throw new CxcError(404, "CxC no encontrada");
-    if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
-      throw new CxcError(409, `CxC en estado "${cxc.estado}" no acepta pagos`);
-    }
-
-    const monto = new Decimal(input.monto);
-    const pagadoActual = new Decimal(cxc.montoPagado.toString());
-    const total = new Decimal(cxc.montoOriginal.toString()).plus(
-      new Decimal(cxc.interesAcumulado.toString()),
-    );
-    const saldoActual = total.minus(pagadoActual);
-    if (monto.gt(saldoActual)) {
-      throw new CxcError(409, "El pago excede el saldo de la CxC", {
-        saldoActual: saldoActual.toString(),
-        intentado: monto.toString(),
-      });
-    }
-
-    const nuevoPagado = pagadoActual.plus(monto);
-    const saldoNuevo = total.minus(nuevoPagado);
-    const estado = saldoNuevo.eq(ZERO) ? "liquidada" : cxc.estado;
-
-    await tx.cuentaCobrar.update({
-      where: { id: cxc.id },
-      data: {
-        montoPagado: nuevoPagado.toString(),
-        estado,
-        ...(estado === "liquidada" ? { liquidadaAt: new Date() } : {}),
-      },
-    });
-    const pago = await tx.cxcPago.create({
-      data: {
-        cuentaCobrarId: cxc.id,
-        metodo: input.metodo,
-        monto: monto.toString(),
-        ...(input.referencia ? { referencia: input.referencia } : {}),
-        ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
-        usuarioId: input.usuarioId,
-      },
-    });
-    if (cxc.vendedorId) {
-      await devengarComisionCobro(tx, {
-        vendedorId: cxc.vendedorId,
-        cxcPagoId: pago.id,
-        monto: monto.toString(),
-      });
-    }
-
-    return {
-      saldoRestante: saldoNuevo.toString(),
-      montoPagado: nuevoPagado.toString(),
-      estado,
-    };
-  });
+  return client.$transaction((tx) => registrarPagoTx(tx, input));
 }
 
 export async function condonarCxc(

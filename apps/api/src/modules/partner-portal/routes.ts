@@ -50,20 +50,24 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
  * fijando su password y después consulta SU programa.
  */
 const partnerPortalRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/auth/aceptar-invitacion", async (req, reply) => {
-    const body = aceptarSchema.parse(req.body);
-    try {
-      const result = await aceptarInvitacionConPassword(
-        app.masterPrisma,
-        body.token,
-        body.password,
-      );
-      return reply.code(200).send(result);
-    } catch (err) {
-      if (handleErr(reply, err)) return;
-      throw err;
-    }
-  });
+  app.post(
+    "/auth/aceptar-invitacion",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = aceptarSchema.parse(req.body);
+      try {
+        const result = await aceptarInvitacionConPassword(
+          app.masterPrisma,
+          body.token,
+          body.password,
+        );
+        return reply.code(200).send(result);
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
 
   app.post(
     "/auth/login",
