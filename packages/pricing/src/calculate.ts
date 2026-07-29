@@ -318,6 +318,28 @@ export function calcularTicket(input: CalcularTicketInput): TicketCalculado {
     }
   }
 
+  // Piso de negociación a nivel ticket: los descuentos de ticket (pasos 4-6:
+  // mayoreo, cupón y descuento global manual) también pueden hundir una línea
+  // bajo su `precioMinimoNegociacion`. Se redistribuye el descuento de ticket
+  // proporcional al subtotal de cada línea y se re-evalúa el piso sobre el
+  // precio unitario efectivo, de lo contrario el bloqueo de piso se saltaría.
+  const descuentoTicket = subtotalLineas.minus(totalActual);
+  if (descuentoTicket.gt(ZERO) && subtotalLineas.gt(ZERO)) {
+    lineas.forEach((lineaCalc, idx) => {
+      if (lineaCalc.precioMinimoViolado) return;
+      const item = input.lineas[idx]?.listaPrecioItem;
+      if (!item || item.precioMinimoNegociacion === null) return;
+      const lineaSubtotal = dec(lineaCalc.subtotal);
+      const lineaCantidad = dec(lineaCalc.cantidad);
+      if (lineaSubtotal.lte(ZERO) || lineaCantidad.lte(ZERO)) return;
+      const descuentoLinea = descuentoTicket.mul(lineaSubtotal).div(subtotalLineas);
+      const precioUnitarioEfectivo = lineaSubtotal.minus(descuentoLinea).div(lineaCantidad);
+      if (precioUnitarioEfectivo.lt(dec(item.precioMinimoNegociacion))) {
+        lineaCalc.precioMinimoViolado = true;
+      }
+    });
+  }
+
   return {
     lineas,
     subtotal: subtotalLineas.toString(),

@@ -495,18 +495,32 @@ export async function registrarPacienteMaster(
 ): Promise<{ paciente: PacienteMaster; codigo: string }> {
   const codigo = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const otpExpiraAt = new Date(Date.now() + OTP_TTL_MIN * 60_000);
-  const datos = {
-    nombre: input.nombre,
-    otpCodigo: codigo,
-    otpExpiraAt,
-    otpIntentos: 0,
-    ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
-    ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
-  };
-  const paciente = await master.pacienteMaster.upsert({
+  const otpDatos = { otpCodigo: codigo, otpExpiraAt, otpIntentos: 0 };
+
+  const existente = await master.pacienteMaster.findUnique({
     where: { email: input.email },
-    create: { email: input.email, ...datos },
-    update: datos,
+  });
+  if (existente) {
+    // El correo ya pertenece a un PacienteMaster (identidad global cross-tenant).
+    // Este endpoint es público y sin autenticar, así que NUNCA sobreescribimos
+    // nombre/apellidos/telefono: eso corresponde al flujo autenticado de perfil.
+    // Un "registro" sobre un correo conocido solo cuenta como solicitud de un
+    // OTP nuevo para reenviarlo a la dirección del propio dueño.
+    const paciente = await master.pacienteMaster.update({
+      where: { email: input.email },
+      data: otpDatos,
+    });
+    return { paciente, codigo };
+  }
+
+  const paciente = await master.pacienteMaster.create({
+    data: {
+      email: input.email,
+      nombre: input.nombre,
+      ...otpDatos,
+      ...(input.apellidos !== undefined ? { apellidos: input.apellidos } : {}),
+      ...(input.telefono !== undefined ? { telefono: input.telefono } : {}),
+    },
   });
   return { paciente, codigo };
 }

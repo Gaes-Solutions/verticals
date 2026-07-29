@@ -210,6 +210,13 @@ export async function crearApartado(
     throw err;
   }
 
+  const violado = ticket.lineas.find((l) => l.precioMinimoViolado);
+  if (violado) {
+    throw new ApartadoError(409, "Línea bajo precio mínimo de negociación", {
+      varianteId: violado.productoVarianteId,
+    });
+  }
+
   const cuponAplicado = ticket.descuentosTicket.some((d) => d.fuente === "cupon");
 
   const snapshots = await loadSnapshots(
