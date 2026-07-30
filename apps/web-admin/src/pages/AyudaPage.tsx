@@ -488,6 +488,8 @@ function irA(seccion: string) {
 
 export function AyudaPage() {
   const [q, setQ] = useState("");
+  // Secciones cuya captura no existe todavía: se ocultan al fallar la carga.
+  const [sinImg, setSinImg] = useState<Set<string>>(new Set());
 
   const visibles = useMemo(() => {
     const permitidos = MODULOS.filter((m) => puede(m.perm));
@@ -546,6 +548,23 @@ export function AyudaPage() {
                   <p className="mb-3 text-slate-600 text-sm">
                     <b className="text-slate-700">¿Para qué sirve?</b> {m.paraQue}
                   </p>
+
+                  {!sinImg.has(m.seccion) && (
+                    <a
+                      href={`/ayuda/${m.seccion}.png`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-3 block overflow-hidden rounded-xl border border-slate-200"
+                    >
+                      <img
+                        src={`/ayuda/${m.seccion}.png`}
+                        alt={`Pantalla de ${m.titulo}`}
+                        loading="lazy"
+                        onError={() => setSinImg((s) => new Set(s).add(m.seccion))}
+                        className="block w-full"
+                      />
+                    </a>
+                  )}
 
                   <p className="mb-1 font-semibold text-slate-500 text-xs uppercase tracking-wide">
                     Cómo se hace
