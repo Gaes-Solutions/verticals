@@ -8,16 +8,30 @@ const config: ExpoConfig = {
   orientation: "portrait",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
+  icon: "./assets/icon.png",
   ios: {
     bundleIdentifier: "com.gaessoft.negocio",
     supportsTablet: true,
   },
   android: {
     package: "com.gaessoft.negocio",
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#0f766e",
+    },
   },
   plugins: [
     "expo-router",
     "expo-secure-store",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#0f766e",
+      },
+    ],
     [
       "expo-local-authentication",
       { faceIDPermission: "Usa Face ID para entrar a GaesSoft sin escribir tu contraseña." },
