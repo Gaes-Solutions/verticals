@@ -13,6 +13,14 @@ export default function AppLayout() {
     <Tabs screenOptions={{ tabBarActiveTintColor: "#0f766e", headerShown: true }}>
       <Tabs.Screen name="index" options={{ title: "Inicio" }} />
       <Tabs.Screen
+        name="ventas"
+        options={{ title: "Ventas", href: puede("ventas.leer") ? undefined : null }}
+      />
+      <Tabs.Screen
+        name="productos"
+        options={{ title: "Productos", href: puede("productos.leer") ? undefined : null }}
+      />
+      <Tabs.Screen
         name="reportes"
         options={{ title: "Reportes", href: puede("reportes.ventas") ? undefined : null }}
       />
