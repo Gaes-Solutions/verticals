@@ -1,10 +1,5 @@
-import type { ApiClient } from "./client.js";
-import type {
-  ClienteSession,
-  LoginCredentials,
-  TenantLoginResult,
-  TenantSession,
-} from "./types.js";
+import type { ApiClient } from "./client";
+import type { ClienteSession, LoginCredentials, TenantLoginResult, TenantSession } from "./types";
 
 interface RawTenantLogin {
   accessToken?: string;

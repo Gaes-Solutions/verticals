@@ -1,15 +1,15 @@
-export { ApiError, NetworkError } from "./errors.js";
-export { createApiClient } from "./client.js";
-export type { ApiClient, ApiClientConfig, RequestOptions } from "./client.js";
-export { createMemoryStorage } from "./storage.js";
-export type { SecureStorage } from "./storage.js";
+export { ApiError, NetworkError } from "./errors";
+export { createApiClient } from "./client";
+export type { ApiClient, ApiClientConfig, RequestOptions } from "./client";
+export { createMemoryStorage } from "./storage";
+export type { SecureStorage } from "./storage";
 export {
   loginTenant,
   verifyTenantMfa,
   loginCliente,
   registrarCliente,
-} from "./auth.js";
-export type { RegistroClienteInput } from "./auth.js";
+} from "./auth";
+export type { RegistroClienteInput } from "./auth";
 export type {
   StaffUser,
   TenantSession,
@@ -17,4 +17,4 @@ export type {
   ClienteUser,
   ClienteSession,
   LoginCredentials,
-} from "./types.js";
+} from "./types";

@@ -1,4 +1,4 @@
-import { ApiError, NetworkError } from "./errors.js";
+import { ApiError, NetworkError } from "./errors";
 
 export interface ApiClientConfig {
   /** Base del API, ej. "https://app.angaes.com/api". */
