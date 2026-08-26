@@ -11,6 +11,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.5",
     "@gaespos/api-client": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
     "expo": "^53.0.0",

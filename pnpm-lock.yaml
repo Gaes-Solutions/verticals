@@ -159,6 +159,9 @@ importers:
 
   apps/mobile-cliente:
     dependencies:
+      '@expo/metro-runtime':
+        specifier: ~5.0.5
+        version: 5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))
       '@gaespos/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -211,6 +214,9 @@ importers:
 
   apps/mobile-negocio:
     dependencies:
+      '@expo/metro-runtime':
+        specifier: ~5.0.5
+        version: 5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))
       '@gaespos/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
