@@ -157,6 +157,58 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/mobile-cliente:
+    dependencies:
+      '@gaespos/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@tanstack/react-query':
+        specifier: ^5.62.7
+        version: 5.101.4(react@19.0.0)
+      expo:
+        specifier: ^53.0.0
+        version: 53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+      expo-constants:
+        specifier: ~17.1.6
+        version: 17.1.8(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))
+      expo-local-authentication:
+        specifier: ~16.0.4
+        version: 16.0.5(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
+      expo-router:
+        specifier: ~5.1.11
+        version: 5.1.11(ba2b47f14d4f3da69c9ee4950172f2aa)
+      expo-secure-store:
+        specifier: ~14.2.3
+        version: 14.2.4(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
+      expo-splash-screen:
+        specifier: ~0.30.10
+        version: 0.30.10(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
+      expo-status-bar:
+        specifier: ~2.2.3
+        version: 2.2.3(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+      react:
+        specifier: 19.0.0
+        version: 19.0.0
+      react-native:
+        specifier: 0.79.6
+        version: 0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)
+      react-native-safe-area-context:
+        specifier: 5.4.0
+        version: 5.4.0(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+      react-native-screens:
+        specifier: ~4.11.1
+        version: 4.11.1(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+      zustand:
+        specifier: ^5.0.2
+        version: 5.0.14(@types/react@19.2.15)(react@19.0.0)(use-sync-external-store@1.6.0(react@19.0.0))
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.15
+        version: 19.2.15
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/mobile-negocio:
     dependencies:
       '@gaespos/api-client':
@@ -180,6 +232,9 @@ importers:
       expo-secure-store:
         specifier: ~14.2.3
         version: 14.2.4(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
+      expo-splash-screen:
+        specifier: ~0.30.10
+        version: 0.30.10(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
       expo-status-bar:
         specifier: ~2.2.3
         version: 2.2.3(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
@@ -4359,6 +4414,11 @@ packages:
 
   expo-secure-store@14.2.4:
     resolution: {integrity: sha512-ePaz4fnTitJJZjAiybaVYGfLWWyaEtepZC+vs9ZBMhQMfG5HUotIcVsDaSo3FnwpHmgwsLVPY2qFeryI6AtULw==}
+    peerDependencies:
+      expo: '*'
+
+  expo-splash-screen@0.30.10:
+    resolution: {integrity: sha512-Tt9va/sLENQDQYeOQ6cdLdGvTZ644KR3YG9aRlnpcs2/beYjOX1LHT510EGzVN9ljUTg+1ebEo5GGt2arYtPjw==}
     peerDependencies:
       expo: '*'
 
@@ -10725,6 +10785,13 @@ snapshots:
   expo-secure-store@14.2.4(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)):
     dependencies:
       expo: 53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+
+  expo-splash-screen@0.30.10(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)):
+    dependencies:
+      '@expo/prebuild-config': 9.0.12
+      expo: 53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
+    transitivePeerDependencies:
+      - supports-color
 
   expo-status-bar@2.2.3(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0):
     dependencies:

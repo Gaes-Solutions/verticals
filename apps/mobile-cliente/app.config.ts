@@ -41,6 +41,9 @@ const config: ExpoConfig = {
   extra: {
     // Sobrescribible por build (EAS) con EXPO_PUBLIC_API_URL.
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "https://app.angaes.com/api",
+    eas: {
+      projectId: "d7e5e7bd-bf7c-41a9-9cbc-d804bb40393a",
+    },
   },
 };
 
