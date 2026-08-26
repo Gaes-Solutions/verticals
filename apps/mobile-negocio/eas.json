@@ -7,10 +7,12 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "corepack": true,
       "android": { "buildType": "apk" }
     },
     "preview": {
       "distribution": "internal",
+      "corepack": true,
       "android": {
         "buildType": "apk"
       },
@@ -20,6 +22,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "corepack": true,
       "android": {
         "buildType": "app-bundle"
       },
