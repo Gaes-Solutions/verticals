@@ -4,6 +4,7 @@ const config: ExpoConfig = {
   name: "GaesSoft Negocio",
   slug: "gaessoft-negocio",
   scheme: "gaessoft-negocio",
+  owner: "gaes-soft",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
@@ -40,6 +41,9 @@ const config: ExpoConfig = {
   extra: {
     // Sobrescribible por build (EAS) con EXPO_PUBLIC_API_URL.
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "https://app.angaes.com/api",
+    eas: {
+      projectId: "a2855c15-cbf0-4cec-96bb-80c57cd4d63a",
+    },
   },
 };
 
