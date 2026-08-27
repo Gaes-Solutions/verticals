@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth-store";
 import {
   mfaDisable,
   mfaEnroll,
@@ -9,11 +10,12 @@ import { colors, radius, space } from "@/theme";
 import { Button, Card, Icon, Input, Loading } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
 export default function Seguridad() {
   const qc = useQueryClient();
   const estado = useQuery({ queryKey: ["mfa-estado"], queryFn: mfaEstado });
+  const { biometriaActiva, biometriaDisponible, setBiometria } = useAuth();
   const [enroll, setEnroll] = useState<{ secret: string; otpauthUrl: string } | null>(null);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -75,6 +77,31 @@ export default function Seguridad() {
                 : "Protege tu cuenta con un código temporal."}
             </Text>
           </View>
+        </View>
+      </Card>
+
+      <Card style={s.mt}>
+        <View style={s.head}>
+          <View style={[s.lock, s.lockOff]}>
+            <Icon name="finger-print" size={26} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Entrar con huella / Face ID</Text>
+            <Text style={s.sub}>
+              {biometriaDisponible
+                ? "Desbloquea la app con tu biometría."
+                : "Configura una huella o Face ID en los ajustes de tu teléfono para activarlo."}
+            </Text>
+          </View>
+          <Switch
+            value={biometriaActiva}
+            disabled={!biometriaDisponible}
+            onValueChange={async (v) => {
+              const ok = await setBiometria(v);
+              if (!ok && v) Alert.alert("No se pudo activar", "Verifica tu huella/Face ID.");
+            }}
+            trackColor={{ true: colors.brand, false: colors.line }}
+          />
         </View>
       </Card>
 

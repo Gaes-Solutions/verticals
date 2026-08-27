@@ -39,7 +39,7 @@ const s = StyleSheet.create({
   hi: { backgroundColor: colors.brand },
   top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { fontSize: 12, color: colors.muted, fontWeight: "600" },
-  onHi: { color: colors.brandLight },
+  onHi: { color: colors.onBrandMuted },
   value: { fontSize: 21, fontWeight: "800", color: colors.ink },
   valueHi: { color: colors.white },
 });

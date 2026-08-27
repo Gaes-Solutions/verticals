@@ -9,7 +9,7 @@ const MAP: Record<Tone, { bg: string; fg: string }> = {
   danger: { bg: colors.dangerLight, fg: colors.danger },
   warn: { bg: colors.warnLight, fg: colors.warn },
   info: { bg: colors.infoLight, fg: colors.info },
-  neutral: { bg: "#f1f5f9", fg: colors.muted },
+  neutral: { bg: colors.line, fg: colors.muted },
 };
 
 export function Badge({ label, tone = "neutral" }: { label: string; tone?: Tone }) {

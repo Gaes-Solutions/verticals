@@ -719,3 +719,26 @@ export interface DominioB2b {
   verificado: boolean;
 }
 export const getB2bDominios = () => api.get<{ dominios: DominioB2b[] }>("/t/b2b-dominio");
+
+// ---- Importador (carga masiva CSV) ----
+
+export interface FilaProducto {
+  skuPadre: string;
+  nombre: string;
+  precioBase: string;
+  stockInicial?: string;
+}
+export interface FilaPrecio {
+  sku: string;
+  precioBase: string;
+}
+export interface BulkResultado {
+  creados?: number;
+  actualizados?: number;
+  errores?: number;
+}
+
+export const importarProductos = (filas: FilaProducto[]) =>
+  api.post<BulkResultado>("/t/productos/bulk", { filas });
+export const importarPrecios = (filas: FilaPrecio[]) =>
+  api.post<BulkResultado>("/t/productos/bulk-precios", { filas });

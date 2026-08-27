@@ -2,7 +2,7 @@ import { loginTenant, verifyTenantMfa } from "@gaespos/api-client";
 import type { StaffUser } from "@gaespos/api-client";
 import * as LocalAuth from "expo-local-authentication";
 import { create } from "zustand";
-import { TENANT_KEY, TOKEN_KEY } from "../config";
+import { BIOMETRIA_KEY, TENANT_KEY, TOKEN_KEY } from "../config";
 import { api, setUnauthorizedHandler } from "./api";
 import { secureStorage } from "./storage";
 
@@ -14,7 +14,10 @@ interface AuthState {
   tenantSlug: string | null;
   mfaToken: string | null;
   error: string | null;
+  biometriaActiva: boolean;
+  biometriaDisponible: boolean;
   restore: () => Promise<void>;
+  setBiometria: (on: boolean) => Promise<boolean>;
   login: (tenantSlug: string, email: string, password: string) => Promise<void>;
   submitMfa: (code: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -36,6 +39,8 @@ export const useAuth = create<AuthState>((set, get) => {
     tenantSlug: null,
     mfaToken: null,
     error: null,
+    biometriaActiva: false,
+    biometriaDisponible: false,
 
     restore: async () => {
       const token = await secureStorage.get(TOKEN_KEY);
@@ -43,10 +48,12 @@ export const useAuth = create<AuthState>((set, get) => {
         set({ status: "signedOut" });
         return;
       }
-      // Si el dispositivo tiene biometría, pedirla para desbloquear la sesión guardada.
-      const hasBiometrics =
+      const disponible =
         (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync());
-      if (hasBiometrics) {
+      const pref = (await secureStorage.get(BIOMETRIA_KEY)) === "1";
+      set({ biometriaDisponible: disponible, biometriaActiva: pref && disponible });
+      // Solo pedir huella si el usuario la activó y el equipo la tiene.
+      if (pref && disponible) {
         const r = await LocalAuth.authenticateAsync({
           promptMessage: "Desbloquea GaesSoft",
           cancelLabel: "Usar contraseña",
@@ -58,6 +65,22 @@ export const useAuth = create<AuthState>((set, get) => {
       }
       const slug = await secureStorage.get(TENANT_KEY);
       set({ status: "signedIn", tenantSlug: slug });
+    },
+
+    setBiometria: async (on) => {
+      const disponible =
+        (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync());
+      if (on && !disponible) return false;
+      if (on) {
+        const r = await LocalAuth.authenticateAsync({
+          promptMessage: "Confirma tu huella / Face ID",
+          cancelLabel: "Cancelar",
+        });
+        if (!r.success) return false;
+      }
+      await secureStorage.set(BIOMETRIA_KEY, on ? "1" : "0");
+      set({ biometriaActiva: on, biometriaDisponible: disponible });
+      return true;
     },
 
     login: async (tenantSlug, email, password) => {

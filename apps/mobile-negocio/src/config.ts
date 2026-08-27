@@ -8,3 +8,5 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? fromExtra ?? "https://
 export const TOKEN_KEY = "gaessoft_negocio_token";
 /** Clave del slug del tenant (para reintentar login/biometría). */
 export const TENANT_KEY = "gaessoft_negocio_tenant";
+/** Preferencia del usuario: entrar con huella/Face ID ("1" activado). */
+export const BIOMETRIA_KEY = "gaessoft_negocio_biometria";

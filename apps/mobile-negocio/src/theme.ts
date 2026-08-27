@@ -1,8 +1,35 @@
+import { Appearance } from "react-native";
+
 /**
- * Tokens de marca GaesSoft para móvil (mismos valores que packages/ui web).
- * Acento por app: Negocio = teal. Cada pantalla usa SOLO estos tokens.
+ * Tokens de marca GaesSoft para móvil. Acento app Negocio = teal.
+ * Soporta modo claro/oscuro según el sistema (se resuelve al arrancar la app).
+ * Los tokens se definen por ROL (brandLight = fondo sutil, brandDark = texto/énfasis),
+ * así el mismo componente funciona en ambos temas sin cambios.
  */
-export const colors = {
+type Palette = {
+  brand: string;
+  brandDark: string;
+  brandLight: string;
+  ok: string;
+  okLight: string;
+  danger: string;
+  dangerLight: string;
+  warn: string;
+  warnLight: string;
+  info: string;
+  infoLight: string;
+  ink: string;
+  text: string;
+  muted: string;
+  faint: string;
+  line: string;
+  bg: string;
+  card: string;
+  white: string;
+  onBrandMuted: string;
+};
+
+const light: Palette = {
   brand: "#0f766e",
   brandDark: "#115e59",
   brandLight: "#ccfbf1",
@@ -14,7 +41,6 @@ export const colors = {
   warnLight: "#fef3c7",
   info: "#2563eb",
   infoLight: "#dbeafe",
-  // Neutros (slate)
   ink: "#0f172a",
   text: "#334155",
   muted: "#64748b",
@@ -23,7 +49,34 @@ export const colors = {
   bg: "#f1f5f9",
   card: "#ffffff",
   white: "#ffffff",
-} as const;
+  onBrandMuted: "rgba(255,255,255,0.75)",
+};
+
+const dark: Palette = {
+  brand: "#14b8a6",
+  brandDark: "#5eead4",
+  brandLight: "#134e4a",
+  ok: "#34d399",
+  okLight: "#064e3b",
+  danger: "#f87171",
+  dangerLight: "#7f1d1d",
+  warn: "#fbbf24",
+  warnLight: "#78350f",
+  info: "#60a5fa",
+  infoLight: "#1e3a8a",
+  ink: "#f8fafc",
+  text: "#cbd5e1",
+  muted: "#94a3b8",
+  faint: "#64748b",
+  line: "#334155",
+  bg: "#0b1120",
+  card: "#1e293b",
+  white: "#ffffff",
+  onBrandMuted: "rgba(255,255,255,0.75)",
+};
+
+export const isDark = Appearance.getColorScheme() === "dark";
+export const colors: Palette = isDark ? dark : light;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, xl: 20, pill: 999 } as const;
@@ -39,8 +92,8 @@ export const font = {
 
 export const shadow = {
   card: {
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
+    shadowColor: "#000000",
+    shadowOpacity: isDark ? 0.25 : 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
