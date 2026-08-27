@@ -7,10 +7,12 @@ export function Icon({
   name,
   size = 22,
   color = colors.text,
+  onPress,
 }: {
   name: IconName;
   size?: number;
   color?: string;
+  onPress?: () => void;
 }) {
-  return <Ionicons name={name} size={size} color={color} />;
+  return <Ionicons name={name} size={size} color={color} onPress={onPress} />;
 }

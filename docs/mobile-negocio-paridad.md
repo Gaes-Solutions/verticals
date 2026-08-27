@@ -21,10 +21,10 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [x] Precios (listas: ver, detalle, crear)
 - [ ] Inventario Insights (rotación, sugerencias)
 - [x] Promociones (lista + activar/pausar/archivar)
-- [ ] Monedero / lealtad + gift cards
+- [x] Monedero (gift cards: emitir, cancelar)
 - [ ] CFDI / Facturación (timbrado, cancelación)
 - [ ] Contabilidad (pólizas, categorías)
-- [ ] Comisiones (vendedores)
+- [x] Comisiones (reglas: ver, eliminar)
 - [ ] Reseñas
 - [ ] Preguntas (Q&A de productos)
 - [ ] Envíos (paqueterías, guías)

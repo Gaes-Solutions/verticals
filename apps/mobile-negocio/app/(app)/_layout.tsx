@@ -16,6 +16,8 @@ export default function AppLayout() {
       <Icon name={name} size={size} color={color} />
     );
 
+  const hidden = { href: null } as const;
+
   return (
     <Tabs
       screenOptions={{
@@ -43,25 +45,21 @@ export default function AppLayout() {
           href: puede("ventas.leer") ? undefined : null,
         }}
       />
-      <Tabs.Screen
-        name="inventario"
-        options={{
-          title: "Inventario",
-          tabBarIcon: tab("cube"),
-          href: puede("inventario.leer") ? undefined : null,
-        }}
-      />
+      <Tabs.Screen name="menu" options={{ title: "Menú", tabBarIcon: tab("grid") }} />
       <Tabs.Screen name="cuenta" options={{ title: "Cuenta", tabBarIcon: tab("person-circle") }} />
 
-      {/* Rutas fuera de la barra (se abren desde el Inicio) */}
-      <Tabs.Screen name="productos" options={{ href: null, title: "Productos" }} />
-      <Tabs.Screen name="pedidos" options={{ href: null, title: "Pedidos" }} />
-      <Tabs.Screen name="clientes" options={{ href: null, title: "Clientes" }} />
-      <Tabs.Screen name="devoluciones" options={{ href: null, title: "Devoluciones" }} />
-      <Tabs.Screen name="compras" options={{ href: null, title: "Compras" }} />
-      <Tabs.Screen name="precios" options={{ href: null, title: "Precios" }} />
-      <Tabs.Screen name="promociones" options={{ href: null, title: "Promociones" }} />
-      <Tabs.Screen name="reportes" options={{ href: null, title: "Reportes" }} />
+      {/* Rutas fuera de la barra (se abren desde el Menú) */}
+      <Tabs.Screen name="inventario" options={{ ...hidden, title: "Inventario" }} />
+      <Tabs.Screen name="productos" options={{ ...hidden, title: "Productos" }} />
+      <Tabs.Screen name="reportes" options={{ ...hidden, title: "Reportes" }} />
+      <Tabs.Screen name="pedidos" options={{ ...hidden, title: "Pedidos" }} />
+      <Tabs.Screen name="clientes" options={{ ...hidden, title: "Clientes" }} />
+      <Tabs.Screen name="devoluciones" options={{ ...hidden, title: "Devoluciones" }} />
+      <Tabs.Screen name="compras" options={{ ...hidden, title: "Compras" }} />
+      <Tabs.Screen name="precios" options={{ ...hidden, title: "Precios" }} />
+      <Tabs.Screen name="promociones" options={{ ...hidden, title: "Promociones" }} />
+      <Tabs.Screen name="monedero" options={{ ...hidden, title: "Monedero" }} />
+      <Tabs.Screen name="comisiones" options={{ ...hidden, title: "Comisiones" }} />
     </Tabs>
   );
 }

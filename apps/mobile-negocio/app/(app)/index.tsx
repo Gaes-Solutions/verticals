@@ -10,61 +10,8 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 export default function Inicio() {
   const { user, tenantSlug } = useAuth();
   const rol = user?.isOwner ? "Dueño" : (user?.roleCodes?.[0] ?? "Equipo");
-  const puede = (perm: string) =>
-    user?.isOwner === true || (user?.permissions ?? []).includes(perm);
   const q = useQuery({ queryKey: ["resumen", 30], queryFn: () => getResumen(30) });
   const d = q.data;
-
-  const accesos = [
-    {
-      perm: "pedidos.leer",
-      icon: "cube" as const,
-      label: "Pedidos",
-      to: "/(app)/pedidos" as const,
-    },
-    {
-      perm: "clientes.leer",
-      icon: "people" as const,
-      label: "Clientes",
-      to: "/(app)/clientes" as const,
-    },
-    {
-      perm: "productos.leer",
-      icon: "pricetags" as const,
-      label: "Productos",
-      to: "/(app)/productos" as const,
-    },
-    {
-      perm: "compras_oc.leer",
-      icon: "cart" as const,
-      label: "Compras",
-      to: "/(app)/compras" as const,
-    },
-    {
-      perm: "ventas.leer",
-      icon: "return-down-back" as const,
-      label: "Devoluciones",
-      to: "/(app)/devoluciones" as const,
-    },
-    {
-      perm: "precios.leer",
-      icon: "cash" as const,
-      label: "Precios",
-      to: "/(app)/precios" as const,
-    },
-    {
-      perm: "promociones.gestionar",
-      icon: "megaphone" as const,
-      label: "Promociones",
-      to: "/(app)/promociones" as const,
-    },
-    {
-      perm: "reportes.ventas",
-      icon: "bar-chart" as const,
-      label: "Reportes",
-      to: "/(app)/reportes" as const,
-    },
-  ].filter((a) => puede(a.perm));
 
   return (
     <ScrollView
@@ -87,17 +34,6 @@ export default function Inicio() {
         </View>
         <Icon name="chevron-forward" size={22} color={colors.white} />
       </Pressable>
-
-      {accesos.length > 0 ? (
-        <View style={s.accesos}>
-          {accesos.map((a) => (
-            <Pressable key={a.label} style={s.acceso} onPress={() => router.push(a.to)}>
-              <Icon name={a.icon} size={22} color={colors.brand} />
-              <Text style={s.accesoLabel}>{a.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
 
       {q.isLoading ? (
         <Loading />
@@ -161,20 +97,6 @@ const s = StyleSheet.create({
   },
   cobrarTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   cobrarSub: { color: colors.brandLight, fontSize: 13 },
-  accesos: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.sm },
-  acceso: {
-    flexGrow: 1,
-    minWidth: "46%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.sm,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    paddingVertical: space.md,
-    ...shadow.card,
-  },
-  accesoLabel: { fontSize: 14, fontWeight: "700", color: colors.ink },
   periodo: { fontSize: 13, color: colors.faint, marginTop: space.lg, marginBottom: 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   cardTitle: { fontSize: 15, fontWeight: "700", color: colors.ink, marginBottom: 4 },

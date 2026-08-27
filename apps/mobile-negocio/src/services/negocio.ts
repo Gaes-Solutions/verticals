@@ -342,3 +342,36 @@ export type AccionPromo = "activar" | "pausar" | "archivar";
 export const listPromociones = () => api.get<PromoItem[]>("/t/promociones");
 export const cambiarEstadoPromo = (id: string, accion: AccionPromo) =>
   api.post<{ ok: boolean }>(`/t/promociones/${id}/${accion}`, {});
+
+// ---- Monedero (gift cards) ----
+
+export interface GiftCard {
+  id: string;
+  codigo: string;
+  montoInicial: string;
+  saldoActual: string;
+  estado: string;
+  createdAt: string;
+}
+
+export const listGiftCards = () => api.get<GiftCard[]>("/t/monedero/gift-cards");
+export const emitirGiftCard = (monto: string) =>
+  api.post<GiftCard>("/t/monedero/gift-cards", { monto });
+export const cancelarGiftCard = (id: string) =>
+  api.post<{ ok: boolean }>(`/t/monedero/gift-cards/${id}/cancelar`, {});
+
+// ---- Comisiones (reglas) ----
+
+export interface ReglaComision {
+  id: string;
+  nombre: string;
+  base: string;
+  pct: number;
+  prioridad: number;
+  isActive: boolean;
+  categoria?: { id: string; nombre: string } | null;
+  producto?: { id: string; nombre: string } | null;
+}
+
+export const listReglasComision = () => api.get<ReglaComision[]>("/t/comisiones/reglas");
+export const eliminarReglaComision = (id: string) => api.del<void>(`/t/comisiones/reglas/${id}`);
