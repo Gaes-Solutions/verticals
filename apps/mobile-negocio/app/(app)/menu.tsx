@@ -61,6 +61,20 @@ const GRUPOS: Grupo[] = [
     ],
   },
   {
+    titulo: "Tienda en línea",
+    items: [
+      { perm: "ecommerce.configurar", icon: "globe", label: "Tienda", to: "/(app)/tienda" },
+      { perm: "ecommerce.resenas_moderar", icon: "star", label: "Reseñas", to: "/(app)/resenas" },
+      {
+        perm: "ecommerce.resenas_moderar",
+        icon: "help-circle",
+        label: "Preguntas",
+        to: "/(app)/preguntas",
+      },
+      { perm: "ecommerce.envios_gestionar", icon: "car", label: "Envíos", to: "/(app)/envios" },
+    ],
+  },
+  {
     titulo: "Fiscal y contabilidad",
     items: [
       { perm: "cfdi.leer", icon: "document-text", label: "Facturas (CFDI)", to: "/(app)/cfdi" },

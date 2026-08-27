@@ -564,3 +564,85 @@ export interface ClienteB2b {
 
 export const listClientesB2b = (q: string) =>
   api.get<Paged<ClienteB2b>>(`/t/clientes-b2b?pageSize=100&q=${encodeURIComponent(q)}`);
+
+// ---- Reseñas ----
+
+export interface Resena {
+  id: string;
+  rating: number;
+  titulo: string | null;
+  comentario: string | null;
+  estado: "pendiente" | "aprobada" | "rechazada";
+  respuestaTienda: string | null;
+  createdAt: string;
+  productoPublicado: { tituloPublico: string };
+  cliente: { nombre: string } | null;
+}
+
+export const listResenas = (estado?: string) => {
+  const qs = estado ? `?estado=${encodeURIComponent(estado)}` : "";
+  return api.get<Resena[]>(`/t/resenas${qs}`);
+};
+export const moderarResena = (id: string, estado: "aprobada" | "rechazada") =>
+  api.post<{ ok: boolean }>(`/t/resenas/${id}/moderar`, { estado });
+export const responderResena = (id: string, respuesta: string) =>
+  api.post<{ ok: boolean }>(`/t/resenas/${id}/responder`, { respuesta });
+
+// ---- Preguntas ----
+
+export interface Pregunta {
+  id: string;
+  pregunta: string;
+  respuesta: string | null;
+  estado: string;
+  createdAt: string;
+  productoPublicado: { tituloPublico: string } | null;
+  cliente: { nombre: string } | null;
+}
+
+export const listPreguntas = () => api.get<Pregunta[]>("/t/preguntas");
+export const responderPregunta = (id: string, respuesta: string) =>
+  api.post<{ ok: boolean }>(`/t/preguntas/${id}/responder`, { respuesta });
+export const rechazarPregunta = (id: string) =>
+  api.post<{ ok: boolean }>(`/t/preguntas/${id}/rechazar`, {});
+
+// ---- Envíos ----
+
+export interface Zona {
+  id: string;
+  nombre: string;
+  cpsIncluidos: string[];
+  estadosIncluidos: string[];
+}
+export interface Tarifa {
+  id: string;
+  paqueteria: string;
+  nombrePublico: string;
+  tipoCalculo: string;
+  montoFijo: string | null;
+  montoMinimoEnvioGratis: string | null;
+  diasEntregaEstimados: number | null;
+  isActive: boolean;
+}
+export interface PickupRow {
+  sucursal: { id: string; nombre: string };
+  config: { activa: boolean; tiempoPreparacionPromedioMin: number } | null;
+}
+
+export const listZonas = () => api.get<Zona[]>("/t/envios/zonas");
+export const listTarifas = () => api.get<Tarifa[]>("/t/envios/tarifas");
+export const listPickup = () => api.get<PickupRow[]>("/t/envios/pickup");
+
+// ---- Tienda (ecommerce config) ----
+
+export interface ConfigTienda {
+  activa?: boolean;
+  subdominio?: string | null;
+  dominioPropio?: string | null;
+}
+
+export const getEcommerceConfig = () => api.get<ConfigTienda>("/t/ecommerce/config");
+export const saveEcommerceConfig = (cfg: ConfigTienda) =>
+  api.put<ConfigTienda>("/t/ecommerce/config", cfg);
+export const countProductosPublicados = () =>
+  api.get<{ items: unknown[] }>("/t/ecommerce/productos-publicados");

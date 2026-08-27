@@ -25,11 +25,11 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [x] CFDI/Facturacion (emitidos: lista, cancelar SAT)
 - [x] Contabilidad (CFDIs recibidos, categorizar, auto, DIOT)
 - [x] Comisiones (reglas: ver, eliminar)
-- [ ] Reseñas
-- [ ] Preguntas (Q&A de productos)
-- [ ] Envíos (paqueterías, guías)
+- [x] Reseñas (moderar aprobar/rechazar, responder)
+- [x] Preguntas (responder, rechazar)
+- [x] Envios (tarifas, zonas, pickup: vista)
 - [ ] Etiquetas (impresión)
-- [ ] Tienda (config ecommerce)
+- [x] Tienda (config: activa, subdominio, publicados)
 - [ ] Dominio B2B
 - [x] Usuarios y Roles (usuarios: activar/roles; roles: ver)
 - [x] Seguridad (2FA: activar/desactivar/regenerar respaldo)
