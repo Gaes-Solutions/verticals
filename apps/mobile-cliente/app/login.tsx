@@ -1,15 +1,15 @@
 import { useAuth } from "@/lib/auth-store";
+import { colors, radius, space } from "@/theme";
+import { Button, Icon, Input } from "@/ui";
 import { Redirect } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -24,60 +24,57 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   if (status === "signedIn") return <Redirect href="/(app)" />;
+  const esRegistro = modo === "registro";
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     await fn();
     setBusy(false);
   };
-
-  const esRegistro = modo === "registro";
-
-  const enviar = () => {
-    if (esRegistro) {
-      run(() =>
-        registro({
-          tenantSlug: tenant.trim(),
-          nombre: nombre.trim(),
-          email: email.trim(),
-          password,
-          ...(telefono.trim() ? { telefono: telefono.trim() } : {}),
-        }),
-      );
-    } else {
-      run(() => login(tenant.trim(), email.trim(), password));
-    }
-  };
+  const enviar = () =>
+    esRegistro
+      ? run(() =>
+          registro({
+            tenantSlug: tenant.trim(),
+            nombre: nombre.trim(),
+            email: email.trim(),
+            password,
+            ...(telefono.trim() ? { telefono: telefono.trim() } : {}),
+          }),
+        )
+      : run(() => login(tenant.trim(), email.trim(), password));
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.card}>
-          <Text style={s.brand}>GaesSoft</Text>
-          <Text style={s.subtitle}>{esRegistro ? "Crea tu cuenta" : "Tu cuenta y pedidos"}</Text>
+        <View style={s.logo}>
+          <Icon name="bag-handle" size={34} color={colors.white} />
+        </View>
+        <Text style={s.brand}>GaesSoft</Text>
+        <Text style={s.sub}>{esRegistro ? "Crea tu cuenta" : "Tu cuenta y pedidos"}</Text>
 
-          <Text style={s.label}>Tienda</Text>
-          <TextInput
-            style={s.input}
+        <View style={s.card}>
+          <Input
+            label="Tienda"
+            icon="storefront"
             value={tenant}
             onChangeText={setTenant}
             placeholder="mi-tienda"
             autoCapitalize="none"
             autoCorrect={false}
           />
-
           {esRegistro ? (
             <>
-              <Text style={s.label}>Nombre</Text>
-              <TextInput
-                style={s.input}
+              <Input
+                label="Nombre"
+                icon="person"
                 value={nombre}
                 onChangeText={setNombre}
                 placeholder="Tu nombre"
               />
-              <Text style={s.label}>Teléfono (opcional)</Text>
-              <TextInput
-                style={s.input}
+              <Input
+                label="Teléfono (opcional)"
+                icon="call"
                 value={telefono}
                 onChangeText={setTelefono}
                 placeholder="55 1234 5678"
@@ -85,10 +82,9 @@ export default function Login() {
               />
             </>
           ) : null}
-
-          <Text style={s.label}>Correo</Text>
-          <TextInput
-            style={s.input}
+          <Input
+            label="Correo"
+            icon="mail"
             value={email}
             onChangeText={setEmail}
             placeholder="tu@correo.com"
@@ -96,25 +92,26 @@ export default function Login() {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Text style={s.label}>Contraseña</Text>
-          <TextInput
-            style={s.input}
+          <Input
+            label="Contraseña"
+            icon="lock-closed"
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
           />
-
-          <Pressable style={[s.btn, busy && s.btnDisabled]} onPress={enviar} disabled={busy}>
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.btnText}>{esRegistro ? "Crear cuenta" : "Entrar"}</Text>
-            )}
-          </Pressable>
-
-          {error ? <Text style={s.error}>{error}</Text> : null}
-
+          <Button
+            label={esRegistro ? "Crear cuenta" : "Entrar"}
+            icon="log-in"
+            busy={busy}
+            onPress={enviar}
+          />
+          {error ? (
+            <View style={s.err}>
+              <Icon name="alert-circle" size={16} color={colors.danger} />
+              <Text style={s.errText}>{error}</Text>
+            </View>
+          ) : null}
           <Pressable style={s.switch} onPress={() => setModo(esRegistro ? "login" : "registro")}>
             <Text style={s.switchText}>
               {esRegistro ? "¿Ya tienes cuenta? Inicia sesión" : "¿Nuevo? Crea tu cuenta"}
@@ -127,30 +124,28 @@ export default function Login() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#eef2ff" },
-  scroll: { flexGrow: 1, justifyContent: "center", padding: 20 },
-  card: { backgroundColor: "#fff", borderRadius: 20, padding: 24, gap: 6 },
-  brand: { fontSize: 26, fontWeight: "800", color: "#4f46e5" },
-  subtitle: { fontSize: 14, color: "#64748b", marginBottom: 12 },
-  label: { fontSize: 13, color: "#334155", marginTop: 8, fontWeight: "600" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  btn: {
-    backgroundColor: "#4f46e5",
-    borderRadius: 12,
-    paddingVertical: 14,
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flexGrow: 1, justifyContent: "center", padding: space.xl },
+  logo: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.xl,
+    backgroundColor: colors.brand,
     alignItems: "center",
-    marginTop: 16,
+    justifyContent: "center",
+    alignSelf: "center",
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  error: { color: "#dc2626", marginTop: 12, fontSize: 14 },
-  switch: { marginTop: 16, alignItems: "center" },
-  switchText: { color: "#4f46e5", fontWeight: "600", fontSize: 14 },
+  brand: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: colors.brand,
+    textAlign: "center",
+    marginTop: space.md,
+  },
+  sub: { fontSize: 14, color: colors.muted, textAlign: "center", marginBottom: space.xl },
+  card: { backgroundColor: colors.card, borderRadius: radius.xl, padding: space.xl, gap: space.md },
+  err: { flexDirection: "row", alignItems: "center", gap: 6 },
+  errText: { color: colors.danger, fontSize: 14, flex: 1 },
+  switch: { alignItems: "center", marginTop: 4 },
+  switchText: { color: colors.brand, fontWeight: "600", fontSize: 14 },
 });

@@ -1,58 +1,81 @@
 import { useAuth } from "@/lib/auth-store";
 import { getPerfil } from "@/services/cliente";
+import { colors, shadow, space } from "@/theme";
+import { Button, Card, Icon, type IconName } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Cuenta() {
   const { user, tenantSlug, logout } = useAuth();
   const q = useQuery({ queryKey: ["perfil"], queryFn: getPerfil });
   const p = q.data;
-
   const nombre = [p?.nombre, p?.apellidos].filter(Boolean).join(" ") || user?.nombre || "Cliente";
 
   return (
-    <View style={s.root}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={s.root}>
       <View style={s.avatar}>
-        <Text style={s.avatarText}>{(nombre[0] ?? "?").toUpperCase()}</Text>
+        <Text style={s.avatarT}>{(nombre[0] ?? "?").toUpperCase()}</Text>
       </View>
+      <Text style={s.nombre}>{nombre}</Text>
+      <Text style={s.email}>{p?.email ?? user?.email}</Text>
+      {tenantSlug ? <Text style={s.tienda}>Tienda: {tenantSlug}</Text> : null}
 
-      <View style={s.card}>
-        <Text style={s.nombre}>{nombre}</Text>
-        <Text style={s.email}>{p?.email ?? user?.email}</Text>
-        {p?.telefono ? <Text style={s.email}>{p.telefono}</Text> : null}
-        {tenantSlug ? <Text style={s.tienda}>Tienda: {tenantSlug}</Text> : null}
+      <Card style={{ marginTop: space.lg, width: "100%" }} padded={false}>
+        <Link icon="person" label="Editar perfil" onPress={() => router.push("/(app)/perfil")} />
+        <Link
+          icon="location"
+          label="Mis direcciones"
+          onPress={() => router.push("/(app)/direcciones")}
+        />
+        <Link icon="heart" label="Favoritos" onPress={() => router.push("/(app)/favoritos")} last />
+      </Card>
+
+      <View style={{ height: space.lg, width: "100%" }} />
+      <View style={{ width: "100%" }}>
+        <Button
+          label="Cerrar sesión"
+          icon="log-out"
+          variant="danger"
+          onPress={() => void logout()}
+        />
       </View>
+    </ScrollView>
+  );
+}
 
-      <Pressable style={s.btn} onPress={() => void logout()}>
-        <Text style={s.btnText}>Cerrar sesión</Text>
-      </Pressable>
-    </View>
+function Link({
+  icon,
+  label,
+  onPress,
+  last,
+}: { icon: IconName; label: string; onPress: () => void; last?: boolean }) {
+  return (
+    <Pressable style={[s.link, !last && s.linkBorder]} onPress={onPress}>
+      <Icon name={icon} size={20} color={colors.brand} />
+      <Text style={s.linkLabel}>{label}</Text>
+      <Icon name="chevron-forward" size={18} color={colors.faint} />
+    </Pressable>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, padding: 20, gap: 16, alignItems: "stretch" },
+  root: { padding: space.xl, alignItems: "center" },
   avatar: {
-    width: 72,
-    height: 72,
+    width: 84,
+    height: 84,
     borderRadius: 999,
-    backgroundColor: "#4f46e5",
+    backgroundColor: colors.brand,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginTop: 8,
+    marginTop: space.sm,
+    ...shadow.card,
   },
-  avatarText: { color: "#fff", fontSize: 30, fontWeight: "800" },
-  card: { backgroundColor: "#fff", borderRadius: 16, padding: 18, gap: 4 },
-  nombre: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
-  email: { fontSize: 14, color: "#64748b" },
-  tienda: { fontSize: 13, color: "#94a3b8", marginTop: 6 },
-  btn: {
-    borderWidth: 1,
-    borderColor: "#fca5a5",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  btnText: { color: "#dc2626", fontWeight: "700", fontSize: 16 },
+  avatarT: { color: colors.white, fontSize: 34, fontWeight: "800" },
+  nombre: { fontSize: 20, fontWeight: "800", color: colors.ink, marginTop: space.md },
+  email: { fontSize: 14, color: colors.muted },
+  tienda: { fontSize: 13, color: colors.faint, marginTop: 4 },
+  link: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg },
+  linkBorder: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  linkLabel: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: "600" },
 });

@@ -1,25 +1,23 @@
 import { fecha } from "@/lib/format";
 import { listNotificaciones, marcarLeida, marcarTodasLeidas } from "@/services/cliente";
+import { colors, radius, shadow, space } from "@/theme";
+import { EmptyState, Loading } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function Notificaciones() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["notificaciones"], queryFn: listNotificaciones });
-
   const invalidar = () => qc.invalidateQueries({ queryKey: ["notificaciones"] });
   const leerUna = useMutation({ mutationFn: marcarLeida, onSuccess: invalidar });
   const leerTodas = useMutation({ mutationFn: marcarTodasLeidas, onSuccess: invalidar });
-
-  if (q.isLoading) {
-    return <ActivityIndicator style={{ marginTop: 40 }} color="#4f46e5" />;
-  }
-
+  if (q.isLoading) return <Loading />;
   const noLeidas = q.data?.noLeidas ?? 0;
 
   return (
     <FlatList
-      contentContainerStyle={s.root}
+      style={{ backgroundColor: colors.bg }}
+      contentContainerStyle={s.list}
       data={q.data?.items ?? []}
       keyExtractor={(n) => n.id}
       refreshing={q.isFetching}
@@ -31,10 +29,10 @@ export default function Notificaciones() {
           </Pressable>
         ) : null
       }
-      ListEmptyComponent={<Text style={s.empty}>No tienes avisos.</Text>}
+      ListEmptyComponent={<EmptyState icon="notifications-outline" title="No tienes avisos" />}
       renderItem={({ item }) => (
         <Pressable
-          style={[s.card, !item.leida && s.cardNueva]}
+          style={[s.card, !item.leida && s.nueva]}
           onPress={() => {
             if (!item.leida) leerUna.mutate(item.id);
           }}
@@ -54,15 +52,20 @@ export default function Notificaciones() {
 }
 
 const s = StyleSheet.create({
-  root: { padding: 16, gap: 10 },
+  list: { padding: space.lg, gap: space.sm },
   leerTodas: { alignItems: "flex-end", paddingBottom: 4 },
-  leerTodasText: { color: "#4f46e5", fontWeight: "600", fontSize: 13 },
-  card: { backgroundColor: "#fff", borderRadius: 14, padding: 14, gap: 4 },
-  cardNueva: { borderLeftWidth: 3, borderLeftColor: "#4f46e5" },
+  leerTodasText: { color: colors.brand, fontWeight: "600", fontSize: 13 },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: 4,
+    ...shadow.card,
+  },
+  nueva: { borderLeftWidth: 3, borderLeftColor: colors.brand },
   top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  titulo: { flex: 1, fontWeight: "700", color: "#0f172a", fontSize: 15 },
-  dot: { width: 9, height: 9, borderRadius: 999, backgroundColor: "#4f46e5" },
-  cuerpo: { color: "#475569", fontSize: 14 },
-  fecha: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
-  empty: { textAlign: "center", color: "#94a3b8", marginTop: 40 },
+  titulo: { flex: 1, fontWeight: "700", color: colors.ink, fontSize: 15 },
+  dot: { width: 9, height: 9, borderRadius: 999, backgroundColor: colors.brand },
+  cuerpo: { color: colors.text, fontSize: 14 },
+  fecha: { color: colors.faint, fontSize: 12, marginTop: 2 },
 });
