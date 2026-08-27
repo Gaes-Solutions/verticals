@@ -18,9 +18,9 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [x] Devoluciones (lista, aprobar con metodo reembolso, rechazar)
 - [x] Compras (OC: lista, detalle, autorizar, recibir, cancelar)
 - [ ] Cobros avanzados (link de pago, multipago)
-- [ ] Precios (listas de precios, cascada)
+- [x] Precios (listas: ver, detalle, crear)
 - [ ] Inventario Insights (rotación, sugerencias)
-- [ ] Promociones
+- [x] Promociones (lista + activar/pausar/archivar)
 - [ ] Monedero / lealtad + gift cards
 - [ ] CFDI / Facturación (timbrado, cancelación)
 - [ ] Contabilidad (pólizas, categorías)

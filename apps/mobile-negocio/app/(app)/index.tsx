@@ -47,6 +47,18 @@ export default function Inicio() {
       to: "/(app)/devoluciones" as const,
     },
     {
+      perm: "precios.leer",
+      icon: "cash" as const,
+      label: "Precios",
+      to: "/(app)/precios" as const,
+    },
+    {
+      perm: "promociones.gestionar",
+      icon: "megaphone" as const,
+      label: "Promociones",
+      to: "/(app)/promociones" as const,
+    },
+    {
       perm: "reportes.ventas",
       icon: "bar-chart" as const,
       label: "Reportes",

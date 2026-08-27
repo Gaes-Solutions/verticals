@@ -296,3 +296,49 @@ export const recibirOcTodo = (id: string, lineas: OcLinea[]) => {
     .filter((l) => Number(l.cantidadRecibida) > 0);
   return api.post<{ ok: boolean }>(`/t/ordenes-compra/${id}/recibir`, { lineas: pend });
 };
+
+// ---- Precios (listas) ----
+
+export type TipoLista = "publico" | "mayoreo_nivel" | "cliente_individual";
+
+export interface ListaResumen {
+  id: string;
+  codigo: string;
+  nombre: string;
+  tipo: string;
+  _count?: { items: number };
+}
+
+export interface ListaItem {
+  varianteId: string;
+  precio: string;
+  variante: { id: string; sku: string };
+}
+
+export interface ListaDetalle extends ListaResumen {
+  items: ListaItem[];
+}
+
+export const listListasPrecios = () => api.get<ListaResumen[]>("/t/precios/listas");
+export const getListaPrecios = (id: string) => api.get<ListaDetalle>(`/t/precios/listas/${id}`);
+export const crearListaPrecios = (input: { codigo: string; nombre: string; tipo: TipoLista }) =>
+  api.post<ListaResumen>("/t/precios/listas", input);
+
+// ---- Promociones ----
+
+export interface PromoItem {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  tipo: string;
+  status: string;
+  vigenciaInicio: string;
+  vigenciaFin?: string | null;
+  acciones?: { valor?: number } | null;
+}
+
+export type AccionPromo = "activar" | "pausar" | "archivar";
+
+export const listPromociones = () => api.get<PromoItem[]>("/t/promociones");
+export const cambiarEstadoPromo = (id: string, accion: AccionPromo) =>
+  api.post<{ ok: boolean }>(`/t/promociones/${id}/${accion}`, {});
