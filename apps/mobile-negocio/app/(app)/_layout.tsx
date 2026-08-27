@@ -44,22 +44,18 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="productos"
+        name="inventario"
         options={{
-          title: "Productos",
-          tabBarIcon: tab("pricetags"),
-          href: puede("productos.leer") ? undefined : null,
-        }}
-      />
-      <Tabs.Screen
-        name="reportes"
-        options={{
-          title: "Reportes",
-          tabBarIcon: tab("bar-chart"),
-          href: puede("reportes.ventas") ? undefined : null,
+          title: "Inventario",
+          tabBarIcon: tab("cube"),
+          href: puede("inventario.leer") ? undefined : null,
         }}
       />
       <Tabs.Screen name="cuenta" options={{ title: "Cuenta", tabBarIcon: tab("person-circle") }} />
+
+      {/* Rutas fuera de la barra (se abren desde el Inicio) */}
+      <Tabs.Screen name="productos" options={{ href: null, title: "Productos" }} />
+      <Tabs.Screen name="reportes" options={{ href: null, title: "Reportes" }} />
     </Tabs>
   );
 }

@@ -10,8 +10,25 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 export default function Inicio() {
   const { user, tenantSlug } = useAuth();
   const rol = user?.isOwner ? "Dueño" : (user?.roleCodes?.[0] ?? "Equipo");
+  const puede = (perm: string) =>
+    user?.isOwner === true || (user?.permissions ?? []).includes(perm);
   const q = useQuery({ queryKey: ["resumen", 30], queryFn: () => getResumen(30) });
   const d = q.data;
+
+  const accesos = [
+    {
+      perm: "productos.leer",
+      icon: "pricetags" as const,
+      label: "Productos",
+      to: "/(app)/productos" as const,
+    },
+    {
+      perm: "reportes.ventas",
+      icon: "bar-chart" as const,
+      label: "Reportes",
+      to: "/(app)/reportes" as const,
+    },
+  ].filter((a) => puede(a.perm));
 
   return (
     <ScrollView
@@ -34,6 +51,17 @@ export default function Inicio() {
         </View>
         <Icon name="chevron-forward" size={22} color={colors.white} />
       </Pressable>
+
+      {accesos.length > 0 ? (
+        <View style={s.accesos}>
+          {accesos.map((a) => (
+            <Pressable key={a.label} style={s.acceso} onPress={() => router.push(a.to)}>
+              <Icon name={a.icon} size={22} color={colors.brand} />
+              <Text style={s.accesoLabel}>{a.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {q.isLoading ? (
         <Loading />
@@ -97,6 +125,19 @@ const s = StyleSheet.create({
   },
   cobrarTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   cobrarSub: { color: colors.brandLight, fontSize: 13 },
+  accesos: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
+  acceso: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    ...shadow.card,
+  },
+  accesoLabel: { fontSize: 14, fontWeight: "700", color: colors.ink },
   periodo: { fontSize: 13, color: colors.faint, marginTop: space.lg, marginBottom: 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   cardTitle: { fontSize: 15, fontWeight: "700", color: colors.ink, marginBottom: 4 },

@@ -109,3 +109,35 @@ export const cobrarEfectivo = (sucursalId: string, lineas: LineaVenta[], montoTo
     lineas,
     pagos: [{ metodo: "efectivo", monto: montoTotal }],
   });
+
+// ---- Inventario ----
+
+export interface InventarioItem {
+  id: string;
+  stockActual: string;
+  stockMinimo: string;
+  variante: {
+    id: string;
+    sku: string;
+    nombreVariante: string | null;
+    producto: { id: string; nombre: string; skuPadre: string };
+  };
+  sucursal: { id: string; codigo: string; nombre: string };
+}
+
+export type TipoAjuste = "ajuste_positivo" | "ajuste_negativo" | "merma" | "consumo_interno";
+
+export const listInventario = (sucursalId?: string, soloBajos = false) => {
+  const qs = new URLSearchParams({ pageSize: "80" });
+  if (sucursalId) qs.set("sucursalId", sucursalId);
+  if (soloBajos) qs.set("stockBajoMinimo", "true");
+  return api.get<Paged<InventarioItem>>(`/t/inventario?${qs.toString()}`);
+};
+
+export const ajustarInventario = (input: {
+  varianteId: string;
+  sucursalId: string;
+  tipo: TipoAjuste;
+  cantidad: string;
+  motivo: string;
+}) => api.post<{ ok: boolean }>("/t/inventario/ajustes", input);
