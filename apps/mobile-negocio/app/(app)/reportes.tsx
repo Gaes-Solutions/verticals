@@ -1,8 +1,10 @@
 import { money } from "@/lib/format";
-import { getResumen } from "@/services/negocio";
+import { type ResumenVentas, getResumen } from "@/services/negocio";
+import { colors, radius, space } from "@/theme";
+import { Card, EmptyState, Loading, StatCard } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 const PERIODOS = [
   { dias: 7, label: "7 días" },
@@ -13,9 +15,10 @@ const PERIODOS = [
 export default function Reportes() {
   const [dias, setDias] = useState(30);
   const q = useQuery({ queryKey: ["resumen", dias], queryFn: () => getResumen(dias) });
+  const d = q.data;
 
   return (
-    <ScrollView contentContainerStyle={s.root}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={s.root}>
       <View style={s.tabs}>
         {PERIODOS.map((p) => (
           <Pressable
@@ -29,37 +32,45 @@ export default function Reportes() {
       </View>
 
       {q.isLoading ? (
-        <ActivityIndicator style={{ marginTop: 32 }} color="#0f766e" />
-      ) : q.data ? (
+        <Loading />
+      ) : d ? (
         <>
           <View style={s.grid}>
-            <Kpi label="Ventas del periodo" valor={money(q.data.totalPeriodo)} />
-            <Kpi label="Tickets" valor={String(q.data.numTickets)} />
-            <Kpi label="Ticket promedio" valor={money(q.data.ticketPromedio)} />
-            <Kpi label="IVA del periodo" valor={money(q.data.ivaPeriodo)} />
+            <StatCard label="Ventas" value={money(d.totalPeriodo)} icon="cash" highlight />
+            <StatCard label="Tickets" value={String(d.numTickets)} icon="receipt" />
+            <StatCard label="Ticket prom." value={money(d.ticketPromedio)} icon="pricetag" />
+            <StatCard label="IVA" value={money(d.ivaPeriodo)} icon="calculator" />
           </View>
 
-          <Text style={s.h2}>Ventas por canal</Text>
-          <View style={s.card}>
-            {q.data.porCanal.length === 0 ? (
+          <Text style={s.h2}>Ventas por día</Text>
+          <Card>
+            <BarChart data={d.porDia} />
+          </Card>
+
+          <Text style={s.h2}>Por canal</Text>
+          <Card>
+            {d.porCanal.length === 0 ? (
               <Text style={s.muted}>Sin ventas en el periodo.</Text>
             ) : (
-              q.data.porCanal.map((c) => (
-                <View key={c.canal} style={s.row}>
+              d.porCanal.map((c, i) => (
+                <View key={c.canal} style={[s.row, i < d.porCanal.length - 1 && s.rowBorder]}>
                   <Text style={s.rowName}>{c.canal}</Text>
                   <Text style={s.rowVal}>{money(c.total)}</Text>
                 </View>
               ))
             )}
-          </View>
+          </Card>
 
           <Text style={s.h2}>Más vendidos</Text>
-          <View style={s.card}>
-            {q.data.topProductos.length === 0 ? (
+          <Card>
+            {d.topProductos.length === 0 ? (
               <Text style={s.muted}>Sin datos.</Text>
             ) : (
-              q.data.topProductos.map((p) => (
-                <View key={p.productoId} style={s.row}>
+              d.topProductos.map((p, i) => (
+                <View
+                  key={p.productoId}
+                  style={[s.row, i < d.topProductos.length - 1 && s.rowBorder]}
+                >
                   <Text style={s.rowName} numberOfLines={1}>
                     {p.nombre}
                   </Text>
@@ -69,40 +80,68 @@ export default function Reportes() {
                 </View>
               ))
             )}
-          </View>
+          </Card>
+          <View style={{ height: space.xl }} />
         </>
       ) : (
-        <Text style={s.error}>No se pudieron cargar los reportes.</Text>
+        <EmptyState icon="bar-chart-outline" title="No se pudieron cargar los reportes" />
       )}
     </ScrollView>
   );
 }
 
-function Kpi({ label, valor }: { label: string; valor: string }) {
+function BarChart({ data }: { data: ResumenVentas["porDia"] }) {
+  const puntos = data.slice(-14);
+  const max = Math.max(1, ...puntos.map((p) => p.total));
+  if (puntos.length === 0) return <Text style={s.muted}>Sin ventas en el periodo.</Text>;
   return (
-    <View style={s.kpi}>
-      <Text style={s.kpiLabel}>{label}</Text>
-      <Text style={s.kpiValue}>{valor}</Text>
+    <View style={s.chart}>
+      {puntos.map((p) => {
+        const h = Math.max(4, Math.round((p.total / max) * 120));
+        const dd = p.fecha.slice(8, 10);
+        return (
+          <View key={p.fecha} style={s.barCol}>
+            <View style={[s.bar, { height: h }]} />
+            <Text style={s.barLabel}>{dd}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: { padding: 16, gap: 6 },
-  tabs: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  tab: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#fff" },
-  tabOn: { backgroundColor: "#0f766e" },
-  tabText: { color: "#475569", fontWeight: "600" },
-  tabTextOn: { color: "#fff" },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  kpi: { flexGrow: 1, minWidth: "45%", backgroundColor: "#fff", borderRadius: 14, padding: 14 },
-  kpiLabel: { fontSize: 12, color: "#64748b" },
-  kpiValue: { fontSize: 19, fontWeight: "800", color: "#0f172a", marginTop: 2 },
-  h2: { fontSize: 15, fontWeight: "700", color: "#0f172a", marginTop: 14 },
-  card: { backgroundColor: "#fff", borderRadius: 14, padding: 14, gap: 8, marginTop: 6 },
-  row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  rowName: { flex: 1, color: "#475569", fontSize: 14, textTransform: "capitalize" },
-  rowVal: { color: "#0f172a", fontWeight: "600", fontSize: 14 },
-  muted: { color: "#94a3b8", fontSize: 14 },
-  error: { color: "#dc2626", marginTop: 24 },
+  root: { padding: space.lg, gap: space.sm, paddingBottom: space.xl },
+  tabs: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
+  tab: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+  },
+  tabOn: { backgroundColor: colors.brand },
+  tabText: { color: colors.text, fontWeight: "600" },
+  tabTextOn: { color: colors.white },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  h2: { fontSize: 15, fontWeight: "700", color: colors.ink, marginTop: space.lg, marginBottom: 2 },
+  chart: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    height: 150,
+    gap: 3,
+  },
+  barCol: { flex: 1, alignItems: "center", gap: 4 },
+  bar: { width: "72%", backgroundColor: colors.brand, borderRadius: 4, minHeight: 4 },
+  barLabel: { fontSize: 10, color: colors.faint },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: space.md,
+    paddingVertical: 10,
+  },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.line },
+  rowName: { flex: 1, color: colors.text, fontSize: 14, textTransform: "capitalize" },
+  rowVal: { color: colors.ink, fontWeight: "700", fontSize: 14 },
+  muted: { color: colors.faint, fontSize: 14 },
 });

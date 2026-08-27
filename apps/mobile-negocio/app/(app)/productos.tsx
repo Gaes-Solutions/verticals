@@ -1,35 +1,42 @@
 import { money } from "@/lib/format";
 import { listProductos } from "@/services/negocio";
+import { colors, radius, shadow, space } from "@/theme";
+import { EmptyState, Icon, Input, Loading } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
 export default function Productos() {
   const [q, setQ] = useState("");
-  const query = useQuery({
-    queryKey: ["productos", q],
-    queryFn: () => listProductos(q),
-  });
+  const query = useQuery({ queryKey: ["productos", q], queryFn: () => listProductos(q) });
 
   return (
     <View style={s.root}>
-      <TextInput
-        style={s.search}
-        value={q}
-        onChangeText={setQ}
-        placeholder="Buscar por nombre o código…"
-        autoCorrect={false}
-      />
+      <View style={s.search}>
+        <Input
+          icon="search"
+          value={q}
+          onChangeText={setQ}
+          placeholder="Buscar por nombre o código…"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+      </View>
       {query.isLoading ? (
-        <ActivityIndicator style={{ marginTop: 32 }} color="#0f766e" />
+        <Loading />
       ) : (
         <FlatList
           contentContainerStyle={s.list}
           data={query.data?.items ?? []}
           keyExtractor={(p) => p.id}
-          ListEmptyComponent={<Text style={s.empty}>Sin productos.</Text>}
+          refreshing={query.isFetching}
+          onRefresh={() => query.refetch()}
+          ListEmptyComponent={<EmptyState icon="pricetags-outline" title="Sin productos" />}
           renderItem={({ item }) => (
             <View style={s.card}>
+              <View style={s.thumb}>
+                <Icon name="cube" size={20} color={colors.brand} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.nombre} numberOfLines={1}>
                   {item.nombre}
@@ -46,26 +53,27 @@ export default function Productos() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, padding: 16 },
-  search: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  list: { gap: 10, paddingBottom: 20 },
+  root: { flex: 1, backgroundColor: colors.bg },
+  search: { padding: space.lg, paddingBottom: space.sm },
+  list: { paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.sm },
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: space.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: space.md,
+    ...shadow.card,
   },
-  nombre: { fontWeight: "600", color: "#0f172a", fontSize: 15 },
-  sku: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
-  precio: { fontWeight: "800", color: "#0f172a", fontSize: 15 },
-  empty: { textAlign: "center", color: "#94a3b8", marginTop: 40 },
+  thumb: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nombre: { fontWeight: "600", color: colors.ink, fontSize: 15 },
+  sku: { color: colors.faint, fontSize: 12, marginTop: 2 },
+  precio: { fontWeight: "800", color: colors.ink, fontSize: 15 },
 });

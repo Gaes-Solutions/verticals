@@ -1,29 +1,29 @@
 import { fecha, money } from "@/lib/format";
 import { listVentas } from "@/services/negocio";
+import { colors, radius, shadow, space } from "@/theme";
+import { Badge, EmptyState, Loading } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
-const COLOR: Record<string, string> = {
-  cobrada: "#059669",
-  cancelada: "#dc2626",
-  borrador: "#94a3b8",
+const TONE: Record<string, "ok" | "danger" | "neutral"> = {
+  cobrada: "ok",
+  cancelada: "danger",
+  borrador: "neutral",
 };
 
 export default function Ventas() {
   const q = useQuery({ queryKey: ["ventas"], queryFn: () => listVentas() });
-
-  if (q.isLoading) {
-    return <ActivityIndicator style={{ marginTop: 40 }} color="#0f766e" />;
-  }
+  if (q.isLoading) return <Loading />;
 
   return (
     <FlatList
+      style={{ backgroundColor: colors.bg }}
       contentContainerStyle={s.root}
       data={q.data?.items ?? []}
       keyExtractor={(v) => v.id}
       refreshing={q.isFetching}
       onRefresh={() => q.refetch()}
-      ListEmptyComponent={<Text style={s.empty}>Aún no hay ventas.</Text>}
+      ListEmptyComponent={<EmptyState icon="receipt-outline" title="Aún no hay ventas" />}
       renderItem={({ item }) => (
         <View style={s.card}>
           <View style={s.top}>
@@ -34,9 +34,7 @@ export default function Ventas() {
             <Text style={s.meta}>
               {fecha(item.createdAt)} · {item.canal}
             </Text>
-            <Text style={[s.estado, { color: COLOR[item.estado] ?? "#475569" }]}>
-              {item.estado}
-            </Text>
+            <Badge label={item.estado} tone={TONE[item.estado] ?? "neutral"} />
           </View>
         </View>
       )}
@@ -45,12 +43,16 @@ export default function Ventas() {
 }
 
 const s = StyleSheet.create({
-  root: { padding: 16, gap: 10 },
-  card: { backgroundColor: "#fff", borderRadius: 14, padding: 14, gap: 6 },
+  root: { padding: space.lg, gap: space.sm },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: 8,
+    ...shadow.card,
+  },
   top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  folio: { fontWeight: "700", color: "#0f172a", fontSize: 15 },
-  total: { fontWeight: "800", color: "#0f172a", fontSize: 16 },
-  meta: { color: "#64748b", fontSize: 13 },
-  estado: { fontSize: 13, fontWeight: "600", textTransform: "capitalize" },
-  empty: { textAlign: "center", color: "#94a3b8", marginTop: 40 },
+  folio: { fontWeight: "700", color: colors.ink, fontSize: 15 },
+  total: { fontWeight: "800", color: colors.ink, fontSize: 16 },
+  meta: { color: colors.muted, fontSize: 13 },
 });

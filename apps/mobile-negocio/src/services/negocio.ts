@@ -48,3 +48,64 @@ export const listVentas = (canal?: string) => {
 
 export const listProductos = (q: string) =>
   api.get<Paged<ProductoItem>>(`/t/productos?pageSize=30&q=${encodeURIComponent(q)}`);
+
+// ---- POS / Cobro ----
+
+export interface VarianteItem {
+  id: string;
+  sku: string;
+  precioBase: string;
+  isDefault: boolean;
+}
+
+export interface ProductoPOS {
+  id: string;
+  nombre: string;
+  skuPadre: string;
+  variantes: VarianteItem[];
+}
+
+export interface Sucursal {
+  id: string;
+  nombre: string;
+  codigo: string;
+  isDefault: boolean;
+}
+
+export interface VentaPreview {
+  subtotal: string;
+  descuentoTotal: string;
+  ivaTotal: string;
+  total: string;
+}
+
+export interface VentaCreada {
+  id: string;
+  folio: string;
+  total: string;
+  estado: string;
+}
+
+export interface LineaVenta {
+  varianteId: string;
+  cantidad: string;
+}
+
+export const listSucursales = () => api.get<Sucursal[]>("/t/sucursales");
+
+/** Busca productos para el POS (variantes con id + precio). */
+export const buscarProductosPOS = (q: string) =>
+  api.get<Paged<ProductoPOS>>(`/t/productos?pageSize=25&isActive=true&q=${encodeURIComponent(q)}`);
+
+/** Previsualiza los totales (pricing + promos) sin cobrar. */
+export const previewVenta = (sucursalId: string, lineas: LineaVenta[]) =>
+  api.post<VentaPreview>("/t/ventas/preview", { sucursalId, canal: "pos", lineas });
+
+/** Crea y cobra una venta en efectivo (POS). */
+export const cobrarEfectivo = (sucursalId: string, lineas: LineaVenta[], montoTotal: string) =>
+  api.post<VentaCreada>("/t/ventas", {
+    sucursalId,
+    canal: "pos",
+    lineas,
+    pagos: [{ metodo: "efectivo", monto: montoTotal }],
+  });

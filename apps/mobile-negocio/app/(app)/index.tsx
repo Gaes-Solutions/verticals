@@ -1,23 +1,21 @@
 import { useAuth } from "@/lib/auth-store";
 import { money } from "@/lib/format";
 import { getResumen } from "@/services/negocio";
+import { colors, radius, shadow, space } from "@/theme";
+import { Card, Icon, Loading, StatCard } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { router } from "expo-router";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Inicio() {
   const { user, tenantSlug } = useAuth();
-  const rol = user?.isOwner ? "Dueño" : (user?.roleCodes[0] ?? "Equipo");
+  const rol = user?.isOwner ? "Dueño" : (user?.roleCodes?.[0] ?? "Equipo");
   const q = useQuery({ queryKey: ["resumen", 30], queryFn: () => getResumen(30) });
+  const d = q.data;
 
   return (
     <ScrollView
+      style={{ backgroundColor: colors.bg }}
       contentContainerStyle={s.root}
       refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} />}
     >
@@ -26,32 +24,48 @@ export default function Inicio() {
         {rol} · {tenantSlug ?? "tu negocio"}
       </Text>
 
+      <Pressable style={s.cobrar} onPress={() => router.push("/(app)/cobrar")}>
+        <View style={s.cobrarIcon}>
+          <Icon name="cart" size={24} color={colors.white} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.cobrarTitle}>Cobrar</Text>
+          <Text style={s.cobrarSub}>Nueva venta en el punto de venta</Text>
+        </View>
+        <Icon name="chevron-forward" size={22} color={colors.white} />
+      </Pressable>
+
       {q.isLoading ? (
-        <ActivityIndicator style={{ marginTop: 32 }} color="#0f766e" />
+        <Loading />
       ) : q.isError ? (
-        <Text style={s.error}>No se pudieron cargar tus números. Desliza para reintentar.</Text>
-      ) : q.data ? (
+        <Card>
+          <Text style={s.err}>No se pudieron cargar tus números. Desliza para reintentar.</Text>
+        </Card>
+      ) : d ? (
         <>
-          <Text style={s.periodo}>Últimos {q.data.dias} días</Text>
+          <Text style={s.periodo}>Últimos {d.dias} días</Text>
           <View style={s.grid}>
-            <Kpi label="Ventas" valor={money(q.data.totalPeriodo)} destacado />
-            <Kpi label="Tickets" valor={String(q.data.numTickets)} />
-            <Kpi label="Ticket prom." valor={money(q.data.ticketPromedio)} />
-            <Kpi label="IVA" valor={money(q.data.ivaPeriodo)} />
+            <StatCard label="Ventas" value={money(d.totalPeriodo)} icon="cash" highlight />
+            <StatCard label="Tickets" value={String(d.numTickets)} icon="receipt" />
+            <StatCard label="Ticket prom." value={money(d.ticketPromedio)} icon="pricetag" />
+            <StatCard label="IVA" value={money(d.ivaPeriodo)} icon="calculator" />
           </View>
 
-          {q.data.topProductos.length > 0 && (
-            <View style={s.card}>
+          {d.topProductos.length > 0 && (
+            <Card style={{ marginTop: space.md }}>
               <Text style={s.cardTitle}>Más vendidos</Text>
-              {q.data.topProductos.slice(0, 5).map((p) => (
+              {d.topProductos.slice(0, 5).map((p, i) => (
                 <View key={p.productoId} style={s.row}>
+                  <View style={s.rank}>
+                    <Text style={s.rankN}>{i + 1}</Text>
+                  </View>
                   <Text style={s.rowName} numberOfLines={1}>
                     {p.nombre}
                   </Text>
                   <Text style={s.rowVal}>{money(p.monto)}</Text>
                 </View>
               ))}
-            </View>
+            </Card>
           )}
         </>
       ) : null}
@@ -59,31 +73,44 @@ export default function Inicio() {
   );
 }
 
-function Kpi({ label, valor, destacado }: { label: string; valor: string; destacado?: boolean }) {
-  return (
-    <View style={[s.kpi, destacado && s.kpiHi]}>
-      <Text style={s.kpiLabel}>{label}</Text>
-      <Text style={[s.kpiValue, destacado && s.kpiValueHi]}>{valor}</Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
-  root: { padding: 16, gap: 6 },
-  hola: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  sub: { fontSize: 14, color: "#64748b" },
-  periodo: { fontSize: 13, color: "#94a3b8", marginTop: 10 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 },
-  kpi: { flexGrow: 1, minWidth: "45%", backgroundColor: "#fff", borderRadius: 14, padding: 14 },
-  kpiHi: { backgroundColor: "#0f766e" },
-  kpiLabel: { fontSize: 12, color: "#64748b" },
-  kpiValue: { fontSize: 20, fontWeight: "800", color: "#0f172a", marginTop: 2 },
-  kpiValueHi: { color: "#fff" },
-  kpiLabelHi: { color: "#ccfbf1" },
-  card: { backgroundColor: "#fff", borderRadius: 14, padding: 16, marginTop: 14, gap: 8 },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: "#0f172a" },
-  row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  rowName: { flex: 1, color: "#475569", fontSize: 14 },
-  rowVal: { color: "#0f172a", fontWeight: "600", fontSize: 14 },
-  error: { color: "#dc2626", marginTop: 24, fontSize: 14 },
+  root: { padding: space.lg, gap: 4, paddingBottom: space.xxl },
+  hola: { fontSize: 24, fontWeight: "800", color: colors.ink },
+  sub: { fontSize: 14, color: colors.muted },
+  cobrar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginTop: space.lg,
+    ...shadow.card,
+  },
+  cobrarIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cobrarTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
+  cobrarSub: { color: colors.brandLight, fontSize: 13 },
+  periodo: { fontSize: 13, color: colors.faint, marginTop: space.lg, marginBottom: 2 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: colors.ink, marginBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: 7 },
+  rank: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: colors.brandLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rankN: { fontSize: 12, fontWeight: "800", color: colors.brandDark },
+  rowName: { flex: 1, color: colors.text, fontSize: 14 },
+  rowVal: { color: colors.ink, fontWeight: "700", fontSize: 14 },
+  err: { color: colors.danger, fontSize: 14 },
 });

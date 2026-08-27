@@ -1,16 +1,9 @@
 import { useAuth } from "@/lib/auth-store";
+import { colors, radius, space } from "@/theme";
+import { Button, Icon, Input } from "@/ui";
 import { Redirect } from "expo-router";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Login() {
   const { status, error, login, submitMfa } = useAuth();
@@ -21,6 +14,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   if (status === "signedIn") return <Redirect href="/(app)" />;
+  const esMfa = status === "mfa";
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -28,101 +22,105 @@ export default function Login() {
     setBusy(false);
   };
 
-  const esMfa = status === "mfa";
-
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={s.card}>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <View style={s.logo}>
+          <Icon name="storefront" size={34} color={colors.white} />
+        </View>
         <Text style={s.brand}>GaesSoft</Text>
-        <Text style={s.subtitle}>{esMfa ? "Verificación en dos pasos" : "Panel del negocio"}</Text>
+        <Text style={s.sub}>{esMfa ? "Verificación en dos pasos" : "Panel del negocio"}</Text>
 
-        {esMfa ? (
-          <>
-            <Text style={s.label}>Código de tu app de autenticación</Text>
-            <TextInput
-              style={s.input}
-              value={code}
-              onChangeText={setCode}
-              placeholder="123456"
-              keyboardType="number-pad"
-              maxLength={6}
-              autoFocus
-            />
-            <Boton texto="Entrar" busy={busy} onPress={() => run(() => submitMfa(code))} />
-          </>
-        ) : (
-          <>
-            <Text style={s.label}>Negocio</Text>
-            <TextInput
-              style={s.input}
-              value={tenant}
-              onChangeText={setTenant}
-              placeholder="mi-negocio"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={s.label}>Correo</Text>
-            <TextInput
-              style={s.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="tu@correo.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={s.label}>Contraseña</Text>
-            <TextInput
-              style={s.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              secureTextEntry
-            />
-            <Boton
-              texto="Entrar"
-              busy={busy}
-              onPress={() => run(() => login(tenant.trim(), email.trim(), password))}
-            />
-          </>
-        )}
-
-        {error ? <Text style={s.error}>{error}</Text> : null}
-      </View>
+        <View style={s.card}>
+          {esMfa ? (
+            <>
+              <Input
+                label="Código de tu app de autenticación"
+                icon="shield-checkmark"
+                value={code}
+                onChangeText={setCode}
+                placeholder="123456"
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+              />
+              <Button
+                label="Entrar"
+                icon="log-in"
+                busy={busy}
+                onPress={() => run(() => submitMfa(code))}
+              />
+            </>
+          ) : (
+            <>
+              <Input
+                label="Negocio"
+                icon="business"
+                value={tenant}
+                onChangeText={setTenant}
+                placeholder="mi-negocio"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Input
+                label="Correo"
+                icon="mail"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="tu@correo.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Input
+                label="Contraseña"
+                icon="lock-closed"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                secureTextEntry
+              />
+              <Button
+                label="Entrar"
+                icon="log-in"
+                busy={busy}
+                onPress={() => run(() => login(tenant.trim(), email.trim(), password))}
+              />
+            </>
+          )}
+          {error ? (
+            <View style={s.err}>
+              <Icon name="alert-circle" size={16} color={colors.danger} />
+              <Text style={s.errText}>{error}</Text>
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function Boton({ texto, busy, onPress }: { texto: string; busy: boolean; onPress: () => void }) {
-  return (
-    <Pressable style={[s.btn, busy && s.btnDisabled]} onPress={onPress} disabled={busy}>
-      {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{texto}</Text>}
-    </Pressable>
-  );
-}
-
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#f1f5f9" },
-  card: { backgroundColor: "#fff", borderRadius: 20, padding: 24, gap: 6 },
-  brand: { fontSize: 26, fontWeight: "800", color: "#0f766e" },
-  subtitle: { fontSize: 14, color: "#64748b", marginBottom: 12 },
-  label: { fontSize: 13, color: "#334155", marginTop: 8, fontWeight: "600" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  btn: {
-    backgroundColor: "#0f766e",
-    borderRadius: 12,
-    paddingVertical: 14,
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flexGrow: 1, justifyContent: "center", padding: space.xl },
+  logo: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.xl,
+    backgroundColor: colors.brand,
     alignItems: "center",
-    marginTop: 16,
+    justifyContent: "center",
+    alignSelf: "center",
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  error: { color: "#dc2626", marginTop: 12, fontSize: 14 },
+  brand: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: colors.brand,
+    textAlign: "center",
+    marginTop: space.md,
+  },
+  sub: { fontSize: 14, color: colors.muted, textAlign: "center", marginBottom: space.xl },
+  card: { backgroundColor: colors.card, borderRadius: radius.xl, padding: space.xl, gap: space.md },
+  err: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  errText: { color: colors.danger, fontSize: 14, flex: 1 },
 });
