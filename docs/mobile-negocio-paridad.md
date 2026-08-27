@@ -14,7 +14,7 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 ## ⏳ Pendientes (paridad web)
 - [ ] Pedidos (ecommerce: lista, detalle, cambiar estado)
 - [ ] Clientes B2C/B2B (lista, alta, detalle)
-- [ ] CxC — cuentas por cobrar / fiados (saldos, abonos)
+- [x] CxC (cuentas por cobrar: resumen, abonos, condonar/incobrable) — cuentas por cobrar / fiados (saldos, abonos)
 - [x] Devoluciones (lista, aprobar con metodo reembolso, rechazar)
 - [x] Compras (OC: lista, detalle, autorizar, recibir, cancelar)
 - [ ] Cobros avanzados (link de pago, multipago)
@@ -33,7 +33,7 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [ ] Dominio B2B
 - [x] Usuarios y Roles (usuarios: activar/roles; roles: ver)
 - [x] Seguridad (2FA: activar/desactivar/regenerar respaldo)
-- [ ] Configuración (branding, impresión, feature flags)
+- [x] Configuracion (tope de descuento)
 - [ ] Suscripción / Billing
 - [ ] Automatizaciones (flows)
 - [ ] Importador (carga masiva)

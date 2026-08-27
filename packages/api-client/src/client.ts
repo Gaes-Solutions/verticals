@@ -28,6 +28,7 @@ export interface ApiClient {
     body?: unknown,
     opts?: Omit<RequestOptions, "method" | "body">,
   ): Promise<T>;
+  put<T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body">): Promise<T>;
   del<T>(path: string, opts?: Omit<RequestOptions, "method" | "body">): Promise<T>;
 }
 
@@ -75,6 +76,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     get: (path, opts) => request(path, { ...opts, method: "GET" }),
     post: (path, body, opts) => request(path, { ...opts, method: "POST", body }),
     patch: (path, body, opts) => request(path, { ...opts, method: "PATCH", body }),
+    put: (path, body, opts) => request(path, { ...opts, method: "PUT", body }),
     del: (path, opts) => request(path, { ...opts, method: "DELETE" }),
   };
 }

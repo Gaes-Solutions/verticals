@@ -29,6 +29,8 @@ const GRUPOS: Grupo[] = [
         to: "/(app)/devoluciones",
       },
       { perm: "clientes.leer", icon: "people", label: "Clientes", to: "/(app)/clientes" },
+      { perm: "clientes.leer", icon: "business", label: "Clientes B2B", to: "/(app)/clientes-b2b" },
+      { perm: "cxc.leer", icon: "wallet", label: "Cuentas por cobrar", to: "/(app)/cxc" },
     ],
   },
   {
@@ -80,6 +82,12 @@ const GRUPOS: Grupo[] = [
         to: "/(app)/usuarios",
       },
       { perm: "*", icon: "shield-checkmark", label: "Seguridad (2FA)", to: "/(app)/seguridad" },
+      {
+        perm: "configuracion.leer",
+        icon: "settings",
+        label: "Configuración",
+        to: "/(app)/configuracion",
+      },
     ],
   },
   {

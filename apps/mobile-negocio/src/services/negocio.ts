@@ -492,3 +492,75 @@ export const mfaDisable = (password: string) =>
   api.post<{ ok: boolean }>("/auth/tenant/mfa/disable", { password });
 export const mfaRegenerate = (code: string) =>
   api.post<{ backupCodes: string[] }>("/auth/tenant/mfa/backup-codes/regenerate", { code });
+
+// ---- Configuración ----
+
+export interface ConfigVentas {
+  descuentoMaximoPct: number;
+  recomendado: number;
+}
+
+export const getConfigVentas = () => api.get<ConfigVentas>("/t/config-ventas");
+export const saveConfigVentas = (descuentoMaximoPct: number) =>
+  api.put<ConfigVentas>("/t/config-ventas", { descuentoMaximoPct });
+
+// ---- CxC (cuentas por cobrar) ----
+
+export type MetodoPago =
+  | "efectivo"
+  | "tarjeta_debito"
+  | "tarjeta_credito"
+  | "transferencia"
+  | "vale"
+  | "otro";
+
+export interface CxcItem {
+  id: string;
+  folio: string;
+  estado: string;
+  tipoOrigen: string;
+  montoOriginal: string;
+  montoPagado: string;
+  interesAcumulado: string;
+  fechaVencimiento: string;
+  cliente?: { nombre: string; apellidos?: string | null } | null;
+  clienteB2b?: { razonSocial: string } | null;
+  venta?: { folio: string } | null;
+}
+
+export interface CxcPago {
+  id: string;
+  monto: string;
+  metodo: string;
+  createdAt: string;
+}
+
+export interface CxcDetalle extends CxcItem {
+  pagos: CxcPago[];
+}
+
+export const cxcSaldo = (c: CxcItem) =>
+  Number(c.montoOriginal) + Number(c.interesAcumulado) - Number(c.montoPagado);
+
+export const listCxc = () => api.get<Paged<CxcItem>>("/t/cxc?pageSize=100");
+export const getCxcDetalle = (id: string) => api.get<CxcDetalle>(`/t/cxc/${id}`);
+export const registrarPagoCxc = (id: string, monto: string, metodo: MetodoPago) =>
+  api.post<{ ok: boolean }>(`/t/cxc/${id}/pagos`, { monto, metodo });
+export const condonarCxc = (id: string, motivo: string) =>
+  api.post<{ ok: boolean }>(`/t/cxc/${id}/condonar`, { motivo });
+export const incobrableCxc = (id: string, motivo: string) =>
+  api.post<{ ok: boolean }>(`/t/cxc/${id}/incobrable`, { motivo });
+
+// ---- Clientes B2B ----
+
+export interface ClienteB2b {
+  id: string;
+  razonSocial: string;
+  rfc: string;
+  condicionesPago: string;
+  diasCreditoDefault: number;
+  emailPrincipal?: string | null;
+}
+
+export const listClientesB2b = (q: string) =>
+  api.get<Paged<ClienteB2b>>(`/t/clientes-b2b?pageSize=100&q=${encodeURIComponent(q)}`);
