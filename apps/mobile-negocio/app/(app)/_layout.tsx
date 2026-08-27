@@ -55,6 +55,8 @@ export default function AppLayout() {
 
       {/* Rutas fuera de la barra (se abren desde el Inicio) */}
       <Tabs.Screen name="productos" options={{ href: null, title: "Productos" }} />
+      <Tabs.Screen name="pedidos" options={{ href: null, title: "Pedidos" }} />
+      <Tabs.Screen name="clientes" options={{ href: null, title: "Clientes" }} />
       <Tabs.Screen name="reportes" options={{ href: null, title: "Reportes" }} />
     </Tabs>
   );

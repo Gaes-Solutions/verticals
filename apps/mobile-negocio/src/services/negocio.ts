@@ -141,3 +141,81 @@ export const ajustarInventario = (input: {
   cantidad: string;
   motivo: string;
 }) => api.post<{ ok: boolean }>("/t/inventario/ajustes", input);
+
+// ---- Pedidos (ecommerce) ----
+
+export interface PedidoRow {
+  id: string;
+  folioPublico: string;
+  cliente: { nombre: string } | null;
+  metodoEnvio: string;
+  statusPedido: string;
+  statusPago: string;
+  total: string;
+  createdAt: string;
+  statusLabel?: string;
+}
+
+export interface PedidoEvento {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  createdAt: string;
+}
+
+export interface PedidoDetalle extends PedidoRow {
+  subtotal: string;
+  items: Array<{ nombre: string; cantidad: string; precioUnitario: string; subtotal: string }>;
+  eventos: PedidoEvento[];
+}
+
+export interface ConfigEstados {
+  estados: string[];
+  etiquetas: Record<string, string>;
+}
+
+export const listPedidosEcom = (statusPedido?: string) => {
+  const qs = statusPedido ? `?statusPedido=${encodeURIComponent(statusPedido)}` : "";
+  return api.get<{ items: PedidoRow[] }>(`/t/pedidos-ecommerce${qs}`);
+};
+
+export const getConfigEstados = () => api.get<ConfigEstados>("/t/pedidos-ecommerce/config");
+
+export const getPedidoDetalle = (id: string) =>
+  api.get<PedidoDetalle>(`/t/pedidos-ecommerce/${id}`);
+
+export const transicionarPedido = (id: string, nuevoEstado: string, motivo?: string) =>
+  api.post<{ ok: boolean }>(`/t/pedidos-ecommerce/${id}/transicionar`, {
+    nuevoEstado,
+    ...(nuevoEstado === "cancelado" && motivo ? { motivo } : {}),
+  });
+
+// ---- Clientes (B2C) ----
+
+export interface ClienteRow {
+  id: string;
+  tipo: string;
+  isDefault: boolean;
+  nombre: string;
+  apellidos: string | null;
+  emailPrincipal: string | null;
+  telefonoPrincipal: string | null;
+  rfc: string | null;
+  _count?: { ventas: number };
+}
+
+export interface FiadoMovimiento {
+  id: string;
+  tipo: string;
+  monto: string;
+  createdAt: string;
+}
+
+export interface ClienteDetalle extends ClienteRow {
+  fiado: { montoTotal: string; estado: string; movimientos: FiadoMovimiento[] } | null;
+}
+
+export const listClientes = (q: string) =>
+  api.get<Paged<ClienteRow>>(`/t/clientes?pageSize=50&q=${encodeURIComponent(q)}`);
+
+export const getClienteDetalle = (id: string) => api.get<ClienteDetalle>(`/t/clientes/${id}`);

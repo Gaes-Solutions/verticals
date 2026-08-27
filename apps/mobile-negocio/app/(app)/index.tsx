@@ -17,6 +17,18 @@ export default function Inicio() {
 
   const accesos = [
     {
+      perm: "pedidos.leer",
+      icon: "cube" as const,
+      label: "Pedidos",
+      to: "/(app)/pedidos" as const,
+    },
+    {
+      perm: "clientes.leer",
+      icon: "people" as const,
+      label: "Clientes",
+      to: "/(app)/clientes" as const,
+    },
+    {
       perm: "productos.leer",
       icon: "pricetags" as const,
       label: "Productos",
@@ -125,9 +137,10 @@ const s = StyleSheet.create({
   },
   cobrarTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   cobrarSub: { color: colors.brandLight, fontSize: 13 },
-  accesos: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
+  accesos: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.sm },
   acceso: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: "46%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
