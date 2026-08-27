@@ -219,3 +219,80 @@ export const listClientes = (q: string) =>
   api.get<Paged<ClienteRow>>(`/t/clientes?pageSize=50&q=${encodeURIComponent(q)}`);
 
 export const getClienteDetalle = (id: string) => api.get<ClienteDetalle>(`/t/clientes/${id}`);
+
+// ---- Devoluciones (online) ----
+
+export type MetodoReembolso =
+  | "efectivo"
+  | "tarjeta_misma"
+  | "saldo_a_favor"
+  | "vale"
+  | "transferencia";
+
+export interface Solicitud {
+  id: string;
+  folio: string;
+  motivo: string;
+  estado: string;
+  createdAt: string;
+  monto?: string | null;
+  items: Array<{ nombre: string; cantidad: number }>;
+  pedido: { folioPublico: string; emailComprador: string } | null;
+  cliente: { nombre: string } | null;
+}
+
+export const listDevoluciones = (estado?: string) => {
+  const qs = estado ? `?estado=${encodeURIComponent(estado)}` : "";
+  return api.get<Solicitud[]>(`/t/devoluciones-online${qs}`);
+};
+
+export const aprobarDevolucion = (id: string, metodoReembolso: MetodoReembolso) =>
+  api.post<{ ok: boolean }>(`/t/devoluciones-online/${id}/aprobar`, { metodoReembolso });
+
+export const rechazarDevolucion = (id: string, motivo: string) =>
+  api.post<{ ok: boolean }>(`/t/devoluciones-online/${id}/rechazar`, { motivo });
+
+// ---- Compras (órdenes de compra) ----
+
+export interface OcLinea {
+  id: string;
+  descripcion: string;
+  cantidad: string;
+  precioUnitario: string;
+  cantidadRecibida: string;
+}
+
+export interface OcRow {
+  id: string;
+  folio: string;
+  proveedorRazonSocial: string;
+  proveedorRfc: string;
+  estado: string;
+  total: string;
+  createdAt: string;
+  lineas: OcLinea[];
+}
+
+export const listOrdenesCompra = (estado?: string) => {
+  const qs = estado ? `?estado=${encodeURIComponent(estado)}` : "";
+  return api.get<{ items: OcRow[] }>(`/t/ordenes-compra${qs}`);
+};
+
+export const getOcDetalle = (id: string) => api.get<OcRow>(`/t/ordenes-compra/${id}`);
+
+export const autorizarOc = (id: string) =>
+  api.post<{ ok: boolean }>(`/t/ordenes-compra/${id}/autorizar`, {});
+
+export const cancelarOc = (id: string, motivo: string) =>
+  api.post<void>(`/t/ordenes-compra/${id}/cancelar`, { motivo });
+
+/** Recibe todas las líneas pendientes (cantidad - ya recibida). */
+export const recibirOcTodo = (id: string, lineas: OcLinea[]) => {
+  const pend = lineas
+    .map((l) => ({
+      lineaId: l.id,
+      cantidadRecibida: String(Number(l.cantidad) - Number(l.cantidadRecibida)),
+    }))
+    .filter((l) => Number(l.cantidadRecibida) > 0);
+  return api.post<{ ok: boolean }>(`/t/ordenes-compra/${id}/recibir`, { lineas: pend });
+};

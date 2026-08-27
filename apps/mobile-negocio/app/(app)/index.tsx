@@ -35,6 +35,18 @@ export default function Inicio() {
       to: "/(app)/productos" as const,
     },
     {
+      perm: "compras_oc.leer",
+      icon: "cart" as const,
+      label: "Compras",
+      to: "/(app)/compras" as const,
+    },
+    {
+      perm: "ventas.leer",
+      icon: "return-down-back" as const,
+      label: "Devoluciones",
+      to: "/(app)/devoluciones" as const,
+    },
+    {
       perm: "reportes.ventas",
       icon: "bar-chart" as const,
       label: "Reportes",

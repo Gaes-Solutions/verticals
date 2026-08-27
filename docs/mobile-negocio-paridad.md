@@ -15,8 +15,8 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [ ] Pedidos (ecommerce: lista, detalle, cambiar estado)
 - [ ] Clientes B2C/B2B (lista, alta, detalle)
 - [ ] CxC — cuentas por cobrar / fiados (saldos, abonos)
-- [ ] Devoluciones
-- [ ] Compras (órdenes de compra, recepción)
+- [x] Devoluciones (lista, aprobar con metodo reembolso, rechazar)
+- [x] Compras (OC: lista, detalle, autorizar, recibir, cancelar)
 - [ ] Cobros avanzados (link de pago, multipago)
 - [ ] Precios (listas de precios, cascada)
 - [ ] Inventario Insights (rotación, sugerencias)

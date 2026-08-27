@@ -57,6 +57,8 @@ export default function AppLayout() {
       <Tabs.Screen name="productos" options={{ href: null, title: "Productos" }} />
       <Tabs.Screen name="pedidos" options={{ href: null, title: "Pedidos" }} />
       <Tabs.Screen name="clientes" options={{ href: null, title: "Clientes" }} />
+      <Tabs.Screen name="devoluciones" options={{ href: null, title: "Devoluciones" }} />
+      <Tabs.Screen name="compras" options={{ href: null, title: "Compras" }} />
       <Tabs.Screen name="reportes" options={{ href: null, title: "Reportes" }} />
     </Tabs>
   );
