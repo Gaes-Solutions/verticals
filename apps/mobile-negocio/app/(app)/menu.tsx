@@ -40,6 +40,7 @@ const GRUPOS: Grupo[] = [
       { perm: "inventario.leer", icon: "cube", label: "Inventario", to: "/(app)/inventario" },
       { perm: "precios.leer", icon: "cash", label: "Precios", to: "/(app)/precios" },
       { perm: "compras_oc.leer", icon: "cart", label: "Compras", to: "/(app)/compras" },
+      { perm: "productos.leer", icon: "cloud-upload", label: "Importar", to: "/(app)/importador" },
     ],
   },
   {
@@ -72,6 +73,12 @@ const GRUPOS: Grupo[] = [
         to: "/(app)/preguntas",
       },
       { perm: "ecommerce.envios_gestionar", icon: "car", label: "Envíos", to: "/(app)/envios" },
+      {
+        perm: "configuracion.actualizar",
+        icon: "globe",
+        label: "Dominio B2B",
+        to: "/(app)/dominio-b2b",
+      },
     ],
   },
   {

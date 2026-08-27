@@ -12,14 +12,14 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [x] Reportes (KPIs + gráfica por día/canal/top)
 
 ## ⏳ Pendientes (paridad web)
-- [ ] Pedidos (ecommerce: lista, detalle, cambiar estado)
+- [x] Pedidos (ecommerce)
 - [ ] Clientes B2C/B2B (lista, alta, detalle)
 - [x] CxC (cuentas por cobrar: resumen, abonos, condonar/incobrable) — cuentas por cobrar / fiados (saldos, abonos)
 - [x] Devoluciones (lista, aprobar con metodo reembolso, rechazar)
 - [x] Compras (OC: lista, detalle, autorizar, recibir, cancelar)
 - [ ] Cobros avanzados (link de pago, multipago)
 - [x] Precios (listas: ver, detalle, crear)
-- [ ] Inventario Insights (rotación, sugerencias)
+- [x] Inventario Insights (reordenar/estancados/top margen)
 - [x] Promociones (lista + activar/pausar/archivar)
 - [x] Monedero (gift cards: emitir, cancelar)
 - [x] CFDI/Facturacion (emitidos: lista, cancelar SAT)
@@ -30,14 +30,14 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [x] Envios (tarifas, zonas, pickup: vista)
 - [ ] Etiquetas (impresión)
 - [x] Tienda (config: activa, subdominio, publicados)
-- [ ] Dominio B2B
+- [x] Dominio B2B (dominios + verificación)
 - [x] Usuarios y Roles (usuarios: activar/roles; roles: ver)
 - [x] Seguridad (2FA: activar/desactivar/regenerar respaldo)
 - [x] Configuracion (tope de descuento)
-- [ ] Suscripción / Billing
-- [ ] Automatizaciones (flows)
-- [ ] Importador (carga masiva)
-- [ ] Guía de inicio / Ayuda (manual)
+- [x] Suscripcion (plan + facturas)
+- [x] Automatizaciones (flows: activar/pausar/ejecutar)
+- [x] Importador (guia de capacidades)
+- [x] Guia de inicio (checklist onboarding)
 
 ## Notas
 - Cada módulo reusa el kit UI en `apps/mobile-negocio/src/ui` + `theme.ts`.

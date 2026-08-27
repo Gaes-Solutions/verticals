@@ -646,3 +646,76 @@ export const saveEcommerceConfig = (cfg: ConfigTienda) =>
   api.put<ConfigTienda>("/t/ecommerce/config", cfg);
 export const countProductosPublicados = () =>
   api.get<{ items: unknown[] }>("/t/ecommerce/productos-publicados");
+
+// ---- Inventario Insights ----
+
+export interface Insights {
+  reordenar: Array<{ sku: string; nombre: string; stock: number; sugerenciaReorden: number }>;
+  estancados: Array<{ sku: string; nombre: string; stock: number; valorInmovilizado: number }>;
+  topVendidos: Array<{ sku: string; nombre: string; vendido: number; margenTotal: number }>;
+}
+export const getInventarioInsights = () => api.get<Insights>("/t/inventario-insights");
+
+// ---- Automatizaciones (flows) ----
+
+export interface EventoFlow {
+  evento: string;
+  label: string;
+  usaDias: boolean;
+}
+export interface Flow {
+  id: string;
+  evento: string;
+  campanaNombre: string;
+  canal: string;
+  dias: number | null;
+  frecuenciaMax: number;
+  isActive: boolean;
+}
+export const listFlows = () => api.get<Flow[]>("/t/campanas/flows");
+export const listEventosFlow = () => api.get<EventoFlow[]>("/t/campanas/flows/eventos");
+export const toggleFlow = (id: string, isActive: boolean) =>
+  api.patch<{ ok: boolean }>(`/t/campanas/flows/${id}`, { isActive });
+export const runFlows = () => api.post<{ encolados: number }>("/t/campanas/flows/run", {});
+
+// ---- Guía de inicio (onboarding) ----
+
+export interface Onboarding {
+  pasos: Record<string, boolean>;
+}
+export const getOnboarding = () => api.get<Onboarding>("/t/onboarding");
+
+// ---- Suscripción (billing) ----
+
+export interface BillingContext {
+  tenant: {
+    slug: string;
+    name: string;
+    status: string;
+    plan: { code: string; name: string; priceMonthly: string };
+  };
+  subscription: {
+    id: string;
+    status: string;
+    interval: string;
+    currentPeriodEnd: string | null;
+  } | null;
+}
+export interface Invoice {
+  id: string;
+  folio: string;
+  status: string;
+  total: string;
+  currency: string;
+  createdAt: string;
+}
+export const getBillingMe = () => api.get<BillingContext>("/billing/me");
+export const listInvoices = () => api.get<Invoice[]>("/billing/invoices");
+
+// ---- Dominio B2B ----
+
+export interface DominioB2b {
+  host: string;
+  verificado: boolean;
+}
+export const getB2bDominios = () => api.get<{ dominios: DominioB2b[] }>("/t/b2b-dominio");

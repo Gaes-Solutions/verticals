@@ -71,6 +71,15 @@ export default function AppLayout() {
       <Tabs.Screen name="resenas" options={{ ...hidden, title: "Reseñas" }} />
       <Tabs.Screen name="preguntas" options={{ ...hidden, title: "Preguntas" }} />
       <Tabs.Screen name="envios" options={{ ...hidden, title: "Envíos" }} />
+      <Tabs.Screen
+        name="inventario-insights"
+        options={{ ...hidden, title: "Insights inventario" }}
+      />
+      <Tabs.Screen name="automatizaciones" options={{ ...hidden, title: "Automatizaciones" }} />
+      <Tabs.Screen name="dominio-b2b" options={{ ...hidden, title: "Dominio B2B" }} />
+      <Tabs.Screen name="suscripcion" options={{ ...hidden, title: "Suscripción" }} />
+      <Tabs.Screen name="importador" options={{ ...hidden, title: "Importar" }} />
+      <Tabs.Screen name="guia" options={{ ...hidden, title: "Guía de inicio" }} />
     </Tabs>
   );
 }

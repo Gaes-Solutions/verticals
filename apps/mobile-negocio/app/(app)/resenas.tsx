@@ -77,6 +77,7 @@ export default function Resenas() {
           refreshing={q.isFetching}
           onRefresh={() => q.refetch()}
           ListEmptyComponent={<EmptyState icon="star-outline" title="Sin reseñas" />}
+          // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: render de tarjeta con estados condicionales
           renderItem={({ item }) => (
             <View style={s.card}>
               <View style={s.top}>
