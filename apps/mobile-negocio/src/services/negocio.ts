@@ -440,3 +440,55 @@ export const categorizarCfdi = (id: string, categoriaContableId: string) =>
 export const autoCategorizarCfdi = (id: string) =>
   api.post<{ ok: boolean }>(`/t/cfdis-recibidos/${id}/auto-categorizar`, {});
 export const getDiot = (periodo: string) => api.get<DiotReporte>(`/t/diot/${periodo}`);
+
+// ---- Usuarios y Roles ----
+
+export interface RolRef {
+  id: string;
+  codigo: string;
+  nombre: string;
+}
+
+export interface Usuario {
+  id: string;
+  email: string;
+  nombre: string;
+  isActive: boolean;
+  roles: RolRef[];
+}
+
+export interface Rol {
+  id: string;
+  codigo: string;
+  nombre: string;
+  isActive: boolean;
+  permisos: string[];
+}
+
+export const listUsuarios = () => api.get<Usuario[]>("/t/usuarios");
+export const listRoles = () => api.get<Rol[]>("/t/roles");
+export const setUsuarioActivo = (id: string, isActive: boolean) =>
+  isActive
+    ? api.patch<{ ok: boolean }>(`/t/usuarios/${id}`, { isActive: true })
+    : api.del<void>(`/t/usuarios/${id}`);
+export const asignarRol = (usuarioId: string, rolId: string) =>
+  api.post<{ ok: boolean }>(`/t/usuarios/${usuarioId}/roles`, { rolId });
+export const quitarRol = (usuarioId: string, rolId: string) =>
+  api.del<void>(`/t/usuarios/${usuarioId}/roles/${rolId}`);
+
+// ---- Seguridad (MFA/2FA del usuario actual) ----
+
+export interface MfaEstado {
+  enabled: boolean;
+  backupCodesRestantes: number;
+}
+
+export const mfaEstado = () => api.get<MfaEstado>("/auth/tenant/mfa/estado");
+export const mfaEnroll = () =>
+  api.post<{ secret: string; otpauthUrl: string }>("/auth/tenant/mfa/enroll", {});
+export const mfaEnrollConfirm = (code: string) =>
+  api.post<{ backupCodes: string[] }>("/auth/tenant/mfa/enroll/confirm", { code });
+export const mfaDisable = (password: string) =>
+  api.post<{ ok: boolean }>("/auth/tenant/mfa/disable", { password });
+export const mfaRegenerate = (code: string) =>
+  api.post<{ backupCodes: string[] }>("/auth/tenant/mfa/backup-codes/regenerate", { code });

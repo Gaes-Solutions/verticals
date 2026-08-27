@@ -62,6 +62,8 @@ export default function AppLayout() {
       <Tabs.Screen name="comisiones" options={{ ...hidden, title: "Comisiones" }} />
       <Tabs.Screen name="cfdi" options={{ ...hidden, title: "Facturas" }} />
       <Tabs.Screen name="contabilidad" options={{ ...hidden, title: "Contabilidad" }} />
+      <Tabs.Screen name="usuarios" options={{ ...hidden, title: "Usuarios y roles" }} />
+      <Tabs.Screen name="seguridad" options={{ ...hidden, title: "Seguridad" }} />
     </Tabs>
   );
 }

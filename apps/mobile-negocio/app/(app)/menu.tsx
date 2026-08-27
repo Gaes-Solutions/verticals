@@ -71,6 +71,18 @@ const GRUPOS: Grupo[] = [
     ],
   },
   {
+    titulo: "Administración",
+    items: [
+      {
+        perm: "usuarios.leer",
+        icon: "people-circle",
+        label: "Usuarios y roles",
+        to: "/(app)/usuarios",
+      },
+      { perm: "*", icon: "shield-checkmark", label: "Seguridad (2FA)", to: "/(app)/seguridad" },
+    ],
+  },
+  {
     titulo: "Análisis",
     items: [
       { perm: "reportes.ventas", icon: "bar-chart", label: "Reportes", to: "/(app)/reportes" },
@@ -81,7 +93,7 @@ const GRUPOS: Grupo[] = [
 export default function Menu() {
   const { user } = useAuth();
   const puede = (perm: string) =>
-    user?.isOwner === true || (user?.permissions ?? []).includes(perm);
+    perm === "*" || user?.isOwner === true || (user?.permissions ?? []).includes(perm);
 
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={s.root}>

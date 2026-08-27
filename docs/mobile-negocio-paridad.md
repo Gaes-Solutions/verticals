@@ -31,8 +31,8 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [ ] Etiquetas (impresión)
 - [ ] Tienda (config ecommerce)
 - [ ] Dominio B2B
-- [ ] Usuarios y Roles (RBAC)
-- [ ] Seguridad (2FA, sesiones)
+- [x] Usuarios y Roles (usuarios: activar/roles; roles: ver)
+- [x] Seguridad (2FA: activar/desactivar/regenerar respaldo)
 - [ ] Configuración (branding, impresión, feature flags)
 - [ ] Suscripción / Billing
 - [ ] Automatizaciones (flows)
