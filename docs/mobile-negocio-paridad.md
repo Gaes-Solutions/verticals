@@ -22,8 +22,8 @@ Se construye por tandas nativas. Estado por módulo (31 páginas del panel web):
 - [ ] Inventario Insights (rotación, sugerencias)
 - [x] Promociones (lista + activar/pausar/archivar)
 - [x] Monedero (gift cards: emitir, cancelar)
-- [ ] CFDI / Facturación (timbrado, cancelación)
-- [ ] Contabilidad (pólizas, categorías)
+- [x] CFDI/Facturacion (emitidos: lista, cancelar SAT)
+- [x] Contabilidad (CFDIs recibidos, categorizar, auto, DIOT)
 - [x] Comisiones (reglas: ver, eliminar)
 - [ ] Reseñas
 - [ ] Preguntas (Q&A de productos)

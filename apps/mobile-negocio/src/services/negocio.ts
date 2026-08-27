@@ -375,3 +375,68 @@ export interface ReglaComision {
 
 export const listReglasComision = () => api.get<ReglaComision[]>("/t/comisiones/reglas");
 export const eliminarReglaComision = (id: string) => api.del<void>(`/t/comisiones/reglas/${id}`);
+
+// ---- CFDI / Facturación (emitidos) ----
+
+export interface CfdiEmitido {
+  id: string;
+  serie: string | null;
+  folio: string | null;
+  folioFiscal: string | null;
+  fechaEmision: string;
+  rfcReceptor: string;
+  razonSocialReceptor: string;
+  total: string;
+  estado: string;
+  esAutofactura: boolean;
+}
+
+export type MotivoCancelacion = "02" | "03" | "04";
+
+export const listCfdisEmitidos = (estado?: string) => {
+  const qs = new URLSearchParams({ pageSize: "50" });
+  if (estado) qs.set("estado", estado);
+  return api.get<Paged<CfdiEmitido>>(`/t/cfdis?${qs.toString()}`);
+};
+
+export const cancelarCfdi = (id: string, motivo: MotivoCancelacion) =>
+  api.post<{ ok: boolean }>(`/t/cfdis/${id}/cancelar`, { motivo });
+
+// ---- Contabilidad (CFDIs recibidos + DIOT) ----
+
+export interface CategoriaContable {
+  id: string;
+  codigoContable: string;
+  nombre: string;
+  tipo: string;
+}
+
+export interface CfdiRecibido {
+  id: string;
+  folio: string | null;
+  emisorRfc: string;
+  emisorRazonSocial: string;
+  fechaEmision: string;
+  total: string;
+  estado: string;
+  categorizacion?: {
+    categoria?: { codigoContable: string; nombre: string } | null;
+    fuente?: string | null;
+  } | null;
+}
+
+export interface DiotReporte {
+  periodoYyyymm: string;
+  totalProveedores: number;
+  totalIvaPagado: string;
+}
+
+export const listCfdisRecibidos = () =>
+  api.get<{ items: CfdiRecibido[] }>("/t/cfdis-recibidos?pageSize=100");
+export const listCategoriasContables = () =>
+  api.get<CategoriaContable[]>("/t/cfdis-recibidos/categorias/contables");
+export const categorizarCfdi = (id: string, categoriaContableId: string) =>
+  api.post<{ ok: boolean }>(`/t/cfdis-recibidos/${id}/categorizar`, { categoriaContableId });
+export const autoCategorizarCfdi = (id: string) =>
+  api.post<{ ok: boolean }>(`/t/cfdis-recibidos/${id}/auto-categorizar`, {});
+export const getDiot = (periodo: string) => api.get<DiotReporte>(`/t/diot/${periodo}`);

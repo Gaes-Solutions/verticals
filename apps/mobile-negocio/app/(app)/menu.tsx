@@ -59,6 +59,18 @@ const GRUPOS: Grupo[] = [
     ],
   },
   {
+    titulo: "Fiscal y contabilidad",
+    items: [
+      { perm: "cfdi.leer", icon: "document-text", label: "Facturas (CFDI)", to: "/(app)/cfdi" },
+      {
+        perm: "cfdis_recibidos.leer",
+        icon: "documents",
+        label: "Contabilidad",
+        to: "/(app)/contabilidad",
+      },
+    ],
+  },
+  {
     titulo: "Análisis",
     items: [
       { perm: "reportes.ventas", icon: "bar-chart", label: "Reportes", to: "/(app)/reportes" },

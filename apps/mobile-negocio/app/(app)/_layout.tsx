@@ -60,6 +60,8 @@ export default function AppLayout() {
       <Tabs.Screen name="promociones" options={{ ...hidden, title: "Promociones" }} />
       <Tabs.Screen name="monedero" options={{ ...hidden, title: "Monedero" }} />
       <Tabs.Screen name="comisiones" options={{ ...hidden, title: "Comisiones" }} />
+      <Tabs.Screen name="cfdi" options={{ ...hidden, title: "Facturas" }} />
+      <Tabs.Screen name="contabilidad" options={{ ...hidden, title: "Contabilidad" }} />
     </Tabs>
   );
 }
