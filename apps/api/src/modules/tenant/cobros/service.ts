@@ -150,10 +150,10 @@ export async function pagarCobro(
     ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
   });
 
-  // Tarjeta: cobro inmediato (Conekta real confirma; mock acepta) → pagado.
-  // OXXO/SPEI: queda pendiente con referencia para pagar en tienda/banco.
-  const pagado =
-    intent.status === "confirmado" || (intent.status === "pendiente" && input.metodo === "tarjeta");
+  // Solo un cobro efectivamente confirmado por la pasarela liquida el link.
+  // "pendiente" (Conekta con 3DS/revisión, OXXO/SPEI) NO es dinero recibido:
+  // marcarlo pagado crea liquidez fantasma sin conciliación por webhook.
+  const pagado = intent.status === "confirmado";
 
   if (pagado) {
     await client.linkPago.update({

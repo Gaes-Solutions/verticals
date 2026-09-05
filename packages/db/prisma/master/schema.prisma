@@ -140,6 +140,7 @@ model AdminUser {
   mfaSecret      String?   @map("mfa_secret")
   mfaVerifiedAt  DateTime? @map("mfa_verified_at")
   mfaBackupCodes String[]  @default([]) @map("mfa_backup_codes")
+  mfaLastStep    Int?      @map("mfa_last_step")
   lastLoginAt    DateTime? @map("last_login_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
@@ -280,6 +281,7 @@ model Partner {
   mfaSecret               String?       @map("mfa_secret")
   mfaVerifiedAt           DateTime?     @map("mfa_verified_at")
   mfaBackupCodes          String[]      @default([]) @map("mfa_backup_codes")
+  mfaLastStep             Int?          @map("mfa_last_step")
   lastLoginAt             DateTime?     @map("last_login_at")
   tipo                    PartnerTipo
   nivel                   PartnerNivel  @default(bronze)
@@ -544,6 +546,15 @@ enum ConsentSubjectType {
   pet
 }
 
+// Procedencia del consentimiento. Solo `patient_portal` (autorizado por el
+// paciente autenticado) desbloquea lectura cross-tenant del PHR;
+// `tenant_attested` (la clínica atestigua consent presencial) limita la lectura
+// a los registros que la propia clínica publicó.
+enum ConsentGrantedVia {
+  patient_portal
+  tenant_attested
+}
+
 enum FamilyRelationship {
   mother
   father
@@ -609,6 +620,7 @@ model PacienteMaster {
   telefono         String?
   otpCodigo        String?            @map("otp_codigo")
   otpExpiraAt      DateTime?          @map("otp_expira_at")
+  otpIntentos      Int                @default(0) @map("otp_intentos")
   otpVerificadoAt  DateTime?          @map("otp_verificado_at")
   archivedAt       DateTime?          @map("archived_at")
   deletedAt        DateTime?          @map("deleted_at")
@@ -704,6 +716,7 @@ model PatientConsent {
   patientId    String             @map("patient_id")
   tenantId     String             @map("tenant_id")
   scope        ConsentScope       @default(full_phr)
+  grantedVia   ConsentGrantedVia  @default(patient_portal) @map("granted_via")
   revocable    Boolean            @default(true)
   termsVersion String             @default("v1") @map("terms_version")
   ipAtGrant    String?            @map("ip_at_grant")
@@ -1214,6 +1227,17 @@ model WebauthnCredential {
   @@map("webauthn_credentials")
 }
 
+// Registro de challenges WebAuthn ya consumidos: garantiza uso único del
+// challenge (evita replay de la aserción durante su TTL). La fila existe = usado.
+model WebauthnUsedChallenge {
+  id        String   @id
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("webauthn_used_challenges")
+}
+
 model Coupon {
   id                String             @id @default(cuid())
   code              String             @unique
@@ -1379,13 +1403,14 @@ model SupportTicketMessage {
 // de conocer el tenant. tipo: "subdominio" (apex de la plataforma, verificado
 // automático) | "propio" (dominio del cliente, verificado por DNS TXT).
 model TiendaDominio {
-  id         String   @id @default(cuid())
-  host       String   @unique
-  tenantSlug String   @map("tenant_slug")
-  tipo       String
-  verificado Boolean  @default(false)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  host               String   @unique
+  tenantSlug         String   @map("tenant_slug")
+  tipo               String
+  verificado         Boolean  @default(false)
+  tokenVerificacion  String?  @map("token_verificacion")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@index([tenantSlug])
   @@map("tienda_dominios")

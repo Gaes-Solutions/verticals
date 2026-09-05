@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 const decimalString = z
-  .union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/)])
+  .union([z.number().finite().min(0), z.string().regex(/^\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 const positiveDecimalString = z
-  .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 export const inventarioListQuerySchema = z.object({

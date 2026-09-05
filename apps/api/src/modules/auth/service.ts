@@ -6,6 +6,7 @@ import { consumeBackupCode, generateBackupCodes, hashBackupCodes } from "../../l
 
 const REFRESH_TOKEN_BYTES = 48;
 const TOTP_ISSUER = "GaesSoft Admin";
+const TOTP_STEP_SECONDS = 30;
 
 // 2FA TOTP forzoso (decisión Flujo 10): primer login enrola, después siempre reta.
 
@@ -25,6 +26,20 @@ export function verifyTotpCode(code: string, secret: string): boolean {
   }
 }
 
+/**
+ * Verifica un TOTP y devuelve el time-step absoluto que aceptó (o null si es inválido),
+ * para poder rechazar reuso del mismo código dentro de su ventana de validez.
+ */
+export function verifyTotpStep(code: string, secret: string): number | null {
+  try {
+    const delta = authenticator.checkDelta(code, secret);
+    if (delta === null) return null;
+    return Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + delta;
+  } catch {
+    return null;
+  }
+}
+
 /** Guarda un secret TOTP pendiente de verificar (se confirma en /mfa/activate). */
 export async function setPendingMfaSecret(
   adminUserId: string,
@@ -39,11 +54,24 @@ export async function setPendingMfaSecret(
 
 export async function markMfaVerified(
   adminUserId: string,
+  usedStep: number,
   client: MasterPrismaClient = masterPrisma,
 ): Promise<void> {
   await client.adminUser.update({
     where: { id: adminUserId },
-    data: { mfaVerifiedAt: new Date() },
+    data: { mfaVerifiedAt: new Date(), mfaLastStep: usedStep },
+  });
+}
+
+/** Registra el último time-step TOTP consumido (uso único: rechaza replays dentro de la ventana). */
+export async function recordMfaStep(
+  adminUserId: string,
+  usedStep: number,
+  client: MasterPrismaClient = masterPrisma,
+): Promise<void> {
+  await client.adminUser.update({
+    where: { id: adminUserId },
+    data: { mfaLastStep: usedStep },
   });
 }
 
@@ -67,13 +95,13 @@ export async function consumeAdminBackupCode(
   code: string,
   client: MasterPrismaClient = masterPrisma,
 ): Promise<boolean> {
-  const { ok, remaining } = await consumeBackupCode(admin.mfaBackupCodes, code);
-  if (!ok) return false;
-  await client.adminUser.update({
-    where: { id: admin.id },
+  const { ok, remaining, matchedHash } = await consumeBackupCode(admin.mfaBackupCodes, code);
+  if (!ok || !matchedHash) return false;
+  const result = await client.adminUser.updateMany({
+    where: { id: admin.id, mfaBackupCodes: { has: matchedHash } },
     data: { mfaBackupCodes: remaining },
   });
-  return true;
+  return result.count === 1;
 }
 
 export function hashRefreshToken(plaintext: string): string {

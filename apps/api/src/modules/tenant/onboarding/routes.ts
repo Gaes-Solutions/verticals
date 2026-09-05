@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 
 /**
@@ -6,6 +7,7 @@ import type { FastifyPluginAsync } from "fastify";
  */
 const onboardingRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
+    req.requirePerm(PERMISSIONS.CONFIGURACION_LEER);
     const p = req.tenantPrisma;
     const [productos, listas, clientesB2b, usuarios, comisiones, ventas] = await Promise.all([
       p.producto.count(),

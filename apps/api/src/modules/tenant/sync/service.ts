@@ -1,4 +1,5 @@
 import type { TenantPrismaClient } from "@gaespos/db";
+import { PERMISSIONS, type PermissionPrincipal, hasPermission } from "@gaespos/permissions";
 import {
   type SyncOpResult,
   type SyncOperation,
@@ -7,6 +8,8 @@ import {
   type SyncPushResult,
   decideUpdate,
 } from "@gaespos/sync";
+import { clienteCreateSchema, clienteUpdateSchema } from "../clientes/schemas.js";
+import { ventaCreateSchema } from "../ventas/schemas.js";
 import { VentaError, crearVenta } from "../ventas/service.js";
 
 /** Campos del Cliente que el sync compara para detectar conflictos field-level. */
@@ -19,6 +22,26 @@ const CLIENTE_SYNC_FIELDS = [
   "notas",
   "aceptaMarketing",
 ] as const;
+
+// Validación de valores idéntica a las rutas directas POST/PATCH /clientes, pero
+// acotada a los campos que el sync tiene permitido escribir. `pick()` sólo filtra
+// NOMBRES; estos esquemas aplican los topes de longitud + email + RFC que la ruta
+// directa exige, para que el camino offline no persista datos inválidos.
+const CLIENTE_SYNC_SCHEMA_SHAPE = {
+  nombre: true,
+  apellidos: true,
+  emailPrincipal: true,
+  telefonoPrincipal: true,
+  rfc: true,
+  notas: true,
+  aceptaMarketing: true,
+} as const;
+
+const clienteSyncCreateSchema = clienteCreateSchema.pick({
+  ...CLIENTE_SYNC_SCHEMA_SHAPE,
+  tipo: true,
+});
+const clienteSyncUpdateSchema = clienteUpdateSchema.pick(CLIENTE_SYNC_SCHEMA_SHAPE);
 
 function pick(obj: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -47,12 +70,43 @@ async function storeProcessed(
 
 async function aplicarVenta(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   userId: string,
   op: SyncOperation,
 ): Promise<SyncOpResult> {
+  // Misma autorización que la ruta directa POST /ventas: sync.usar no basta para
+  // crear ventas; se exige ventas.crear (defensa en profundidad, RBAC en la capa
+  // de acceso, no dentro de crearVenta).
+  if (!hasPermission(principal, PERMISSIONS.VENTAS_CREAR)) {
+    return {
+      idempotencyKey: op.idempotencyKey,
+      entityType: op.entityType,
+      entityIdLocal: op.entityIdLocal,
+      entityIdRemoto: null,
+      status: "failed",
+      error: `Permiso requerido: ${PERMISSIONS.VENTAS_CREAR}`,
+    };
+  }
+
+  // El payload llega como JSON arbitrario; se valida con el mismo esquema que la
+  // ruta directa POST /ventas antes de tocar el motor de ventas.
+  const parsed = ventaCreateSchema.safeParse(op.payload);
+  if (!parsed.success) {
+    return {
+      idempotencyKey: op.idempotencyKey,
+      entityType: op.entityType,
+      entityIdLocal: op.entityIdLocal,
+      entityIdRemoto: null,
+      status: "failed",
+      error: parsed.error.issues[0]?.message ?? "payload de venta inválido",
+    };
+  }
+
+  const permiteDescuentoAlto = hasPermission(principal, PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO);
+
   // Ventas son inmutables: la idempotencia (dedup arriba) es la única garantía.
   try {
-    const venta = (await crearVenta(prisma, userId, op.payload as never)) as { ventaId: string };
+    const venta = await crearVenta(prisma, userId, parsed.data, { permiteDescuentoAlto });
     return {
       idempotencyKey: op.idempotencyKey,
       entityType: op.entityType,
@@ -78,6 +132,7 @@ async function aplicarVenta(
 
 async function aplicarCliente(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   op: SyncOperation,
 ): Promise<SyncOpResult> {
   const base = {
@@ -86,9 +141,36 @@ async function aplicarCliente(
     entityIdLocal: op.entityIdLocal,
   };
 
+  // Misma autorización que las rutas directas POST/PATCH /clientes: sync.usar no
+  // basta para crear/editar clientes; se exige clientes.crear / clientes.actualizar
+  // (defensa en profundidad, gate por operación como en aplicarVenta).
+  const permisoRequerido =
+    op.operation === "create" ? PERMISSIONS.CLIENTES_CREAR : PERMISSIONS.CLIENTES_ACTUALIZAR;
+  if (!hasPermission(principal, permisoRequerido)) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto ?? null,
+      status: "failed",
+      error: `Permiso requerido: ${permisoRequerido}`,
+    };
+  }
+
   if (op.operation === "create") {
+    // Mismo esquema que la ruta directa POST /clientes: el whitelist de campos
+    // no valida VALORES (longitudes, email, RFC); se valida antes de persistir.
+    const parsed = clienteSyncCreateSchema.safeParse(op.payload);
+    if (!parsed.success) {
+      return {
+        ...base,
+        entityIdRemoto: null,
+        status: "failed",
+        error: parsed.error.issues[0]?.message ?? "payload de cliente inválido",
+      };
+    }
     const cliente = await prisma.cliente.create({
-      data: pick(op.payload, [...CLIENTE_SYNC_FIELDS, "tipo"]) as { nombre: string },
+      data: pick(parsed.data as Record<string, unknown>, [...CLIENTE_SYNC_FIELDS, "tipo"]) as {
+        nombre: string;
+      },
     });
     return {
       ...base,
@@ -107,6 +189,18 @@ async function aplicarCliente(
       error: "entityIdRemoto requerido para update",
     };
   }
+  // Mismo esquema que la ruta directa PATCH /clientes: valida VALORES antes de
+  // usar el payload en la resolución de conflictos y en la persistencia.
+  const parsed = clienteSyncUpdateSchema.safeParse(op.payload);
+  if (!parsed.success) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto,
+      status: "failed",
+      error: parsed.error.issues[0]?.message ?? "payload de cliente inválido",
+    };
+  }
+  const payload = parsed.data as Record<string, unknown>;
   const current = await prisma.cliente.findUnique({ where: { id: op.entityIdRemoto } });
   if (!current) {
     return {
@@ -116,10 +210,18 @@ async function aplicarCliente(
       error: "Cliente no encontrado",
     };
   }
+  if (current.isDefault) {
+    return {
+      ...base,
+      entityIdRemoto: op.entityIdRemoto,
+      status: "failed",
+      error: "El cliente Público en general es de solo lectura",
+    };
+  }
 
   const decision = decideUpdate({
     base: op.baseSnapshot ?? null,
-    local: op.payload,
+    local: payload,
     remote: current as unknown as Record<string, unknown>,
     fields: [...CLIENTE_SYNC_FIELDS],
     baseUpdatedAt: op.baseUpdatedAt ?? null,
@@ -145,7 +247,7 @@ async function aplicarCliente(
   }
   const updated = await prisma.cliente.update({
     where: { id: op.entityIdRemoto },
-    data: pick(op.payload, CLIENTE_SYNC_FIELDS) as object,
+    data: pick(payload, CLIENTE_SYNC_FIELDS) as object,
   });
   return {
     ...base,
@@ -157,6 +259,7 @@ async function aplicarCliente(
 
 export async function procesarPush(
   prisma: TenantPrismaClient,
+  principal: PermissionPrincipal,
   userId: string,
   ops: SyncOperation[],
   deviceId?: string,
@@ -182,9 +285,9 @@ export async function procesarPush(
 
     let result: SyncOpResult;
     if (op.entityType === "venta") {
-      result = await aplicarVenta(prisma, userId, op);
+      result = await aplicarVenta(prisma, principal, userId, op);
     } else if (op.entityType === "cliente") {
-      result = await aplicarCliente(prisma, op);
+      result = await aplicarCliente(prisma, principal, op);
     } else {
       result = {
         idempotencyKey: op.idempotencyKey,

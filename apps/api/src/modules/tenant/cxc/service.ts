@@ -7,6 +7,24 @@ type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 
 const ZERO = new Decimal(0);
 
+// Namespace seed for pg_advisory_xact_lock keyed por cliente B2B: serializa
+// ventas a crédito concurrentes del mismo cliente y cierra el TOCTOU de la
+// línea de crédito (chequeo de disponible + alta de CxC en la misma tx).
+const CREDITO_B2B_LOCK_NAMESPACE = 9274183n;
+
+async function lockCreditoB2b(tx: Tx, clienteB2bId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clienteB2bId}, ${CREDITO_B2B_LOCK_NAMESPACE}))`;
+}
+
+// Namespace seed para pg_advisory_xact_lock keyed por CxC: serializa los pagos
+// concurrentes sobre la misma cuenta y cierra el lost-update/TOCTOU (lee saldo +
+// escribe montoPagado absoluto en la misma tx bajo READ COMMITTED).
+const CXC_PAGO_LOCK_NAMESPACE = 5518427n;
+
+async function lockCxc(tx: Tx, cuentaCobrarId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${cuentaCobrarId}, ${CXC_PAGO_LOCK_NAMESPACE}))`;
+}
+
 export class CxcError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -64,7 +82,7 @@ function validateClienteRefs(input: { clienteId?: string; clienteB2bId?: string 
 }
 
 export async function lineaCreditoDisponible(
-  client: TenantClient,
+  client: TenantClient | Tx,
   clienteB2bId: string,
 ): Promise<{
   lineaAutorizada: string;
@@ -108,12 +126,20 @@ export async function lineaCreditoDisponible(
   };
 }
 
+/**
+ * Valida de forma autoritativa que la línea de crédito B2B alcanza. DEBE
+ * ejecutarse dentro de un `$transaction`: toma un advisory lock por cliente para
+ * serializar las ventas a crédito concurrentes y evaluar la disponibilidad
+ * contra el estado ya comprometido por la transacción que entra primero,
+ * cerrando el TOCTOU de sobregiro de la línea.
+ */
 export async function validarCreditoB2bSuficiente(
-  client: TenantClient,
+  tx: Tx,
   clienteB2bId: string,
   montoSolicitado: string,
 ): Promise<{ diasCredito: number; tasaInteresMoraPct: string | null }> {
-  const info = await lineaCreditoDisponible(client, clienteB2bId);
+  await lockCreditoB2b(tx, clienteB2bId);
+  const info = await lineaCreditoDisponible(tx, clienteB2bId);
   const monto = new Decimal(montoSolicitado);
   if (monto.gt(new Decimal(info.disponible))) {
     throw new CxcError(409, "Excede la línea de crédito disponible del cliente B2B", {
@@ -218,66 +244,99 @@ export interface RegistrarPagoResult {
   estado: "activa" | "vencida" | "liquidada" | "incobrable" | "condonada";
 }
 
+export async function registrarPagoTx(
+  tx: Tx,
+  input: RegistrarPagoInput,
+): Promise<RegistrarPagoResult> {
+  await lockCxc(tx, input.cuentaCobrarId);
+  const cxc = await tx.cuentaCobrar.findUnique({ where: { id: input.cuentaCobrarId } });
+  if (!cxc) throw new CxcError(404, "CxC no encontrada");
+  if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
+    throw new CxcError(409, `CxC en estado "${cxc.estado}" no acepta pagos`);
+  }
+
+  const monto = new Decimal(input.monto);
+  const pagadoActual = new Decimal(cxc.montoPagado.toString());
+  const total = new Decimal(cxc.montoOriginal.toString()).plus(
+    new Decimal(cxc.interesAcumulado.toString()),
+  );
+  const saldoActual = total.minus(pagadoActual);
+  if (monto.gt(saldoActual)) {
+    throw new CxcError(409, "El pago excede el saldo de la CxC", {
+      saldoActual: saldoActual.toString(),
+      intentado: monto.toString(),
+    });
+  }
+
+  const nuevoPagado = pagadoActual.plus(monto);
+  const saldoNuevo = total.minus(nuevoPagado);
+  const estado = saldoNuevo.eq(ZERO) ? "liquidada" : cxc.estado;
+
+  await tx.cuentaCobrar.update({
+    where: { id: cxc.id },
+    data: {
+      montoPagado: nuevoPagado.toString(),
+      estado,
+      ...(estado === "liquidada" ? { liquidadaAt: new Date() } : {}),
+    },
+  });
+  const pago = await tx.cxcPago.create({
+    data: {
+      cuentaCobrarId: cxc.id,
+      metodo: input.metodo,
+      monto: monto.toString(),
+      ...(input.referencia ? { referencia: input.referencia } : {}),
+      ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
+      usuarioId: input.usuarioId,
+    },
+  });
+  if (cxc.vendedorId) {
+    await devengarComisionCobro(tx, {
+      vendedorId: cxc.vendedorId,
+      cxcPagoId: pago.id,
+      monto: monto.toString(),
+    });
+  }
+
+  return {
+    saldoRestante: saldoNuevo.toString(),
+    montoPagado: nuevoPagado.toString(),
+    estado,
+  };
+}
+
 export async function registrarPago(
   client: TenantClient,
   input: RegistrarPagoInput,
 ): Promise<RegistrarPagoResult> {
-  return client.$transaction(async (tx) => {
-    const cxc = await tx.cuentaCobrar.findUnique({ where: { id: input.cuentaCobrarId } });
-    if (!cxc) throw new CxcError(404, "CxC no encontrada");
-    if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
-      throw new CxcError(409, `CxC en estado "${cxc.estado}" no acepta pagos`);
-    }
+  return client.$transaction((tx) => registrarPagoTx(tx, input));
+}
 
-    const monto = new Decimal(input.monto);
-    const pagadoActual = new Decimal(cxc.montoPagado.toString());
-    const total = new Decimal(cxc.montoOriginal.toString()).plus(
-      new Decimal(cxc.interesAcumulado.toString()),
-    );
-    const saldoActual = total.minus(pagadoActual);
-    if (monto.gt(saldoActual)) {
-      throw new CxcError(409, "El pago excede el saldo de la CxC", {
-        saldoActual: saldoActual.toString(),
-        intentado: monto.toString(),
-      });
-    }
-
-    const nuevoPagado = pagadoActual.plus(monto);
-    const saldoNuevo = total.minus(nuevoPagado);
-    const estado = saldoNuevo.eq(ZERO) ? "liquidada" : cxc.estado;
-
-    await tx.cuentaCobrar.update({
-      where: { id: cxc.id },
-      data: {
-        montoPagado: nuevoPagado.toString(),
-        estado,
-        ...(estado === "liquidada" ? { liquidadaAt: new Date() } : {}),
-      },
-    });
-    const pago = await tx.cxcPago.create({
-      data: {
-        cuentaCobrarId: cxc.id,
-        metodo: input.metodo,
-        monto: monto.toString(),
-        ...(input.referencia ? { referencia: input.referencia } : {}),
-        ...(input.comprobanteUrl ? { comprobanteUrl: input.comprobanteUrl } : {}),
-        usuarioId: input.usuarioId,
-      },
-    });
-    if (cxc.vendedorId) {
-      await devengarComisionCobro(tx, {
-        vendedorId: cxc.vendedorId,
-        cxcPagoId: pago.id,
-        monto: monto.toString(),
-      });
-    }
-
-    return {
-      saldoRestante: saldoNuevo.toString(),
-      montoPagado: nuevoPagado.toString(),
-      estado,
-    };
+export async function condonarCxcTx(
+  tx: Tx,
+  cuentaCobrarId: string,
+  motivo: string,
+): Promise<{ pendienteCondonado: string }> {
+  await lockCxc(tx, cuentaCobrarId);
+  const cxc = await tx.cuentaCobrar.findUnique({ where: { id: cuentaCobrarId } });
+  if (!cxc) throw new CxcError(404, "CxC no encontrada");
+  if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
+    throw new CxcError(409, `CxC ya está "${cxc.estado}"`);
+  }
+  const total = new Decimal(cxc.montoOriginal.toString()).plus(
+    new Decimal(cxc.interesAcumulado.toString()),
+  );
+  const pagado = new Decimal(cxc.montoPagado.toString());
+  const pendiente = total.minus(pagado);
+  await tx.cuentaCobrar.update({
+    where: { id: cxc.id },
+    data: {
+      estado: "condonada",
+      condonadaAt: new Date(),
+      notas: cxc.notas ? `${cxc.notas}\n[CONDONADA] ${motivo}` : `[CONDONADA] ${motivo}`,
+    },
   });
+  return { pendienteCondonado: pendiente.toString() };
 }
 
 export async function condonarCxc(
@@ -285,27 +344,7 @@ export async function condonarCxc(
   cuentaCobrarId: string,
   motivo: string,
 ): Promise<{ pendienteCondonado: string }> {
-  return client.$transaction(async (tx) => {
-    const cxc = await tx.cuentaCobrar.findUnique({ where: { id: cuentaCobrarId } });
-    if (!cxc) throw new CxcError(404, "CxC no encontrada");
-    if (cxc.estado === "liquidada" || cxc.estado === "condonada") {
-      throw new CxcError(409, `CxC ya está "${cxc.estado}"`);
-    }
-    const total = new Decimal(cxc.montoOriginal.toString()).plus(
-      new Decimal(cxc.interesAcumulado.toString()),
-    );
-    const pagado = new Decimal(cxc.montoPagado.toString());
-    const pendiente = total.minus(pagado);
-    await tx.cuentaCobrar.update({
-      where: { id: cxc.id },
-      data: {
-        estado: "condonada",
-        condonadaAt: new Date(),
-        notas: cxc.notas ? `${cxc.notas}\n[CONDONADA] ${motivo}` : `[CONDONADA] ${motivo}`,
-      },
-    });
-    return { pendienteCondonado: pendiente.toString() };
-  });
+  return client.$transaction((tx) => condonarCxcTx(tx, cuentaCobrarId, motivo));
 }
 
 export async function marcarIncobrable(

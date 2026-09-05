@@ -1,6 +1,7 @@
 import {
   ConektaClient,
   MockPaymentProvider,
+  PagoError,
   type PaymentProvider,
   StripeClient,
 } from "@gaespos/pagos";
@@ -15,6 +16,12 @@ declare module "fastify" {
   }
 }
 
+// El proveedor mock confirma pagos sin cobro real (firma trivialmente falsificable),
+// por lo que jamás debe estar disponible en producción: sería un bypass de pago.
+// Solo se habilita fuera de producción y con opt-in explícito PAGOS_ALLOW_MOCK=true.
+const mockAllowed = (): boolean =>
+  process.env.NODE_ENV !== "production" && process.env.PAGOS_ALLOW_MOCK === "true";
+
 const defaultFactory: PagoProviderFactory = (proveedor) => {
   if (proveedor === "stripe") {
     return new StripeClient({
@@ -28,10 +35,22 @@ const defaultFactory: PagoProviderFactory = (proveedor) => {
       webhookSecret: process.env.CONEKTA_WEBHOOK_SECRET ?? "",
     });
   }
+  if (!mockAllowed()) {
+    throw new PagoError(
+      "Proveedor de pago mock no disponible en este entorno",
+      "PROVIDER_UNAVAILABLE",
+    );
+  }
   return new MockPaymentProvider();
 };
 
 const pagosPlugin: FastifyPluginAsync<{ factory?: PagoProviderFactory }> = async (app, opts) => {
+  // Fail-fast: una mala config operativa (mock habilitado en prod) reabriría el
+  // bypass de pago. Preferimos romper el arranque de forma ruidosa antes que
+  // aceptar cobros-cero silenciosos en producción.
+  if (process.env.NODE_ENV === "production" && process.env.PAGOS_ALLOW_MOCK === "true") {
+    throw new Error("PAGOS_ALLOW_MOCK=true no permitido en producción: sería bypass de pago");
+  }
   app.decorate("pagoProviderFactory", opts.factory ?? defaultFactory);
 };
 

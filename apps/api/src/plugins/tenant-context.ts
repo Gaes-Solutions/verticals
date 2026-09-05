@@ -8,6 +8,7 @@ import {
 } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
+import { buildTenantPrincipal, loadTenantUserById } from "../modules/auth-tenant/service.js";
 
 export interface TenantPrincipal extends PermissionPrincipal {
   userId: string;
@@ -55,17 +56,25 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const permissions = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-    const isOwner = permissions.length === 1 && permissions[0] === "*";
+    const tenantPrisma = getTenantClient(req.user.tenantSlug);
+    const user = await loadTenantUserById(req.user.sub, tenantPrisma);
+    if (!user || !user.isActive) {
+      return reply.code(401).send({
+        statusCode: 401,
+        error: "Unauthorized",
+        message: "Usuario inactivo o no encontrado",
+      });
+    }
+    const fresh = buildTenantPrincipal(user, req.user.tenantSlug);
 
     req.tenantSlug = req.user.tenantSlug;
-    req.tenantPrisma = getTenantClient(req.user.tenantSlug);
+    req.tenantPrisma = tenantPrisma;
     req.principal = {
-      userId: req.user.sub,
-      email: req.user.email,
+      userId: fresh.id,
+      email: fresh.email,
       tenantSlug: req.user.tenantSlug,
-      permissions,
-      isOwner,
+      permissions: fresh.permissions,
+      isOwner: fresh.isOwner,
     };
     req.requirePerm = (perm) => {
       if (!hasPermission(req.principal, perm)) {

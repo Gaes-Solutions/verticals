@@ -1,6 +1,6 @@
 import {
   EnviaClient,
-  MockShippingProvider,
+  PaqueteriaError,
   type ShippingProvider,
   SkydropxClient,
 } from "@gaespos/paqueterias";
@@ -30,7 +30,10 @@ const defaultFactory: ShippingProviderFactory = (proveedor) => {
       webhookSecret: process.env.ENVIA_WEBHOOK_SECRET ?? "",
     });
   }
-  return new MockShippingProvider();
+  // El mock solo se inyecta explícitamente (SHIPPING_PROVIDER=mock) desde server.ts.
+  // En producción NO debe ser alcanzable: su firma de webhook es forjable, así que
+  // aceptarlo desde el body permitiría falsificar eventos de tracking.
+  throw new PaqueteriaError("proveedor de paquetería mock no disponible", "PROVIDER_UNAVAILABLE");
 };
 
 const paqueteriasPlugin: FastifyPluginAsync<{ factory?: ShippingProviderFactory }> = async (

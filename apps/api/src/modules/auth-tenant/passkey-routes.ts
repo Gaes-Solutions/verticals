@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { getTenantClient } from "@gaespos/db";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { type MasterPrismaClient, type TenantPrismaClient, getTenantClient } from "@gaespos/db";
 import {
   type AuthenticationResponseJSON,
   type AuthenticatorTransportFuture,
@@ -15,10 +15,16 @@ import {
   buildTenantPrincipal,
   findTenantBySlug,
   loadTenantUserById,
+  loadTenantUserMfa,
+  recordTenantMfaStep,
+  require2faParaUsuario,
   updateLastLogin,
+  verifyPassword,
+  verifyTenantTotpStep,
 } from "./service.js";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const MFA_TOKEN_TTL = "10m";
 
 function rp() {
   return {
@@ -29,6 +35,7 @@ function rp() {
 }
 
 interface ChallengePayload {
+  jti: string;
   challenge: string;
   purpose: "reg" | "login";
   tenantSlug: string;
@@ -61,6 +68,32 @@ function verificarChallenge(token: string): ChallengePayload | null {
   }
 }
 
+// Marca el challenge como consumido de forma atómica: la inserción del jti
+// (PK único) falla con P2002 si ya se usó → replay rechazado. Cumple el
+// requisito WebAuthn de challenge de un solo uso.
+async function consumirChallenge(
+  masterPrisma: MasterPrismaClient,
+  jti: string,
+  exp: number,
+): Promise<boolean> {
+  try {
+    await masterPrisma.webauthnUsedChallenge.create({
+      data: { id: jti, expiresAt: new Date(exp) },
+    });
+    return true;
+  } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code: unknown }).code === "P2002"
+    ) {
+      return false;
+    }
+    throw err;
+  }
+}
+
 function transportsToArray(csv: string | null): AuthenticatorTransportFuture[] | undefined {
   return csv ? (csv.split(",") as AuthenticatorTransportFuture[]) : undefined;
 }
@@ -69,6 +102,88 @@ function unauthorized(reply: FastifyReply, message = "No se pudo verificar la hu
   return reply.code(401).send({ statusCode: 401, error: "Unauthorized", message });
 }
 
+// El passkey solo cuenta como segundo factor si el autenticador verificó al
+// usuario (biometría/PIN). Cuando la política del tenant exige 2FA y la aserción
+// no fue verificada, se devuelve el token intermedio (kind tenant_mfa) para
+// completar TOTP, igual que el login por contraseña — nunca una sesión completa.
+async function retarSegundoFactor(
+  reply: FastifyReply,
+  tenantPrisma: TenantPrismaClient,
+  principal: { id: string; email: string },
+  tenantSlug: string,
+) {
+  const mfa = await loadTenantUserMfa(tenantPrisma, { id: principal.id });
+  const enrolado = Boolean(mfa?.mfaEnabled && mfa.mfaSecret && mfa.mfaVerifiedAt);
+  const mfaToken = await reply.jwtSign(
+    { sub: principal.id, email: principal.email, tenantSlug, kind: "tenant_mfa" },
+    { expiresIn: MFA_TOKEN_TTL },
+  );
+  return enrolado ? { mfaRequired: true, mfaToken } : { mfaSetupRequired: true, mfaToken };
+}
+
+async function verificarAsercionLogin(
+  response: AuthenticationResponseJSON,
+  cred: { credentialId: string; publicKey: string; counter: bigint; transports: string | null },
+  expectedChallenge: string,
+): Promise<{ newCounter: number; userVerified: boolean } | null> {
+  const { rpID, origin } = rp();
+  const trans = transportsToArray(cred.transports);
+  try {
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+      credential: {
+        id: cred.credentialId,
+        publicKey: new Uint8Array(Buffer.from(cred.publicKey, "base64url")),
+        counter: Number(cred.counter),
+        ...(trans ? { transports: trans } : {}),
+      },
+    });
+    if (!verification.verified) return null;
+    return {
+      newCounter: verification.authenticationInfo.newCounter,
+      userVerified: verification.authenticationInfo.userVerified,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function emitirSesionTenant(
+  reply: FastifyReply,
+  principal: ReturnType<typeof buildTenantPrincipal>,
+) {
+  await updateLastLogin(principal.tenantSlug, principal.id, undefined);
+  const permissions = principal.isOwner ? ["*"] : principal.permissions;
+  const accessToken = await reply.jwtSign({
+    sub: principal.id,
+    email: principal.email,
+    tenantSlug: principal.tenantSlug,
+    permissions,
+    kind: "tenant",
+  });
+  return {
+    accessToken,
+    user: {
+      id: principal.id,
+      email: principal.email,
+      nombre: principal.nombre,
+      apellidos: principal.apellidos,
+      tipoUsuario: principal.tipoUsuario,
+      isOwner: principal.isOwner,
+      roleCodes: principal.roleCodes,
+      permissions,
+    },
+    tenant: { slug: principal.tenantSlug },
+  };
+}
+
+const regOptionsSchema = z.object({
+  password: z.string().min(1),
+  totp: z.string().optional(),
+});
 const regVerifySchema = z.object({
   response: z.unknown(),
   challengeToken: z.string(),
@@ -89,6 +204,25 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       if (req.user.kind !== "tenant") return unauthorized(reply);
       const { sub: usuarioId, tenantSlug, email } = req.user;
+      const { password, totp } = regOptionsSchema.parse(req.body);
+      const tenantPrisma = getTenantClient(tenantSlug);
+      const u = await tenantPrisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { passwordHash: true },
+      });
+      if (!u || !(await verifyPassword(password, u.passwordHash))) {
+        return unauthorized(reply, "Contraseña incorrecta");
+      }
+      const mfa = await loadTenantUserMfa(tenantPrisma, { id: usuarioId });
+      if (mfa?.mfaEnabled && mfa.mfaSecret && mfa.mfaVerifiedAt) {
+        const totpStep = totp ? verifyTenantTotpStep(totp, mfa.mfaSecret) : null;
+        const totpOk =
+          totpStep !== null && (mfa.mfaLastStep === null || totpStep > mfa.mfaLastStep);
+        if (!totpOk || totpStep === null) {
+          return unauthorized(reply, "Código incorrecto");
+        }
+        await recordTenantMfaStep(tenantPrisma, usuarioId, totpStep);
+      }
       const existentes = await app.masterPrisma.webauthnCredential.findMany({
         where: { tenantSlug, usuarioId },
         select: { credentialId: true, transports: true },
@@ -104,9 +238,10 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
           const t = transportsToArray(c.transports);
           return { id: c.credentialId, ...(t ? { transports: t } : {}) };
         }),
-        authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+        authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
       });
       const challengeToken = firmarChallenge({
+        jti: randomUUID(),
         challenge: options.challenge,
         purpose: "reg",
         tenantSlug,
@@ -147,6 +282,11 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
             .code(400)
             .send({ statusCode: 400, error: "Bad Request", message: "Credencial no verificada" });
         }
+        if (!(await consumirChallenge(app.masterPrisma, ch.jti, ch.exp))) {
+          return reply
+            .code(400)
+            .send({ statusCode: 400, error: "Bad Request", message: "Challenge inválido" });
+        }
         const cred = verification.registrationInfo.credential;
         await app.masterPrisma.webauthnCredential.create({
           data: {
@@ -176,10 +316,11 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
     const { rpID } = rp();
     const options = await generateAuthenticationOptions({
       rpID,
-      userVerification: "preferred",
+      userVerification: "required",
       allowCredentials: [],
     });
     const challengeToken = firmarChallenge({
+      jti: randomUUID(),
       challenge: options.challenge,
       purpose: "login",
       tenantSlug,
@@ -203,33 +344,16 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
       });
       if (!cred || cred.tenantSlug !== body.tenantSlug) return unauthorized(reply);
 
-      const { rpID, origin } = rp();
-      const trans = transportsToArray(cred.transports);
-      let verified = false;
-      let newCounter = 0;
-      try {
-        const verification = await verifyAuthenticationResponse({
-          response,
-          expectedChallenge: ch.challenge,
-          expectedOrigin: origin,
-          expectedRPID: rpID,
-          credential: {
-            id: cred.credentialId,
-            publicKey: new Uint8Array(Buffer.from(cred.publicKey, "base64url")),
-            counter: Number(cred.counter),
-            ...(trans ? { transports: trans } : {}),
-          },
-        });
-        verified = verification.verified;
-        newCounter = verification.authenticationInfo.newCounter;
-      } catch {
+      const asercion = await verificarAsercionLogin(response, cred, ch.challenge);
+      if (!asercion) return unauthorized(reply);
+
+      if (!(await consumirChallenge(app.masterPrisma, ch.jti, ch.exp))) {
         return unauthorized(reply);
       }
-      if (!verified) return unauthorized(reply);
 
       await app.masterPrisma.webauthnCredential.update({
         where: { id: cred.id },
-        data: { counter: BigInt(newCounter), lastUsedAt: new Date() },
+        data: { counter: BigInt(asercion.newCounter), lastUsedAt: new Date() },
       });
 
       const tenant = await findTenantBySlug(body.tenantSlug, app.masterPrisma);
@@ -239,28 +363,16 @@ const passkeyRoutes: FastifyPluginAsync = async (app) => {
       if (!user || !user.isActive) return unauthorized(reply);
 
       const principal = buildTenantPrincipal(user, body.tenantSlug);
-      await updateLastLogin(body.tenantSlug, principal.id, undefined);
-      const accessToken = await reply.jwtSign({
-        sub: principal.id,
-        email: principal.email,
-        tenantSlug: principal.tenantSlug,
-        permissions: principal.isOwner ? ["*"] : principal.permissions,
-        kind: "tenant",
-      });
-      return {
-        accessToken,
-        user: {
-          id: principal.id,
-          email: principal.email,
-          nombre: principal.nombre,
-          apellidos: principal.apellidos,
-          tipoUsuario: principal.tipoUsuario,
-          isOwner: principal.isOwner,
-          roleCodes: principal.roleCodes,
-          permissions: principal.isOwner ? ["*"] : principal.permissions,
-        },
-        tenant: { slug: body.tenantSlug },
-      };
+      const requerido = await require2faParaUsuario(
+        tenantPrisma,
+        tenant.vertical,
+        principal.roleCodes,
+      );
+      if (requerido && !asercion.userVerified) {
+        return retarSegundoFactor(reply, tenantPrisma, principal, body.tenantSlug);
+      }
+
+      return emitirSesionTenant(reply, principal);
     },
   );
 

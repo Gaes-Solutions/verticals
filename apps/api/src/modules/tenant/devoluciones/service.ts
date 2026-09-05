@@ -8,15 +8,24 @@ import {
 } from "@gaespos/fiscal";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
-import { FiadoError, aplicarAbonoFiado } from "../clientes/fiado-service.js";
+import { FiadoError, aplicarAbonoFiadoTx, ensureFiado } from "../clientes/fiado-service.js";
 import { castigarComisionesDevolucion } from "../comisiones/service.js";
-import { CxcError, registrarPago as registrarPagoCxc } from "../cxc/service.js";
+import { CxcError, registrarPagoTx as registrarPagoCxcTx } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
+import { MonederoError, aplicarMovimientoTx } from "../monedero/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 
 const ZERO = new Decimal(0);
+
+// Namespace seed for pg_advisory_xact_lock keyed por venta: serializa
+// devoluciones concurrentes de la misma venta y cierra el TOCTOU de yaDevuelto.
+const DEVOLUCION_LOCK_NAMESPACE = 6841655n;
+
+async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${DEVOLUCION_LOCK_NAMESPACE}))`;
+}
 
 export class DevolucionError extends Error {
   constructor(
@@ -105,7 +114,7 @@ interface LineaCalc {
 }
 
 async function validateAndCalcLineas(
-  client: TenantClient,
+  client: Tx,
   ventaId: string,
   input: ProcesarDevolucionInput,
 ): Promise<LineaCalc[]> {
@@ -236,6 +245,11 @@ function validarMetodoReembolso(input: ProcesarDevolucionInput, venta: VentaCarg
       );
     }
   }
+  if (input.metodoReembolso === "saldo_a_favor" || input.metodoReembolso === "vale") {
+    if (!venta.clienteId) {
+      throw new DevolucionError(400, "Reembolso a saldo a favor requiere venta con cliente B2C");
+    }
+  }
 }
 
 interface PersistirDevolucionParams {
@@ -343,7 +357,7 @@ async function persistirDevolucion(
 }
 
 async function aplicarReembolso(
-  client: TenantClient,
+  tx: Tx,
   venta: VentaCargada,
   input: ProcesarDevolucionInput,
   totalDev: Decimal,
@@ -351,7 +365,7 @@ async function aplicarReembolso(
 ): Promise<void> {
   if (input.metodoReembolso === "nota_credito_fiado" && venta.clienteId) {
     try {
-      await aplicarAbonoFiado(client, {
+      await aplicarAbonoFiadoTx(tx, {
         clienteId: venta.clienteId,
         monto: totalDev.toString(),
         metodoPago: "otro",
@@ -368,7 +382,7 @@ async function aplicarReembolso(
   }
   if (input.metodoReembolso === "nota_credito_cxc" && venta.cuentaCobrar) {
     try {
-      await registrarPagoCxc(client, {
+      await registrarPagoCxcTx(tx, {
         cuentaCobrarId: venta.cuentaCobrar.id,
         monto: totalDev.toString(),
         metodo: "otro",
@@ -380,6 +394,65 @@ async function aplicarReembolso(
         throw new DevolucionError(err.statusCode, err.message, err.extra);
       }
       throw err;
+    }
+    return;
+  }
+  if (
+    (input.metodoReembolso === "saldo_a_favor" || input.metodoReembolso === "vale") &&
+    venta.clienteId
+  ) {
+    // La porción de la mercancía devuelta que se pagó a credito_fiado nunca entró a
+    // caja: acreditarla al monedero sobre-acredita al cliente mientras su deuda de
+    // fiado sobrevive. Reconciliar primero abonando esa porción (capada al saldo
+    // deudor real, como nota_credito_fiado) contra el fiado, y solo lo efectivamente
+    // pagado va al monedero.
+    const totalPagado = venta.pagos.reduce(
+      (acc, p) => acc.plus(new Decimal(p.monto.toString())),
+      ZERO,
+    );
+    const fiadoPagado = venta.pagos
+      .filter((p) => p.metodo === "credito_fiado")
+      .reduce((acc, p) => acc.plus(new Decimal(p.monto.toString())), ZERO);
+
+    let montoMonedero = totalDev;
+    if (fiadoPagado.gt(ZERO) && totalPagado.gt(ZERO)) {
+      const fiadoShare = totalDev.mul(fiadoPagado).div(totalPagado);
+      const fiado = await ensureFiado(tx, venta.clienteId);
+      const saldoFiado = new Decimal(fiado.montoTotal.toString());
+      const abonoFiado = Decimal.min(fiadoShare, saldoFiado).toDecimalPlaces(2);
+      if (abonoFiado.gt(ZERO)) {
+        try {
+          await aplicarAbonoFiadoTx(tx, {
+            clienteId: venta.clienteId,
+            monto: abonoFiado.toString(),
+            metodoPago: "otro",
+            referencia: `Devolución ${input.referenciaReembolso ?? ""}`.trim(),
+            usuarioId,
+          });
+        } catch (err) {
+          if (err instanceof FiadoError) {
+            throw new DevolucionError(err.statusCode, err.message, err.extra);
+          }
+          throw err;
+        }
+        montoMonedero = totalDev.minus(abonoFiado);
+      }
+    }
+
+    if (montoMonedero.gt(ZERO)) {
+      try {
+        await aplicarMovimientoTx(tx, usuarioId, venta.clienteId, {
+          tipo: "abono",
+          monto: montoMonedero.toNumber(),
+          motivo: `Reembolso devolución${input.referenciaReembolso ? ` ${input.referenciaReembolso}` : ""}`,
+          refTipo: "devolucion",
+        });
+      } catch (err) {
+        if (err instanceof MonederoError) {
+          throw new DevolucionError(err.statusCode, err.message);
+        }
+        throw err;
+      }
     }
   }
 }
@@ -541,30 +614,56 @@ export async function procesarDevolucion(
   const venta = await cargarVenta(client, ventaId);
   validarMetodoReembolso(input, venta);
 
-  const lineasCalc = await validateAndCalcLineas(client, ventaId, input);
-
-  const subtotalDev = lineasCalc.reduce((acc, l) => acc.plus(l.subtotal), ZERO);
-  const ivaDev = lineasCalc.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
-  const iepsDev = lineasCalc.reduce((acc, l) => acc.plus(l.iepsTotal), ZERO);
-  const totalDev = lineasCalc.reduce((acc, l) => acc.plus(l.totalLinea), ZERO);
-  const tipo = determinarTipo(lineasCalc);
-
-  let persisted: { devolucionId: string; folio: string };
+  let persisted: {
+    devolucionId: string;
+    folio: string;
+    tipo: "total" | "parcial";
+    lineasCalc: LineaCalc[];
+    totales: { subtotalDev: Decimal; ivaDev: Decimal; iepsDev: Decimal; totalDev: Decimal };
+  };
   try {
     persisted = await client.$transaction(async (tx) => {
+      // Serializa devoluciones concurrentes de la misma venta: sin el lock, dos
+      // requests leen yaDevuelto=0 (TOCTOU) y persisten dos devoluciones completas,
+      // provocando doble reembolso y doble reposición de stock. El advisory lock
+      // es transaccional (se libera al commit/rollback); el segundo request espera y
+      // re-valida yaDevuelto ya committeado dentro de esta misma transacción.
+      await lockVenta(tx, ventaId);
+
+      const estadoActual = await tx.venta.findUnique({
+        where: { id: ventaId },
+        select: { estado: true },
+      });
+      if (!estadoActual) throw new DevolucionError(404, "Venta no encontrada");
+      if (estadoActual.estado !== "cobrada") {
+        throw new DevolucionError(
+          409,
+          `Venta en estado "${estadoActual.estado}" no admite devolución`,
+        );
+      }
+
+      const lineasCalc = await validateAndCalcLineas(tx, ventaId, input);
+      const subtotalDev = lineasCalc.reduce((acc, l) => acc.plus(l.subtotal), ZERO);
+      const ivaDev = lineasCalc.reduce((acc, l) => acc.plus(l.ivaTotal), ZERO);
+      const iepsDev = lineasCalc.reduce((acc, l) => acc.plus(l.iepsTotal), ZERO);
+      const totalDev = lineasCalc.reduce((acc, l) => acc.plus(l.totalLinea), ZERO);
+      const tipo = determinarTipo(lineasCalc);
+      const totales = { subtotalDev, ivaDev, iepsDev, totalDev };
+
       const result = await persistirDevolucion(tx, {
         venta,
         input,
         lineasCalc,
         usuarioId,
         tipo,
-        totales: { subtotalDev, ivaDev, iepsDev, totalDev },
+        totales,
       });
       await castigarComisionesDevolucion(tx, {
         ventaId: venta.id,
         montoDevuelto: subtotalDev.toString(),
       });
-      return result;
+      await aplicarReembolso(tx, venta, input, totalDev, usuarioId);
+      return { ...result, tipo, lineasCalc, totales };
     });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
@@ -578,7 +677,8 @@ export async function procesarDevolucion(
     throw err;
   }
 
-  await aplicarReembolso(client, venta, input, totalDev, usuarioId);
+  const { tipo, lineasCalc, totales } = persisted;
+  const totalDev = totales.totalDev;
 
   let cfdiEgresoId: string | null = null;
   const ingresoVigente = findIngresoVigente(venta);
@@ -586,7 +686,7 @@ export async function procesarDevolucion(
     cfdiEgresoId = await emitirCfdiEgreso(client, provider, {
       devolucionId: persisted.devolucionId,
       ventaId: venta.id,
-      totales: { subtotalDev, ivaDev, iepsDev, totalDev },
+      totales,
       lineasCalc,
       cfdiInput: input.cfdiEgreso,
       ingresoVigente,

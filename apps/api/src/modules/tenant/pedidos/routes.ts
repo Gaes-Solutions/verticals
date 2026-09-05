@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
   type PedidoListQuery,
@@ -107,11 +107,16 @@ const pedidosRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.PEDIDOS_CREAR);
     const body = pedidoCreateSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
       const result = await crearPedido(req.tenantPrisma, req.principal.userId, {
         sucursalId: body.sucursalId,
         clienteB2bId: body.clienteB2bId,
         lineas: body.lineas,
+        permiteDescuentoAlto,
         ...(body.listaPrecioCodigo ? { listaPrecioCodigo: body.listaPrecioCodigo } : {}),
         ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
         ...(body.descuentoGlobalPct !== undefined && body.descuentoGlobalPct !== null

@@ -196,7 +196,8 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
   // En producción la confirmación llega por webhook del proveedor real.
   app.post("/confirmar-mock", async (req, reply) => {
     const { intentId } = z.object({ intentId: z.string().min(1) }).parse(req.body);
-    const provider = app.pagoProviderFactory("mock");
+    const provider = resolverProvider(app, "mock", reply);
+    if (!provider) return;
     const mock = provider as unknown as {
       simularWebhook?: (id: string) => { payload: string; signature: string };
     };

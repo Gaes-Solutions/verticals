@@ -31,6 +31,15 @@ function actorDe(req: FastifyRequest): string {
 
 const tenantRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
+  app.addHook("preHandler", async (req, reply) => {
+    if (req.method === "GET") return;
+    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    return reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo un superadmin puede administrar clientes",
+    });
+  });
 
   app.get("/", async (req) => {
     const q = listQuery.parse(req.query);

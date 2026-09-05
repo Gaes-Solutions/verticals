@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const positiveDecimalString = z
-  .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 const nonNegDecimalString = z
@@ -53,8 +53,6 @@ export const pedidoConvertirVentaSchema = z.object({
           "tarjeta_debito",
           "tarjeta_credito",
           "transferencia",
-          "vale",
-          "monedero",
           "credito_b2b",
           "otro",
         ]),

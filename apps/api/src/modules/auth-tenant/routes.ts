@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import { tenantLoginBodySchema, tenantMfaCodeSchema, tenantMfaDisableSchema } from "./schemas.js";
 import {
   type TenantPrincipal,
@@ -11,13 +12,14 @@ import {
   generateTenantTotpSecret,
   loadTenantUserForLogin,
   loadTenantUserMfa,
+  recordTenantMfaStep,
   require2faParaUsuario,
   resetTenantBackupCodes,
   setTenantPendingSecret,
   tenantTotpKeyUri,
   updateLastLogin,
   verifyPassword,
-  verifyTenantTotp,
+  verifyTenantTotpStep,
 } from "./service.js";
 
 const MFA_TOKEN_TTL = "10m";
@@ -110,7 +112,10 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
 
       const tenantPrisma = getTenantClient(body.tenantSlug);
       const user = await loadTenantUserForLogin(body.email, tenantPrisma);
-      if (!user || !user.isActive) return unauthorized(reply);
+      if (!user || !user.isActive) {
+        await burnPasswordTiming(body.password);
+        return unauthorized(reply);
+      }
       if (!(await verifyPassword(body.password, user.passwordHash))) return unauthorized(reply);
 
       const principal = buildTenantPrincipal(user, body.tenantSlug);
@@ -160,10 +165,13 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
       const ctx = await ctxFromMfaToken(req);
       if (!ctx) return unauthorized(reply, "Token MFA inválido");
       const { code } = tenantMfaCodeSchema.parse(req.body);
-      if (!ctx.user.mfaSecret || !verifyTenantTotp(code, ctx.user.mfaSecret)) {
+      const activateStep = ctx.user.mfaSecret
+        ? verifyTenantTotpStep(code, ctx.user.mfaSecret)
+        : null;
+      if (activateStep === null) {
         return unauthorized(reply, "Código incorrecto");
       }
-      const backupCodes = await enableTenantMfa(ctx.tenantPrisma, ctx.user.id);
+      const backupCodes = await enableTenantMfa(ctx.tenantPrisma, ctx.user.id, activateStep);
       const principal = await loadPrincipalById(ctx.tenantPrisma, ctx.tenantSlug, ctx.user.id);
       if (!principal) return unauthorized(reply);
       const session = await issueSession(reply, principal, ctx.tenantSlug);
@@ -181,9 +189,14 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
       const { code } = tenantMfaCodeSchema.parse(req.body);
       const enrolado = Boolean(ctx.user.mfaEnabled && ctx.user.mfaSecret && ctx.user.mfaVerifiedAt);
       if (!enrolado) return unauthorized(reply, "MFA no configurado");
-      const totpOk = ctx.user.mfaSecret ? verifyTenantTotp(code, ctx.user.mfaSecret) : false;
+      const totpStep = ctx.user.mfaSecret ? verifyTenantTotpStep(code, ctx.user.mfaSecret) : null;
+      const totpOk =
+        totpStep !== null && (ctx.user.mfaLastStep === null || totpStep > ctx.user.mfaLastStep);
       const backupOk = !totpOk && (await consumeTenantBackupCode(ctx.tenantPrisma, ctx.user, code));
       if (!totpOk && !backupOk) return unauthorized(reply, "Código incorrecto");
+      if (totpOk && totpStep !== null) {
+        await recordTenantMfaStep(ctx.tenantPrisma, ctx.user.id, totpStep);
+      }
       const principal = await loadPrincipalById(ctx.tenantPrisma, ctx.tenantSlug, ctx.user.id);
       if (!principal) return unauthorized(reply);
       return issueSession(reply, principal, ctx.tenantSlug);
@@ -232,10 +245,11 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
     const tenantPrisma = getTenantClient(req.user.tenantSlug);
     const { code } = tenantMfaCodeSchema.parse(req.body);
     const mfa = await loadTenantUserMfa(tenantPrisma, { id: req.user.sub });
-    if (!mfa?.mfaSecret || !verifyTenantTotp(code, mfa.mfaSecret)) {
+    const confirmStep = mfa?.mfaSecret ? verifyTenantTotpStep(code, mfa.mfaSecret) : null;
+    if (confirmStep === null) {
       return unauthorized(reply, "Código incorrecto");
     }
-    const backupCodes = await enableTenantMfa(tenantPrisma, req.user.sub);
+    const backupCodes = await enableTenantMfa(tenantPrisma, req.user.sub, confirmStep);
     return { backupCodes };
   });
 
@@ -277,9 +291,14 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
       const tenantPrisma = getTenantClient(req.user.tenantSlug);
       const { code } = tenantMfaCodeSchema.parse(req.body);
       const mfa = await loadTenantUserMfa(tenantPrisma, { id: req.user.sub });
-      if (!mfa?.mfaEnabled || !mfa.mfaSecret || !verifyTenantTotp(code, mfa.mfaSecret)) {
+      const regenStep =
+        mfa?.mfaEnabled && mfa.mfaSecret ? verifyTenantTotpStep(code, mfa.mfaSecret) : null;
+      const regenOk =
+        regenStep !== null && (mfa?.mfaLastStep == null || regenStep > mfa.mfaLastStep);
+      if (!mfa || !regenOk || regenStep === null) {
         return unauthorized(reply, "Código incorrecto");
       }
+      await recordTenantMfaStep(tenantPrisma, req.user.sub, regenStep);
       const backupCodes = await resetTenantBackupCodes(tenantPrisma, req.user.sub);
       return { backupCodes };
     },

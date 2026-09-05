@@ -24,7 +24,7 @@ function authOwner() {
   return { authorization: `Bearer ${ownerToken}` };
 }
 
-async function cobrarVenta(): Promise<string> {
+async function cobrarVenta(): Promise<{ ventaId: string; folio: string }> {
   const res = await app.inject({
     method: "POST",
     url: "/t/ventas",
@@ -37,7 +37,8 @@ async function cobrarVenta(): Promise<string> {
     },
   });
   if (res.statusCode !== 201) throw new Error(`venta failed: ${res.body}`);
-  return res.json().ventaId as string;
+  const j = res.json() as { ventaId: string; folio: string };
+  return { ventaId: j.ventaId, folio: j.folio };
 }
 
 const DATOS_FISCALES = {
@@ -108,17 +109,38 @@ afterAll(async () => {
 });
 
 describe("autofactura pública (QR del ticket)", () => {
-  it("resumen público de una venta cobrada → facturable", async () => {
-    const ventaId = await cobrarVenta();
+  it("resumen público con folio + total correctos → facturable", async () => {
+    const { ventaId, folio } = await cobrarVenta();
     const res = await app.inject({
       method: "GET",
-      url: `/autofactura/${SLUG}/venta/${ventaId}`,
+      url: `/autofactura/${SLUG}/venta/${ventaId}?folio=${encodeURIComponent(folio)}&total=116`,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.facturable).toBe(true);
     expect(body.total).toBe(116);
     expect(body.negocio).toBe("Autofactura Demo SA");
+  });
+
+  it("resumen público sin segundo factor → no revela total (oráculo cerrado)", async () => {
+    const { ventaId } = await cobrarVenta();
+    const res = await app.inject({
+      method: "GET",
+      url: `/autofactura/${SLUG}/venta/${ventaId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.total).toBeNull();
+    expect(body.facturable).toBe(false);
+  });
+
+  it("resumen público con total incorrecto → no revela total", async () => {
+    const { ventaId, folio } = await cobrarVenta();
+    const res = await app.inject({
+      method: "GET",
+      url: `/autofactura/${SLUG}/venta/${ventaId}?folio=${encodeURIComponent(folio)}&total=1`,
+    });
+    expect(res.json().total).toBeNull();
   });
 
   it("negocio inexistente → 404", async () => {
@@ -129,12 +151,12 @@ describe("autofactura pública (QR del ticket)", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("emite CFDI por autofactura (201) y no se puede facturar dos veces (409)", async () => {
-    const ventaId = await cobrarVenta();
+  it("emite CFDI con folio + total correctos (201) y no se factura dos veces (409)", async () => {
+    const { ventaId, folio } = await cobrarVenta();
     const res = await app.inject({
       method: "POST",
       url: `/autofactura/${SLUG}/venta/${ventaId}`,
-      payload: DATOS_FISCALES,
+      payload: { ...DATOS_FISCALES, folio, total: 116 },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().folioFiscal).toBeTruthy();
@@ -142,17 +164,27 @@ describe("autofactura pública (QR del ticket)", () => {
     const dup = await app.inject({
       method: "POST",
       url: `/autofactura/${SLUG}/venta/${ventaId}`,
-      payload: DATOS_FISCALES,
+      payload: { ...DATOS_FISCALES, folio, total: 116 },
     });
     expect(dup.statusCode).toBe(409);
   });
 
-  it("venta inexistente → POST 409 (no facturable)", async () => {
+  it("POST sin segundo factor válido → 404 (IDOR cerrado)", async () => {
+    const { ventaId, folio } = await cobrarVenta();
+    const sinFactor = await app.inject({
+      method: "POST",
+      url: `/autofactura/${SLUG}/venta/${ventaId}`,
+      payload: { ...DATOS_FISCALES, folio, total: 1 },
+    });
+    expect(sinFactor.statusCode).toBe(404);
+  });
+
+  it("venta inexistente → POST 404", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/autofactura/${SLUG}/venta/venta-fantasma`,
-      payload: DATOS_FISCALES,
+      payload: { ...DATOS_FISCALES, folio: "X-1", total: 116 },
     });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(404);
   });
 });

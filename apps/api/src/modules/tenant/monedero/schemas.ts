@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const montoPositivo = z
-  .union([z.number().positive(), z.string().regex(/^\d+(\.\d{1,2})?$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d{1,2})?$/)])
   .transform((v) => Number(v))
   .refine((n) => n > 0 && n <= 1_000_000, "Monto fuera de rango");
 

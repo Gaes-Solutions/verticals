@@ -222,11 +222,14 @@ async function persistirYProcesar(
   provider: RechargeProvider,
   p: PersistirYProcesarInput,
 ): Promise<ProcesarRecargaResult> {
-  const saldoActual = new Decimal(p.proveedor.saldoPrefondeado.toString());
-  if (saldoActual.lt(p.monto)) {
+  const montoStr = p.monto.toString();
+  const { count: reservado } = await client.recargaProveedorConfig.updateMany({
+    where: { id: p.proveedor.id, saldoPrefondeado: { gte: montoStr } },
+    data: { saldoPrefondeado: { decrement: montoStr } },
+  });
+  if (reservado === 0) {
     throw new RecargaError(409, "Saldo prefondeado insuficiente con el proveedor", {
-      saldoActual: saldoActual.toString(),
-      requerido: p.monto.toString(),
+      requerido: montoStr,
     });
   }
 
@@ -290,6 +293,12 @@ async function persistirYProcesar(
   });
 
   const finalEstado: "exitosa" | "fallida" = proveedorResult.estado;
+  const costoFinal =
+    finalEstado === "exitosa"
+      ? proveedorResult.costoRealTenant.gt(0)
+        ? proveedorResult.costoRealTenant
+        : p.monto
+      : ZERO;
   await client.recarga.update({
     where: { id: recarga.id },
     data: {
@@ -301,26 +310,27 @@ async function persistirYProcesar(
       ...(proveedorResult.comisionProveedor.gt(0)
         ? { comisionProveedor: proveedorResult.comisionProveedor.toString() }
         : {}),
-      ...(proveedorResult.costoRealTenant.gt(0)
-        ? { costoRealTenant: proveedorResult.costoRealTenant.toString() }
-        : {}),
+      costoRealTenant: costoFinal.toString(),
       procesadoAt: new Date(),
     },
   });
 
   if (finalEstado === "exitosa") {
-    const costoFinal = proveedorResult.costoRealTenant.gt(0)
-      ? proveedorResult.costoRealTenant
-      : p.monto;
+    const ajuste = p.monto.minus(costoFinal);
     await client.recargaProveedorConfig.update({
       where: { id: p.proveedor.id },
       data: {
-        saldoPrefondeado: saldoActual.minus(costoFinal).toString(),
+        ...(ajuste.isZero() ? {} : { saldoPrefondeado: { increment: ajuste.toString() } }),
         lastRechargeAt: new Date(),
         totalConsumidoLifetime: {
           increment: Number(costoFinal.toFixed(4)),
         },
       },
+    });
+  } else {
+    await client.recargaProveedorConfig.update({
+      where: { id: p.proveedor.id },
+      data: { saldoPrefondeado: { increment: montoStr } },
     });
   }
 
@@ -379,29 +389,8 @@ export async function reembolsarRecarga(
       );
     }
     const costo = new Decimal(r.costoRealTenant.toString());
-    if (costo.lte(ZERO)) {
-      await tx.recarga.update({
-        where: { id: recargaId },
-        data: {
-          estado: "reembolsada",
-          reembolsadaAt: new Date(),
-          reembolsadaPorId: usuarioId,
-          reembolsoMotivo: motivo,
-        },
-      });
-      return {
-        saldoDevuelto: "0",
-        nuevoSaldoPrefondeado: r.proveedorConfig.saldoPrefondeado.toString(),
-      };
-    }
-    const saldoActual = new Decimal(r.proveedorConfig.saldoPrefondeado.toString());
-    const nuevoSaldo = saldoActual.plus(costo);
-    await tx.recargaProveedorConfig.update({
-      where: { id: r.proveedorConfigId },
-      data: { saldoPrefondeado: nuevoSaldo.toString() },
-    });
-    await tx.recarga.update({
-      where: { id: recargaId },
+    const claimed = await tx.recarga.updateMany({
+      where: { id: recargaId, estado: { in: ["fallida", "disputada"] } },
       data: {
         estado: "reembolsada",
         reembolsadaAt: new Date(),
@@ -409,7 +398,26 @@ export async function reembolsarRecarga(
         reembolsoMotivo: motivo,
       },
     });
-    return { saldoDevuelto: costo.toString(), nuevoSaldoPrefondeado: nuevoSaldo.toString() };
+    if (claimed.count === 0) {
+      throw new RecargaError(
+        409,
+        `Solo se reembolsan recargas fallidas o disputadas (actual: ${r.estado})`,
+      );
+    }
+    if (costo.lte(ZERO)) {
+      return {
+        saldoDevuelto: "0",
+        nuevoSaldoPrefondeado: r.proveedorConfig.saldoPrefondeado.toString(),
+      };
+    }
+    const updated = await tx.recargaProveedorConfig.update({
+      where: { id: r.proveedorConfigId },
+      data: { saldoPrefondeado: { increment: costo.toString() } },
+    });
+    return {
+      saldoDevuelto: costo.toString(),
+      nuevoSaldoPrefondeado: updated.saldoPrefondeado.toString(),
+    };
   });
 }
 

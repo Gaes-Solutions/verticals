@@ -316,6 +316,7 @@ export async function otorgarConsent(
       subjectId,
       tenantId: input.tenantId,
       scope: input.scope,
+      grantedVia: "patient_portal",
       ...(input.ip !== undefined ? { ipAtGrant: input.ip } : {}),
     },
   });
@@ -612,12 +613,39 @@ export interface PublicarRegistroInput {
   isVisibleToPatient?: boolean | undefined;
 }
 
+/**
+ * Un tenant solo puede atestiguar consentimientos o escribir en el PHR de un
+ * paciente con el que tiene una relación real: una cita agendada (PublicBooking)
+ * o un consentimiento previo otorgado por el propio paciente vía portal. Sin esto
+ * cualquier tenant podría auto-atestiguar consent e inyectar registros clínicos en
+ * el expediente master de un paciente arbitrario. La respuesta genérica evita
+ * además el oráculo de existencia (404 vs 201) sobre pacientes del master.
+ */
+async function assertPacienteVinculadoAlTenant(
+  master: MasterPrismaClient,
+  patientId: string,
+  tenantId: string,
+): Promise<void> {
+  const [booking, consentDelPaciente] = await Promise.all([
+    master.publicBooking.findFirst({
+      where: { pacienteMasterId: patientId, tenantId },
+      select: { id: true },
+    }),
+    master.patientConsent.findFirst({
+      where: { subjectId: patientId, tenantId, grantedVia: "patient_portal", revokedAt: null },
+      select: { id: true },
+    }),
+  ]);
+  if (!booking && !consentDelPaciente) {
+    throw new PhrError(403, "El paciente no tiene una relación con este consultorio");
+  }
+}
+
 export async function publicarRegistro(
   master: MasterPrismaClient,
   input: PublicarRegistroInput,
 ): Promise<PatientRecord> {
-  const paciente = await master.pacienteMaster.findUnique({ where: { id: input.patientId } });
-  if (!paciente) throw new PhrError(404, "Paciente no encontrado");
+  await assertPacienteVinculadoAlTenant(master, input.patientId, input.tenantId);
   const consent = await consentActivoQueCubre(
     master,
     input.patientId,
@@ -630,6 +658,10 @@ export async function publicarRegistro(
       "El paciente no ha otorgado consentimiento que cubra este tipo de registro",
     );
   }
+  // Simétrico con leerExpedienteTenant: un consent atestiguado por la propia clínica
+  // (tenant_attested) NO desbloquea escritura cross-tenant ni visible al paciente; solo
+  // un consent autorizado por el paciente (patient_portal) permite propagar el registro.
+  const patientAuthorized = consent.grantedVia === "patient_portal";
   const record = await master.patientRecord.create({
     data: {
       patientId: input.patientId,
@@ -638,8 +670,8 @@ export async function publicarRegistro(
       resourceType: input.resourceType,
       effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : new Date(),
       data: input.data,
-      isCritical: input.isCritical ?? false,
-      isVisibleToPatient: input.isVisibleToPatient ?? true,
+      isCritical: patientAuthorized ? (input.isCritical ?? false) : false,
+      isVisibleToPatient: patientAuthorized ? (input.isVisibleToPatient ?? true) : false,
       ...(input.resourceSubtype !== undefined ? { resourceSubtype: input.resourceSubtype } : {}),
       ...(input.summaryText !== undefined ? { summaryText: input.summaryText } : {}),
     },
@@ -660,8 +692,7 @@ export async function registrarConsentimientoTenant(
   master: MasterPrismaClient,
   input: { patientId: string; tenantId: string; scope: ConsentScope; userId: string; ip?: string },
 ): Promise<PatientConsent> {
-  const paciente = await master.pacienteMaster.findUnique({ where: { id: input.patientId } });
-  if (!paciente) throw new PhrError(404, "Paciente no encontrado");
+  await assertPacienteVinculadoAlTenant(master, input.patientId, input.tenantId);
   await master.patientConsent.updateMany({
     where: { subjectId: input.patientId, tenantId: input.tenantId, revokedAt: null },
     data: { revokedAt: new Date() },
@@ -672,6 +703,7 @@ export async function registrarConsentimientoTenant(
       subjectId: input.patientId,
       tenantId: input.tenantId,
       scope: input.scope,
+      grantedVia: "tenant_attested",
       ...(input.ip !== undefined ? { ipAtGrant: input.ip } : {}),
     },
   });
@@ -687,15 +719,27 @@ export async function leerExpedienteTenant(
   if (consents.length === 0) {
     throw new PhrError(403, "El paciente no ha otorgado consentimiento a este consultorio");
   }
-  const cubreTodo = consents.some((c) => c.scope === "full_phr");
-  const tiposPermitidos = consents
+  // Solo un consentimiento autorizado por el paciente (patient_portal) desbloquea
+  // lectura cross-tenant. Un consent atestiguado por la clínica (tenant_attested)
+  // solo permite releer los registros que la propia clínica publicó.
+  const consentsAutorizados = consents.filter((c) => c.grantedVia === "patient_portal");
+  const cubreTodo = consentsAutorizados.some((c) => c.scope === "full_phr");
+  const tiposPermitidos = consentsAutorizados
     .flatMap((c) =>
       SCOPE_CUBRE[c.scope] === "*" ? [] : (SCOPE_CUBRE[c.scope] as FhirResourceType[]),
     )
     .filter((t, i, arr) => arr.indexOf(t) === i);
 
-  const where: Record<string, unknown> = { patientId: input.patientId };
-  if (!cubreTodo) where.resourceType = { in: tiposPermitidos };
+  const propios = { tenantId: input.tenantId };
+  const where: Record<string, unknown> = cubreTodo
+    ? { patientId: input.patientId, OR: [propios, { isVisibleToPatient: true }] }
+    : {
+        patientId: input.patientId,
+        OR:
+          tiposPermitidos.length > 0
+            ? [propios, { resourceType: { in: tiposPermitidos }, isVisibleToPatient: true }]
+            : [propios],
+      };
 
   const records = await master.patientRecord.findMany({
     where,

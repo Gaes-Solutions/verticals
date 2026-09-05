@@ -98,26 +98,31 @@ export async function canjearPuntos(
   });
   if (!inscrito) throw new LealtadError(404, "Cliente no inscrito");
   if (puntos <= 0) throw new LealtadError(400, "Puntos a canjear debe ser > 0");
-  if (inscrito.puntosActuales < puntos) {
-    throw new LealtadError(409, "Saldo de puntos insuficiente");
-  }
-  const nuevoSaldo = inscrito.puntosActuales - puntos;
   const valorMxn = new Decimal(puntos).mul(programa.valorPuntoRedimible.toString()).toFixed(2);
-  await client.$transaction([
-    client.loyaltyMovimiento.create({
+  const nuevoSaldo = await client.$transaction(async (tx) => {
+    const { count } = await tx.clienteLoyalty.updateMany({
+      where: { id: inscrito.id, puntosActuales: { gte: puntos } },
+      data: {
+        puntosActuales: { decrement: puntos },
+        lifetimeCanjeado: { increment: puntos },
+      },
+    });
+    if (count === 0) throw new LealtadError(409, "Saldo de puntos insuficiente");
+    const actualizado = await tx.clienteLoyalty.findUniqueOrThrow({
+      where: { id: inscrito.id },
+      select: { puntosActuales: true },
+    });
+    await tx.loyaltyMovimiento.create({
       data: {
         loyaltyProgramId: programa.id,
         clienteId,
         tipo: "canje",
         puntos: -puntos,
-        saldoResultante: nuevoSaldo,
+        saldoResultante: actualizado.puntosActuales,
         notas: `Canje por $${valorMxn} MXN`,
       },
-    }),
-    client.clienteLoyalty.update({
-      where: { id: inscrito.id },
-      data: { puntosActuales: nuevoSaldo, lifetimeCanjeado: inscrito.lifetimeCanjeado + puntos },
-    }),
-  ]);
+    });
+    return actualizado.puntosActuales;
+  });
   return { saldo: nuevoSaldo, valorMxn };
 }

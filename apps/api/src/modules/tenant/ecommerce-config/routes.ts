@@ -1,6 +1,8 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import {
+  DominioEnUsoError,
+  asegurarHostsDisponibles,
   instruccionesDns,
   sincronizarDominioMaster,
   tokenVerificacion,
@@ -39,6 +41,17 @@ function patchDominioPropio(
 }
 
 const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
+  app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof DominioEnUsoError) {
+      return reply.code(409).send({
+        statusCode: 409,
+        error: "Conflict",
+        message: "Ese subdominio o dominio ya está en uso por otro negocio",
+      });
+    }
+    return reply.send(err);
+  });
+
   app.get("/config", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
     return req.tenantPrisma.configTiendaEcommerce.findFirst();
@@ -48,6 +61,13 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
     const body = configTiendaSchema.parse(req.body);
     const existing = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    await asegurarHostsDisponibles(app.masterPrisma, req.tenantSlug, {
+      subdominio: body.subdominio,
+      dominioPropio:
+        body.dominioPropio === undefined
+          ? (existing?.dominioPropio ?? null)
+          : (body.dominioPropio ?? null),
+    });
     const data = {
       subdominio: body.subdominio,
       nombre: body.nombre,

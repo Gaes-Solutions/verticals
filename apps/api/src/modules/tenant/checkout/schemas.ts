@@ -16,7 +16,7 @@ export const iniciarCheckoutSchema = z.object({
   carritoId: z.string().min(1),
   emailComprador: z.string().email(),
   metodoPago: z.enum(["tarjeta", "oxxo", "spei", "transferencia", "cod"]).default("tarjeta"),
-  proveedorPago: z.enum(["stripe", "conekta", "mock"]).default("mock"),
+  proveedorPago: z.enum(["stripe", "conekta", "mock"]),
   metodoEnvio: z.enum(["paqueteria", "click_collect", "envio_local"]),
   sucursalPickupId: z.string().optional(),
   direccionEnvio: direccionSchema.optional(),
@@ -42,7 +42,7 @@ export const iniciarCheckoutSchema = z.object({
 export const webhookSchema = z.object({
   payload: z.string().min(1),
   signature: z.string().min(1),
-  proveedorPago: z.enum(["stripe", "conekta", "mock"]).default("mock"),
+  proveedorPago: z.enum(["stripe", "conekta", "mock"]),
 });
 
 export type IniciarCheckoutInput = z.infer<typeof iniciarCheckoutSchema>;

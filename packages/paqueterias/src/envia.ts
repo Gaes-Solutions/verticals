@@ -180,6 +180,11 @@ export class EnviaClient implements ShippingProvider {
 
   /** Firma `sha256=<hmac-sha256(webhookSecret, payload)>`, igual patrón que Conekta. */
   parseWebhook(payload: string, signature: string): ShippingWebhookEvento {
+    // Sin secreto, el HMAC se computa con clave "" (determinista y reproducible por
+    // cualquiera): la firma dejaría de autenticar el origen. Fail-closed, no fail-open.
+    if (!this.webhookSecret) {
+      throw new PaqueteriaError("Webhook Envía sin secreto configurado", "INVALID_WEBHOOK");
+    }
     const v = signature.startsWith("sha256=") ? signature.slice(7) : signature;
     const esperada = createHmac("sha256", this.webhookSecret).update(payload).digest("hex");
     const a = Buffer.from(esperada);

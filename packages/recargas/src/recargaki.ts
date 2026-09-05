@@ -1,4 +1,5 @@
 import { findCompania } from "./catalogo.js";
+import { assertSsrfSafeUrl } from "./ssrf-guard.js";
 import {
   type ConsultarEstadoInput,
   RecargaError,
@@ -66,6 +67,7 @@ export class RecargaKiClient implements RechargeProvider {
     body: unknown,
     op: string,
   ): Promise<RecargaResult> {
+    await assertSsrfSafeUrl(this.cfg.apiUrl);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.cfg.timeoutMs ?? 15000);
     try {
@@ -76,6 +78,7 @@ export class RecargaKiClient implements RechargeProvider {
           ...(body ? { "Content-Type": "application/json" } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
+        redirect: "error",
         signal: controller.signal,
       });
       const text = await res.text();
@@ -83,8 +86,7 @@ export class RecargaKiClient implements RechargeProvider {
       if (!res.ok) {
         throw new RecargaError(
           `RECARGAKI_HTTP_${res.status}`,
-          `RecargaKi ${op} retornó ${res.status}: ${text.slice(0, 200)}`,
-          data,
+          `RecargaKi ${op} retornó ${res.status}`,
         );
       }
       return parseRecargaKiResult(data, this.cfg);

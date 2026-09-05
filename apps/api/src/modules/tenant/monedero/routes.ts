@@ -67,7 +67,7 @@ const monederoRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/gift-cards/canjear", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.CLIENTES_ACTUALIZAR);
+    req.requirePerm(PERMISSIONS.CLIENTES_FIADO_GESTIONAR);
     const body = canjearGiftCardSchema.parse(req.body);
     try {
       return await canjearGiftCardAMonedero(
@@ -95,7 +95,7 @@ const monederoRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/clientes/:clienteId/movimiento", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.CLIENTES_ACTUALIZAR);
+    req.requirePerm(PERMISSIONS.CLIENTES_FIADO_GESTIONAR);
     const { clienteId } = clienteParam.parse(req.params);
     const body = movimientoMonederoSchema.parse(req.body);
     try {

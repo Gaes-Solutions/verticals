@@ -51,6 +51,15 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
 
 const partnersRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
+  app.addHook("preHandler", async (req, reply) => {
+    if (req.method === "GET") return;
+    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    return reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo un superadmin puede administrar partners",
+    });
+  });
 
   app.get("/", async (req) => {
     const q = req.query as { tipo?: string; estado?: string; nivel?: string };

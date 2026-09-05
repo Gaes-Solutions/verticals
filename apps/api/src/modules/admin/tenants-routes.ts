@@ -3,6 +3,8 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
 
+const ROLES_COBRANZA = new Set(["superadmin", "billing"]);
+
 const VERTICALES = [
   "retail_mayoreo",
   "abarrotes",
@@ -55,6 +57,18 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
       statusCode: 403,
       error: "Forbidden",
       message: "Solo un superadmin puede dar de alta clientes",
+    });
+    return false;
+  }
+
+  // El detalle de facturación expone métodos de pago (last4/brand/expiry) y
+  // política de cobranza: dato sensible que support no debe leer, solo cobranza.
+  function requireCobranza(req: FastifyRequest, reply: FastifyReply): boolean {
+    if (req.user.kind === "admin" && ROLES_COBRANZA.has(req.user.role)) return true;
+    reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo superadmin o rol de cobranza puede ver el detalle de facturación",
     });
     return false;
   }
@@ -208,6 +222,7 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
 
   // Detalle de facturación del cliente: métodos de pago y política de cobranza.
   app.get("/:slug/detalle", async (req, reply) => {
+    if (!requireCobranza(req, reply)) return;
     const { slug } = slugParamSchema.parse(req.params);
     const tenant = await app.masterPrisma.tenant.findUnique({
       where: { slug },

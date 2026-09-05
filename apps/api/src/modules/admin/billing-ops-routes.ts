@@ -1,6 +1,8 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+
+const ROLES_COBRANZA = new Set(["superadmin", "billing"]);
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -24,6 +26,20 @@ const voidSchema = z.object({ motivo: z.string().min(3).max(300) });
 /** Operación de cobranza global (estilo Stripe Dashboard interno). */
 const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
+
+  // Operar cobranza (anular/reprogramar) es privilegio de superadmin o del rol billing;
+  // support no debe manipular facturas del SaaS.
+  function requireCobranza(req: FastifyRequest, reply: FastifyReply): boolean {
+    if (req.user.kind === "admin" && ROLES_COBRANZA.has(req.user.role)) {
+      return true;
+    }
+    reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Solo superadmin o rol de cobranza puede operar facturas",
+    });
+    return false;
+  }
 
   app.get("/overview", async () => {
     const master = app.masterPrisma;
@@ -91,6 +107,7 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
 
   // Write-off: anula una factura incobrable (con motivo, queda en audit).
   app.post("/invoices/:id/void", async (req, reply) => {
+    if (!requireCobranza(req, reply)) return;
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     const { motivo } = voidSchema.parse(req.body);
     const invoice = await app.masterPrisma.invoice.findUnique({ where: { id } });
@@ -123,6 +140,7 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
 
   // Reprograma el próximo reintento de cobro de una factura abierta (dunning).
   app.post("/invoices/:id/reintentar", async (req, reply) => {
+    if (!requireCobranza(req, reply)) return;
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     const { fecha } = z.object({ fecha: z.string().datetime().optional() }).parse(req.body ?? {});
     const invoice = await app.masterPrisma.invoice.findUnique({ where: { id } });

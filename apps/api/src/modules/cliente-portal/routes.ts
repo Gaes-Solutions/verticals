@@ -27,6 +27,7 @@ import {
 } from "../tenant/notificaciones/service.js";
 import { PreguntaError, crearPregunta } from "../tenant/preguntas/service.js";
 import { eliminarSuscripcion, guardarSuscripcion } from "../tenant/push/service.js";
+import { isPushEndpointSafeSync } from "../tenant/push/ssrf-guard.js";
 import {
   actualizarDireccion,
   crearDireccion,
@@ -50,7 +51,9 @@ import {
 } from "./service.js";
 
 const pushSubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().refine(isPushEndpointSafeSync, {
+    message: "endpoint de push no permitido (https público requerido)",
+  }),
   keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
 });
 const pushUnsubscribeSchema = z.object({ endpoint: z.string().url() });
@@ -111,9 +114,9 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
   return false;
 }
 
-function clienteCtx(req: FastifyRequest): { clienteId: string; email: string; tenantSlug: string } {
+function clienteCtx(req: FastifyRequest): { clienteId: string; tenantSlug: string } {
   if (req.user.kind !== "cliente") throw new ClientePortalError(401, "Sesión de cliente requerida");
-  return { clienteId: req.user.sub, email: req.user.email, tenantSlug: req.user.tenantSlug };
+  return { clienteId: req.user.sub, tenantSlug: req.user.tenantSlug };
 }
 
 /** Registro y login de clientes de la tienda (auth B2C por tenant). */
@@ -200,15 +203,15 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/pedidos", async (req) => {
-    const { clienteId, email, tenantSlug } = clienteCtx(req);
-    return getPedidosCliente(getTenantClient(tenantSlug), clienteId, email);
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    return getPedidosCliente(getTenantClient(tenantSlug), clienteId);
   });
 
   app.get("/pedidos/:folio", async (req, reply) => {
-    const { clienteId, email, tenantSlug } = clienteCtx(req);
+    const { clienteId, tenantSlug } = clienteCtx(req);
     const { folio } = z.object({ folio: z.string().min(1) }).parse(req.params);
     try {
-      return await getPedidoClienteDetalle(getTenantClient(tenantSlug), clienteId, email, folio);
+      return await getPedidoClienteDetalle(getTenantClient(tenantSlug), clienteId, folio);
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;
@@ -322,12 +325,13 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
         items: z
           .array(
             z.object({
-              varianteId: z.string().min(1),
-              nombre: z.string(),
-              cantidad: z.number().int().positive(),
+              varianteId: z.string().min(1).max(64),
+              nombre: z.string().max(200),
+              cantidad: z.number().int().positive().max(100000),
             }),
           )
-          .min(1),
+          .min(1)
+          .max(200),
         fotos: z.array(z.string().url()).max(6).optional(),
       })
       .parse(req.body);
@@ -556,15 +560,15 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/resenables", async (req) => {
-    const { clienteId, email, tenantSlug } = clienteCtx(req);
-    return getComprasResenables(getTenantClient(tenantSlug), clienteId, email);
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    return getComprasResenables(getTenantClient(tenantSlug), clienteId);
   });
 
   app.post("/resenas", async (req, reply) => {
-    const { clienteId, email, tenantSlug } = clienteCtx(req);
+    const { clienteId, tenantSlug } = clienteCtx(req);
     const body = crearResenaSchema.parse(req.body);
     try {
-      const r = await crearResenaCliente(getTenantClient(tenantSlug), clienteId, email, body);
+      const r = await crearResenaCliente(getTenantClient(tenantSlug), clienteId, body);
       return reply.code(201).send(r);
     } catch (err) {
       if (handleErr(reply, err)) return;

@@ -9,8 +9,20 @@ const params = z.object({
   ventaId: z.string().min(1),
 });
 
+/**
+ * Segundo factor obligatorio para autofacturar: folio impreso + total del ticket.
+ * Ninguno de los dos va codificado en el QR (que solo lleva el id), así que
+ * conocer el id no basta: hay que tener el ticket físico. Cierra el IDOR y el
+ * oráculo de montos por id.
+ */
+const segundoFactorSchema = z.object({
+  folio: z.string().trim().min(1).max(40),
+  total: z.coerce.number().finite().nonnegative(),
+});
+
 interface VentaAutofactura {
   id: string;
+  folio: string;
   estado: string;
   total: unknown;
   cobradaAt: Date | null;
@@ -19,9 +31,16 @@ interface VentaAutofactura {
   cfdis: { estado: string }[];
 }
 
+function coincideSegundoFactor(venta: VentaAutofactura, folio: string, total: number): boolean {
+  const folioOk = venta.folio.trim().toLowerCase() === folio.toLowerCase();
+  const totalOk = Number(venta.total).toFixed(2) === total.toFixed(2);
+  return folioOk && totalOk;
+}
+
 /**
- * Resuelve el estado de autofacturación de una venta (sin auth: el QR del ticket
- * es la credencial). Devuelve si es facturable + el motivo si no lo es.
+ * Resuelve el estado de autofacturación de una venta (sin auth: el ticket físico
+ * —id del QR + folio + total— es la credencial). Devuelve si es facturable + el
+ * motivo si no lo es.
  */
 async function cargarContexto(tenantSlug: string, ventaId: string) {
   const client = getTenantClient(tenantSlug);
@@ -30,6 +49,7 @@ async function cargarContexto(tenantSlug: string, ventaId: string) {
     where: { id: ventaId },
     select: {
       id: true,
+      folio: true,
       estado: true,
       total: true,
       cobradaAt: true,
@@ -77,20 +97,39 @@ function fail(reply: FastifyReply, code: number, message: string) {
  * ticket y emite su CFDI con sus datos fiscales. Reusa emitirCfdi(esAutofactura).
  */
 export const autofacturaPublicRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/autofactura/:tenantSlug/venta/:ventaId", async (req, reply) => {
-    const p = params.parse(req.params);
-    const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug: p.tenantSlug } });
-    if (!tenant || tenant.status === "cancelled") return fail(reply, 404, "Negocio no encontrado");
-    const { cfg, venta } = await cargarContexto(p.tenantSlug, p.ventaId);
-    const ev = evaluar(venta, cfg);
-    return {
-      negocio: cfg?.razonSocialEmisor ?? tenant.name,
-      ventaId: p.ventaId,
-      total: venta ? Number(venta.total) : null,
-      fecha: venta ? (venta.cobradaAt ?? venta.createdAt).toISOString() : null,
-      ...ev,
-    };
-  });
+  app.get(
+    "/autofactura/:tenantSlug/venta/:ventaId",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const p = params.parse(req.params);
+      const sf = segundoFactorSchema.safeParse(req.query);
+      const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug: p.tenantSlug } });
+      if (!tenant || tenant.status === "cancelled")
+        return fail(reply, 404, "Negocio no encontrado");
+      const { cfg, venta } = await cargarContexto(p.tenantSlug, p.ventaId);
+      const negocio = cfg?.razonSocialEmisor ?? tenant.name;
+      if (!sf.success || !venta || !coincideSegundoFactor(venta, sf.data.folio, sf.data.total)) {
+        return {
+          negocio,
+          ventaId: p.ventaId,
+          total: null,
+          fecha: null,
+          facturable: false,
+          motivo: "Verifica el folio y el total de tu ticket",
+          yaFacturada: false,
+          expiraAt: null,
+        };
+      }
+      const ev = evaluar(venta, cfg);
+      return {
+        negocio,
+        ventaId: p.ventaId,
+        total: Number(venta.total),
+        fecha: (venta.cobradaAt ?? venta.createdAt).toISOString(),
+        ...ev,
+      };
+    },
+  );
 
   app.post(
     "/autofactura/:tenantSlug/venta/:ventaId",
@@ -98,13 +137,16 @@ export const autofacturaPublicRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const p = params.parse(req.params);
       const body = cfdiEmitirSchema.parse(req.body);
+      const sf = segundoFactorSchema.parse(req.body);
       const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug: p.tenantSlug } });
       if (!tenant || tenant.status === "cancelled")
         return fail(reply, 404, "Negocio no encontrado");
 
       const { client, cfg, venta } = await cargarContexto(p.tenantSlug, p.ventaId);
+      if (!venta || !cfg || !coincideSegundoFactor(venta, sf.folio, sf.total))
+        return fail(reply, 404, "No pudimos validar tu ticket. Revisa el folio y el total.");
       const ev = evaluar(venta, cfg);
-      if (!ev.facturable || !venta || !cfg) return fail(reply, 409, ev.motivo ?? "No facturable");
+      if (!ev.facturable) return fail(reply, 409, ev.motivo ?? "No facturable");
 
       const provider = app.fiscalProviderFactory({
         apiKey: cfg.facturamaApiKey,

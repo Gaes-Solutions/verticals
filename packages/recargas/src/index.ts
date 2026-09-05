@@ -11,6 +11,7 @@ export { MockRecargaProvider } from "./mock.js";
 export type { MockRecargaConfig } from "./mock.js";
 export { RecargaKiClient } from "./recargaki.js";
 export type { RecargaKiConfig } from "./recargaki.js";
+export { assertSsrfSafeUrl, isSsrfSafeUrlSync } from "./ssrf-guard.js";
 export { RecargaError } from "./types.js";
 export type {
   ConsultarEstadoInput,

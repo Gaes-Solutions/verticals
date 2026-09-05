@@ -184,7 +184,12 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // Lectura del registro completo del carrito (incluye PII: emailAnonimo,
+  // clienteId, recoveryCodigo). NO es una llamada del storefront (el BFF nunca
+  // la usa); es una lectura de back-office, así que se cierra con el mismo
+  // permiso que el detalle de pedido (ecommerce.pedidos_leer).
   app.get("/:id", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
     const { id } = carritoIdParamSchema.parse(req.params);
     const carrito = await req.tenantPrisma.carritoEcommerce.findUnique({ where: { id } });
     if (!carrito) {

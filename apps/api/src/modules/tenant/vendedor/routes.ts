@@ -6,6 +6,14 @@ import { lineaCreditoDisponible } from "../cxc/service.js";
 
 const idParamSchema = z.object({ id: z.string().cuid() });
 
+function puedeVerTodas(req: {
+  principal: { isOwner?: boolean; permissions: readonly string[] };
+}): boolean {
+  return (
+    req.principal.isOwner || req.principal.permissions.includes(PERMISSIONS.COMISIONES_LEER_TODAS)
+  );
+}
+
 function hoy(): { inicio: Date; fin: Date } {
   const inicio = new Date();
   inicio.setHours(0, 0, 0, 0);
@@ -138,12 +146,20 @@ const vendedorRoutes: FastifyPluginAsync = async (app) => {
       include: {
         direcciones: true,
         vendedoresAsignados: {
-          where: { usuarioId: req.principal.userId },
+          where: {
+            usuarioId: req.principal.userId,
+            OR: [{ vigenteHasta: null }, { vigenteHasta: { gte: new Date() } }],
+          },
           select: { tipo: true },
         },
       },
     });
     if (!cliente) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });
+    }
+    if (!puedeVerTodas(req) && cliente.vendedoresAsignados.length === 0) {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Cliente no encontrado" });

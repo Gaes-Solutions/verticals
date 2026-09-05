@@ -6,7 +6,7 @@ import type { FastifyRequest } from "fastify";
 import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
 import { notificarCliente, notificarUsuariosConPermiso } from "../notificaciones/service.js";
 import { crearVenta } from "../ventas/service.js";
-import { evaluarCupon, registrarUsoCupon } from "./cupon-service.js";
+import { evaluarCupon, liberarUsoCupon, reservarUsoCupon } from "./cupon-service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 
@@ -115,11 +115,16 @@ export async function iniciarCheckout(
     }
   }
   // Cupón (si el carrito trae uno válido): descuenta del subtotal o libera el envío.
+  // La reserva del uso es atómica y va ANTES de aplicar el descuento: si dos
+  // checkouts concurrentes corren contra el mismo cupón, solo el que gana el
+  // compare-and-swap obtiene el descuento; el otro ve `agotado` y paga completo.
   let descuentoTotal = new Decimal(0);
   const cuponesSnapshot: Array<Record<string, unknown>> = [];
+  let cuponReservado: string | undefined;
   if (carrito.cuponCodigo) {
     const ev = await evaluarCupon(client, carrito.cuponCodigo, subtotal.toNumber());
-    if (ev.valido) {
+    if (ev.valido && (await reservarUsoCupon(client, carrito.cuponCodigo))) {
+      cuponReservado = carrito.cuponCodigo;
       descuentoTotal = new Decimal(ev.descuentoSubtotal);
       if (ev.envioGratis) costoEnvio = new Decimal(0);
       cuponesSnapshot.push({
@@ -131,6 +136,38 @@ export async function iniciarCheckout(
   }
   const total = Decimal.max(new Decimal(0), subtotal.minus(descuentoTotal)).plus(costoEnvio);
 
+  try {
+    return await crearPedidoConIntent(client, provider, input, carrito, {
+      subtotal,
+      costoEnvio,
+      descuentoTotal,
+      total,
+      paqueteria,
+      cuponesSnapshot,
+    });
+  } catch (err) {
+    if (cuponReservado) await liberarUsoCupon(client, cuponReservado);
+    throw err;
+  }
+}
+
+interface CrearPedidoParams {
+  subtotal: Decimal;
+  costoEnvio: Decimal;
+  descuentoTotal: Decimal;
+  total: Decimal;
+  paqueteria: string | undefined;
+  cuponesSnapshot: Array<Record<string, unknown>>;
+}
+
+async function crearPedidoConIntent(
+  client: TenantClient,
+  provider: PaymentProvider,
+  input: IniciarCheckoutInput,
+  carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
+  params: CrearPedidoParams,
+): Promise<IniciarCheckoutResult> {
+  const { subtotal, costoEnvio, descuentoTotal, total, paqueteria, cuponesSnapshot } = params;
   const folioPublico = await nextFolioPublico(client);
   const pedido = await client.pedidoEcommerce.create({
     data: {
@@ -202,10 +239,6 @@ export async function iniciarCheckout(
     data: { paymentIntentId: intent.intentId },
   });
 
-  if (cuponesSnapshot.length && carrito.cuponCodigo) {
-    await registrarUsoCupon(client, carrito.cuponCodigo);
-  }
-
   return {
     pedidoId: pedido.id,
     folioPublico,
@@ -276,26 +309,72 @@ export async function procesarWebhookPago(
     };
   }
 
+  // Defensa en profundidad: el monto confirmado debe coincidir con el total del
+  // pedido. En proveedores reales el monto viene firmado por la pasarela; esto
+  // rechaza montos parciales o falsificados (p.ej. montoCentavos:1) para todos.
+  const totalCentavos = Math.round(new Decimal(pedido.total.toString()).times(100).toNumber());
+  if (evento.montoCentavos !== totalCentavos) {
+    throw new CheckoutError(422, "El monto confirmado no coincide con el total del pedido", {
+      esperadoCentavos: totalCentavos,
+      recibidoCentavos: evento.montoCentavos,
+    });
+  }
+
+  // Claim atómico: cierra el TOCTOU del check-then-act (línea ~248). Los
+  // procesadores (Stripe/Conekta) entregan at-least-once y reintentan en
+  // timeout, así que dos entregas del mismo evento pueden pasar el guard a la
+  // vez. updateMany con guarda de estado es un compare-and-swap que Postgres
+  // serializa a nivel de fila: solo una entrega transiciona el pedido a
+  // "pago_confirmado" y ejecuta crearVenta (con su descuento de stock); las
+  // duplicadas obtienen count=0 y salen idempotentes.
+  const estadoPrevio = pedido.statusPago;
+  const claim = await client.pedidoEcommerce.updateMany({
+    where: { id: pedido.id, statusPago: { not: "pago_confirmado" } },
+    data: { statusPago: "pago_confirmado" },
+  });
+  if (claim.count === 0) {
+    const yaConfirmado = await client.pedidoEcommerce.findUniqueOrThrow({
+      where: { id: pedido.id },
+      select: { statusPago: true, ventaIdGenerada: true },
+    });
+    return {
+      pedidoId: pedido.id,
+      folioPublico: pedido.folioPublico,
+      statusPago: yaConfirmado.statusPago,
+      ventaIdGenerada: yaConfirmado.ventaIdGenerada,
+    };
+  }
+
   const items = pedido.items as unknown as CarritoItem[];
   const sucursal = await resolverSucursal(client, pedido.sucursalPickupId);
 
-  const venta = await crearVenta(client, usuarioSistemaId, {
-    sucursalId: sucursal,
-    canal: "ecommerce",
-    lineas: items.map((i) => ({ varianteId: i.varianteId, cantidad: String(i.cantidad) })),
-    pagos: [
-      {
-        metodo: pedido.metodoPago === "tarjeta" ? "tarjeta_credito" : "transferencia",
-        monto: pedido.subtotal.toString(),
-      },
-    ],
-    ...(pedido.clienteId ? { clienteId: pedido.clienteId } : {}),
-  } as Parameters<typeof crearVenta>[2]);
+  let venta: Awaited<ReturnType<typeof crearVenta>>;
+  try {
+    venta = await crearVenta(client, usuarioSistemaId, {
+      sucursalId: sucursal,
+      canal: "ecommerce",
+      lineas: items.map((i) => ({ varianteId: i.varianteId, cantidad: String(i.cantidad) })),
+      pagos: [
+        {
+          metodo: pedido.metodoPago === "tarjeta" ? "tarjeta_credito" : "transferencia",
+          monto: pedido.subtotal.toString(),
+        },
+      ],
+      ...(pedido.clienteId ? { clienteId: pedido.clienteId } : {}),
+    } as Parameters<typeof crearVenta>[2]);
+  } catch (err) {
+    // Libera el claim para que un reintento del proveedor pueda reprocesar.
+    // La guarda ventaIdGenerada:null evita revertir un pedido ya completado.
+    await client.pedidoEcommerce.updateMany({
+      where: { id: pedido.id, statusPago: "pago_confirmado", ventaIdGenerada: null },
+      data: { statusPago: estadoPrevio },
+    });
+    throw err;
+  }
 
   await client.pedidoEcommerce.update({
     where: { id: pedido.id },
     data: {
-      statusPago: "pago_confirmado",
       statusPedido: "pago_confirmado",
       pagoConfirmadoAt: new Date(),
       ventaIdGenerada: venta.ventaId,

@@ -5,6 +5,7 @@ import { authenticator } from "otplib";
 import { consumeBackupCode, generateBackupCodes, hashBackupCodes } from "../../lib/mfa-backup.js";
 
 const TOTP_ISSUER = "GaesSoft";
+const TOTP_STEP_SECONDS = 30;
 const SALUD_VERTICALES = ["salud_vet", "salud_humana"];
 
 export interface TenantPrincipal {
@@ -137,12 +138,30 @@ export function tenantTotpKeyUri(email: string, slug: string, secret: string): s
   return authenticator.keyuri(email, `${TOTP_ISSUER} (${slug})`, secret);
 }
 
-export function verifyTenantTotp(code: string, secret: string): boolean {
+/**
+ * Verifica un TOTP y devuelve el time-step absoluto que aceptó (o null si es inválido),
+ * para rechazar el reuso del mismo código dentro de su ventana de validez.
+ */
+export function verifyTenantTotpStep(code: string, secret: string): number | null {
   try {
-    return authenticator.verify({ token: code, secret });
+    const delta = authenticator.checkDelta(code, secret);
+    if (delta === null) return null;
+    return Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + delta;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Registra el último time-step TOTP consumido (uso único: rechaza replays dentro de la ventana). */
+export async function recordTenantMfaStep(
+  tenantPrisma: TenantPrismaClient,
+  userId: string,
+  usedStep: number,
+): Promise<void> {
+  await tenantPrisma.usuario.update({
+    where: { id: userId },
+    data: { mfaLastStep: usedStep },
+  });
 }
 
 export interface TenantUserMfa {
@@ -152,6 +171,7 @@ export interface TenantUserMfa {
   mfaSecret: string | null;
   mfaVerifiedAt: Date | null;
   mfaBackupCodes: string[];
+  mfaLastStep: number | null;
   isActive: boolean;
 }
 
@@ -168,6 +188,7 @@ export async function loadTenantUserMfa(
       mfaSecret: true,
       mfaVerifiedAt: true,
       mfaBackupCodes: true,
+      mfaLastStep: true,
       isActive: true,
     },
   });
@@ -190,12 +211,18 @@ export async function setTenantPendingSecret(
 export async function enableTenantMfa(
   tenantPrisma: TenantPrismaClient,
   userId: string,
+  usedStep: number,
 ): Promise<string[]> {
   const plain = generateBackupCodes();
   const hashed = await hashBackupCodes(plain);
   await tenantPrisma.usuario.update({
     where: { id: userId },
-    data: { mfaEnabled: true, mfaVerifiedAt: new Date(), mfaBackupCodes: hashed },
+    data: {
+      mfaEnabled: true,
+      mfaVerifiedAt: new Date(),
+      mfaBackupCodes: hashed,
+      mfaLastStep: usedStep,
+    },
   });
   return plain;
 }
@@ -218,13 +245,13 @@ export async function consumeTenantBackupCode(
   user: TenantUserMfa,
   code: string,
 ): Promise<boolean> {
-  const { ok, remaining } = await consumeBackupCode(user.mfaBackupCodes, code);
-  if (!ok) return false;
-  await tenantPrisma.usuario.update({
-    where: { id: user.id },
+  const { ok, remaining, matchedHash } = await consumeBackupCode(user.mfaBackupCodes, code);
+  if (!ok || !matchedHash) return false;
+  const result = await tenantPrisma.usuario.updateMany({
+    where: { id: user.id, mfaBackupCodes: { has: matchedHash } },
     data: { mfaBackupCodes: remaining },
   });
-  return true;
+  return result.count === 1;
 }
 
 export async function disableTenantMfa(
@@ -233,7 +260,13 @@ export async function disableTenantMfa(
 ): Promise<void> {
   await tenantPrisma.usuario.update({
     where: { id: userId },
-    data: { mfaEnabled: false, mfaSecret: null, mfaVerifiedAt: null, mfaBackupCodes: [] },
+    data: {
+      mfaEnabled: false,
+      mfaSecret: null,
+      mfaVerifiedAt: null,
+      mfaBackupCodes: [],
+      mfaLastStep: null,
+    },
   });
 }
 
