@@ -103,3 +103,18 @@ de persona. Reusa `@gaespos/api-client`.
 3. Contenido comercial: ¿**auto** (promos+destacados) es suficiente para el MVP, o el
    cliente ya quiere subir sus propios videos/slides desde el día 1?
 4. ¿Cuántos kioskos por sucursal esperan? (afecta la gestión remota).
+
+## 9. Hallazgo técnico (31-ago) — el backend necesita 2 piezas para Fase 1
+Al revisar el código: `GET /t/productos/buscar/:codigo` YA existe pero:
+- Requiere login de staff con permiso `PRODUCTOS_LEER` (no sirve tal cual para un kiosko sin persona).
+- Devuelve solo `precioBase`, **NO el precio vigente con promo** (usaría el motor de pricing como el POS).
+
+Por eso Fase 1 requiere construir en backend:
+1. **Auth de dispositivo (kiosko token):** modelo `kiosko_device` (token por sucursal, revocable, `last_seen`)
+   + decorator `authenticateKiosko` + endpoint de canje. Migración aditiva (tabla nueva).
+2. **Endpoint `/kiosko/precio/:codigo`:** valida token de dispositivo → resuelve producto por
+   código/sku/barcode → corre el **mismo motor de pricing/promos que el POS** → devuelve
+   `{nombre, imagen, precioVigente, precioAntes?, promoLabel?}`. Consistencia POS↔kiosko garantizada.
+
+Orden Fase 1: (1) backend token+endpoint (con migración + tests) → (2) app `mobile-kiosko`
+(cámara → precio, idle → carrusel auto) → (3) build APK → (4) prueba en 1 dispositivo.
