@@ -14,7 +14,7 @@ import {
 } from "./schemas.js";
 
 const decimalStr = z
-  .union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/)])
+  .union([z.number().finite().min(0), z.string().regex(/^\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 const bulkProductosSchema = z.object({

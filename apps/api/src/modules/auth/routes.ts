@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../../config.js";
 import { writeAudit } from "../../lib/audit.js";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import { loginBodySchema } from "./schemas.js";
 import {
   consumeAdminBackupCode,
@@ -11,13 +12,14 @@ import {
   findValidRefreshToken,
   generateTotpSecret,
   markMfaVerified,
+  recordMfaStep,
   resetAdminBackupCodes,
   revokeRefreshToken,
   revokeRefreshTokenByPlaintext,
   setPendingMfaSecret,
   totpKeyUri,
   verifyPassword,
-  verifyTotpCode,
+  verifyTotpStep,
 } from "./service.js";
 
 const REFRESH_COOKIE_NAME = "gaespos_refresh";
@@ -107,7 +109,15 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
       const body = loginBodySchema.parse(req.body);
 
       const admin = await findActiveAdminByEmail(body.email, app.masterPrisma);
-      if (!admin || !(await verifyPassword(body.password, admin.passwordHash))) {
+      if (!admin) {
+        await burnPasswordTiming(body.password);
+        return reply.code(401).send({
+          statusCode: 401,
+          error: "Unauthorized",
+          message: "Credenciales inválidas",
+        });
+      }
+      if (!(await verifyPassword(body.password, admin.passwordHash))) {
         return reply.code(401).send({
           statusCode: 401,
           error: "Unauthorized",
@@ -157,13 +167,22 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Token MFA inválido" });
       }
+      if (admin.mfaVerifiedAt) {
+        return reply
+          .code(409)
+          .send({ statusCode: 409, error: "Conflict", message: "MFA ya configurado" });
+      }
       const { code } = mfaCodeSchema.parse(req.body);
-      if (!admin.mfaSecret || !verifyTotpCode(code, admin.mfaSecret)) {
+      const activateStep = admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null;
+      if (
+        activateStep === null ||
+        (admin.mfaLastStep !== null && activateStep <= admin.mfaLastStep)
+      ) {
         return reply
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
       }
-      await markMfaVerified(admin.id, app.masterPrisma);
+      await markMfaVerified(admin.id, activateStep, app.masterPrisma);
       const backupCodes = await resetAdminBackupCodes(admin.id, app.masterPrisma);
       await writeAudit(app.masterPrisma, {
         actor: admin.email,
@@ -188,7 +207,9 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
       }
       const { code } = mfaCodeSchema.parse(req.body);
       const enrolado = Boolean(admin.mfaSecret && admin.mfaVerifiedAt);
-      const totpOk = enrolado && admin.mfaSecret ? verifyTotpCode(code, admin.mfaSecret) : false;
+      const totpStep = enrolado && admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null;
+      const totpOk =
+        totpStep !== null && (admin.mfaLastStep === null || totpStep > admin.mfaLastStep);
       const backupOk = enrolado
         ? !totpOk && (await consumeAdminBackupCode(admin, code, app.masterPrisma))
         : false;
@@ -196,6 +217,9 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
         return reply
           .code(401)
           .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
+      }
+      if (totpOk && totpStep !== null) {
+        await recordMfaStep(admin.id, totpStep, app.masterPrisma);
       }
       if (backupOk) {
         await writeAudit(app.masterPrisma, {
@@ -224,6 +248,15 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
           .code(409)
           .send({ statusCode: 409, error: "Conflict", message: "MFA no está activo" });
       }
+      const { code } = mfaCodeSchema.parse(req.body);
+      const step = admin.mfaSecret ? verifyTotpStep(code, admin.mfaSecret) : null;
+      const stepOk = step !== null && (admin.mfaLastStep === null || step > admin.mfaLastStep);
+      if (step === null || !stepOk) {
+        return reply
+          .code(401)
+          .send({ statusCode: 401, error: "Unauthorized", message: "Código incorrecto" });
+      }
+      await recordMfaStep(admin.id, step, app.masterPrisma);
       const backupCodes = await resetAdminBackupCodes(admin.id, app.masterPrisma);
       await writeAudit(app.masterPrisma, {
         actor: admin.email,

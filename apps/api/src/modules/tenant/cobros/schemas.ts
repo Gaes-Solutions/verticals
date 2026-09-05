@@ -3,7 +3,7 @@ import { z } from "zod";
 export const crearCobroSchema = z.object({
   concepto: z.string().min(2).max(200),
   monto: z
-    .union([z.number().positive(), z.string().regex(/^\d+(\.\d{1,2})?$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d{1,2})?$/)])
     .transform((v) => Number(v))
     .refine((n) => n > 0 && n <= 1_000_000, "Monto fuera de rango"),
   clienteNombre: z.string().max(120).optional(),

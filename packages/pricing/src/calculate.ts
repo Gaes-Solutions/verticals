@@ -20,6 +20,19 @@ function dec(v: DecimalLike): Decimal {
   return v instanceof Decimal ? v : new Decimal(v);
 }
 
+// Defensa en profundidad: una regla con `condicion.montoMinimo`/`cantidadMinima`
+// no numérica (persistida antes de validarse en el borde) NUNCA debe tumbar el
+// motor. Un valor inválido se descarta en vez de lanzar DecimalError.
+function decOrNull(v: DecimalLike | undefined): Decimal | null {
+  if (v === undefined || v === null) return null;
+  try {
+    const d = v instanceof Decimal ? v : new Decimal(v);
+    return d.isFinite() ? d : null;
+  } catch {
+    return null;
+  }
+}
+
 function pickEscalonado(linea: LineaPrecioInput): {
   precio: Decimal;
   matched: boolean;
@@ -67,7 +80,8 @@ function reglaAplica(
       return false;
     }
   }
-  if (cond.cantidadMinima !== undefined && dec(linea.cantidad).lt(dec(cond.cantidadMinima))) {
+  const cantMin = decOrNull(cond.cantidadMinima);
+  if (cantMin !== null && dec(linea.cantidad).lt(cantMin)) {
     return false;
   }
   return true;
@@ -182,7 +196,7 @@ export function calcularLinea(
   descuentos.push(...paso3.descuentos);
 
   const precioFinal = paso3.precio;
-  const subtotal = precioFinal.mul(cantidad);
+  const subtotal = Decimal.max(precioFinal.mul(cantidad), ZERO);
 
   return {
     productoVarianteId: linea.productoVarianteId,
@@ -202,8 +216,8 @@ function aplicarMayoreoTotalTicket(
   const candidatas = reglas
     .filter((r) => r.tipo === "mayoreo_por_total_ticket")
     .filter((r) => {
-      const min = r.condicion.montoMinimo;
-      return min === undefined || subtotal.gte(dec(min));
+      const min = decOrNull(r.condicion.montoMinimo);
+      return min === null || subtotal.gte(min);
     })
     .sort((a, b) => a.prioridad - b.prioridad);
 
@@ -302,6 +316,28 @@ export function calcularTicket(input: CalcularTicketInput): TicketCalculado {
         montoTotal: desc.toString(),
       });
     }
+  }
+
+  // Piso de negociación a nivel ticket: los descuentos de ticket (pasos 4-6:
+  // mayoreo, cupón y descuento global manual) también pueden hundir una línea
+  // bajo su `precioMinimoNegociacion`. Se redistribuye el descuento de ticket
+  // proporcional al subtotal de cada línea y se re-evalúa el piso sobre el
+  // precio unitario efectivo, de lo contrario el bloqueo de piso se saltaría.
+  const descuentoTicket = subtotalLineas.minus(totalActual);
+  if (descuentoTicket.gt(ZERO) && subtotalLineas.gt(ZERO)) {
+    lineas.forEach((lineaCalc, idx) => {
+      if (lineaCalc.precioMinimoViolado) return;
+      const item = input.lineas[idx]?.listaPrecioItem;
+      if (!item || item.precioMinimoNegociacion === null) return;
+      const lineaSubtotal = dec(lineaCalc.subtotal);
+      const lineaCantidad = dec(lineaCalc.cantidad);
+      if (lineaSubtotal.lte(ZERO) || lineaCantidad.lte(ZERO)) return;
+      const descuentoLinea = descuentoTicket.mul(lineaSubtotal).div(subtotalLineas);
+      const precioUnitarioEfectivo = lineaSubtotal.minus(descuentoLinea).div(lineaCantidad);
+      if (precioUnitarioEfectivo.lt(dec(item.precioMinimoNegociacion))) {
+        lineaCalc.precioMinimoViolado = true;
+      }
+    });
   }
 
   return {

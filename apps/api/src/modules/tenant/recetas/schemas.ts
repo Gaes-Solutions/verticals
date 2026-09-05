@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const positiveDecimal = z
-  .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
   .transform((v) => String(v));
 
 export const recetaItemInputSchema = z.object({

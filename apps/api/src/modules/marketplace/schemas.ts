@@ -81,7 +81,6 @@ export const pacienteConfirmarSchema = z.object({
 });
 
 export const crearResenaPublicaSchema = z.object({
-  pacienteEmail: z.string().email().toLowerCase(),
   bookingId: z.string().min(1).optional(),
   ratingGeneral: z.number().int().min(1).max(5),
   ratingPuntualidad: z.number().int().min(1).max(5).optional(),
@@ -91,7 +90,6 @@ export const crearResenaPublicaSchema = z.object({
 });
 
 export const reservaCreateSchema = z.object({
-  pacienteMasterId: z.string().min(1),
   locationId: z.string().min(1).optional(),
   fechaHora: z.string().datetime(),
   modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),

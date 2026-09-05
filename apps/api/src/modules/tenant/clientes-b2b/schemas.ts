@@ -123,7 +123,7 @@ export const direccionB2bCreateSchema = z.object({
 
 export const creditoCreateSchema = z.object({
   lineaAutorizada: z
-    .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
     .transform((v) => String(v)),
   diasCredito: z.number().int().min(1).max(180).default(30),
   tasaInteresMoraPct: z.number().min(0).max(100).optional(),

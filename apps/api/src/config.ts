@@ -19,6 +19,12 @@ const configSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
+  // Número EXACTO de proxies de confianza frente al API (Railway = 1). Fastify lo
+  // pasa a proxy-addr para tomar solo el último salto de X-Forwarded-For como
+  // req.ip; nunca la IP más a la izquierda que el cliente puede falsificar. Con
+  // `trustProxy: true` (cadena completa) el rate-limit por IP se evade con un XFF
+  // aleatorio por request. 0 = ignorar XFF (usar socket, p.ej. sin proxy).
+  TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(1),
   FLOWS_SCHEDULER_ENABLED: z
     .enum(["true", "false"])
     .default("false")
@@ -32,12 +38,31 @@ const configSchema = z.object({
   // Base pública del API para armar el link de confirmación de citas que se
   // manda al tutor (anti-no-show). En prod = dominio del API.
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
+  // Billing de la plataforma (cobro de suscripción al tenant). Ambas son opcionales
+  // (dev/tests usan el cobro mock), pero si hay STRIPE_API_KEY el webhook queda vivo
+  // y el secreto de firma es OBLIGATORIO: sin él la verificación fallaría-abierto.
+  STRIPE_API_KEY: z.string().trim().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z
+    .string()
+    .trim()
+    .min(16, "STRIPE_WEBHOOK_SECRET debe tener al menos 16 caracteres")
+    .optional(),
+});
+
+const configSchemaChecked = configSchema.superRefine((cfg, ctx) => {
+  if (cfg.STRIPE_API_KEY && !cfg.STRIPE_WEBHOOK_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["STRIPE_WEBHOOK_SECRET"],
+      message: "STRIPE_WEBHOOK_SECRET es obligatorio cuando STRIPE_API_KEY está configurada",
+    });
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;
 
 export function loadConfig(): Config {
-  const parsed = configSchema.safeParse(process.env);
+  const parsed = configSchemaChecked.safeParse(process.env);
   if (!parsed.success) {
     console.error("[config] Variables de entorno inválidas:");
     console.error(parsed.error.flatten().fieldErrors);

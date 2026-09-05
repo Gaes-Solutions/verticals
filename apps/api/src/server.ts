@@ -1,4 +1,5 @@
 import { MockFacturamaClient } from "@gaespos/fiscal";
+import { MockShippingProvider } from "@gaespos/paqueterias";
 import { MockRecargaProvider } from "@gaespos/recargas";
 import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const useMockFiscal = process.env.FISCAL_PROVIDER === "mock";
   const useMockRecarga = process.env.RECARGA_PROVIDER === "mock";
+  const useMockShipping = process.env.SHIPPING_PROVIDER === "mock";
 
   const opts: BuildAppOptions = {};
   if (useMockFiscal) {
@@ -22,6 +24,10 @@ async function main(): Promise<void> {
     const mockRecarga = new MockRecargaProvider();
     opts.recargaProviderFactory = () => mockRecarga;
   }
+  if (useMockShipping) {
+    const mockShipping = new MockShippingProvider();
+    opts.shippingProviderFactory = () => mockShipping;
+  }
 
   const app = await buildApp(config, opts);
   if (useMockFiscal) {
@@ -29,6 +35,9 @@ async function main(): Promise<void> {
   }
   if (useMockRecarga) {
     app.log.warn("⚠️  RECARGA_PROVIDER=mock — usando MockRecargaProvider (no apto producción)");
+  }
+  if (useMockShipping) {
+    app.log.warn("⚠️  SHIPPING_PROVIDER=mock — usando MockShippingProvider (no apto producción)");
   }
 
   let stopFlowsScheduler: (() => void) | undefined;

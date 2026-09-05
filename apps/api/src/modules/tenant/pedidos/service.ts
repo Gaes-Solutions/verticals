@@ -9,6 +9,7 @@ import {
 import { CxcError, crearCxcDesdeVentaB2b, validarCreditoB2bSuficiente } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
+import { VentaError, validarTopeDescuento } from "../ventas/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
@@ -39,6 +40,8 @@ export interface CrearPedidoInput {
   cuponCodigo?: string;
   descuentoGlobalPct?: string | null;
   descuentoGlobalMotivo?: string;
+  /** Capacidad RBAC (resuelta en la ruta) para exceder el tope de descuento global. */
+  permiteDescuentoAlto?: boolean;
   ordenCompraCliente?: string;
   direccionEnvioId?: string;
   fechaEntregaEstimada?: Date;
@@ -273,6 +276,17 @@ export async function crearPedido(
     if (!dir || dir.clienteB2bId !== cliente.id) {
       throw new PedidoError(400, "Dirección de envío no pertenece al cliente B2B");
     }
+  }
+
+  try {
+    await validarTopeDescuento(
+      client,
+      input.descuentoGlobalPct ?? null,
+      input.permiteDescuentoAlto ?? false,
+    );
+  } catch (err) {
+    if (err instanceof VentaError) throw new PedidoError(err.statusCode, err.message, err.extra);
+    throw err;
   }
 
   let ticket: TicketCalculado;
@@ -660,6 +674,7 @@ async function persistirVentaDesdePedido(
       cantidad: linea.cantidad.toString(),
       motivo: `Venta ${ventaFolio} desde pedido ${ped.folio} línea ${linea.numero}`,
       usuarioId,
+      respetarReservado: true,
     });
   }
 
@@ -745,22 +760,16 @@ export async function convertirAVenta(
   const total = new Decimal(ped.total.toString());
   const { totalCobrado, pagoCreditoB2b } = validarPagosConvertir(total, input.pagos);
 
-  let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
-  if (pagoCreditoB2b.gt(ZERO)) {
-    try {
-      creditoB2b = await validarCreditoB2bSuficiente(
-        client,
-        ped.clienteB2bId,
-        pagoCreditoB2b.toString(),
-      );
-    } catch (err) {
-      if (err instanceof CxcError) throw new PedidoError(err.statusCode, err.message, err.extra);
-      throw err;
-    }
-  }
-
   try {
     return await client.$transaction(async (tx) => {
+      let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
+      if (pagoCreditoB2b.gt(ZERO)) {
+        creditoB2b = await validarCreditoB2bSuficiente(
+          tx,
+          ped.clienteB2bId,
+          pagoCreditoB2b.toString(),
+        );
+      }
       const { ventaId, folioVenta } = await persistirVentaDesdePedido(
         tx,
         ped,
@@ -796,6 +805,9 @@ export async function convertirAVenta(
         stockActual: err.stockActual,
         intentado: err.intentado,
       });
+    }
+    if (err instanceof CxcError) {
+      throw new PedidoError(err.statusCode, err.message, err.extra);
     }
     throw err;
   }

@@ -1,3 +1,4 @@
+import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -11,6 +12,7 @@ const agregarItemSchema = z.object({ productoPublicadoId: z.string().min(1) });
 
 const wishlistsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
     const q = req.query as { clienteId?: string };
     const where: Record<string, unknown> = {};
     if (q.clienteId) where.clienteId = q.clienteId;
@@ -22,6 +24,7 @@ const wishlistsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
     const body = crearSchema.parse(req.body);
     const wishlist = await req.tenantPrisma.wishlist.create({
       data: {
@@ -35,6 +38,7 @@ const wishlistsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/:id/items", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
     const { id } = idParam.parse(req.params);
     const body = agregarItemSchema.parse(req.body);
     try {
@@ -53,8 +57,16 @@ const wishlistsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/:id/items/:itemId", async (req, reply) => {
-    const params = z.object({ id: z.string(), itemId: z.string() }).parse(req.params);
-    await req.tenantPrisma.wishlistItem.delete({ where: { id: params.itemId } });
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    const params = z.object({ id: z.string().min(1), itemId: z.string().min(1) }).parse(req.params);
+    const { count } = await req.tenantPrisma.wishlistItem.deleteMany({
+      where: { id: params.itemId, wishlistId: params.id },
+    });
+    if (count === 0) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Item no encontrado" });
+    }
     return reply.code(204).send();
   });
 };

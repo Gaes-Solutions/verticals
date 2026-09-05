@@ -26,6 +26,7 @@ const ESTADOS_ENTREGADO = ["entregado", "recogido"];
 const resenasRoutes: FastifyPluginAsync = async (app) => {
   // Crear reseña — verificación obligatoria: solo si el pedido está entregado/recogido
   app.post("/", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_RESENAS_MODERAR);
     const body = crearResenaSchema.parse(req.body);
     const pedido = await req.tenantPrisma.pedidoEcommerce.findUnique({
       where: { id: body.pedidoId },

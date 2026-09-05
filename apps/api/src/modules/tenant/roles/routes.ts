@@ -101,6 +101,16 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
     });
   }
 
+  // Impide la escalada de privilegios al editar/crear roles: nadie puede embeber
+  // en un rol un permiso que él mismo no posee. El dueño (isOwner) tiene acceso
+  // total. Espeja assertCanGrantRoles del módulo usuarios, pero en el momento de
+  // ESCRIBIR el rol (login re-mergea permisos → cambia el JWT del siguiente token).
+  function permisosNoPoseidos(req: FastifyRequest, permisos: string[]): string[] {
+    if (req.principal.isOwner) return [];
+    const actorPerms = new Set(req.principal.permissions);
+    return permisos.filter((p) => p === "*" || !actorPerms.has(p));
+  }
+
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.ROLES_CREAR);
     const body = rolCreateSchema.parse(req.body);
@@ -110,6 +120,14 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 400,
         error: "Bad Request",
         message: `Permisos fuera de tu vertical: ${fuera.join(", ")}`,
+      });
+    }
+    const noPoseidos = permisosNoPoseidos(req, body.permisos);
+    if (noPoseidos.length > 0) {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: "Forbidden",
+        message: `No puedes otorgar permisos que tú no posees: ${noPoseidos.join(", ")}`,
       });
     }
     const created = await req.tenantPrisma.rol.create({
@@ -150,6 +168,14 @@ const rolesRoutes: FastifyPluginAsync = async (app) => {
           statusCode: 400,
           error: "Bad Request",
           message: `Permisos fuera de tu vertical: ${fuera.join(", ")}`,
+        });
+      }
+      const noPoseidos = permisosNoPoseidos(req, body.permisos);
+      if (noPoseidos.length > 0) {
+        return reply.code(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: `No puedes otorgar permisos que tú no posees: ${noPoseidos.join(", ")}`,
         });
       }
     }

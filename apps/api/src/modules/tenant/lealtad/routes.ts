@@ -25,7 +25,7 @@ const programaSchema = z.object({
     .object({ puntosPorPeso: z.number().positive() })
     .default({ puntosPorPeso: 1 }),
   valorPuntoRedimible: z
-    .union([z.number().positive(), z.string().regex(/^\d*\.?\d+$/)])
+    .union([z.number().positive(), z.string().regex(/^(?!0*\.?0+$)\d*\.?\d+$/)])
     .transform((v) => String(v))
     .default("0.1"),
   caducidadPuntosMeses: z.number().int().min(1).max(120).default(12),

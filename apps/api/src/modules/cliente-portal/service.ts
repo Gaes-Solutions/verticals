@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient, masterPrisma } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
+import { burnPasswordTiming } from "../../lib/password-timing.js";
 import { etiquetasDe, flujoDe, labelDe } from "../tenant/pedidos-ecommerce/estados.js";
 
 export class ClientePortalError extends Error {
@@ -72,7 +73,10 @@ export async function loginCliente(input: {
   const cliente = await prisma.cliente.findFirst({
     where: { emailPrincipal: input.email, passwordHash: { not: null }, isActive: true },
   });
-  if (!cliente?.passwordHash) throw new ClientePortalError(401, "Credenciales inválidas");
+  if (!cliente?.passwordHash) {
+    await burnPasswordTiming(input.password);
+    throw new ClientePortalError(401, "Credenciales inválidas");
+  }
   const ok = await argon2Verify(cliente.passwordHash, input.password);
   if (!ok) throw new ClientePortalError(401, "Credenciales inválidas");
   return {
@@ -136,17 +140,19 @@ export async function cambiarPasswordCliente(
 }
 
 /**
- * Pedidos del cliente: los asociados a su clienteId más los que hizo como
- * invitado con su mismo correo (checkout guest antes de tener cuenta).
+ * Pedidos del cliente: estrictamente los asociados a su clienteId. NO se
+ * resuelven por emailComprador porque el correo de la cuenta no está verificado
+ * (registro sin doble opt-in), así que confiar en él permitiría reclamar los
+ * pedidos guest de otro comprador (IDOR). El vínculo de pedidos guest requiere
+ * un flujo de reclamo con correo verificado.
  */
 export async function getPedidosCliente(
   prisma: TenantPrismaClient,
   clienteId: string,
-  email: string,
 ): Promise<unknown[]> {
   const [pedidos, etiquetas] = await Promise.all([
     prisma.pedidoEcommerce.findMany({
-      where: { OR: [{ clienteId }, { emailComprador: email }] },
+      where: { clienteId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -172,7 +178,6 @@ export async function getPedidosCliente(
 export async function getPedidoClienteDetalle(
   prisma: TenantPrismaClient,
   clienteId: string,
-  email: string,
   folio: string,
 ): Promise<unknown> {
   const [pedido, etiquetas] = await Promise.all([
@@ -184,7 +189,7 @@ export async function getPedidoClienteDetalle(
     }),
     etiquetasDe(prisma),
   ]);
-  if (!pedido || (pedido.clienteId !== clienteId && pedido.emailComprador !== email)) {
+  if (!pedido || pedido.clienteId !== clienteId) {
     throw new ClientePortalError(404, "Pedido no encontrado");
   }
 
@@ -369,11 +374,10 @@ async function productosPublicadosDePedido(
 export async function getComprasResenables(
   prisma: TenantPrismaClient,
   clienteId: string,
-  email: string,
 ): Promise<CompraResenable[]> {
   const pedidos = await prisma.pedidoEcommerce.findMany({
     where: {
-      OR: [{ clienteId }, { emailComprador: email }],
+      clienteId,
       statusPedido: { in: [...ESTADOS_RESENABLES] },
     },
     orderBy: { createdAt: "desc" },
@@ -416,20 +420,20 @@ export interface CrearResenaClienteInput {
 }
 
 /**
- * Reseña verificada por compra: el pedido debe ser del cliente (id o email),
- * estar entregado/recogido y el producto pertenecer al pedido.
+ * Reseña verificada por compra: el pedido debe pertenecer al cliente (por su
+ * clienteId, no por correo sin verificar), estar entregado/recogido y el
+ * producto pertenecer al pedido.
  */
 export async function crearResenaCliente(
   prisma: TenantPrismaClient,
   clienteId: string,
-  email: string,
   input: CrearResenaClienteInput,
 ): Promise<{ resenaId: string; estado: string }> {
   const pedido = await prisma.pedidoEcommerce.findUnique({
     where: { id: input.pedidoId },
-    select: { id: true, clienteId: true, emailComprador: true, statusPedido: true, items: true },
+    select: { id: true, clienteId: true, statusPedido: true, items: true },
   });
-  if (!pedido || (pedido.clienteId !== clienteId && pedido.emailComprador !== email)) {
+  if (!pedido || pedido.clienteId !== clienteId) {
     throw new ClientePortalError(404, "Pedido no encontrado");
   }
   if (!ESTADOS_RESENABLES.includes(pedido.statusPedido as (typeof ESTADOS_RESENABLES)[number])) {

@@ -50,14 +50,18 @@ export function IdentidadModal({
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ id: string; verificado: boolean }>("/marketplace/pacientes/confirmar", {
-        body: { email: email.trim().toLowerCase(), codigo: codigo.trim() },
-      });
+      const r = await api<{ id: string; verificado: boolean; accessToken?: string }>(
+        "/marketplace/pacientes/confirmar",
+        {
+          body: { email: email.trim().toLowerCase(), codigo: codigo.trim() },
+        },
+      );
       const sesion: PacienteSesion = {
         id: r.id || pacienteId,
         email: email.trim().toLowerCase(),
         nombre: nombre.trim(),
         verificado: r.verificado,
+        ...(r.accessToken ? { token: r.accessToken } : {}),
       };
       setPaciente(sesion);
       onListo(sesion);

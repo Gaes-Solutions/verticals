@@ -10,8 +10,16 @@ const syncRoutes: FastifyPluginAsync = async (app) => {
   app.post("/push", async (req) => {
     req.requirePerm(PERMISSIONS.SYNC_USAR);
     const body = syncPushSchema.parse(req.body);
+    // Defensa en profundidad: si el batch trae alguna venta, exigimos ventas.crear
+    // a nivel de ruta (fail-fast 403), igual que la ruta directa POST /ventas.
+    // El gate por operación en procesarPush es la barrera definitiva y conserva
+    // la semántica de éxito parcial del sync para ops individuales.
+    if (body.operations.some((op) => op.entityType === "venta")) {
+      req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    }
     return procesarPush(
       req.tenantPrisma,
+      req.principal,
       req.principal.userId,
       body.operations as SyncOperation[],
       body.deviceId,

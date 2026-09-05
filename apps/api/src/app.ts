@@ -148,7 +148,7 @@ export async function buildApp(
           }
         : { level: config.LOG_LEVEL },
     disableRequestLogging: false,
-    trustProxy: true,
+    trustProxy: config.TRUST_PROXY_HOPS,
   });
 
   await app.register(errorHandlerPlugin);
@@ -213,7 +213,14 @@ export async function buildApp(
   await app.register(storefrontPublicRoutes);
   await app.register(b2bPublicRoutes);
   await app.register(billingAdminTenantRoutes);
-  await app.register(billingWebhookRoutes);
+  // Webhook mock SIN auth ni firma: marca invoices como pagadas. Solo dev/tests.
+  // En producción el pago llega por los webhooks firmados Stripe/Conekta de abajo;
+  // dejarlo vivo en prod sería un bypass total de pago (cualquiera marca una invoice
+  // como pagada con solo el invoiceId). Allowlist explícita (fail-closed): cualquier
+  // entorno que no sea dev/test —incluido uno nuevo o mal configurado— NO lo monta.
+  if (config.NODE_ENV === "development" || config.NODE_ENV === "test") {
+    await app.register(billingWebhookRoutes);
+  }
   await app.register(conektaWebhookRoutes);
   await app.register(stripeWebhookRoutes);
   await app.register(billingAdminGaesSoftRoutes);

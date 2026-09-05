@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { PedidoError, convertirCotizacionAPedido } from "../pedidos/service.js";
 import {
@@ -95,12 +95,17 @@ const cotizacionesRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.VENTAS_COTIZAR);
     const body = cotizacionCreateSchema.parse(req.body);
+    const permiteDescuentoAlto = hasPermission(
+      req.principal,
+      PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+    );
     try {
       const result = await crearCotizacion(req.tenantPrisma, req.principal.userId, {
         sucursalId: body.sucursalId,
         clienteB2bId: body.clienteB2bId,
         diasVigencia: body.diasVigencia,
         lineas: body.lineas,
+        permiteDescuentoAlto,
         ...(body.listaPrecioCodigo ? { listaPrecioCodigo: body.listaPrecioCodigo } : {}),
         ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
         ...(body.descuentoGlobalPct !== undefined && body.descuentoGlobalPct !== null

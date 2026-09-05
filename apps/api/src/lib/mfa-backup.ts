@@ -29,12 +29,16 @@ export async function hashBackupCodes(codes: string[]): Promise<string[]> {
 
 /**
  * Verifica un código contra la lista de hashes. Si acierta, devuelve la lista
- * sin el hash consumido (de un solo uso). Si no, devuelve la lista intacta.
+ * sin el hash consumido (de un solo uso) y `matchedHash`, el hash acertado, que
+ * el caller DEBE usar como guarda en un `updateMany` condicional
+ * (`mfaBackupCodes: { has: matchedHash }`) para que el consumo sea atómico bajo
+ * concurrencia (evita TOCTOU: dos verify simultáneos con el mismo código). Si no
+ * acierta, devuelve la lista intacta sin `matchedHash`.
  */
 export async function consumeBackupCode(
   hashedCodes: string[],
   code: string,
-): Promise<{ ok: boolean; remaining: string[] }> {
+): Promise<{ ok: boolean; remaining: string[]; matchedHash?: string }> {
   const candidate = normalize(code);
   if (!candidate) return { ok: false, remaining: hashedCodes };
   for (let i = 0; i < hashedCodes.length; i++) {
@@ -48,7 +52,7 @@ export async function consumeBackupCode(
     }
     if (matches) {
       const remaining = hashedCodes.filter((_, idx) => idx !== i);
-      return { ok: true, remaining };
+      return { ok: true, remaining, matchedHash: h };
     }
   }
   return { ok: false, remaining: hashedCodes };

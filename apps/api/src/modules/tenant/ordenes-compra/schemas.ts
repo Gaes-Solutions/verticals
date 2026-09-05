@@ -5,7 +5,7 @@ const positiveDecimal = z
   .transform((v) => String(v));
 
 const positiveDecimalStrict = z
-  .union([z.number().positive(), z.string().regex(/^\d*\.?\d+$/)])
+  .union([z.number().positive(), z.string().regex(/^(?!0*\.?0+$)\d*\.?\d+$/)])
   .transform((v) => String(v))
   .refine((v) => Number(v) > 0, "Debe ser mayor a 0");
 

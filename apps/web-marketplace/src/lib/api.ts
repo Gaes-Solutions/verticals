@@ -22,6 +22,8 @@ export async function api<T = unknown>(
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const token = getPaciente()?.token;
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers,
@@ -45,6 +47,7 @@ export interface PacienteSesion {
   email: string;
   nombre: string;
   verificado: boolean;
+  token?: string;
 }
 
 export function getPaciente(): PacienteSesion | null {

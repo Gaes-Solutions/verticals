@@ -1,6 +1,6 @@
-import { PERMISSIONS } from "@gaespos/permissions";
+import { PERMISSIONS, PermissionDeniedError } from "@gaespos/permissions";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import {
   type UsuarioUpdateInput,
   assignRolSchema,
@@ -11,6 +11,58 @@ import {
   usuarioIdParamSchema,
   usuarioUpdateSchema,
 } from "./schemas.js";
+
+const OWNER_WILDCARD = "*";
+
+/**
+ * Impide la escalada de privilegios al asignar roles: nadie puede otorgar un rol
+ * más privilegiado que él mismo. El dueño (isOwner) puede otorgar cualquier rol;
+ * cualquier otro actor no puede otorgar el rol wildcard (`dueno`) ni un rol que
+ * contenga un permiso que el actor no posee.
+ */
+async function assertCanGrantRoles(req: FastifyRequest, rolIds: readonly string[]): Promise<void> {
+  if (req.principal.isOwner) return;
+  const uniqueIds = [...new Set(rolIds)];
+  if (uniqueIds.length === 0) return;
+  const roles = await req.tenantPrisma.rol.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { permisos: true },
+  });
+  const actorPerms = new Set(req.principal.permissions);
+  for (const rol of roles) {
+    const perms = Array.isArray(rol.permisos) ? (rol.permisos as string[]) : [];
+    if (perms.includes(OWNER_WILDCARD) || perms.some((p) => !actorPerms.has(p))) {
+      throw new PermissionDeniedError([PERMISSIONS.USUARIOS_ASIGNAR_ROL]);
+    }
+  }
+}
+
+/**
+ * Un usuario es "dueño" si alguno de sus roles contiene el permiso wildcard (`*`).
+ */
+async function isTargetOwner(req: FastifyRequest, targetId: string): Promise<boolean> {
+  const target = await req.tenantPrisma.usuario.findUnique({
+    where: { id: targetId },
+    select: { roles: { select: { rol: { select: { permisos: true } } } } },
+  });
+  if (!target) return false;
+  return target.roles.some(
+    (r) =>
+      Array.isArray(r.rol.permisos) &&
+      (r.rol.permisos as readonly string[]).includes(OWNER_WILDCARD),
+  );
+}
+
+/**
+ * Impide que un actor que no es dueño desactive/archive a un dueño del tenant,
+ * evitando el bloqueo (lockout) de las cuentas de mayor privilegio.
+ */
+async function assertCanDeactivateTarget(req: FastifyRequest, targetId: string): Promise<void> {
+  if (req.principal.isOwner) return;
+  if (await isTargetOwner(req, targetId)) {
+    throw new PermissionDeniedError([PERMISSIONS.USUARIOS_ARCHIVAR]);
+  }
+}
 
 async function buildUsuarioUpdateData(body: UsuarioUpdateInput): Promise<Record<string, unknown>> {
   const data: Record<string, unknown> = {};
@@ -114,6 +166,7 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     req.requirePerm(PERMISSIONS.USUARIOS_CREAR);
     const body = usuarioCreateSchema.parse(req.body);
+    await assertCanGrantRoles(req, body.rolIds);
     const passwordHash = await argon2Hash(body.password);
     const pinHash = body.pin ? await argon2Hash(body.pin) : null;
 
@@ -149,6 +202,9 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.USUARIOS_ACTUALIZAR);
     const params = usuarioIdParamSchema.parse(req.params);
     const body = usuarioUpdateSchema.parse(req.body);
+    if (body.isActive === false) {
+      await assertCanDeactivateTarget(req, params.id);
+    }
     const data = await buildUsuarioUpdateData(body);
     const updated = await req.tenantPrisma.usuario.update({
       where: { id: params.id },
@@ -160,6 +216,7 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
   app.delete("/:id", async (req) => {
     req.requirePerm(PERMISSIONS.USUARIOS_ARCHIVAR);
     const params = usuarioIdParamSchema.parse(req.params);
+    await assertCanDeactivateTarget(req, params.id);
     const archived = await req.tenantPrisma.usuario.update({
       where: { id: params.id },
       data: { isActive: false, terminatedAt: new Date() },
@@ -171,6 +228,7 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.USUARIOS_ASIGNAR_ROL);
     const params = usuarioIdParamSchema.parse(req.params);
     const body = assignRolSchema.parse(req.body);
+    await assertCanGrantRoles(req, [body.rolId]);
     await req.tenantPrisma.usuarioRol.upsert({
       where: { usuarioId_rolId: { usuarioId: params.id, rolId: body.rolId } },
       update: {},
@@ -189,6 +247,9 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
         error: "Bad Request",
         message: "rolId requerido",
       });
+    }
+    if (!req.principal.isOwner && (await isTargetOwner(req, params.id))) {
+      throw new PermissionDeniedError([PERMISSIONS.USUARIOS_ASIGNAR_ROL]);
     }
     await req.tenantPrisma.usuarioRol.deleteMany({
       where: { usuarioId: params.id, rolId },
@@ -222,6 +283,33 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.USUARIOS_RESET_PASSWORD);
     const params = usuarioIdParamSchema.parse(req.params);
     const body = resetPasswordSchema.parse(req.body);
+
+    const target = await req.tenantPrisma.usuario.findUnique({
+      where: { id: params.id },
+      select: { roles: { select: { rol: { select: { permisos: true } } } } },
+    });
+    if (!target) {
+      return reply.code(404).send({
+        statusCode: 404,
+        error: "Not Found",
+        message: "Usuario no encontrado",
+      });
+    }
+    if (!req.principal.isOwner) {
+      const actorPerms = new Set(req.principal.permissions);
+      const targetOutranksActor = target.roles.some((r) => {
+        const perms = Array.isArray(r.rol.permisos) ? (r.rol.permisos as readonly string[]) : [];
+        return perms.includes(OWNER_WILDCARD) || perms.some((p) => !actorPerms.has(p));
+      });
+      if (targetOutranksActor) {
+        return reply.code(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "No puedes restablecer la contraseña de un usuario con mayor privilegio.",
+        });
+      }
+    }
+
     const passwordHash = await argon2Hash(body.newPassword);
     await req.tenantPrisma.usuario.update({
       where: { id: params.id },

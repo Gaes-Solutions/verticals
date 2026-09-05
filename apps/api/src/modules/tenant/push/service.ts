@@ -1,5 +1,6 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import webpush from "web-push";
+import { isPushEndpointSafe } from "./ssrf-guard.js";
 
 let vapidListo: boolean | null = null;
 
@@ -91,6 +92,7 @@ export async function enviarPushCliente(
   const muertas: string[] = [];
   await Promise.all(
     subs.map(async (s) => {
+      if (!(await isPushEndpointSafe(s.endpoint))) return; // SSRF guard: no disparar a hosts internos/privados
       try {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },

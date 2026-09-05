@@ -101,3 +101,12 @@ Admin: alta usuario+rol · 2FA · reportes.
 2. Build: ¿Java 17 local ya, o esperamos EAS 1-sep / plan pago?
 3. Kiosko Fase 1: las 4 decisiones del `plan-kiosko-verificador-precios.md`.
 4. Tenant piloto real (nombre/catálogo) para cargar datos de verdad.
+
+## 9. Hallazgos del smoke test post-deploy (31-ago)
+- ✅ Producción estable tras integrar móvil + seguridad: api/health 200 constante durante el redeploy.
+- ✅ Auth intacto tras los fixes: login cliente OK (200 + token), login negocio pide MFA (2FA activo).
+- ✅ Web OK: app, shop, admin, pos → 200.
+- ⚠️ **`clinica.angaes.com` y `salud.angaes.com` → SSL falla** (TCP conecta, TLS no; HTTP 000).
+  Problema de certificado/dominio custom en Railway, PREEXISTENTE (no del deploy). Son verticales
+  de **Salud**, NO Retail → no bloquea el piloto del 25-sep, pero arreglar antes de lanzar Salud
+  (revisar Custom Domain + SSL de web-clinical y web-marketplace en Railway).

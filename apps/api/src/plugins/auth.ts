@@ -1,5 +1,6 @@
 import fastifyCookie from "@fastify/cookie";
 import fastifyJwt from "@fastify/jwt";
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "../config.js";
@@ -34,10 +35,14 @@ type TenantMfaTokenPayload = {
   kind: "tenant_mfa";
 };
 
+// scope distingue el factor de posesión con el que se emitió la sesión:
+// - "phr": OTP por teléfono (WhatsApp/SMS) + device-trust → acceso al expediente.
+// - "marketplace": OTP por correo → solo reservar/reseñar, nunca el PHR.
 type PatientTokenPayload = {
   sub: string;
   phoneE164: string;
   kind: "patient";
+  scope: "phr" | "marketplace";
 };
 
 type AdminTenantTokenPayload = {
@@ -96,6 +101,7 @@ declare module "fastify" {
     authenticateAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticatePatient: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticatePatientPhr: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateAdminTenant: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateCliente: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateClienteB2b: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -147,6 +153,18 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     if (req.user.kind !== "admin") {
       return rejectUnauthorized(reply, "Se requiere sesión de administrador");
     }
+    // Recarga el AdminUser en cada request: el plano de mayor privilegio no puede
+    // autorizar desde el claim del access token. Una degradación de rol o
+    // desactivación debe aplicar de inmediato, no al expirar el token (revocar los
+    // refresh tokens solo frena reemitir, no invalida el access token vivo).
+    const admin = await app.masterPrisma.adminUser.findUnique({
+      where: { id: req.user.sub },
+      select: { active: true, role: true },
+    });
+    if (!admin || !admin.active) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
+    }
+    req.user.role = admin.role;
   });
 
   app.decorate("authenticateTenant", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -171,6 +189,20 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
   });
 
+  // Guard del portal PHR: fail-closed. Solo acepta la sesión de factor fuerte
+  // (scope "phr", emitida por OTP de teléfono + device-trust). Rechaza la sesión
+  // de marketplace (OTP por correo), que no debe leer el expediente cross-tenant.
+  app.decorate("authenticatePatientPhr", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await req.jwtVerify();
+    } catch (_err) {
+      return rejectUnauthorized(reply, "Token inválido o expirado");
+    }
+    if (req.user.kind !== "patient" || req.user.scope !== "phr") {
+      return rejectUnauthorized(reply, "Se requiere sesión de paciente del portal");
+    }
+  });
+
   app.decorate("authenticateAdminTenant", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
@@ -182,6 +214,13 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
   });
 
+  // Rechaza tokens de tenants cancelados: la sesión del portal (B2C/B2B) muere
+  // en cuanto el tenant se cancela, no al expirar el access token.
+  const tenantActivo = async (slug: string): Promise<boolean> => {
+    const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
+    return !!tenant && tenant.status !== "cancelled";
+  };
+
   app.decorate("authenticateCliente", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
@@ -190,6 +229,16 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente");
+    }
+    if (!(await tenantActivo(req.user.tenantSlug))) {
+      return rejectUnauthorized(reply, "Portal no disponible");
+    }
+    const cliente = await getTenantClient(req.user.tenantSlug).cliente.findUnique({
+      where: { id: req.user.sub },
+      select: { isActive: true },
+    });
+    if (!cliente || !cliente.isActive) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
     }
   });
 
@@ -202,6 +251,13 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     if (req.user.kind !== "partner") {
       return rejectUnauthorized(reply, "Se requiere sesión de partner");
     }
+    const partner = await app.masterPrisma.partner.findUnique({
+      where: { id: req.user.sub },
+      select: { estado: true },
+    });
+    if (!partner || partner.estado !== "activo") {
+      return rejectUnauthorized(reply, "Cuenta de partner inactiva o no encontrada");
+    }
   });
 
   app.decorate("authenticateClienteB2b", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -212,6 +268,16 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     }
     if (req.user.kind !== "cliente_b2b") {
       return rejectUnauthorized(reply, "Se requiere sesión de cliente mayorista");
+    }
+    if (!(await tenantActivo(req.user.tenantSlug))) {
+      return rejectUnauthorized(reply, "Portal no disponible");
+    }
+    const usuario = await getTenantClient(req.user.tenantSlug).clienteB2bUsuario.findUnique({
+      where: { id: req.user.sub },
+      select: { isActive: true, clienteB2b: { select: { isActive: true } } },
+    });
+    if (!usuario || !usuario.isActive || !usuario.clienteB2b.isActive) {
+      return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
     }
   });
 };

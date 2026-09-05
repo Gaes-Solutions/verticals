@@ -1,6 +1,7 @@
 import type { TicketCalculado } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import { reservarUsoCupon } from "../checkout/cupon-service.js";
 import {
   InsufficientStockError,
   aplicarAjuste,
@@ -25,6 +26,39 @@ export class ApartadoError extends Error {
     super(message);
     this.name = "ApartadoError";
   }
+}
+
+/**
+ * Valida que el descuento global manual del apartado no exceda el tope
+ * configurado por el dueño (config_ventas.descuentoMaximoPct, default 100 = sin
+ * tope). Mismo control que crearVenta: quien tiene `permiteDescuentoAlto`
+ * (ventas.aplicar_descuento_alto o dueño) lo sobrepasa. Bloquea antes de
+ * calcular precios, cerrando el bypass del tope vía el flujo de apartados.
+ */
+async function validarTopeDescuento(
+  client: TenantClient,
+  descuentoGlobalPct: number | string | null | undefined,
+  permiteDescuentoAlto: boolean,
+): Promise<void> {
+  if (permiteDescuentoAlto || descuentoGlobalPct === null || descuentoGlobalPct === undefined) {
+    return;
+  }
+  const pct = new Decimal(String(descuentoGlobalPct));
+  if (pct.lte(ZERO)) return;
+  const cfg = await client.configVentas.findFirst();
+  const max = new Decimal(cfg ? cfg.descuentoMaximoPct.toString() : "100");
+  if (pct.gt(max)) {
+    throw new ApartadoError(
+      400,
+      `El descuento máximo permitido es ${max.toString()}%. Pide autorización para aplicar un descuento mayor.`,
+      { descuentoMaximoPct: max.toString(), solicitado: pct.toString() },
+    );
+  }
+}
+
+export interface CrearApartadoOpts {
+  /** Permite sobrepasar el tope de descuento configurado (ventas.aplicar_descuento_alto o dueño). */
+  permiteDescuentoAlto?: boolean;
 }
 
 interface VarianteSnapshot {
@@ -150,9 +184,12 @@ export async function crearApartado(
   client: TenantClient,
   usuarioId: string,
   input: ApartadoCreateInput,
+  opts: CrearApartadoOpts = {},
 ): Promise<CrearApartadoResult> {
   const sucursal = await client.sucursal.findUnique({ where: { id: input.sucursalId } });
   if (!sucursal) throw new ApartadoError(404, "Sucursal no encontrada");
+
+  await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
 
   let ticket: TicketCalculado;
   try {
@@ -173,6 +210,15 @@ export async function crearApartado(
     throw err;
   }
 
+  const violado = ticket.lineas.find((l) => l.precioMinimoViolado);
+  if (violado) {
+    throw new ApartadoError(409, "Línea bajo precio mínimo de negociación", {
+      varianteId: violado.productoVarianteId,
+    });
+  }
+
+  const cuponAplicado = ticket.descuentosTicket.some((d) => d.fuente === "cupon");
+
   const snapshots = await loadSnapshots(
     client,
     ticket.lineas.map((l) => l.productoVarianteId),
@@ -192,6 +238,15 @@ export async function crearApartado(
 
   try {
     return await client.$transaction(async (tx) => {
+      // Consume el tope global del cupón (usosTotal) con el mismo compare-and-swap
+      // atómico que el checkout de tienda y la venta POS. Si otro canal ya lo agotó
+      // entre el preview y aquí, el reserve devuelve false y abortamos el apartado.
+      if (cuponAplicado && input.cuponCodigo) {
+        const reservado = await reservarUsoCupon(tx, input.cuponCodigo);
+        if (!reservado) {
+          throw new ApartadoError(409, `Cupón "${input.cuponCodigo}" agotado`);
+        }
+      }
       const folio = await nextFolio(tx, sucursal.id, sucursal.codigo);
       const apartado = await tx.apartado.create({
         data: {
@@ -294,20 +349,35 @@ export async function registrarAbono(
       throw new ApartadoError(409, `Apartado en estado ${apartado.estado} no acepta abonos`);
     }
     const monto = new Decimal(input.monto);
-    const pagadoActual = new Decimal(apartado.montoPagado.toString());
     const total = new Decimal(apartado.total.toString());
-    const saldoActual = total.minus(pagadoActual);
-    if (monto.gt(saldoActual)) {
+    // Compare-and-swap atómico: el incremento condicional (where montoPagado <= total - monto)
+    // toma lock de fila en Postgres, serializa abonos concurrentes de un mismo apartado y
+    // re-evalúa el saldo contra el valor ya abonado tras el primer commit (count=0 = excede),
+    // cerrando el lost-update. Mismo patrón que monedero/ventas.
+    const maxPagadoPrevio = total.minus(monto);
+    const abonado = await tx.apartado.updateMany({
+      where: {
+        id: apartado.id,
+        estado: "activo",
+        montoPagado: { lte: maxPagadoPrevio.toString() },
+      },
+      data: { montoPagado: { increment: monto.toString() } },
+    });
+    if (abonado.count === 0) {
+      const actual = await tx.apartado.findUnique({
+        where: { id: apartado.id },
+        select: { montoPagado: true, total: true, estado: true },
+      });
+      if (!actual) throw new ApartadoError(404, "Apartado no encontrado");
+      if (actual.estado !== "activo") {
+        throw new ApartadoError(409, `Apartado en estado ${actual.estado} no acepta abonos`);
+      }
+      const saldoActual = new Decimal(actual.total.toString()).minus(actual.montoPagado.toString());
       throw new ApartadoError(409, "El abono excede el saldo del apartado", {
         saldoRestante: saldoActual.toString(),
         intentado: monto.toString(),
       });
     }
-    const nuevoPagado = pagadoActual.plus(monto);
-    await tx.apartado.update({
-      where: { id: apartado.id },
-      data: { montoPagado: nuevoPagado.toString() },
-    });
     await tx.apartadoAbono.create({
       data: {
         apartadoId: apartado.id,
@@ -318,6 +388,11 @@ export async function registrarAbono(
         usuarioId: input.usuarioId,
       },
     });
+    const actualizado = await tx.apartado.findUnique({
+      where: { id: apartado.id },
+      select: { montoPagado: true },
+    });
+    const nuevoPagado = new Decimal((actualizado?.montoPagado ?? apartado.montoPagado).toString());
     return {
       saldoRestante: total.minus(nuevoPagado).toString(),
       montoPagado: nuevoPagado.toString(),
