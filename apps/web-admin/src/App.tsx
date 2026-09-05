@@ -16,6 +16,7 @@ import {
   type LucideIcon,
   Menu,
   MessageCircleQuestion,
+  Monitor,
   Package,
   PackageCheck,
   Percent,
@@ -63,6 +64,7 @@ import { GuiaInicioPage } from "./pages/GuiaInicioPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
 import { InventarioInsightsPage } from "./pages/InventarioInsightsPage.js";
 import { InventarioPage } from "./pages/InventarioPage.js";
+import { KioskosPage } from "./pages/KioskosPage.js";
 import { MonederoPage } from "./pages/MonederoPage.js";
 import { PedidosPage } from "./pages/PedidosPage.js";
 import { PreciosPage } from "./pages/PreciosPage.js";
@@ -111,6 +113,7 @@ type Seccion =
   | "usuarios"
   | "seguridad"
   | "configuracion"
+  | "kioskos"
   | "contabilidad"
   | "suscripcion"
   | "portal-b2b"
@@ -222,6 +225,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "usuarios", label: "Usuarios y permisos", icon: Users, perm: "usuarios.leer" },
       { key: "seguridad", label: "Seguridad", icon: ShieldCheck, perm: "configuracion.leer" },
       { key: "configuracion", label: "Configuración", icon: Settings, perm: "configuracion.leer" },
+      { key: "kioskos", label: "Kioskos de precios", icon: Monitor, perm: "configuracion.leer" },
       { key: "suscripcion", label: "Mi suscripción", icon: CreditCard, perm: "*" },
     ],
   },
@@ -241,6 +245,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   usuarios: UsuariosRolesPage,
   seguridad: SeguridadPage,
   configuracion: ConfiguracionPage,
+  kioskos: KioskosPage,
   ventas: VentasPage,
   cobros: CobrosPage,
   cxc: CxcPage,

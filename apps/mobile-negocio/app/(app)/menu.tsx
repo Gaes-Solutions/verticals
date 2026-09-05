@@ -109,6 +109,7 @@ const GRUPOS: Grupo[] = [
         label: "Configuración",
         to: "/(app)/configuracion",
       },
+      { perm: "configuracion.leer", icon: "tv", label: "Kioskos", to: "/(app)/kioskos" },
     ],
   },
   {

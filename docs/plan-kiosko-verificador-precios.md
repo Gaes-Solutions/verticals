@@ -118,3 +118,13 @@ Por eso Fase 1 requiere construir en backend:
 
 Orden Fase 1: (1) backend token+endpoint (con migración + tests) → (2) app `mobile-kiosko`
 (cámara → precio, idle → carrusel auto) → (3) build APK → (4) prueba en 1 dispositivo.
+
+## 10. Estado (1-sep) — Fase 1 construida
+- ✅ Backend: modelos `kiosko_devices` + `kiosko_config`, migración `20260831120000_add_kiosko`
+  (aditiva, **pendiente de aplicar en prod**), token de dispositivo, `/kiosko/config|precio|idle`,
+  admin `/t/kioskos` (alta/baja/config).
+- ✅ App `apps/mobile-kiosko`: setup por token, cámara → precio, reposo → carrusel, config remota.
+- ✅ Panel **"Kioskos de precios"** en web-admin (`KioskosPage`) y en app Negocio (`kioskos.tsx`):
+  alta con token visible una sola vez, desactivar, estado/última conexión, 9 ajustes.
+- ⏳ Falta: aplicar migración en prod, proyecto EAS + APK del kiosko, prueba en tablet real,
+  tests de endpoints.

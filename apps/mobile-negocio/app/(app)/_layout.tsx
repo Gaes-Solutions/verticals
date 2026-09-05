@@ -65,6 +65,7 @@ export default function AppLayout() {
       <Tabs.Screen name="usuarios" options={{ ...hidden, title: "Usuarios y roles" }} />
       <Tabs.Screen name="seguridad" options={{ ...hidden, title: "Seguridad" }} />
       <Tabs.Screen name="configuracion" options={{ ...hidden, title: "Configuración" }} />
+      <Tabs.Screen name="kioskos" options={{ ...hidden, title: "Kioskos de precios" }} />
       <Tabs.Screen name="cxc" options={{ ...hidden, title: "Cuentas por cobrar" }} />
       <Tabs.Screen name="clientes-b2b" options={{ ...hidden, title: "Clientes B2B" }} />
       <Tabs.Screen name="tienda" options={{ ...hidden, title: "Tienda" }} />

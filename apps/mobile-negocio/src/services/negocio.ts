@@ -742,3 +742,34 @@ export const importarProductos = (filas: FilaProducto[]) =>
   api.post<BulkResultado>("/t/productos/bulk", { filas });
 export const importarPrecios = (filas: FilaPrecio[]) =>
   api.post<BulkResultado>("/t/productos/bulk-precios", { filas });
+
+// ── Kioskos verificadores de precio ─────────────────────────────────────────
+
+export interface Kiosko {
+  id: string;
+  nombre: string;
+  sucursalId: string;
+  activo: boolean;
+  ultimoVisto: string | null;
+  createdAt: string;
+}
+
+export interface KioskoConfig {
+  reposoSegundos: number;
+  precioSegundos: number;
+  contenidoReposo: "promociones" | "destacados" | "ambos";
+  slideSegundos: number;
+  mostrarExistencia: boolean;
+  sonidoBeep: boolean;
+  mensajeBienvenida: string;
+  colorAcento: string;
+  idioma: "es" | "en";
+}
+
+export const listKioskos = () => api.get<Kiosko[]>("/t/kioskos");
+export const crearKiosko = (nombre: string, sucursalId: string) =>
+  api.post<{ device: { id: string }; token: string }>("/t/kioskos", { nombre, sucursalId });
+export const desactivarKiosko = (id: string) => api.del<void>(`/t/kioskos/${id}`);
+export const getKioskoConfig = () => api.get<KioskoConfig>("/t/kioskos/config");
+export const saveKioskoConfig = (cfg: KioskoConfig) =>
+  api.put<KioskoConfig>("/t/kioskos/config", cfg);
