@@ -65,6 +65,8 @@ import hospitalizacionesRoutes from "./modules/tenant/hospitalizaciones/routes.j
 import imagenologiaRoutes from "./modules/tenant/imagenologia/routes.js";
 import inventarioInsightsRoutes from "./modules/tenant/inventario-insights/routes.js";
 import inventarioRoutes from "./modules/tenant/inventario/routes.js";
+import kioskoAdminRoutes from "./modules/tenant/kiosko/admin-routes.js";
+import { kioskoDeviceRoutes } from "./modules/tenant/kiosko/routes.js";
 import laboratorioRoutes from "./modules/tenant/laboratorio/routes.js";
 import lealtadRoutes from "./modules/tenant/lealtad/routes.js";
 import preciosRoutes from "./modules/tenant/listas-precios/routes.js";
@@ -217,6 +219,7 @@ export async function buildApp(
   await app.register(billingAdminGaesSoftRoutes);
   await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
+  await app.register(kioskoDeviceRoutes, { prefix: "/kiosko" });
   await app.register(b2bAuthRoutes, { prefix: "/auth/cliente-b2b" });
   await app.register(b2bPortalRoutes, { prefix: "/b2b-portal" });
 
@@ -255,6 +258,7 @@ export async function buildApp(
       await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(seguridadRoutes, { prefix: "/seguridad" });
       await tenantApp.register(configVentasRoutes, { prefix: "/config-ventas" });
+      await tenantApp.register(kioskoAdminRoutes, { prefix: "/kioskos" });
       await tenantApp.register(recordatoriosRoutes, { prefix: "/recordatorios" });
       await tenantApp.register(cobrosRoutes, { prefix: "/cobros" });
       await tenantApp.register(monederoRoutes, { prefix: "/monedero" });

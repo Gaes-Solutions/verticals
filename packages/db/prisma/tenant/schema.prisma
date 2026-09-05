@@ -104,6 +104,7 @@ model Sucursal {
   pedidosEcommercePickup      PedidoEcommerce[]
   configPickup                ConfigPickupSucursal?
   pickupPedidos               PickupPedido[]
+  kioskos                     KioskoDevice[]
 
   @@index([isActive])
   @@map("sucursales")
@@ -1887,7 +1888,7 @@ model CxcPago {
 
   cuentaCobrar CuentaCobrar @relation(fields: [cuentaCobrarId], references: [id], onDelete: Cascade)
   usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
-  comision Comision?
+  comision     Comision?
 
   @@index([cuentaCobrarId, createdAt])
   @@map("cxc_pagos")
@@ -2491,25 +2492,25 @@ model Paciente {
 }
 
 model Medico {
-  id                        String   @id @default(cuid())
-  usuarioId                 String   @unique @map("usuario_id")
-  cedulaProfesional         String?  @map("cedula_profesional")
-  especialidades            Json     @default("[]")
-  subespecialidades         Json     @default("[]")
-  anosExperiencia           Int?     @map("anos_experiencia")
-  idiomasAtencion           Json     @default("[\"es-MX\"]") @map("idiomas_atencion")
-  bio                       String?
-  fotoPerfilUrl             String?  @map("foto_perfil_url")
-  consultorios              Json     @default("[]")
-  precioConsultaPrimera     Decimal? @map("precio_consulta_primera") @db.Decimal(14, 2)
-  precioConsultaSeguimiento Decimal? @map("precio_consulta_seguimiento") @db.Decimal(14, 2)
-  aceptaSeguros             Json     @default("[]") @map("acepta_seguros")
-  firmaElectronicaUrl       String?  @map("firma_electronica_url")
-  aceptaTelemedicina        Boolean  @default(false) @map("acepta_telemedicina")
-  isPerfilPublicoMarketplace Boolean @default(false) @map("is_perfil_publico_marketplace")
-  isActive                  Boolean  @default(true) @map("is_active")
-  createdAt                 DateTime @default(now()) @map("created_at")
-  updatedAt                 DateTime @updatedAt @map("updated_at")
+  id                         String   @id @default(cuid())
+  usuarioId                  String   @unique @map("usuario_id")
+  cedulaProfesional          String?  @map("cedula_profesional")
+  especialidades             Json     @default("[]")
+  subespecialidades          Json     @default("[]")
+  anosExperiencia            Int?     @map("anos_experiencia")
+  idiomasAtencion            Json     @default("[\"es-MX\"]") @map("idiomas_atencion")
+  bio                        String?
+  fotoPerfilUrl              String?  @map("foto_perfil_url")
+  consultorios               Json     @default("[]")
+  precioConsultaPrimera      Decimal? @map("precio_consulta_primera") @db.Decimal(14, 2)
+  precioConsultaSeguimiento  Decimal? @map("precio_consulta_seguimiento") @db.Decimal(14, 2)
+  aceptaSeguros              Json     @default("[]") @map("acepta_seguros")
+  firmaElectronicaUrl        String?  @map("firma_electronica_url")
+  aceptaTelemedicina         Boolean  @default(false) @map("acepta_telemedicina")
+  isPerfilPublicoMarketplace Boolean  @default(false) @map("is_perfil_publico_marketplace")
+  isActive                   Boolean  @default(true) @map("is_active")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -2965,23 +2966,23 @@ model VacunaCatalogo {
 }
 
 model Vacunacion {
-  id                       String    @id @default(cuid())
-  pacienteId               String?   @map("paciente_id")
-  mascotaId                String?   @map("mascota_id")
-  vacunaCatalogoId         String    @map("vacuna_catalogo_id")
-  medicoAplicadorId        String    @map("medico_aplicador_id")
-  fechaAplicacion          DateTime  @map("fecha_aplicacion")
-  numeroLote               String    @map("numero_lote")
-  caducidadLote            DateTime  @map("caducidad_lote")
-  marcaSnapshot            String?   @map("marca_snapshot")
-  viaAdministracion        String?   @map("via_administracion")
-  dosisAplicada            String?   @map("dosis_aplicada")
-  reaccionAdversaObservada String?   @map("reaccion_adversa_observada")
-  proximaAplicacionFecha   DateTime? @map("proxima_aplicacion_fecha")
+  id                           String    @id @default(cuid())
+  pacienteId                   String?   @map("paciente_id")
+  mascotaId                    String?   @map("mascota_id")
+  vacunaCatalogoId             String    @map("vacuna_catalogo_id")
+  medicoAplicadorId            String    @map("medico_aplicador_id")
+  fechaAplicacion              DateTime  @map("fecha_aplicacion")
+  numeroLote                   String    @map("numero_lote")
+  caducidadLote                DateTime  @map("caducidad_lote")
+  marcaSnapshot                String?   @map("marca_snapshot")
+  viaAdministracion            String?   @map("via_administracion")
+  dosisAplicada                String?   @map("dosis_aplicada")
+  reaccionAdversaObservada     String?   @map("reaccion_adversa_observada")
+  proximaAplicacionFecha       DateTime? @map("proxima_aplicacion_fecha")
   recordatorioProximaEnviadoAt DateTime? @map("recordatorio_proxima_enviado_at")
-  notas                    String?
-  createdAt                DateTime  @default(now()) @map("created_at")
-  updatedAt                DateTime  @updatedAt @map("updated_at")
+  notas                        String?
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
 
   vacuna          VacunaCatalogo @relation(fields: [vacunaCatalogoId], references: [id], onDelete: Restrict)
   medicoAplicador Usuario        @relation("VacunacionAplicador", fields: [medicoAplicadorId], references: [id], onDelete: Restrict)
@@ -3269,28 +3270,28 @@ model EstudioLaboratorio {
 // se cargan hallazgos, impresión diagnóstica e imágenes (`imagenes` = arreglo de
 // {url, descripcion}). Sin interpretación automática (línea roja no-IA-clínica).
 model EstudioImagen {
-  id                  String    @id @default(cuid())
-  folio               String    @unique
-  sucursalId          String    @map("sucursal_id")
-  pacienteId          String?   @map("paciente_id")
-  mascotaId           String?   @map("mascota_id")
-  medicoSolicitanteId String    @map("medico_solicitante_id")
-  consultaId          String?   @map("consulta_id")
-  modalidad           String
-  region              String?
-  nombreEstudio       String    @map("nombre_estudio")
-  prioridad           String    @default("rutina")
-  notasClinicas       String?   @map("notas_clinicas")
-  estado              String    @default("solicitado")
-  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
-  fechaResultado      DateTime? @map("fecha_resultado")
-  hallazgos           String?
-  impresionDiagnostica String?  @map("impresion_diagnostica")
-  imagenes            Json      @default("[]")
-  cargadoPorId        String?   @map("cargado_por_id")
-  canceladoMotivo     String?   @map("cancelado_motivo")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  id                   String    @id @default(cuid())
+  folio                String    @unique
+  sucursalId           String    @map("sucursal_id")
+  pacienteId           String?   @map("paciente_id")
+  mascotaId            String?   @map("mascota_id")
+  medicoSolicitanteId  String    @map("medico_solicitante_id")
+  consultaId           String?   @map("consulta_id")
+  modalidad            String
+  region               String?
+  nombreEstudio        String    @map("nombre_estudio")
+  prioridad            String    @default("rutina")
+  notasClinicas        String?   @map("notas_clinicas")
+  estado               String    @default("solicitado")
+  fechaSolicitud       DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResultado       DateTime? @map("fecha_resultado")
+  hallazgos            String?
+  impresionDiagnostica String?   @map("impresion_diagnostica")
+  imagenes             Json      @default("[]")
+  cargadoPorId         String?   @map("cargado_por_id")
+  canceladoMotivo      String?   @map("cancelado_motivo")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@index([mascotaId])
   @@index([pacienteId])
@@ -4790,4 +4791,49 @@ model VisitaFoto {
 
   @@index([visitaId])
   @@map("visita_fotos")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kiosko verificador de precios (estilo Walmart) + config por tenant
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum KioskoContenido {
+  promociones
+  destacados
+  ambos
+}
+
+/// Un dispositivo verificador de precios registrado en una sucursal.
+model KioskoDevice {
+  id          String    @id @default(cuid())
+  nombre      String
+  sucursalId  String    @map("sucursal_id")
+  tokenHash   String    @unique @map("token_hash")
+  activo      Boolean   @default(true)
+  ultimoVisto DateTime? @map("ultimo_visto")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@index([sucursalId])
+  @@map("kiosko_devices")
+}
+
+/// Configuración del kiosko por tenant (singleton). Todo default es editable.
+model KioskoConfig {
+  id                String          @id @default(cuid())
+  reposoSegundos    Int             @default(20) @map("reposo_segundos")
+  precioSegundos    Int             @default(8) @map("precio_segundos")
+  contenidoReposo   KioskoContenido @default(ambos) @map("contenido_reposo")
+  slideSegundos     Int             @default(6) @map("slide_segundos")
+  mostrarExistencia Boolean         @default(false) @map("mostrar_existencia")
+  sonidoBeep        Boolean         @default(true) @map("sonido_beep")
+  mensajeBienvenida String          @default("Escanea tu producto") @map("mensaje_bienvenida")
+  colorAcento       String          @default("#0f766e") @map("color_acento")
+  idioma            String          @default("es")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@map("kiosko_config")
 }
