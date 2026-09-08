@@ -83,6 +83,7 @@ export interface Sucursal {
 }
 
 export interface ConfigTienda {
+  envioVarianteId?: string | null;
   activa?: boolean;
   subdominio?: string | null;
   dominioPropio?: string | null;

@@ -332,3 +332,43 @@ describe("tenant CRUD — productos + variantes", () => {
     expect(res.json().nombre).toBe("Leche entera 1L UHT");
   });
 });
+
+describe("producto y variante actualizados atómicamente", () => {
+  it("SKU duplicado revierte nombre y precio; éxito guarda ambos", async () => {
+    const create = async (sku: string) => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/t/productos",
+        headers: authOwner(),
+        payload: { skuPadre: sku, nombre: sku, precioBase: "100" },
+      });
+      expect(response.statusCode, response.body).toBe(201);
+      return response.json().id as string;
+    };
+    const id = await create("ATOMIC-A");
+    await create("ATOMIC-B");
+    const conflict = await app.inject({
+      method: "PATCH",
+      url: `/t/productos/${id}`,
+      headers: authOwner(),
+      payload: { nombre: "No debe persistir", precioBase: "250", sku: "ATOMIC-B" },
+    });
+    expect(conflict.statusCode, conflict.body).toBe(409);
+    const unchanged = await app.inject({
+      method: "GET",
+      url: `/t/productos/${id}`,
+      headers: authOwner(),
+    });
+    expect(unchanged.json().nombre).toBe("ATOMIC-A");
+    expect(Number(unchanged.json().variantes[0].precioBase)).toBe(100);
+    const saved = await app.inject({
+      method: "PATCH",
+      url: `/t/productos/${id}`,
+      headers: authOwner(),
+      payload: { nombre: "Actualizado", precioBase: "250" },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json().nombre).toBe("Actualizado");
+    expect(Number(saved.json().variantes[0].precioBase)).toBe(250);
+  });
+});

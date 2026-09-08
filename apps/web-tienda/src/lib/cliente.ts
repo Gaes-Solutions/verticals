@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { slugActual } from "./api";
 
 /**
  * Auth del cliente de la tienda. A diferencia del BFF (token de servicio del
@@ -6,12 +7,70 @@ import { cookies } from "next/headers";
  * cookie httpOnly y se usa para llamar /cliente-portal/* con su identidad.
  */
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
-export const TENANT_SLUG = process.env.TIENDA_TENANT_SLUG ?? "";
 export const COOKIE = "gaespos_cliente_token";
 
-export async function getClienteToken(): Promise<string | null> {
+export class ClienteSessionError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ClienteSessionError";
+  }
+}
+
+export interface ClienteSession {
+  token: string;
+  cliente: ClienteMe & { tenantSlug: string };
+}
+
+export async function getClienteSession(): Promise<ClienteSession | null> {
   const store = await cookies();
-  return store.get(COOKIE)?.value ?? null;
+  const token = store.get(COOKIE)?.value;
+  if (!token) return null;
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/cliente-portal/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ClienteSessionError(503, "No se pudo verificar tu sesión. Reintenta.");
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new ClienteSessionError(401, "Tu sesión venció. Inicia sesión de nuevo.");
+  }
+  if (!res.ok) {
+    throw new ClienteSessionError(503, "No se pudo verificar tu sesión. Reintenta.");
+  }
+  let cliente: ClienteSession["cliente"];
+  try {
+    cliente = (await res.json()) as ClienteSession["cliente"];
+  } catch {
+    throw new ClienteSessionError(503, "No se pudo verificar tu sesión. Reintenta.");
+  }
+  if (
+    !cliente ||
+    typeof cliente.id !== "string" ||
+    !cliente.id ||
+    typeof cliente.tenantSlug !== "string"
+  ) {
+    throw new ClienteSessionError(503, "No se pudo verificar tu sesión. Reintenta.");
+  }
+  if (cliente.tenantSlug !== (await slugActual())) {
+    throw new ClienteSessionError(403, "Inicia sesión en esta tienda para continuar.");
+  }
+  return { token, cliente };
+}
+
+export async function getClienteToken(): Promise<string | null> {
+  try {
+    return (await getClienteSession())?.token ?? null;
+  } catch (err) {
+    if (err instanceof ClienteSessionError && (err.statusCode === 401 || err.statusCode === 403))
+      return null;
+    throw err;
+  }
 }
 
 /** Llama un endpoint del cliente-portal con el token del comprador. */
@@ -117,7 +176,7 @@ export async function authClienteBackend(
   const res = await fetch(`${API_URL}/auth/cliente/${accion}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, tenantSlug: TENANT_SLUG }),
+    body: JSON.stringify({ ...body, tenantSlug: await slugActual() }),
     cache: "no-store",
   });
   const data = (await res.json()) as

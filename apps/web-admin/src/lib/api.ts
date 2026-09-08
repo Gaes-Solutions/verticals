@@ -89,7 +89,13 @@ export function subscribeRealtime(onEvent: () => void): () => void {
 
 export async function api<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown; auth?: boolean; token?: string } = {},
+  opts: {
+    method?: string;
+    body?: unknown;
+    auth?: boolean;
+    token?: string;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
@@ -102,6 +108,7 @@ export async function api<T = unknown>(
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers,
+    ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
   const text = await res.text();

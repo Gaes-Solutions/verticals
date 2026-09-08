@@ -32,6 +32,17 @@ export interface ApiClient {
   del<T>(path: string, opts?: Omit<RequestOptions, "method" | "body">): Promise<T>;
 }
 
+function responseError(
+  status: number,
+  data: { message?: unknown; error?: unknown } | null,
+): string {
+  if (status >= 500) return "El servicio no está disponible. Intenta nuevamente.";
+  const candidate = data && (data.message ?? data.error);
+  return typeof candidate === "string" && candidate.length > 0 && candidate.length <= 500
+    ? candidate
+    : `No se pudo completar la solicitud (${status})`;
+}
+
 export function createApiClient(config: ApiClientConfig): ApiClient {
   const base = config.baseUrl.replace(/\/$/, "");
 
@@ -65,9 +76,13 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       | null;
 
     if (!res.ok) {
-      const message = (data && (data.message ?? data.error)) ?? `Error ${res.status}`;
-      throw new ApiError(res.status, message, data?.code);
+      throw new ApiError(
+        res.status,
+        responseError(res.status, data),
+        typeof data?.code === "string" ? data.code : undefined,
+      );
     }
+    if (data === null) throw new ApiError(502, "El servicio devolvió una respuesta inválida.");
     return data as T;
   }
 

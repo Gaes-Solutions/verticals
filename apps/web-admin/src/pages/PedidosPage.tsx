@@ -1,6 +1,7 @@
 import { MapPin, Settings, Store, Tag, Truck, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatPedido } from "../components/ChatPedido.js";
+import { EfectosPostpagoPanel } from "../components/EfectosPostpagoPanel.js";
 import { ApiError, api, getUserId, puede } from "../lib/api.js";
 
 interface UsuarioRef {
@@ -70,6 +71,10 @@ function badgeColor(estado: string): string {
 
 export function PedidosPage() {
   const [pedidos, setPedidos] = useState<PedidoRow[]>([]);
+  const [listBusy, setListBusy] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const listGeneration = useRef(0);
+  const listController = useRef<AbortController | null>(null);
   const [filtro, setFiltro] = useState("");
   const [detalle, setDetalle] = useState<PedidoDetalle | null>(null);
   const [config, setConfig] = useState<ConfigEstados | null>(null);
@@ -83,13 +88,37 @@ export function PedidosPage() {
   const etiqueta = useCallback((estado: string) => config?.etiquetas[estado] ?? estado, [config]);
 
   const cargar = useCallback(() => {
-    const qs = filtro ? `?statusPedido=${filtro}` : "";
-    api<{ items: PedidoRow[] }>(`/t/pedidos-ecommerce${qs}`)
-      .then((r) => setPedidos(r.items))
-      .catch(() => setPedidos([]));
+    const current = ++listGeneration.current;
+    listController.current?.abort();
+    const controller = new AbortController();
+    listController.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    setListBusy(true);
+    setListError(null);
+    setDetalle(null);
+    const qs = filtro ? `?statusPedido=${encodeURIComponent(filtro)}` : "";
+    void api<{ items: PedidoRow[] }>(`/t/pedidos-ecommerce${qs}`, { signal: controller.signal })
+      .then((result) => {
+        if (!Array.isArray(result.items)) throw new Error("Respuesta inválida");
+        if (current === listGeneration.current) setPedidos(result.items);
+      })
+      .catch(() => {
+        if (current === listGeneration.current)
+          setListError("No pudimos cargar los pedidos. Revisa tu conexión y vuelve a intentar.");
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (current === listGeneration.current) setListBusy(false);
+      });
   }, [filtro]);
 
-  useEffect(() => cargar(), [cargar]);
+  useEffect(() => {
+    cargar();
+    return () => {
+      listGeneration.current++;
+      listController.current?.abort();
+    };
+  }, [cargar]);
 
   useEffect(() => {
     api<ConfigEstados>("/t/pedidos-ecommerce/config")
@@ -103,11 +132,15 @@ export function PedidosPage() {
   }, [puedeGestionar]);
 
   async function abrir(id: string) {
+    if (listBusy || listError) return;
+    const current = listGeneration.current;
     setError(null);
     try {
-      setDetalle(await api<PedidoDetalle>(`/t/pedidos-ecommerce/${id}`));
+      const result = await api<PedidoDetalle>(`/t/pedidos-ecommerce/${id}`);
+      if (current === listGeneration.current) setDetalle(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al cargar pedido");
+      if (current === listGeneration.current)
+        setError(err instanceof ApiError ? err.message : "Error al cargar pedido");
     }
   }
 
@@ -115,7 +148,7 @@ export function PedidosPage() {
     <div className="max-w-4xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Pedidos online</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {puedeConfigurar && config && (
             <button
               type="button"
@@ -126,6 +159,7 @@ export function PedidosPage() {
             </button>
           )}
           <select
+            aria-label="Filtrar pedidos por estado"
             data-tour="ped-filtro"
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
@@ -141,75 +175,90 @@ export function PedidosPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="px-4 py-2">Folio</th>
-              <th className="px-4 py-2">Fecha</th>
-              <th className="px-4 py-2">Comprador</th>
-              <th className="px-4 py-2">Entrega</th>
-              <th className="px-4 py-2">Estado</th>
-              <th className="px-4 py-2">Asignado</th>
-              <th className="px-4 py-2 text-right">Total</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {pedidos.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-medium">{p.folioPublico}</td>
-                <td className="px-4 py-2 text-slate-500">
-                  {new Date(p.createdAt).toLocaleDateString("es-MX")}
-                </td>
-                <td className="px-4 py-2">{p.cliente?.nombre ?? p.emailComprador}</td>
-                <td className="px-4 py-2">
-                  <span className="inline-flex items-center gap-1">
-                    {p.metodoEnvio === "click_collect" ? (
-                      <>
-                        <Store size={14} /> Pickup
-                      </>
-                    ) : (
-                      <>
-                        <Truck size={14} /> Envío
-                      </>
-                    )}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${badgeColor(p.statusPedido)}`}
-                  >
-                    {p.statusLabel ?? etiqueta(p.statusPedido)}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-slate-500">
-                  {p.asignadoA?.nombre ?? <span className="text-slate-300">—</span>}
-                </td>
-                <td className="px-4 py-2 text-right font-semibold">
-                  ${Number(p.total).toFixed(2)}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => abrir(p.id)}
-                    className="font-semibold text-brand hover:underline"
-                  >
-                    Gestionar
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {pedidos.length === 0 && (
+      {puedeGestionar ? <EfectosPostpagoPanel /> : null}
+
+      {listError ? (
+        <div role="alert" className="gx-card mb-4">
+          <p className="text-danger">{listError}</p>
+          <button type="button" className="gx-btn-secondary mt-3 min-h-11" onClick={cargar}>
+            Reintentar consulta de pedidos
+          </button>
+        </div>
+      ) : null}
+      {listBusy ? (
+        <output className="gx-card block text-slate-500">Cargando pedidos…</output>
+      ) : null}
+      {!listBusy && !listError ? (
+        <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
-                  Sin pedidos {filtro ? `en estado "${etiqueta(filtro)}"` : "todavía"}.
-                </td>
+                <th className="px-4 py-2">Folio</th>
+                <th className="px-4 py-2">Fecha</th>
+                <th className="px-4 py-2">Comprador</th>
+                <th className="px-4 py-2">Entrega</th>
+                <th className="px-4 py-2">Estado</th>
+                <th className="px-4 py-2">Asignado</th>
+                <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2" />
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {pedidos.map((p) => (
+                <tr key={p.id} className="border-t border-slate-100">
+                  <td className="px-4 py-2 font-medium">{p.folioPublico}</td>
+                  <td className="px-4 py-2 text-slate-500">
+                    {new Date(p.createdAt).toLocaleDateString("es-MX")}
+                  </td>
+                  <td className="px-4 py-2">{p.cliente?.nombre ?? p.emailComprador}</td>
+                  <td className="px-4 py-2">
+                    <span className="inline-flex items-center gap-1">
+                      {p.metodoEnvio === "click_collect" ? (
+                        <>
+                          <Store size={14} /> Pickup
+                        </>
+                      ) : (
+                        <>
+                          <Truck size={14} /> Envío
+                        </>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${badgeColor(p.statusPedido)}`}
+                    >
+                      {p.statusLabel ?? etiqueta(p.statusPedido)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-slate-500">
+                    {p.asignadoA?.nombre ?? <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold">
+                    ${Number(p.total).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => abrir(p.id)}
+                      className="font-semibold text-brand hover:underline"
+                    >
+                      Gestionar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {pedidos.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                    Sin pedidos {filtro ? `en estado "${etiqueta(filtro)}"` : "todavía"}.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 

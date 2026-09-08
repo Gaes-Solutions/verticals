@@ -1,7 +1,7 @@
 import { getTenantClient } from "@gaespos/db";
 import { MockFacturamaClient } from "@gaespos/fiscal";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
 
 const TENANT_SLUG = "test-devs-1";
@@ -10,6 +10,8 @@ const OWNER_PASSWORD = "ChangeMe!2026";
 const CASHIER_EMAIL = "cajero-dev@test.local";
 const CASHIER_PASSWORD = "ChangeMe!2026";
 
+const fiscalMock = new MockFacturamaClient();
+const fiscalEmit = vi.spyOn(fiscalMock, "emitir");
 let app: FastifyInstance;
 let ownerToken: string;
 let cashierToken: string;
@@ -41,7 +43,7 @@ async function getStock(varId: string): Promise<{ actual: number; reservado: num
 }
 
 beforeAll(async () => {
-  app = await buildTestApp({}, { fiscalProviderFactory: () => new MockFacturamaClient() });
+  app = await buildTestApp({}, { fiscalProviderFactory: () => fiscalMock });
   await createTestTenant(TENANT_SLUG, "Tenant Devoluciones");
   await createTenantUser(TENANT_SLUG, {
     email: OWNER_EMAIL,
@@ -83,6 +85,8 @@ beforeAll(async () => {
       precioBase: "116",
       aplicaIva: true,
       tasaIva: "16",
+      claveSat: "50181900",
+      claveUnidadSat: "H87",
     },
   });
   const v = (prod.json() as { variantes: Array<{ id: string }> }).variantes[0];
@@ -218,6 +222,7 @@ describe("devolución parcial repone stock", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "2" }],
       },
     });
@@ -249,6 +254,7 @@ describe("devolución parcial repone stock", () => {
       payload: {
         motivo: "defectuoso",
         metodoReembolso: "efectivo",
+        cajaId,
         reponeStockDefault: false,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1", motivoLinea: "defectuoso" }],
       },
@@ -271,6 +277,7 @@ describe("devolución parcial repone stock", () => {
       payload: {
         motivo: "otro",
         metodoReembolso: "efectivo",
+        cajaId,
         reponeStockDefault: true,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "2", reponeStock: false }],
       },
@@ -292,6 +299,7 @@ describe("tipo total vs parcial", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "2" }],
       },
     });
@@ -311,6 +319,7 @@ describe("validaciones cantidad acumulada", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "3" }],
       },
     });
@@ -322,6 +331,7 @@ describe("validaciones cantidad acumulada", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "3" }],
       },
     });
@@ -340,6 +350,7 @@ describe("validaciones cantidad acumulada", () => {
       payload: {
         motivo: "otro",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vlB, cantidadDevuelta: "1" }],
       },
     });
@@ -362,6 +373,7 @@ describe("validaciones cantidad acumulada", () => {
       payload: {
         motivo: "otro",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
       },
     });
@@ -479,7 +491,7 @@ describe("reembolso a CxC (venta credito_b2b)", () => {
 
 describe("CFDI Egreso sobre venta facturada", () => {
   it("emite CFDI Egreso vinculado al Ingreso original", async () => {
-    const ventaId = await ventaContado(varianteId, "1", "116");
+    const ventaId = await ventaContado(varianteId, "2", "232");
     const emit = await app.inject({
       method: "POST",
       url: `/t/ventas/${ventaId}/cfdi/emitir`,
@@ -503,6 +515,7 @@ describe("CFDI Egreso sobre venta facturada", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
         cfdiEgreso: { formaPago: "01", usoCfdi: "G03" },
       },
@@ -510,6 +523,23 @@ describe("CFDI Egreso sobre venta facturada", () => {
     expect(res.statusCode).toBe(201);
     const body = res.json() as { cfdiEgresoId: string | null };
     expect(body.cfdiEgresoId).not.toBeNull();
+    const payload = fiscalEmit.mock.calls.at(-1)?.[0];
+    expect(payload).toMatchObject({
+      tipoComprobante: "E",
+      subtotal: "100.00",
+      descuento: "0.00",
+      iva: "16.00",
+      total: "116.00",
+      cfdisRelacionados: { tipoRelacion: "03", uuids: [emit.json().folioFiscal] },
+    });
+    expect(payload?.conceptos[0]).toMatchObject({
+      cantidad: "1",
+      claveProdServ: "50181900",
+      claveUnidad: "H87",
+      ivaBase: "100.000000",
+      ivaImporte: "16.000000",
+      tasaIva: "0.160000",
+    });
 
     const detalle = await app.inject({
       method: "GET",
@@ -533,6 +563,7 @@ describe("CFDI Egreso sobre venta facturada", () => {
       payload: {
         motivo: "cambio_opinion",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
         cfdiEgreso: { formaPago: "01", usoCfdi: "G03" },
       },
@@ -669,6 +700,7 @@ describe("listado y filtros", () => {
         payload: {
           motivo: "otro",
           metodoReembolso: "efectivo",
+          cajaId,
           lineas: [{ ventaLineaId: vl1, cantidadDevuelta: cantidad }],
         },
       });
@@ -707,6 +739,7 @@ describe("permisos", () => {
       payload: {
         motivo: "otro",
         metodoReembolso: "efectivo",
+        cajaId,
         lineas: [{ ventaLineaId: vl1, cantidadDevuelta: "1" }],
       },
     });

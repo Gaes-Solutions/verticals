@@ -65,6 +65,13 @@ export interface CfdiEmitirInput {
     tasaIva: string;
     aplicaIeps?: boolean;
     tasaIeps?: string;
+    ivaImporte?: string;
+    ivaBase?: string;
+    iepsImporte?: string;
+    iepsBase?: string;
+    iepsCuota?: boolean;
+    objetoImpuesto?: "01" | "02";
+    total?: string;
   }>;
   subtotal: string;
   descuento: string;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cantidadVentaSchema } from "../ventas/quantity.js";
 
 const decimalString = z
   .union([z.number().finite().min(0), z.string().regex(/^\d+(\.\d+)?$/)])
@@ -165,7 +166,7 @@ export const previewSchema = z.object({
     .array(
       z.object({
         varianteId: z.string().min(1),
-        cantidad: positiveDecimalString,
+        cantidad: cantidadVentaSchema,
       }),
     )
     .min(1),

@@ -14,7 +14,7 @@ import {
 } from "react-native";
 
 export default function Login() {
-  const { status, error, login, registro } = useAuth();
+  const { status, error, login, registro, restore, logout } = useAuth();
   const [modo, setModo] = useState<"login" | "registro">("login");
   const [tenant, setTenant] = useState("");
   const [nombre, setNombre] = useState("");
@@ -54,6 +54,17 @@ export default function Login() {
         <Text style={s.sub}>{esRegistro ? "Crea tu cuenta" : "Tu cuenta y pedidos"}</Text>
 
         <View style={s.card}>
+          {status === "unverified" ? (
+            <>
+              <Button label="Reintentar sesión guardada" busy={busy} onPress={() => run(restore)} />
+              <Button
+                label="Eliminar sesión guardada"
+                variant="ghost"
+                busy={busy}
+                onPress={() => run(logout)}
+              />
+            </>
+          ) : null}
           <Input
             label="Tienda"
             icon="storefront"

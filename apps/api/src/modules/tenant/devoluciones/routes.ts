@@ -1,5 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import { consultarIntentoDevolucion } from "./attempt-service.js";
 import {
   type DevolucionListQuery,
   devolucionCreateSchema,
@@ -43,6 +45,16 @@ function handleErr<T>(
 }
 
 const devolucionesRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/devoluciones/intentos/:key", async (req) => {
+    req.requirePerm(PERMISSIONS.VENTAS_DEVOLVER);
+    const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
+    return consultarIntentoDevolucion(req.tenantPrisma, req.principal.userId, key);
+  });
+  app.post("/devoluciones/intentos/:key/cancelar", async (req) => {
+    req.requirePerm(PERMISSIONS.VENTAS_DEVOLVER);
+    const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
+    return consultarIntentoDevolucion(req.tenantPrisma, req.principal.userId, key, true);
+  });
   app.get("/devoluciones", async (req) => {
     req.requirePerm(PERMISSIONS.VENTAS_LEER);
     const q = devolucionListQuerySchema.parse(req.query);
@@ -96,6 +108,12 @@ const devolucionesRoutes: FastifyPluginAsync = async (app) => {
     const { id } = ventaIdParamSchema.parse(req.params);
     const body = devolucionCreateSchema.parse(req.body);
 
+    if (body.idempotencyKey && body.cfdiEgreso)
+      return reply.code(422).send({
+        statusCode: 422,
+        code: "REFUND_ATTEMPT_UNSUPPORTED",
+        message: "Intento durable no admite cfdiEgreso; requiere conciliación fiscal separada",
+      });
     const cfg = await req.tenantPrisma.cfdiConfig.findFirst();
     const provider = cfg
       ? app.fiscalProviderFactory({
@@ -119,6 +137,7 @@ const devolucionesRoutes: FastifyPluginAsync = async (app) => {
         req.principal.userId,
         id,
         {
+          ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
           motivo: body.motivo,
           metodoReembolso: body.metodoReembolso,
           lineas: body.lineas.map((l) => ({

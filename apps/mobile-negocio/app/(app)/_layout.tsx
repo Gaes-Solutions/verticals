@@ -25,7 +25,7 @@ export default function AppLayout() {
         tabBarInactiveTintColor: colors.faint,
         headerStyle: { backgroundColor: colors.card },
         headerTitleStyle: { color: colors.ink, fontWeight: "800" },
-        tabBarStyle: { borderTopColor: colors.line },
+        tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.card },
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Inicio", tabBarIcon: tab("home") }} />

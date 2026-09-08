@@ -4,7 +4,7 @@ import type { FastifyRequest } from "fastify";
 import { reservarUsoCupon } from "../checkout/cupon-service.js";
 import { FiadoError, aplicarCargoFiado } from "../clientes/fiado-service.js";
 import { cancelarComisionesVenta } from "../comisiones/service.js";
-import { CorteError, requireAperturaAbierta } from "../cortes/service.js";
+import { CorteError, lockAperturaAbierta, requireAperturaAbierta } from "../cortes/service.js";
 import {
   CxcError,
   condonarCxcTx,
@@ -14,6 +14,7 @@ import {
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { PreviewError, calcularPreview } from "../listas-precios/preview-service.js";
 import { aplicarPromocionesATicket, cargarPromocionesAplicables } from "../promociones/service.js";
+import { QUANTITY_ERROR, cantidadVentaValida } from "./quantity.js";
 import type { VentaCobrarInput, VentaCreateInput, VentaPreviewInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -28,8 +29,8 @@ const HUNDRED = new Decimal(100);
 // 'cobrada', evitando pagos duplicados que inflarían el corte X/Z.
 const COBRO_VENTA_LOCK_NAMESPACE = 4820917n;
 
-async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${COBRO_VENTA_LOCK_NAMESPACE}))`;
+export async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${COBRO_VENTA_LOCK_NAMESPACE}))`;
 }
 
 export class VentaError extends Error {
@@ -83,7 +84,19 @@ export async function validarTopeDescuento(
   }
 }
 
-interface VarianteSnapshot {
+export function esServicioSnapshot(snapshot: unknown): boolean {
+  return Boolean(
+    snapshot &&
+      typeof snapshot === "object" &&
+      "tipoVenta" in snapshot &&
+      snapshot.tipoVenta === "servicio",
+  );
+}
+
+export interface VarianteSnapshot {
+  tipoVenta?: string;
+  claveSat?: string | null;
+  claveUnidadSat?: string | null;
   id: string;
   sku: string;
   nombreVariante: string | null;
@@ -98,8 +111,8 @@ interface VarianteSnapshot {
   tasaIeps: unknown;
 }
 
-async function loadSnapshots(
-  client: TenantClient,
+export async function loadSnapshots(
+  client: Pick<TenantClient, "productoVariante">,
   varianteIds: string[],
 ): Promise<Map<string, VarianteSnapshot>> {
   const variantes = await client.productoVariante.findMany({
@@ -118,6 +131,9 @@ async function loadSnapshots(
       v.id,
       {
         id: v.id,
+        tipoVenta: v.producto.tipoVenta,
+        claveSat: v.producto.claveSat,
+        claveUnidadSat: v.producto.claveUnidadSat,
         sku: v.sku,
         nombreVariante: v.nombreVariante,
         productoId: v.producto.id,
@@ -134,7 +150,7 @@ async function loadSnapshots(
   );
 }
 
-interface LineaCalculo {
+export interface LineaCalculo {
   numero: number;
   varianteId: string;
   productoId: string;
@@ -191,8 +207,8 @@ function parseIepsSpec(raw: unknown): IepsSpec | null {
  *   baseConIeps = subtotal / (1 + ivaPct)
  *   ivaTotal = subtotal − baseConIeps
  */
-function calcularImpuestosLinea(
-  lineaCalc: LineaCalculada,
+export function calcularImpuestosLinea(
+  lineaCalc: Pick<LineaCalculada, "cantidad" | "subtotal">,
   snapshot: VarianteSnapshot,
 ): { ivaUnit: Decimal; ivaTotal: Decimal; iepsUnit: Decimal; iepsTotal: Decimal } {
   const cantidad = new Decimal(lineaCalc.cantidad.toString());
@@ -320,9 +336,13 @@ function validarPagos(
         "Venta con pago a crédito o monedero no debe generar cambio en efectivo",
       );
     }
-    const efectivo = pagos.find((p) => p.metodo === "efectivo");
-    if (!efectivo) {
-      throw new VentaError(400, "Cambio requiere al menos un pago en efectivo");
+    const efectivo = pagos
+      .filter((p) => p.metodo === "efectivo")
+      .reduce((sum, p) => sum.plus(p.monto), ZERO);
+    if (efectivo.lt(cambio)) {
+      throw new VentaError(400, "El cambio no puede superar el efectivo recibido", {
+        code: "CHANGE_EXCEEDS_CASH",
+      });
     }
   }
   return { totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero };
@@ -356,22 +376,23 @@ async function validarSucursalCaja(
   client: TenantClient,
   sucursalId: string,
   cajaId: string | undefined,
-): Promise<{ id: string; codigo: string }> {
+): Promise<{ id: string; codigo: string; aperturaId?: string }> {
   const sucursal = await client.sucursal.findUnique({ where: { id: sucursalId } });
   if (!sucursal) throw new VentaError(404, `Sucursal "${sucursalId}" no encontrada`);
+  let aperturaId: string | undefined;
   if (cajaId) {
     const caja = await client.caja.findUnique({ where: { id: cajaId } });
     if (!caja || caja.sucursalId !== sucursalId) {
       throw new VentaError(400, "cajaId no pertenece a la sucursal indicada");
     }
     try {
-      await requireAperturaAbierta(client, cajaId);
+      aperturaId = (await requireAperturaAbierta(client, cajaId)).id;
     } catch (err) {
       if (err instanceof CorteError) throw new VentaError(err.statusCode, err.message, err.extra);
       throw err;
     }
   }
-  return { id: sucursal.id, codigo: sucursal.codigo };
+  return { id: sucursal.id, codigo: sucursal.codigo, ...(aperturaId ? { aperturaId } : {}) };
 }
 
 function totalesVenta(
@@ -421,6 +442,8 @@ export async function previewVenta(
   input: VentaPreviewInput,
   opts: VentaOpts = {},
 ): Promise<VentaPreviewResult> {
+  if (input.lineas.some((l) => !cantidadVentaValida(l.cantidad)))
+    throw new VentaError(400, QUANTITY_ERROR);
   await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
   const sucursal = await validarSucursalCaja(client, input.sucursalId, undefined);
   const fullInput = { ...input, pagos: [] } as unknown as VentaCreateInput;
@@ -456,12 +479,14 @@ export async function previewVenta(
   };
 }
 
-export async function crearVenta(
+export async function prepararVenta(
   client: TenantClient,
   usuarioId: string,
   input: VentaCreateInput,
   opts: VentaOpts = {},
-): Promise<VentaCreadaResult> {
+) {
+  if (input.lineas.some((l) => !cantidadVentaValida(l.cantidad)))
+    throw new VentaError(400, QUANTITY_ERROR);
   await validarTopeDescuento(client, input.descuentoGlobalPct, opts.permiteDescuentoAlto ?? false);
   const sucursal = await validarSucursalCaja(client, input.sucursalId, input.cajaId);
   const ticket = await ejecutarPreviewSegura(client, usuarioId, input);
@@ -496,6 +521,18 @@ export async function crearVenta(
 
   const lineasCalc = buildLineasCalculo(ticketFinal, input, snapshots);
   const totales = totalesVenta(ticketFinal, lineasCalc);
+  if (
+    input.idempotencyKey &&
+    input.expectedTotal !== undefined &&
+    !totales.totalVenta.eq(new Decimal(input.expectedTotal))
+  ) {
+    throw new VentaError(409, "El total cambió; revisa el importe antes de registrar la venta", {
+      code: "SALE_TOTAL_CHANGED",
+      expectedTotal: input.expectedTotal,
+      currentTotal: totales.totalVenta.toString(),
+    });
+  }
+
   const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero } = validarPagos(
     totales.totalVenta,
     input.pagos,
@@ -503,53 +540,115 @@ export async function crearVenta(
     input.clienteB2bId,
   );
 
+  return {
+    moneda: "MXN",
+    sucursal,
+    input,
+    lineasCalc,
+    usuarioId,
+    totales,
+    totalCobrado,
+    cambio,
+    pagoFiado,
+    pagoCreditoB2b,
+    pagoMonedero,
+    cuponAplicado,
+    promoResult,
+  };
+}
+
+export type VentaPreparada = Awaited<ReturnType<typeof prepararVenta>>;
+
+export async function crearVenta(
+  client: TenantClient,
+  usuarioId: string,
+  input: VentaCreateInput,
+  opts: VentaOpts = {},
+): Promise<VentaCreadaResult> {
+  const prepared = await prepararVenta(client, usuarioId, input, opts);
+  return client.$transaction((tx) => persistirVentaPreparada(tx, prepared));
+}
+
+async function reservarCuponVenta(tx: Tx, codigo: string | undefined) {
+  if (codigo && !(await reservarUsoCupon(tx, codigo)))
+    throw new VentaError(409, `Cupón "${codigo}" agotado`);
+}
+
+async function lockCajaVenta(
+  tx: Tx,
+  cajaId: string | undefined,
+  aperturaId: string | undefined,
+): Promise<void> {
+  if (!cajaId) return;
+  if (!aperturaId) throw new VentaError(409, "Falta apertura de caja validada");
   try {
-    return await client.$transaction(async (tx) => {
-      // Consume el tope global del cupón (usosTotal) con el mismo compare-and-swap
-      // atómico que usa el checkout de tienda. Si otro canal ya lo agotó entre el
-      // preview y aquí, el reserve devuelve false y abortamos la venta.
-      if (cuponAplicado && input.cuponCodigo) {
-        const reservado = await reservarUsoCupon(tx, input.cuponCodigo);
-        if (!reservado) {
-          throw new VentaError(409, `Cupón "${input.cuponCodigo}" agotado`);
-        }
-      }
-      let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
-      if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
-        creditoB2b = await validarCreditoB2bSuficiente(
-          tx,
-          input.clienteB2bId,
-          pagoCreditoB2b.toString(),
-        );
-      }
-      const result = await persistirVenta(tx, {
-        sucursalId: sucursal.id,
-        sucursalCodigo: sucursal.codigo,
-        input,
-        lineasCalc,
-        usuarioId,
-        totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero },
-        creditoB2b,
-      });
-      if (promoResult.aplicaciones.length > 0) {
-        await tx.promocionAplicacion.createMany({
-          data: promoResult.aplicaciones.map((a) => ({
-            promocionId: a.promocionId,
-            ventaId: result.ventaId,
-            ...(input.clienteId ? { clienteId: input.clienteId } : {}),
-            montoDescuento: a.montoDescuento,
-            productosAfectados: a.productosAfectados,
-          })),
-        });
-        for (const a of promoResult.aplicaciones) {
-          await tx.promocion.update({
-            where: { id: a.promocionId },
-            data: { usosActuales: { increment: 1 } },
-          });
-        }
-      }
-      return result;
+    await lockAperturaAbierta(tx, aperturaId);
+  } catch (error) {
+    if (error instanceof CorteError)
+      throw new VentaError(error.statusCode, error.message, error.extra);
+    throw error;
+  }
+}
+
+export async function persistirVentaPreparada(
+  tx: Tx,
+  prepared: VentaPreparada,
+): Promise<VentaCreadaResult> {
+  const {
+    sucursal,
+    input,
+    lineasCalc,
+    usuarioId,
+    totales,
+    totalCobrado,
+    cambio,
+    pagoFiado,
+    pagoCreditoB2b,
+    pagoMonedero,
+    cuponAplicado,
+    promoResult,
+  } = prepared;
+  try {
+    if (lineasCalc.some((l) => !cantidadVentaValida(l.cantidad.toString())))
+      throw new VentaError(400, QUANTITY_ERROR);
+    await lockCajaVenta(tx, input.cajaId, sucursal.aperturaId);
+    await reservarCuponVenta(tx, cuponAplicado ? input.cuponCodigo : undefined);
+    let creditoB2b: { diasCredito: number; tasaInteresMoraPct: string | null } | null = null;
+    if (pagoCreditoB2b.gt(ZERO) && input.clienteB2bId) {
+      creditoB2b = await validarCreditoB2bSuficiente(
+        tx,
+        input.clienteB2bId,
+        pagoCreditoB2b.toString(),
+      );
+    }
+    const result = await persistirVenta(tx, {
+      moneda: prepared.moneda,
+      sucursalId: sucursal.id,
+      sucursalCodigo: sucursal.codigo,
+      input,
+      lineasCalc,
+      usuarioId,
+      totales: { ...totales, totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero },
+      creditoB2b,
     });
+    if (promoResult.aplicaciones.length > 0) {
+      await tx.promocionAplicacion.createMany({
+        data: promoResult.aplicaciones.map((a) => ({
+          promocionId: a.promocionId,
+          ventaId: result.ventaId,
+          ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+          montoDescuento: a.montoDescuento,
+          productosAfectados: a.productosAfectados,
+        })),
+      });
+      for (const a of promoResult.aplicaciones) {
+        await tx.promocion.update({
+          where: { id: a.promocionId },
+          data: { usosActuales: { increment: 1 } },
+        });
+      }
+    }
+    return result;
   } catch (err) {
     if (err instanceof InsufficientStockError) {
       throw new VentaError(
@@ -574,6 +673,7 @@ export async function crearVenta(
 }
 
 interface PersistirVentaParams {
+  moneda: string;
   sucursalId: string;
   sucursalCodigo: string;
   input: VentaCreateInput;
@@ -705,6 +805,7 @@ async function descontarStockLineas(
   params: { lineasCalc: LineaCalculo[]; sucursalId: string; usuarioId: string; folio: string },
 ): Promise<void> {
   for (const linea of params.lineasCalc) {
+    if (esServicioSnapshot(linea.snapshot)) continue;
     await aplicarAjuste(tx, {
       varianteId: linea.varianteId,
       sucursalId: params.sucursalId,
@@ -775,6 +876,7 @@ async function persistirVenta(tx: Tx, p: PersistirVentaParams): Promise<VentaCre
   const venta = await tx.venta.create({
     data: {
       folio,
+      moneda: p.moneda,
       sucursalId: p.sucursalId,
       ...(p.input.cajaId ? { cajaId: p.input.cajaId } : {}),
       usuarioId: p.usuarioId,
@@ -850,7 +952,7 @@ export async function cobrarVenta(
   if (venta.estado !== "borrador") {
     throw new VentaError(409, `La venta ya está ${venta.estado}`, { estado: venta.estado });
   }
-  await validarSucursalCaja(client, venta.sucursalId, input.cajaId);
+  const cajaValidada = await validarSucursalCaja(client, venta.sucursalId, input.cajaId);
 
   const total = new Decimal(venta.total.toString());
   const { totalCobrado, cambio } = validarPagos(
@@ -861,6 +963,7 @@ export async function cobrarVenta(
   );
 
   const actualizada = await client.$transaction(async (tx) => {
+    await lockCajaVenta(tx, input.cajaId, cajaValidada.aperturaId);
     await lockVenta(tx, ventaId);
     const claimed = await tx.venta.findUnique({
       where: { id: ventaId },
@@ -904,6 +1007,39 @@ export async function cobrarVenta(
   };
 }
 
+async function bloquearCajaCancelacion(
+  tx: Tx,
+  venta: {
+    cajaId: string | null;
+    cobradaAt: Date | null;
+    pagos: Array<{ metodo: string; monto: { toString(): string } }>;
+    cambioDado: { toString(): string };
+  },
+): Promise<void> {
+  const efectivoNeto = venta.pagos
+    .filter((p) => p.metodo === "efectivo")
+    .reduce((sum, p) => sum.plus(p.monto.toString()), ZERO)
+    .minus(venta.cambioDado.toString());
+  if (efectivoNeto.gt(ZERO)) {
+    const apertura =
+      venta.cajaId && venta.cobradaAt
+        ? await tx.cajaApertura.findFirst({
+            where: {
+              cajaId: venta.cajaId,
+              estado: "abierta",
+              createdAt: { lte: venta.cobradaAt },
+            },
+          })
+        : null;
+    if (!apertura)
+      throw new VentaError(
+        409,
+        "La apertura original está cerrada o no existe; usa devolución para reembolsar en la caja vigente",
+      );
+    await lockCajaVenta(tx, venta.cajaId ?? undefined, apertura.id);
+  }
+}
+
 export async function cancelarVenta(
   client: TenantClient,
   usuarioId: string,
@@ -928,6 +1064,7 @@ export async function cancelarVenta(
   }
 
   await client.$transaction(async (tx) => {
+    await bloquearCajaCancelacion(tx, venta);
     await lockVenta(tx, ventaId);
     const claimed = await tx.venta.findUnique({
       where: { id: ventaId },
@@ -939,7 +1076,13 @@ export async function cancelarVenta(
         estado: claimed.estado,
       });
     }
+    if (await tx.devolucion.count({ where: { ventaId, estado: "procesada" } }))
+      throw new VentaError(
+        409,
+        "La venta tiene devoluciones procesadas; devuelve únicamente las cantidades pendientes",
+      );
     for (const linea of venta.lineas) {
+      if (esServicioSnapshot(linea.snapshotProducto)) continue;
       await aplicarAjuste(tx, {
         varianteId: linea.varianteId,
         sucursalId: venta.sucursalId,

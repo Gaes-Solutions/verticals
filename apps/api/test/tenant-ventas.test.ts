@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -405,4 +406,97 @@ describe("POST /t/ventas/:id/cancelar — cancelación con devolución de stock"
     });
     expect(res.statusCode).toBe(403);
   });
+});
+
+describe("sale quantity persistence boundaries", () => {
+  it.each(["0.0001", "1.0001", "1000000000000000"])(
+    "rejects %s in sale and both previews without mutations",
+    async (cantidad) => {
+      const client = getTenantClient(TENANT_SLUG);
+      const before = {
+        sales: await client.venta.count(),
+        payments: await client.ventaPago.count(),
+        movements: await client.inventarioMovimiento.count(),
+        stock: (
+          await client.inventarioSucursal.findUniqueOrThrow({
+            where: { varianteId_sucursalId: { varianteId: varianteAId, sucursalId } },
+          })
+        ).stockActual.toString(),
+      };
+      for (const url of ["/t/ventas", "/t/ventas/preview", "/t/listas-precios/preview"]) {
+        const res = await app.inject({
+          method: "POST",
+          url,
+          headers: authOwner(),
+          payload: {
+            sucursalId,
+            cajaId,
+            lineas: [{ varianteId: varianteAId, cantidad }],
+            pagos: [{ metodo: "efectivo", monto: "100" }],
+          },
+        });
+        expect(res.statusCode).toBe(400);
+      }
+      expect({
+        sales: await client.venta.count(),
+        payments: await client.ventaPago.count(),
+        movements: await client.inventarioMovimiento.count(),
+        stock: (
+          await client.inventarioSucursal.findUniqueOrThrow({
+            where: { varianteId_sucursalId: { varianteId: varianteAId, sucursalId } },
+          })
+        ).stockActual.toString(),
+      }).toEqual(before);
+    },
+  );
+});
+
+describe("mixed payment change limit", () => {
+  it("rejects change larger than total cash without creating sale/payment/stock effects", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    const before = await client.venta.count();
+    const movements = await client.inventarioMovimiento.count();
+    const payments = await client.ventaPago.count();
+    const r = await app.inject({
+      method: "POST",
+      url: "/t/ventas",
+      headers: authOwner(),
+      payload: {
+        sucursalId,
+        cajaId,
+        lineas: [{ varianteId: varianteBId, cantidad: "3" }],
+        pagos: [
+          { metodo: "tarjeta_debito", monto: "199" },
+          { metodo: "efectivo", monto: "1" },
+        ],
+      },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("CHANGE_EXCEEDS_CASH");
+    expect(await client.venta.count()).toBe(before);
+    expect(await client.ventaPago.count()).toBe(payments);
+    expect(await client.inventarioMovimiento.count()).toBe(movements);
+  });
+  it.each([{ cash: ["100"] }, { cash: ["25", "75"] }])(
+    "accepts mixed payment using the sum of cash tenders %j",
+    async ({ cash }) => {
+      const r = await app.inject({
+        method: "POST",
+        url: "/t/ventas",
+        headers: authOwner(),
+        payload: {
+          sucursalId,
+          cajaId,
+          lineas: [{ varianteId: varianteBId, cantidad: "3" }],
+          pagos: [
+            { metodo: "tarjeta_debito", monto: "100" },
+            ...cash.map((monto) => ({ metodo: "efectivo", monto })),
+          ],
+        },
+      });
+      expect(r.statusCode).toBe(201);
+      expect(Number(r.json().cambioDado)).toBe(50);
+      expect(Number(r.json().total)).toBe(150);
+    },
+  );
 });

@@ -1,17 +1,32 @@
+import { useAuth } from "@/lib/auth-store";
 import { fecha } from "@/lib/format";
 import { listNotificaciones, marcarLeida, marcarTodasLeidas } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
 import { EmptyState, Loading } from "@/ui";
+import { CommerceError } from "@/ui/CommerceError";
+import { Screen } from "@/ui/Screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function Notificaciones() {
+  const { tenantSlug, user } = useAuth();
+  const queryKey = ["notificaciones", tenantSlug, user?.id];
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["notificaciones"], queryFn: listNotificaciones });
-  const invalidar = () => qc.invalidateQueries({ queryKey: ["notificaciones"] });
+  const q = useQuery({ queryKey, retry: false, queryFn: listNotificaciones });
+  const invalidar = () => qc.invalidateQueries({ queryKey });
   const leerUna = useMutation({ mutationFn: marcarLeida, onSuccess: invalidar });
   const leerTodas = useMutation({ mutationFn: marcarTodasLeidas, onSuccess: invalidar });
   if (q.isLoading) return <Loading />;
+  if (q.isError)
+    return (
+      <Screen>
+        <CommerceError
+          error={q.error}
+          message="No pudimos cargar tus avisos. Revisa tu conexión y vuelve a intentar."
+          retry={() => void q.refetch()}
+        />
+      </Screen>
+    );
   const noLeidas = q.data?.noLeidas ?? 0;
 
   return (
@@ -23,18 +38,35 @@ export default function Notificaciones() {
       refreshing={q.isFetching}
       onRefresh={() => q.refetch()}
       ListHeaderComponent={
-        noLeidas > 0 ? (
-          <Pressable style={s.leerTodas} onPress={() => leerTodas.mutate()}>
-            <Text style={s.leerTodasText}>Marcar todo como leído ({noLeidas})</Text>
-          </Pressable>
-        ) : null
+        <>
+          {leerUna.isError || leerTodas.isError ? (
+            <CommerceError
+              error={leerUna.error ?? leerTodas.error}
+              message="No pudimos confirmar que los avisos quedaron leídos. Actualiza para revisar su estado."
+              retry={() => {
+                leerUna.reset();
+                leerTodas.reset();
+                void q.refetch();
+              }}
+            />
+          ) : null}
+          {noLeidas > 0 ? (
+            <Pressable
+              style={s.leerTodas}
+              disabled={leerTodas.isPending || leerUna.isPending}
+              onPress={() => leerTodas.mutate()}
+            >
+              <Text style={s.leerTodasText}>Marcar todo como leído ({noLeidas})</Text>
+            </Pressable>
+          ) : null}
+        </>
       }
       ListEmptyComponent={<EmptyState icon="notifications-outline" title="No tienes avisos" />}
       renderItem={({ item }) => (
         <Pressable
           style={[s.card, !item.leida && s.nueva]}
           onPress={() => {
-            if (!item.leida) leerUna.mutate(item.id);
+            if (!item.leida && !leerUna.isPending && !leerTodas.isPending) leerUna.mutate(item.id);
           }}
         >
           <View style={s.top}>

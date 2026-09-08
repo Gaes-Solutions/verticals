@@ -9,33 +9,54 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 
 export default function Inicio() {
   const { user, tenantSlug } = useAuth();
+  const puede = (perm: string) =>
+    user?.isOwner || user?.permissions?.includes("*") || user?.permissions?.includes(perm);
+  const verReportes = !!puede("reportes.ventas");
   const rol = user?.isOwner ? "Dueño" : (user?.roleCodes?.[0] ?? "Equipo");
-  const q = useQuery({ queryKey: ["resumen", 30], queryFn: () => getResumen(30) });
+  const q = useQuery({
+    queryKey: ["resumen", 30],
+    queryFn: () => getResumen(30),
+    enabled: verReportes,
+  });
   const d = q.data;
 
   return (
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentContainerStyle={s.root}
-      refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} />}
+      refreshControl={
+        verReportes ? (
+          <RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} />
+        ) : undefined
+      }
     >
       <Text style={s.hola}>Hola, {user?.nombre ?? "bienvenido"} 👋</Text>
       <Text style={s.sub}>
         {rol} · {tenantSlug ?? "tu negocio"}
       </Text>
 
-      <Pressable style={s.cobrar} onPress={() => router.push("/(app)/cobrar")}>
-        <View style={s.cobrarIcon}>
-          <Icon name="cart" size={24} color={colors.white} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.cobrarTitle}>Cobrar</Text>
-          <Text style={s.cobrarSub}>Nueva venta en el punto de venta</Text>
-        </View>
-        <Icon name="chevron-forward" size={22} color={colors.white} />
-      </Pressable>
+      {puede("ventas.crear") && (
+        <Pressable
+          accessibilityRole="button"
+          style={s.cobrar}
+          onPress={() => router.push("/(app)/cobrar")}
+        >
+          <View style={s.cobrarIcon}>
+            <Icon name="cart" size={24} color={colors.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.cobrarTitle}>Cobrar</Text>
+            <Text style={s.cobrarSub}>Nueva venta en el punto de venta</Text>
+          </View>
+          <Icon name="chevron-forward" size={22} color="#07131A" />
+        </Pressable>
+      )}
 
-      {q.isLoading ? (
+      {!verReportes ? (
+        <Text style={{ color: colors.text, marginTop: space.lg }}>
+          Abre el menú para consultar las funciones disponibles para tu cuenta.
+        </Text>
+      ) : q.isLoading ? (
         <Loading />
       ) : q.isError ? (
         <Card>
@@ -95,8 +116,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cobrarTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
-  cobrarSub: { color: colors.brandLight, fontSize: 13 },
+  cobrarTitle: { color: "#07131A", fontSize: 18, fontWeight: "800" },
+  cobrarSub: { color: "#07131A", fontSize: 13 },
   periodo: { fontSize: 13, color: colors.faint, marginTop: space.lg, marginBottom: 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   cardTitle: { fontSize: 15, fontWeight: "700", color: colors.ink, marginBottom: 4 },

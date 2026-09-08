@@ -11,8 +11,8 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   useEffect(() => {
-    void activateKeepAwakeAsync();
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    void activateKeepAwakeAsync().catch(() => undefined);
+    void ScreenOrientation.unlockAsync().catch(() => undefined);
   }, []);
   return (
     <QueryClientProvider client={queryClient}>

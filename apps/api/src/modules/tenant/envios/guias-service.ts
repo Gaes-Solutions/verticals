@@ -9,6 +9,7 @@ import type {
   TarifaProveedor,
 } from "@gaespos/paqueterias";
 import type { ShippingProviderFactory } from "../../../plugins/paqueterias.js";
+import { claimEffect, settleEffect } from "../checkout/post-pago-store.js";
 import { notificarCliente } from "../notificaciones/service.js";
 import { enviarPushCliente } from "../push/service.js";
 
@@ -118,6 +119,60 @@ export interface GuiaPedidoResult {
  * EnvioPedido + datos de tracking en el pedido. Evento visible al cliente.
  */
 export async function generarGuiaPedido(
+  client: TenantClient,
+  provider: ShippingProvider,
+  pedidoId: string,
+  opts: GenerarGuiaOpts = {},
+): Promise<GuiaPedidoResult> {
+  const existing = await client.pedidoEcommerce.findUnique({
+    where: { id: pedidoId },
+    include: { envio: true },
+  });
+  if (!existing) throw new GuiaError(404, "Pedido no encontrado");
+  const token = await claimEffect(client, pedidoId, "guia", true);
+  if (!token)
+    throw new GuiaError(
+      409,
+      "La guía ya fue solicitada o requiere conciliación; no se reenviará al proveedor",
+    );
+  if (existing.envio?.guiaTracking) {
+    await settleEffect(client, pedidoId, "guia", token, "done");
+    throw new GuiaError(409, "El pedido ya tiene una guía generada");
+  }
+  let dispatched = false;
+  const guardedProvider: ShippingProvider = {
+    codigo: provider.codigo,
+    cotizar: (input) => provider.cotizar(input),
+    cancelarGuia: (id) => provider.cancelarGuia(id),
+    parseWebhook: (...args) => provider.parseWebhook(...args),
+    crearGuia: async (input) => {
+      dispatched = true;
+      const guia = await provider.crearGuia(input);
+      await client.pedidoPostPagoEffect.updateMany({
+        where: { pedidoId, tipo: "guia", claimToken: token },
+        data: { result: { guia: { ...guia }, proveedor: provider.codigo } },
+      });
+      return guia;
+    },
+  };
+  try {
+    const result = await generarGuiaPedidoOnce(client, guardedProvider, pedidoId, opts);
+    await settleEffect(client, pedidoId, "guia", token, "done");
+    return result;
+  } catch (error) {
+    await settleEffect(
+      client,
+      pedidoId,
+      "guia",
+      token,
+      dispatched ? "uncertain" : "pending",
+      dispatched ? "SHIPPING_RESULT_UNCERTAIN" : "SHIPPING_PREPARATION_FAILED",
+    );
+    throw error;
+  }
+}
+
+async function generarGuiaPedidoOnce(
   client: TenantClient,
   provider: ShippingProvider,
   pedidoId: string,

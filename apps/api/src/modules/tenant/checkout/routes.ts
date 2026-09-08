@@ -1,15 +1,16 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import { PagoError, type PaymentProvider } from "@gaespos/pagos";
+import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
-import { intentarAutoGuia } from "../envios/guias-service.js";
-import { enviarPushCliente } from "../push/service.js";
+import { dispatchPostPago } from "./post-pago-service.js";
 import { iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
 import {
   CheckoutError,
   type ConfirmarPagoResult,
   type IniciarCheckoutInput,
   type IniciarCheckoutResult,
+  consultarIntentoCheckout,
   iniciarCheckout,
   procesarWebhookPago,
 } from "./service.js";
@@ -24,24 +25,10 @@ export async function postPago(
   result: ConfirmarPagoResult,
 ): Promise<void> {
   if (result.statusPago !== "pago_confirmado") return;
-  await intentarAutoGuia(prisma, app.shippingProviderFactory, result.pedidoId);
   try {
-    const config = await prisma.configTiendaEcommerce.findFirst();
-    const eventos = Array.isArray(config?.pushEventos) ? (config.pushEventos as string[]) : [];
-    if (!config?.pushHabilitado || !eventos.includes("pago_confirmado")) return;
-    const pedido = await prisma.pedidoEcommerce.findUnique({
-      where: { id: result.pedidoId },
-      select: { clienteId: true, folioPublico: true },
-    });
-    if (!pedido?.clienteId) return;
-    await enviarPushCliente(prisma, pedido.clienteId, {
-      titulo: `Pedido ${pedido.folioPublico}`,
-      cuerpo: "Recibimos tu pago. Estamos preparando tu pedido.",
-      url: `/cuenta/pedidos/${pedido.folioPublico}`,
-      tag: `pedido-${pedido.folioPublico}`,
-    });
+    await dispatchPostPago(app, prisma, result.pedidoId);
   } catch {
-    // best-effort
+    app.log.warn({ pedidoId: result.pedidoId }, "efectos postpago conservados para recuperación");
   }
 }
 
@@ -132,6 +119,7 @@ function buildCheckoutInput(
 ): IniciarCheckoutInput {
   return {
     carritoId: body.carritoId,
+    ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
     tenantSlug,
     emailComprador: body.emailComprador,
     metodoPago: body.metodoPago,
@@ -149,21 +137,59 @@ function buildCheckoutInput(
 }
 
 const checkoutRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/iniciar", async (req, reply) => {
-    const body = iniciarCheckoutSchema.parse(req.body);
-    const provider = resolverProvider(app, body.proveedorPago, reply);
-    if (!provider) return;
+  app.get("/efectos-postpago", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    return req.tenantPrisma.pedidoPostPagoEffect.findMany({
+      where: { status: { in: ["pending", "processing", "uncertain"] } },
+      select: {
+        id: true,
+        pedidoId: true,
+        tipo: true,
+        status: true,
+        attempts: true,
+        errorCode: true,
+        updatedAt: true,
+        pedido: { select: { folioPublico: true } },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: 100,
+    });
+  });
+
+  app.get("/intentos/:key", async (req, reply) => {
+    const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
     try {
-      const connect = await resolverConnect(app, req.principal.tenantSlug);
-      const input = buildCheckoutInput(body, req.principal.tenantSlug, connect);
-      const result = await iniciarCheckout(req.tenantPrisma, provider, input);
-      await finalizarSiConfirmado(app, req.tenantPrisma, req.principal.userId, result);
-      return reply.code(201).send(result);
+      return await consultarIntentoCheckout(req.tenantPrisma, key, req.principal.userId);
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;
     }
   });
+
+  for (const [path, requirePublicStore] of [
+    ["/iniciar", false],
+    ["/tienda/iniciar", true],
+  ] as const) {
+    app.post(path, async (req, reply) => {
+      const body = iniciarCheckoutSchema.parse(req.body);
+      const provider = resolverProvider(app, body.proveedorPago, reply);
+      if (!provider) return;
+      try {
+        const connect = await resolverConnect(app, req.principal.tenantSlug);
+        const input = {
+          ...buildCheckoutInput(body, req.principal.tenantSlug, connect),
+          requestedBy: req.principal.userId,
+          requirePublicStore,
+        };
+        const result = await iniciarCheckout(req.tenantPrisma, provider, input);
+        await finalizarSiConfirmado(app, req.tenantPrisma, req.principal.userId, result);
+        return reply.code(201).send(result);
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    });
+  }
 
   app.post("/webhook", async (req, reply) => {
     const body = webhookSchema.parse(req.body);

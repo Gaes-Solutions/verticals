@@ -23,7 +23,7 @@ const ZERO = new Decimal(0);
  * romper la compra). Cupones a nivel pedido: monto_fijo / porcentaje / envío gratis.
  */
 export async function evaluarCupon(
-  client: TenantClient,
+  client: CuponReserveClient,
   codigo: string,
   subtotal: number,
 ): Promise<CuponEvaluado> {

@@ -1,7 +1,10 @@
+import { useAuth } from "@/lib/auth-store";
 import { fecha, money } from "@/lib/format";
 import { getPedidoDetalle, listPedidos } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
 import { Badge, EmptyState, Icon, Loading } from "@/ui";
+import { CommerceError } from "@/ui/CommerceError";
+import { Screen } from "@/ui/Screen";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -14,9 +17,21 @@ const PAGO_TONE: Record<string, "ok" | "warn" | "danger" | "neutral"> = {
 };
 
 export default function Pedidos() {
+  const { tenantSlug, user } = useAuth();
+  const queryKey = ["pedidos", tenantSlug, user?.id];
   const [folio, setFolio] = useState<string | null>(null);
-  const q = useQuery({ queryKey: ["pedidos"], queryFn: listPedidos });
+  const q = useQuery({ queryKey, retry: false, queryFn: listPedidos });
   if (q.isLoading) return <Loading />;
+  if (q.isError)
+    return (
+      <Screen>
+        <CommerceError
+          error={q.error}
+          message="No pudimos cargar tus pedidos. Revisa tu conexión y vuelve a intentar."
+          retry={() => void q.refetch()}
+        />
+      </Screen>
+    );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -51,8 +66,10 @@ export default function Pedidos() {
 }
 
 function DetalleModal({ folio, onClose }: { folio: string | null; onClose: () => void }) {
+  const { tenantSlug, user } = useAuth();
   const q = useQuery({
-    queryKey: ["pedido", folio],
+    queryKey: ["pedido", tenantSlug, user?.id, folio],
+    retry: false,
     queryFn: () => getPedidoDetalle(folio as string),
     enabled: !!folio,
   });
@@ -66,7 +83,13 @@ function DetalleModal({ folio, onClose }: { folio: string | null; onClose: () =>
             <Icon name="close" size={26} color={colors.muted} />
           </Pressable>
         </View>
-        {q.isLoading || !p ? (
+        {q.isError ? (
+          <CommerceError
+            error={q.error}
+            message="No pudimos cargar el detalle del pedido. Vuelve a intentar."
+            retry={() => void q.refetch()}
+          />
+        ) : q.isLoading || !p ? (
           <Loading />
         ) : (
           <ScrollView contentContainerStyle={s.modalBody}>

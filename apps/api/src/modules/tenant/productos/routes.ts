@@ -62,7 +62,7 @@ const PRODUCTO_BASE_INCLUDE = {
   categoria: { select: { id: true, nombre: true, slug: true } },
   marca: { select: { id: true, nombre: true, slug: true } },
   variantes: {
-    where: { isActive: true },
+    where: { isActive: true, archivedAt: null },
     orderBy: { isDefault: "desc" as const },
     include: { codigosBarras: true },
   },
@@ -130,30 +130,33 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
   app.get("/buscar/:codigo", async (req, reply) => {
     req.requirePerm(PERMISSIONS.PRODUCTOS_LEER);
     const { codigo } = productoBuscarParamSchema.parse(req.params);
-    const barcode = await req.tenantPrisma.productoCodigoBarras.findUnique({
-      where: { codigo },
-      include: {
-        variante: {
-          include: {
-            producto: { include: PRODUCTO_BASE_INCLUDE },
-          },
-        },
+    const include = {
+      ...PRODUCTO_BASE_INCLUDE,
+      variantes: {
+        ...PRODUCTO_BASE_INCLUDE.variantes,
+        where: { isActive: true, archivedAt: null },
       },
+    };
+    const activeProduct = { isActive: true, archivedAt: null };
+    const barcode = await req.tenantPrisma.productoCodigoBarras.findFirst({
+      where: { codigo, variante: { isActive: true, archivedAt: null, producto: activeProduct } },
+      include: { variante: { include: { producto: { include } } } },
     });
-    if (barcode) return barcode.variante.producto;
-
-    const variante = await req.tenantPrisma.productoVariante.findUnique({
-      where: { sku: codigo },
-      include: { producto: { include: PRODUCTO_BASE_INCLUDE } },
+    if (barcode) return { ...barcode.variante.producto, varianteEncontradaId: barcode.variante.id };
+    const variante = await req.tenantPrisma.productoVariante.findFirst({
+      where: { sku: codigo, isActive: true, archivedAt: null, producto: activeProduct },
+      include: { producto: { include } },
     });
-    if (variante) return variante.producto;
-
-    const producto = await req.tenantPrisma.producto.findUnique({
-      where: { skuPadre: codigo },
-      include: PRODUCTO_BASE_INCLUDE,
+    if (variante) return { ...variante.producto, varianteEncontradaId: variante.id };
+    const producto = await req.tenantPrisma.producto.findFirst({
+      where: { skuPadre: codigo, ...activeProduct },
+      include,
     });
-    if (producto) return producto;
-
+    if (producto && producto.variantes.length > 0)
+      return {
+        ...producto,
+        varianteEncontradaId: producto.variantes.length === 1 ? producto.variantes[0]?.id : null,
+      };
     return reply
       .code(404)
       .send({ statusCode: 404, error: "Not Found", message: `Sin coincidencia para "${codigo}"` });
@@ -250,36 +253,43 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.PRODUCTOS_ACTUALIZAR);
     const { id } = productoIdParamSchema.parse(req.params);
     const { precioBase, sku, ...rest } = productoUpdateSchema.parse(req.body);
-    await req.tenantPrisma.producto.update({
-      where: { id },
-      data: buildProductoUpdateData(rest) as Parameters<
-        typeof req.tenantPrisma.producto.update
-      >[0]["data"],
-    });
-    // Precio/SKU viven en la variante: se editan sobre la variante base (default).
-    if (precioBase !== undefined || sku !== undefined) {
-      const variantes = await req.tenantPrisma.productoVariante.findMany({
-        where: { productoId: id },
-        select: { id: true, isDefault: true },
-      });
-      const base = variantes.find((v) => v.isDefault) ?? variantes[0];
-      if (base) {
-        try {
-          await req.tenantPrisma.productoVariante.update({
+    try {
+      return await req.tenantPrisma.$transaction(async (tx) => {
+        await tx.producto.update({
+          where: { id },
+          data: buildProductoUpdateData(rest) as Parameters<typeof tx.producto.update>[0]["data"],
+        });
+        if (precioBase !== undefined || sku !== undefined) {
+          const variants = await tx.productoVariante.findMany({
+            where: { productoId: id, isActive: true, archivedAt: null },
+            select: { id: true, isDefault: true },
+            orderBy: { id: "asc" },
+          });
+          const base = variants.find((variant) => variant.isDefault) ?? variants[0];
+          if (!base) throw new Error("PRODUCT_BASE_VARIANT_MISSING");
+          await tx.productoVariante.update({
             where: { id: base.id },
             data: {
               ...(precioBase !== undefined ? { precioBase } : {}),
               ...(sku !== undefined ? { sku } : {}),
             },
           });
-        } catch {
-          return reply
-            .code(409)
-            .send({ statusCode: 409, error: "Conflict", message: "Ese código/SKU ya está en uso" });
         }
-      }
+        return tx.producto.findUniqueOrThrow({ where: { id }, include: PRODUCTO_BASE_INCLUDE });
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002")
+        return reply
+          .code(409)
+          .send({ statusCode: 409, error: "Conflict", message: "Ese código/SKU ya está en uso" });
+      if (error instanceof Error && error.message === "PRODUCT_BASE_VARIANT_MISSING")
+        return reply.code(409).send({
+          statusCode: 409,
+          error: "Conflict",
+          message: "El producto no tiene una variante base para actualizar el precio",
+        });
+      throw error;
     }
-    return req.tenantPrisma.producto.findUnique({ where: { id }, include: PRODUCTO_BASE_INCLUDE });
   });
 
   app.delete("/:id", async (req) => {

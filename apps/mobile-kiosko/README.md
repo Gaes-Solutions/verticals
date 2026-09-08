@@ -1,40 +1,32 @@
-# GaesSoft Negocio (app móvil — staff)
+# GaesSoft Verificador de precios
 
-App nativa (Expo / React Native) para el equipo del negocio (dueño, gerente, cajero, vendedor).
-Consume la API de GaesSoft (`https://app.angaes.com/api`) y adapta el menú por rol/permisos.
+Aplicación Expo / React Native para un dispositivo de consulta de precios de una sucursal. No es la aplicación de empleados ni una caja de cobro.
 
-## Requisitos
-- Node 20+, pnpm 10+ (ya están en el monorepo).
-- Para probar en tu teléfono: la app **Expo Go** (Android/iOS).
-- Para build de tienda: cuenta **Expo (EAS)** y, para iOS, **Apple Developer ($99/año)**.
+## Funciones implementadas
 
-## Correr en desarrollo
+- Activación con token de dispositivo generado en el panel Kioskos; se valida antes de sustituir el token guardado con SecureStore.
+- Consulta por cámara, lector externo en modo teclado con terminador Enter o escritura manual. Los ceros iniciales del código se conservan.
+- Precio, promoción y existencia cuando la configuración lo permite.
+- Reposo con imágenes y texto de promociones o productos publicados. Los videos propios aún no están implementados.
+- Errores explícitos, reintento y bloqueo ante dispositivo no autorizado. Peticiones con límite de12 segundos.
+- Configuración y anuncios consultados cada30 segundos mientras la aplicación se ejecuta. Un fallo de actualización oculta el contenido anterior. Esto no garantiza plazos cuando el sistema operativo suspende la aplicación.
+
+## Desarrollo
+
+Desde la raíz del repositorio:
+
 ```bash
-pnpm install                        # desde la raíz del monorepo (instala Expo)
-pnpm --filter @gaespos/mobile-negocio start
-# escanea el QR con Expo Go, o pulsa 'a' (Android) / 'i' (iOS con Mac)
+EXPO_PUBLIC_API_URL=http://localhost:3000/api pnpm --filter @gaespos/mobile-kiosko start
+pnpm --filter @gaespos/mobile-kiosko test
+pnpm --filter @gaespos/mobile-kiosko typecheck
 ```
-Apunta a otra API con: `EXPO_PUBLIC_API_URL=https://tu-api/api pnpm --filter @gaespos/mobile-negocio start`
 
-## Generar el APK (Android) y app iOS con EAS
-```bash
-npm i -g eas-cli
-eas login
-cd apps/mobile-negocio
-eas build -p android --profile preview   # genera un .apk instalable
-eas build -p ios --profile preview       # requiere cuenta Apple Developer
-```
-El `.apk`/`.ipa` queda para descargar desde el panel de EAS y subir a Play/App Store.
+Usa una API de prueba accesible desde el dispositivo. En un teléfono, localhost apunta al teléfono. No uses tokens de producción en demostraciones o fixtures. Para distribución configura el dominio HTTPS autorizado de la API.
 
-## Seguridad (Fase 1)
-- Token en **Keychain (iOS) / Keystore (Android)** vía `expo-secure-store` (nunca en texto plano).
-- **Huella / Face ID** (`expo-local-authentication`) para desbloquear la sesión guardada.
-- 401 → cierra sesión y pide re-login (el backend no tiene refresh token todavía).
-- **Pendiente Fase 2+ de seguridad**: certificate pinning, detección root/jailbreak, bloqueo de screenshot, refresh token en el backend.
+## Operación y límites
 
-## Estructura
-- `src/config.ts` — URL del API y llaves de storage.
-- `src/lib/storage.ts` — almacenamiento seguro (expo-secure-store).
-- `src/lib/api.ts` — cliente cableado a `@gaespos/api-client`.
-- `src/lib/auth-store.ts` — sesión, login, 2FA, biometría, logout (Zustand).
-- `app/` — Expo Router: `login`, gate de sesión, y grupo `(app)` con tabs por rol.
+El encargado crea un dispositivo en el panel, copia el token una sola vez y lo activa en la aplicación. Mantener pulsada la esquina abre una confirmación para configurar. Esta confirmación evita cambios accidentales; no autentica al encargado ni sustituye el modo kiosco administrado del sistema operativo.
+
+El lector debe enviar caracteres como teclado y terminar con Enter. La prueba web simula esta entrada; cámara, lector físico, rotación, arranque automático y operación prolongada requieren pruebas en cada equipo objetivo. No hay instalador o certificación de dispositivos concluida.
+
+La revisión local comprobó consulta válida, código desconocido, error503 con recuperación, ceros iniciales y anchos360/768/1440. Las pruebas automatizadas usan datos ficticios y no certifican hardware. La reproducción de videos, emparejamiento temporal, renovación administrada de tokens y restricciones físicas de Android/iOS siguen pendientes.

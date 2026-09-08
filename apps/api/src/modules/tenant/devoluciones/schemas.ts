@@ -1,8 +1,22 @@
+import Decimal from "decimal.js";
 import { z } from "zod";
+
+export function cantidadDevolucionValida(value: string | number): boolean {
+  try {
+    const n = new Decimal(value);
+    return n.isFinite() && n.gt(0) && n.decimalPlaces() <= 3 && n.lte("999999999999999.999");
+  } catch {
+    return false;
+  }
+}
 
 const positiveDecimalString = z
   .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
-  .transform((v) => String(v));
+  .transform((v) => String(v))
+  .refine(
+    cantidadDevolucionValida,
+    "Cantidad debe ser positiva, máximo 3 decimales y 15 dígitos enteros",
+  );
 
 const motivoEnum = z.enum([
   "defectuoso",
@@ -31,6 +45,7 @@ export const devolucionLineaInputSchema = z.object({
 });
 
 export const devolucionCreateSchema = z.object({
+  idempotencyKey: z.string().uuid().optional(),
   motivo: motivoEnum,
   motivoDetalle: z.string().max(500).optional(),
   metodoReembolso: metodoReembolsoEnum,

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, space } from "../theme";
+import { colors, isDark, radius, space } from "../theme";
 import { Icon, type IconName } from "./Icon";
 
 type Variant = "primary" | "outline" | "danger" | "ghost";
@@ -20,9 +20,17 @@ export function Button({
   disabled?: boolean;
 }) {
   const off = disabled || busy;
-  const txt = variant === "primary" || variant === "danger" ? colors.white : colors.brand;
+  const txt =
+    variant === "primary" || variant === "danger"
+      ? isDark
+        ? colors.bg
+        : colors.white
+      : colors.brand;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: off, busy }}
       onPress={onPress}
       disabled={off}
       style={({ pressed }) => [s.base, s[variant], off && s.off, pressed && !off && s.pressed]}
@@ -50,7 +58,7 @@ const s = StyleSheet.create({
   label: { fontSize: 16, fontWeight: "700" },
   primary: { backgroundColor: colors.brand },
   danger: { backgroundColor: colors.danger },
-  outline: { borderWidth: 1.5, borderColor: colors.brand, backgroundColor: colors.white },
+  outline: { borderWidth: 1.5, borderColor: colors.brand, backgroundColor: colors.card },
   ghost: { backgroundColor: "transparent" },
   off: { opacity: 0.5 },
   pressed: { opacity: 0.85 },

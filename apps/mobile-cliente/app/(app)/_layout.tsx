@@ -1,9 +1,11 @@
 import { useAuth } from "@/lib/auth-store";
+import { useCartSync } from "@/lib/use-cart-sync";
 import { colors } from "@/theme";
 import { Icon, type IconName } from "@/ui";
 import { Redirect, Tabs } from "expo-router";
 
 export default function AppLayout() {
+  useCartSync();
   const status = useAuth((sel) => sel.status);
   if (status !== "signedIn") return <Redirect href="/login" />;
 
@@ -21,9 +23,13 @@ export default function AppLayout() {
         tabBarInactiveTintColor: colors.faint,
         headerStyle: { backgroundColor: colors.card },
         headerTitleStyle: { color: colors.ink, fontWeight: "800" },
-        tabBarStyle: { borderTopColor: colors.line },
+        tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.card },
       }}
     >
+      <Tabs.Screen name="tienda" options={{ title: "Tienda", tabBarIcon: tab("storefront") }} />
+      <Tabs.Screen name="producto" options={{ ...hidden, title: "Artículo" }} />
+      <Tabs.Screen name="checkout" options={{ ...hidden, title: "Entrega y pago" }} />
+      <Tabs.Screen name="carrito" options={{ ...hidden, title: "Carrito" }} />
       <Tabs.Screen name="index" options={{ title: "Pedidos", tabBarIcon: tab("bag-handle") }} />
       <Tabs.Screen name="favoritos" options={{ title: "Favoritos", tabBarIcon: tab("heart") }} />
       <Tabs.Screen

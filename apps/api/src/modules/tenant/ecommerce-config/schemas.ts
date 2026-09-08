@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const configTiendaSchema = z.object({
+  envioVarianteId: z.string().min(1).nullable().optional(),
   activa: z.boolean().optional(),
   subdominio: z
     .string()

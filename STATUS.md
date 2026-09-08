@@ -1,5 +1,17 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Prioridad vigente — 2026-09-08: entrega de la tienda
+
+Gaby prioriza tienda web + POS/administración + apps móviles con paridad funcional + kiosco de precios/publicidad, para múltiples sistemas operativos. Fuente actual: esta carpeta, rama `mobile/apps`; no usar `gaespos-verticales` como inventario completo de lo ya construido. Ver [Estado de entrega de tienda — 8-sep](docs/estado-entrega-tienda-2026-09-08.md).
+
+**Dictamen vigente:** paquete completo todavía no aprobado para comercialización. Hay avances locales verificados; no equivalen a certificación de proveedores, dispositivos ni instalación en clientes. No hubo ventas, timbrados, despliegues ni migraciones en producción. El detalle posterior a esta sección es histórico.
+
+**Trabajo activo:** tablero local `http://127.0.0.1:4318/` con evidencia y actividad separadas. Confirmación de checkout atómica y snapshot de importes probados; venta/stock/cart se confirman juntos. App cliente incluye catálogo/carrito y OXXO/SPEI; tarjetas y proveedores reales pendientes.
+
+**Evidencia reciente:** POS117; intentos de efectivo13 y tanda previa15 ventas; cortes20; negocio107; cliente54; kiosco24; cliente API6. POS compila. Conjuntos con solapamiento: no sumar como pruebas únicas. Ver informe para tandas anteriores de checkout, fiscal y postpago.
+
+**Trabajo vigente:** efectivo durable implementado en API, POS y app negocio, con recuperación y cancelación de intento sin venta. QA visual de cobro, cambio y recibos completada con datos ficticios; lector y selección exacta de variantes corregidos. Alta/edición básica móvil verificada. Recibido/cambio móvil verificado, incluida recuperación de respuesta perdida. Caja integral probada contra API/DB aisladas:apertura500,venta150,recibido200,cambio50,cortesX/Z650sin diferencia y nuevaapertura requerida. Cierre concurrente protegido;105 regresionesAPI y37 pruebas corteUI. Siguen pendientes paridad administrativa móvil, video operativo, proveedores reales, instalación y hardware.
+
 > **Cómo usar:** Claude actualiza este archivo al final de cada sesión productiva. Si una sesión se trunca o hay que retomar después, este archivo dice exactamente dónde quedamos.
 
 **Última actualización:** 2026-06-21

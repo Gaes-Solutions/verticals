@@ -201,6 +201,23 @@ describe("envíos: zonas + tarifas + cotizador + pickup", () => {
     });
     expect(res.statusCode).toBe(201);
     tarifaEnvioId = res.json().id;
+    const shippingService = await app.inject({
+      method: "POST",
+      url: "/t/productos",
+      headers: auth(ownerToken),
+      payload: {
+        skuPadre: "ECOM-SHIPPING",
+        nombre: "Servicio de envío",
+        tipoVenta: "servicio",
+        precioBase: "99",
+        aplicaIva: true,
+        tasaIva: "16",
+      },
+    });
+    expect(shippingService.statusCode).toBe(201);
+    await getTenantClient(TENANT_SLUG).configTiendaEcommerce.updateMany({
+      data: { envioVarianteId: shippingService.json().variantes[0].id },
+    });
   });
 
   it("cotiza por estado → tarifa $99", async () => {

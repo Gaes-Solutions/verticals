@@ -1,5 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import {
+  cancelarIntentoVenta,
+  consultarIntentoVenta,
+  crearVentaConIntento,
+} from "./attempt-service.js";
 import {
   type VentaListQuery,
   ventaCancelarSchema,
@@ -9,7 +16,7 @@ import {
   ventaListQuerySchema,
   ventaPreviewSchema,
 } from "./schemas.js";
-import { VentaError, cancelarVenta, cobrarVenta, crearVenta, previewVenta } from "./service.js";
+import { VentaError, cancelarVenta, cobrarVenta, previewVenta } from "./service.js";
 
 function buildVentaWhere(q: VentaListQuery): Record<string, unknown> {
   const where: Record<string, unknown> = {};
@@ -30,6 +37,37 @@ function buildVentaWhere(q: VentaListQuery): Record<string, unknown> {
 }
 
 const ventasRoutes: FastifyPluginAsync = async (app) => {
+  app.post("/intentos/preparar", async (req) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    return { idempotencyKey: randomUUID() };
+  });
+  app.post("/intentos/:key/cancelar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
+    try {
+      return await cancelarIntentoVenta(req.tenantPrisma, req.principal.userId, key);
+    } catch (error) {
+      if (error instanceof VentaError)
+        return reply
+          .code(error.statusCode)
+          .send({ statusCode: error.statusCode, message: error.message, ...error.extra });
+      throw error;
+    }
+  });
+  app.get("/intentos/:key", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
+    try {
+      return await consultarIntentoVenta(req.tenantPrisma, req.principal.userId, key);
+    } catch (error) {
+      if (error instanceof VentaError)
+        return reply
+          .code(error.statusCode)
+          .send({ statusCode: error.statusCode, message: error.message, ...error.extra });
+      throw error;
+    }
+  });
+
   app.get("/", async (req) => {
     req.requirePerm(PERMISSIONS.VENTAS_LEER);
     const q = ventaListQuerySchema.parse(req.query);
@@ -86,7 +124,7 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
       PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
     );
     try {
-      const result = await crearVenta(req.tenantPrisma, req.principal.userId, body, {
+      const result = await crearVentaConIntento(req.tenantPrisma, req.principal.userId, body, {
         permiteDescuentoAlto,
       });
       return reply.code(201).send(result);

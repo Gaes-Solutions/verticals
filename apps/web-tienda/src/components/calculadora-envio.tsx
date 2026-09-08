@@ -31,7 +31,9 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
       const params = new URLSearchParams({ cp, subtotal: String(subtotal) });
       if (estado.trim()) params.set("estado", estado.trim());
       const res = await fetch(`/api/envios?${params.toString()}`);
+      if (!res.ok) throw new Error("Cotización no disponible");
       const data = (await res.json()) as { opcionesEnvio?: Opcion[] };
+      if (!Array.isArray(data.opcionesEnvio)) throw new Error("Cotización inválida");
       setOpciones(data.opcionesEnvio ?? []);
     } catch {
       setError("No se pudo calcular el envío");

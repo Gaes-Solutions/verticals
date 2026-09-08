@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth-store";
 import { fecha } from "@/lib/format";
 import {
   type MetodoReembolso,
@@ -9,9 +10,8 @@ import {
 import { colors, radius, shadow, space } from "@/theme";
 import { Badge, Button, EmptyState, Loading } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -40,6 +40,11 @@ function tono(e: string): "ok" | "danger" | "warn" | "neutral" {
 
 export default function Devoluciones() {
   const qc = useQueryClient();
+  const user = useAuth((state) => state.user);
+  const canRead = !!user && (user.isOwner || user.permissions.includes("ventas.leer"));
+  const canResolve = !!user && (user.isOwner || user.permissions.includes("ventas.devolver"));
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const [error, setError] = useState("");
   const [filtro, setFiltro] = useState("");
   const [accion, setAccion] = useState<{ sol: Solicitud; tipo: "aprobar" | "rechazar" } | null>(
     null,
@@ -47,10 +52,15 @@ export default function Devoluciones() {
   const q = useQuery({
     queryKey: ["devoluciones", filtro],
     queryFn: () => listDevoluciones(filtro || undefined),
+    enabled: canRead,
+    retry: false,
   });
 
+  if (!canRead)
+    return <Text accessibilityRole="alert">No tienes permiso para consultar devoluciones.</Text>;
   return (
     <View style={s.root}>
+      {error ? <Text accessibilityRole="alert">{error}</Text> : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -65,6 +75,11 @@ export default function Devoluciones() {
 
       {q.isLoading ? (
         <Loading />
+      ) : q.isError ? (
+        <View>
+          <Text accessibilityRole="alert">No se pudieron consultar las devoluciones.</Text>
+          <Button label="Reintentar consulta" onPress={() => void q.refetch()} />
+        </View>
       ) : (
         <FlatList
           contentContainerStyle={s.list}
@@ -90,7 +105,7 @@ export default function Devoluciones() {
               <Text style={s.meta}>
                 {item.items.length} artículo(s) · {fecha(item.createdAt)}
               </Text>
-              {item.estado === "solicitada" ? (
+              {item.estado === "solicitada" && canResolve && !blocked.includes(item.id) ? (
                 <View style={s.acciones}>
                   <View style={{ flex: 1 }}>
                     <Button
@@ -115,7 +130,14 @@ export default function Devoluciones() {
       )}
 
       <AccionModal
-        accion={accion}
+        key={accion ? `${accion.sol.id}-${accion.tipo}` : "closed"}
+        accion={canResolve ? accion : null}
+        onFailure={() => {
+          if (accion) setBlocked((ids) => [...ids, accion.sol.id]);
+          setError(
+            "No se confirmó la operación. Consulta el estado y solicita conciliación antes de volver a realizarla.",
+          );
+        }}
         onClose={() => setAccion(null)}
         onDone={() => {
           setAccion(null);
@@ -130,11 +152,17 @@ function AccionModal({
   accion,
   onClose,
   onDone,
+  onFailure,
 }: {
   accion: { sol: Solicitud; tipo: "aprobar" | "rechazar" } | null;
   onClose: () => void;
   onDone: () => void;
+  onFailure: () => void;
 }) {
+  const guard = useRef(false);
+  const [writeError, setWriteError] = useState("");
+  const user = useAuth((state) => state.user);
+  const canResolve = !!user && (user.isOwner || user.permissions.includes("ventas.devolver"));
   const [motivo, setMotivo] = useState("");
   const [metodo, setMetodo] = useState<MetodoReembolso>("efectivo");
 
@@ -147,7 +175,10 @@ function AccionModal({
       setMotivo("");
       onDone();
     },
-    onError: (e) => Alert.alert("No se pudo", e instanceof Error ? e.message : "Error"),
+    onError: () => {
+      setWriteError("No se confirmó la operación. No la repitas; solicita conciliación.");
+      onFailure();
+    },
   });
 
   const esAprobar = accion?.tipo === "aprobar";
@@ -190,12 +221,17 @@ function AccionModal({
             </>
           )}
           <View style={{ height: space.md }} />
+          {writeError ? <Text accessibilityRole="alert">{writeError}</Text> : null}
           <Button
             label={esAprobar ? "Confirmar aprobación" : "Confirmar rechazo"}
             variant={esAprobar ? "primary" : "danger"}
             busy={m.isPending}
-            disabled={!esAprobar && motivo.trim().length < 3}
-            onPress={() => m.mutate()}
+            disabled={!canResolve || !!writeError || (!esAprobar && motivo.trim().length < 3)}
+            onPress={() => {
+              if (guard.current || !canResolve || writeError) return;
+              guard.current = true;
+              m.mutate();
+            }}
           />
           <View style={{ height: space.sm }} />
           <Button label="Cancelar" variant="ghost" onPress={onClose} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ShippingServicePicker } from "../components/ShippingServicePicker.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type { ConfigTienda, Paged, Producto } from "../lib/types.js";
 
 interface RegistroDns {
@@ -30,15 +31,41 @@ export function TiendaPage() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [dominioKey, setDominioKey] = useState(0);
+  const canConfigure = puede("ecommerce.configurar");
+  const canPublish = puede("ecommerce.publicar_producto") && puede("productos.leer");
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configRetry, setConfigRetry] = useState(0);
+  const [configLoading, setConfigLoading] = useState(true);
 
   useEffect(() => {
-    api<ConfigTienda>("/t/ecommerce/config")
-      .then((c) => setConfig(c ?? {}))
-      .catch(() => setConfig({}));
-  }, []);
+    const controller = new AbortController();
+    let active = true;
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    setConfigLoading(true);
+    setError(null);
+    api<ConfigTienda>("/t/ecommerce/config", { signal: controller.signal })
+      .then((c) => {
+        if (!active) return;
+        setConfig(c ?? {});
+        setConfigLoaded(true);
+      })
+      .catch(() => {
+        if (active) setError("No se pudo cargar la configuración. Reintenta antes de guardar.");
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (active) setConfigLoading(false);
+      });
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [configRetry]);
 
   // Lista de productos para publicar, con búsqueda server-side (debounce).
   useEffect(() => {
+    if (!canPublish) return;
     const t = setTimeout(() => {
       const qs = buscarPub.trim() ? `&q=${encodeURIComponent(buscarPub.trim())}` : "";
       api<Paged<Producto>>(`/t/productos?pageSize=50${qs}`)
@@ -46,9 +73,10 @@ export function TiendaPage() {
         .catch(() => setProductos([]));
     }, 250);
     return () => clearTimeout(t);
-  }, [buscarPub]);
+  }, [buscarPub, canPublish]);
 
   async function guardarConfig() {
+    if (!canConfigure || !configLoaded) return;
     setError(null);
     setMsg(null);
     setGuardando(true);
@@ -57,6 +85,7 @@ export function TiendaPage() {
         method: "PUT",
         body: {
           activa: config.activa ?? false,
+          envioVarianteId: config.envioVarianteId ?? null,
           subdominio: config.subdominio ?? "",
           dominioPropio: config.dominioPropio ? config.dominioPropio : null,
           nombre: config.nombre ?? "",
@@ -90,6 +119,7 @@ export function TiendaPage() {
   }
 
   async function publicar(p: Producto) {
+    if (!canPublish) return;
     setError(null);
     setMsg(null);
     try {
@@ -111,6 +141,27 @@ export function TiendaPage() {
   return (
     <div className="max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Tienda online</h1>
+      {msg && <output className="mb-4 block text-sm text-emerald-600">{msg}</output>}
+      {error && (
+        <p role="alert" className="mb-4 text-sm text-red-600">
+          {error}
+        </p>
+      )}
+      {!configLoaded && (
+        <div className="mb-4">
+          {configLoading ? (
+            <output className="block text-sm text-slate-600">Cargando configuración…</output>
+          ) : (
+            <button
+              type="button"
+              className="gx-btn-secondary"
+              onClick={() => setConfigRetry((value) => value + 1)}
+            >
+              Reintentar configuración
+            </button>
+          )}
+        </div>
+      )}
 
       <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-4 font-bold text-slate-800">Configuración</h2>
@@ -162,7 +213,7 @@ export function TiendaPage() {
           type="button"
           data-tour="tienda-guardar"
           onClick={guardarConfig}
-          disabled={guardando}
+          disabled={guardando || !configLoaded || !canConfigure}
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar"}
@@ -269,7 +320,7 @@ export function TiendaPage() {
         <button
           type="button"
           onClick={guardarConfig}
-          disabled={guardando}
+          disabled={guardando || !configLoaded || !canConfigure}
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar funciones"}
@@ -311,6 +362,14 @@ export function TiendaPage() {
         <p className="mb-4 text-slate-500 text-sm">
           Conecta una paquetería para generar guías solas y avisar a tus clientes por push.
         </p>
+
+        {canConfigure && (
+          <ShippingServicePicker
+            value={config.envioVarianteId ?? null}
+            onChange={(envioVarianteId) => setConfig({ ...config, envioVarianteId })}
+            disabled={guardando || !configLoaded}
+          />
+        )}
 
         <div className="mb-4 rounded-lg border border-slate-200 p-3">
           <span className="mb-2 block font-medium text-slate-800 text-sm">
@@ -409,7 +468,7 @@ export function TiendaPage() {
         <button
           type="button"
           onClick={guardarConfig}
-          disabled={guardando}
+          disabled={guardando || !configLoaded || !canConfigure}
           className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar envíos"}
@@ -447,53 +506,52 @@ export function TiendaPage() {
         <button
           type="button"
           onClick={guardarConfig}
-          disabled={guardando}
+          disabled={guardando || !configLoaded || !canConfigure}
           className="mt-2 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar políticas"}
         </button>
       </section>
 
-      <section className="rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-bold text-slate-800">Publicar productos</h2>
-        <p className="mb-3 text-sm text-slate-500">
-          Pon tus productos a la venta en la tienda online.
-        </p>
-        <input
-          data-tour="tienda-publicar"
-          value={buscarPub}
-          onChange={(e) => setBuscarPub(e.target.value)}
-          placeholder="Buscar producto por nombre o SKU…"
-          className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
-        />
-        <div className="max-h-72 overflow-y-auto">
-          {productos.map((p) => (
-            <div
-              key={p.id}
-              className="mb-2 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
-            >
-              <span className="text-sm font-medium text-slate-800">{p.nombre}</span>
-              <button
-                type="button"
-                onClick={() => publicar(p)}
-                className="rounded-lg border border-brand px-3 py-1 text-sm font-semibold text-brand hover:bg-teal-50"
+      {canPublish && (
+        <section className="rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-bold text-slate-800">Publicar productos</h2>
+          <p className="mb-3 text-sm text-slate-500">
+            Pon tus productos a la venta en la tienda online.
+          </p>
+          <input
+            data-tour="tienda-publicar"
+            value={buscarPub}
+            onChange={(e) => setBuscarPub(e.target.value)}
+            placeholder="Buscar producto por nombre o SKU…"
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          />
+          <div className="max-h-72 overflow-y-auto">
+            {productos.map((p) => (
+              <div
+                key={p.id}
+                className="mb-2 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
               >
-                Publicar
-              </button>
-            </div>
-          ))}
-          {productos.length === 0 && (
-            <p className="text-sm text-slate-400">
-              {buscarPub.trim()
-                ? `Sin resultados para "${buscarPub.trim()}".`
-                : "Crea productos primero en la sección Productos."}
-            </p>
-          )}
-        </div>
-      </section>
-
-      {msg && <p className="mt-4 text-sm text-emerald-600">{msg}</p>}
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+                <span className="text-sm font-medium text-slate-800">{p.nombre}</span>
+                <button
+                  type="button"
+                  onClick={() => publicar(p)}
+                  className="rounded-lg border border-brand px-3 py-1 text-sm font-semibold text-brand hover:bg-teal-50"
+                >
+                  Publicar
+                </button>
+              </div>
+            ))}
+            {productos.length === 0 && (
+              <p className="text-sm text-slate-400">
+                {buscarPub.trim()
+                  ? `Sin resultados para "${buscarPub.trim()}".`
+                  : "Crea productos primero en la sección Productos."}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

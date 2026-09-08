@@ -76,10 +76,10 @@ export async function enviarPushCliente(
   prisma: TenantPrismaClient,
   clienteId: string,
   payload: PushPayload,
-): Promise<{ enviadas: number; eliminadas: number }> {
-  if (!configurarVapid()) return { enviadas: 0, eliminadas: 0 };
+): Promise<{ enviadas: number; eliminadas: number; fallidas: number }> {
+  if (!configurarVapid()) return { enviadas: 0, eliminadas: 0, fallidas: 0 };
   const subs = await prisma.pushSubscription.findMany({ where: { clienteId } });
-  if (subs.length === 0) return { enviadas: 0, eliminadas: 0 };
+  if (subs.length === 0) return { enviadas: 0, eliminadas: 0, fallidas: 0 };
 
   const body = JSON.stringify({
     title: payload.titulo,
@@ -89,6 +89,7 @@ export async function enviarPushCliente(
   });
 
   let enviadas = 0;
+  let fallidas = 0;
   const muertas: string[] = [];
   await Promise.all(
     subs.map(async (s) => {
@@ -102,11 +103,12 @@ export async function enviarPushCliente(
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) muertas.push(s.endpoint);
+        else fallidas++;
       }
     }),
   );
   if (muertas.length > 0) {
     await prisma.pushSubscription.deleteMany({ where: { endpoint: { in: muertas } } });
   }
-  return { enviadas, eliminadas: muertas.length };
+  return { enviadas, eliminadas: muertas.length, fallidas };
 }

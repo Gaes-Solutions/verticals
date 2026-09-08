@@ -112,9 +112,28 @@ function precioEfectivo(p: ProductoCrudo, ahora: Date): number {
   return promoVigente(p, ahora) ? Number(p.precioPromocion) : precioBaseDe(p);
 }
 
+export const ACTIVE_VARIANT_FILTER = { isActive: true, archivedAt: null } as const;
+export const PUBLIC_PRODUCT_FILTER = {
+  isPublicado: true,
+  producto: {
+    isActive: true,
+    isVisiblePublico: true,
+    archivedAt: null,
+    variantes: { some: ACTIVE_VARIANT_FILTER },
+  },
+} as const;
+
 const INCLUDE = {
-  categoriaPublica: { select: { nombre: true, slugSeo: true } },
-  producto: { select: { id: true, variantes: { select: { id: true, precioBase: true } } } },
+  categoriaPublica: { select: { id: true, nombre: true, slugSeo: true } },
+  producto: {
+    select: {
+      id: true,
+      variantes: {
+        where: ACTIVE_VARIANT_FILTER,
+        select: { id: true, precioBase: true, nombreVariante: true, opciones: true },
+      },
+    },
+  },
 } as const;
 
 export interface CatalogoResult {
@@ -135,7 +154,7 @@ export async function listarCatalogo(
   q: CatalogoQuery,
 ): Promise<CatalogoResult> {
   const ahora = new Date();
-  const where: Record<string, unknown> = { isPublicado: true };
+  const where: Record<string, unknown> = { ...PUBLIC_PRODUCT_FILTER };
   if (q.categoriaPublicaId) where.categoriaPublicaId = q.categoriaPublicaId;
   if (q.destacado !== undefined) where.destacadoHome = q.destacado;
   if (q.q) where.tituloPublico = { contains: q.q, mode: "insensitive" };
@@ -287,7 +306,7 @@ export async function productosRelacionados(
   const ids = Array.isArray(prod.relacionadosIds) ? (prod.relacionadosIds as string[]) : [];
   const explicitos = ids.length
     ? ((await prisma.productoPublicado.findMany({
-        where: { id: { in: ids }, isPublicado: true },
+        where: { ...PUBLIC_PRODUCT_FILTER, id: { in: ids } },
         include: INCLUDE,
       })) as unknown as ProductoCrudo[])
     : [];
@@ -297,7 +316,7 @@ export async function productosRelacionados(
   if (faltan > 0 && prod.categoriaPublicaId) {
     porCategoria = (await prisma.productoPublicado.findMany({
       where: {
-        isPublicado: true,
+        ...PUBLIC_PRODUCT_FILTER,
         categoriaPublicaId: prod.categoriaPublicaId,
         id: { notIn: [prod.id, ...explicitos.map((e) => e.id)] },
       },

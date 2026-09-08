@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
     );
     return NextResponse.json(cot);
   } catch {
-    return NextResponse.json({ opcionesEnvio: [], pickup: [] });
+    return NextResponse.json(
+      { message: "No se pudo consultar la entrega. Reintenta en unos momentos." },
+      { status: 503 },
+    );
   }
 }

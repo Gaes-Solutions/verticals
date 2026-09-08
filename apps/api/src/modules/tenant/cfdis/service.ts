@@ -9,6 +9,11 @@ import {
   type UsoCfdi,
 } from "@gaespos/fiscal";
 import type { FastifyRequest } from "fastify";
+import {
+  type FiscalSaleAmounts,
+  FiscalSnapshotError,
+  buildFiscalAmounts,
+} from "./fiscal-amounts.js";
 import { type CfdiEmitirInput, RFC_GENERICO_NACIONAL } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -68,45 +73,11 @@ function buildFiscalPayload(
       usoCfdi: receptor.usoCfdi as UsoCfdi,
       ...(receptor.correoReceptor ? { correo: receptor.correoReceptor } : {}),
     },
-    conceptos: venta.lineas.map((l) => {
-      const snapshot = l.snapshotProducto as { skuPadre?: string; nombreProducto?: string };
-      const iepsNum = Number(l.iepsTotal.toString());
-      const subtotalNum = Number(l.subtotal.toString());
-      const baseIeps = subtotalNum > 0 ? subtotalNum - iepsNum : 0;
-      const tasaIepsCalc =
-        iepsNum > 0 && baseIeps > 0 ? (iepsNum / baseIeps).toFixed(6) : "0.000000";
-      return {
-        claveProdServ: "01010101",
-        claveUnidad: "H87",
-        cantidad: l.cantidad.toString(),
-        unidad: "PZA",
-        descripcion: snapshot.nombreProducto ?? snapshot.skuPadre ?? "Producto",
-        valorUnitario: l.precioUnitario.toString(),
-        importe: l.subtotal.toString(),
-        aplicaIva: Number(l.ivaTotal.toString()) > 0,
-        tasaIva: Number(l.ivaTotal.toString()) > 0 ? "0.160000" : "0.000000",
-        aplicaIeps: iepsNum > 0,
-        tasaIeps: tasaIepsCalc,
-      };
-    }),
-    subtotal: venta.subtotal.toString(),
-    descuento: venta.descuentoTotal.toString(),
-    iva: venta.ivaTotal.toString(),
-    ieps: venta.iepsTotal.toString(),
-    total: venta.total.toString(),
+    ...buildFiscalAmounts(venta),
   };
 }
 
-type VentaConLineas = NonNullable<Awaited<ReturnType<TenantClient["venta"]["findUnique"]>>> & {
-  lineas: Array<{
-    cantidad: { toString: () => string };
-    precioUnitario: { toString: () => string };
-    subtotal: { toString: () => string };
-    ivaTotal: { toString: () => string };
-    iepsTotal: { toString: () => string };
-    snapshotProducto: unknown;
-  }>;
-};
+type VentaConLineas = FiscalSaleAmounts & { moneda: string };
 
 export async function emitirCfdi(
   client: TenantClient,
@@ -129,6 +100,14 @@ export async function emitirCfdi(
   if (!cfg || !cfg.isActive) throw new CfdiError(409, "CFDI no configurado o inactivo");
 
   const sf = await nextFolio(client);
+  let payload: FiscalEmitirInput;
+  try {
+    payload = buildFiscalPayload(cfg, venta, input, sf);
+  } catch (error) {
+    if (error instanceof FiscalSnapshotError)
+      throw new CfdiError(error.statusCode, error.message, { code: error.code });
+    throw error;
+  }
   const cfdi = await client.cfdi.create({
     data: {
       ventaId: venta.id,
@@ -147,11 +126,11 @@ export async function emitirCfdi(
       codigoPostalReceptor: input.codigoPostalReceptor,
       regimenFiscalReceptor: input.regimenFiscalReceptor,
       ...(input.correoReceptor ? { correoReceptor: input.correoReceptor } : {}),
-      subtotal: venta.subtotal.toString(),
-      descuento: venta.descuentoTotal.toString(),
-      iva: venta.ivaTotal.toString(),
-      ieps: venta.iepsTotal.toString(),
-      total: venta.total.toString(),
+      subtotal: payload.subtotal,
+      descuento: payload.descuento,
+      iva: payload.iva,
+      ieps: payload.ieps,
+      total: payload.total,
       moneda: venta.moneda,
       estado: "pendiente",
       emitidoPorId: input.emitidoPorId,
@@ -160,9 +139,7 @@ export async function emitirCfdi(
   });
 
   try {
-    const result = await provider.emitir(
-      buildFiscalPayload(cfg, venta as VentaConLineas, input, sf),
-    );
+    const result = await provider.emitir(payload);
     await client.cfdi.update({
       where: { id: cfdi.id },
       data: {

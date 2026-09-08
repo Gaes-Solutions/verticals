@@ -21,6 +21,8 @@ import {
   billingPublicRoutes,
   billingWebhookRoutes,
 } from "./modules/billing/routes.js";
+import comercioCheckoutRoutes from "./modules/cliente-portal/comercio-checkout-routes.js";
+import comercioRoutes from "./modules/cliente-portal/comercio-routes.js";
 import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import marketplaceTenantRoutes, {
@@ -226,6 +228,8 @@ export async function buildApp(
   await app.register(billingAdminGaesSoftRoutes);
   await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
+  await app.register(comercioRoutes, { prefix: "/cliente-portal/comercio" });
+  await app.register(comercioCheckoutRoutes, { prefix: "/cliente-portal/comercio" });
   await app.register(kioskoDeviceRoutes, { prefix: "/kiosko" });
   await app.register(b2bAuthRoutes, { prefix: "/auth/cliente-b2b" });
   await app.register(b2bPortalRoutes, { prefix: "/b2b-portal" });

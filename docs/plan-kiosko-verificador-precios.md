@@ -1,5 +1,9 @@
 # Plan — Kiosko verificador de precios + modo comercial (estilo Walmart)
 
+## Revisión vigente — 8-sep-2026
+
+Fase 1 existe y pasa tipos: cámara, precio, carrusel y gestión web/móvil. Eso no es entrega certificada. Ver [hallazgos y aceptación del kiosco](estado-entrega-tienda-2026-09-08.md): fallos de red se muestran como producto inexistente; falta validación/protección de setup, pruebas de precios y anuncios, APK/instalación y tablet real. Videos propios, HID, caché persistente y bloqueo administrado no están implementados en esta fase. Gaby pide cubrir diferentes OS de tabletas/teléfonos; Android no cierra todo el requisito. El resto de este plan conserva el historial.
+
 > Referencia: verificadores de precio de Walmart / Sam's / Costco (el cliente escanea un
 > código y ve precio; cuando nadie lo usa, muestra publicidad de los productos de la tienda).
 > Sigue la regla "no recortar scope": arquitectura completa, configurable por tenant.

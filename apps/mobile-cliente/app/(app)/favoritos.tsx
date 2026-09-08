@@ -1,19 +1,33 @@
+import { useAuth } from "@/lib/auth-store";
 import { money } from "@/lib/format";
 import { listWishlist, quitarWishlist } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
 import { EmptyState, Icon, Loading } from "@/ui";
+import { CommerceError } from "@/ui/CommerceError";
+import { Screen } from "@/ui/Screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
 export default function Favoritos() {
+  const { tenantSlug, user } = useAuth();
+  const queryKey = ["wishlist", tenantSlug, user?.id];
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["wishlist"], queryFn: listWishlist });
+  const q = useQuery({ queryKey, retry: false, queryFn: listWishlist });
   const quitar = useMutation({
     mutationFn: (itemId: string) => quitarWishlist(itemId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["wishlist"] }),
-    onError: (e) => Alert.alert("No se pudo", e instanceof Error ? e.message : "Error"),
+    onSuccess: () => void qc.invalidateQueries({ queryKey }),
   });
   if (q.isLoading) return <Loading />;
+  if (q.isError)
+    return (
+      <Screen>
+        <CommerceError
+          error={q.error}
+          message="No pudimos cargar tus favoritos. Revisa tu conexión y vuelve a intentar."
+          retry={() => void q.refetch()}
+        />
+      </Screen>
+    );
 
   return (
     <FlatList
@@ -23,6 +37,18 @@ export default function Favoritos() {
       keyExtractor={(w) => w.itemId}
       refreshing={q.isFetching}
       onRefresh={() => q.refetch()}
+      ListHeaderComponent={
+        quitar.isError ? (
+          <CommerceError
+            error={quitar.error}
+            message="No pudimos confirmar el cambio de favoritos. Actualiza la lista para revisar su estado."
+            retry={() => {
+              quitar.reset();
+              void q.refetch();
+            }}
+          />
+        ) : null
+      }
       ListEmptyComponent={
         <EmptyState
           icon="heart-outline"
@@ -43,7 +69,9 @@ export default function Favoritos() {
             name="heart-dislike"
             size={22}
             color={colors.danger}
-            onPress={() => quitar.mutate(item.itemId)}
+            onPress={() => {
+              if (!quitar.isPending) quitar.mutate(item.itemId);
+            }}
           />
         </View>
       )}

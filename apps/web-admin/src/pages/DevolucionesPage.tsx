@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, puede } from "../lib/api.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, puede } from "../lib/api.js";
 
 interface Solicitud {
   id: string;
@@ -44,16 +44,39 @@ export function DevolucionesPage() {
   const [accion, setAccion] = useState<{ s: Solicitud; tipo: "aprobar" | "rechazar" } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const puedeLeer = puede("ventas.leer");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const generation = useRef(0);
   const puedeResolver = puede("ventas.devolver");
 
-  const cargar = useCallback(() => {
-    const qs = filtro ? `?estado=${filtro}` : "";
-    api<Solicitud[]>(`/t/devoluciones-online${qs}`)
-      .then(setSolicitudes)
-      .catch(() => setSolicitudes([]));
-  }, [filtro]);
-
-  useEffect(() => cargar(), [cargar]);
+  const cargar = useCallback(async () => {
+    const current = ++generation.current;
+    if (!puedeLeer) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError(false);
+    setSolicitudes([]);
+    try {
+      const qs = filtro ? `?estado=${encodeURIComponent(filtro)}` : "";
+      const result = await api<Solicitud[]>(`/t/devoluciones-online${qs}`);
+      if (current === generation.current) setSolicitudes(result);
+    } catch {
+      if (current === generation.current) setLoadError(true);
+    } finally {
+      if (current === generation.current) setLoading(false);
+    }
+  }, [filtro, puedeLeer]);
+  useEffect(() => {
+    void cargar();
+    return () => {
+      generation.current++;
+    };
+  }, [cargar]);
+  if (!puedeLeer) return <p role="alert">No tienes permiso para consultar devoluciones.</p>;
 
   return (
     <div className="max-w-4xl">
@@ -72,7 +95,20 @@ export function DevolucionesPage() {
         </select>
       </div>
 
-      {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
+      {loading && <output>Consultando devoluciones…</output>}
+      {loadError && (
+        <div role="alert">
+          <p>No se pudieron consultar las devoluciones.</p>
+          <button type="button" onClick={() => void cargar()}>
+            Reintentar consulta
+          </button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="mb-4 text-red-600 text-sm">
+          {error}
+        </p>
+      )}
 
       <div className="space-y-3">
         {solicitudes.map((s) => (
@@ -105,7 +141,7 @@ export function DevolucionesPage() {
             {s.rechazoMotivo && (
               <p className="mt-1 text-red-600 text-sm">Rechazo: {s.rechazoMotivo}</p>
             )}
-            {s.estado === "solicitada" && puedeResolver && (
+            {s.estado === "solicitada" && puedeResolver && !blocked.includes(s.id) && (
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -125,12 +161,12 @@ export function DevolucionesPage() {
             )}
           </div>
         ))}
-        {solicitudes.length === 0 && (
+        {!loading && !loadError && solicitudes.length === 0 && (
           <p className="rounded-xl bg-white p-8 text-center text-slate-400">Sin solicitudes.</p>
         )}
       </div>
 
-      {accion && (
+      {accion && puedeResolver && (
         <AccionModal
           solicitud={accion.s}
           tipo={accion.tipo}
@@ -140,7 +176,10 @@ export function DevolucionesPage() {
             setError(null);
             cargar();
           }}
-          onError={(m) => setError(m)}
+          onError={(m) => {
+            setError(m);
+            setBlocked((ids) => [...ids, accion.s.id]);
+          }}
         />
       )}
     </div>
@@ -163,9 +202,13 @@ function AccionModal({
   const [metodoReembolso, setMetodoReembolso] = useState("tarjeta_misma");
   const [motivo, setMotivo] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const guard = useRef(false);
+  const [failed, setFailed] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function ejecutar() {
+    if (guard.current || failed || !puede("ventas.devolver")) return;
+    guard.current = true;
     setGuardando(true);
     setErr(null);
     try {
@@ -176,14 +219,17 @@ function AccionModal({
       } else {
         if (motivo.trim().length < 3) {
           setErr("Escribe el motivo del rechazo");
+          guard.current = false;
           setGuardando(false);
           return;
         }
         await api(`/t/devoluciones-online/${solicitud.id}/rechazar`, { body: { motivo } });
       }
       onDone();
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Error";
+    } catch {
+      const msg =
+        "No se confirmó la operación. Consulta el estado y solicita conciliación antes de volver a realizarla.";
+      setFailed(true);
       setErr(msg);
       onError(msg);
       setGuardando(false);
@@ -237,7 +283,7 @@ function AccionModal({
           <button
             type="button"
             onClick={ejecutar}
-            disabled={guardando}
+            disabled={guardando || failed}
             className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {guardando ? "Procesando…" : tipo === "aprobar" ? "Aprobar" : "Rechazar"}

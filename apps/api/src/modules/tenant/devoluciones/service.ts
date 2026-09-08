@@ -8,24 +8,26 @@ import {
 } from "@gaespos/fiscal";
 import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
+import {
+  type FiscalSaleLine,
+  FiscalSnapshotError,
+  buildRefundFiscalAmounts,
+  prorateFiscalLine,
+} from "../cfdis/fiscal-amounts.js";
 import { FiadoError, aplicarAbonoFiadoTx, ensureFiado } from "../clientes/fiado-service.js";
 import { castigarComisionesDevolucion } from "../comisiones/service.js";
+import { CorteError, lockAperturaAbierta } from "../cortes/service.js";
 import { CxcError, registrarPagoTx as registrarPagoCxcTx } from "../cxc/service.js";
 import { InsufficientStockError, aplicarAjuste } from "../inventario/service.js";
 import { MonederoError, aplicarMovimientoTx } from "../monedero/service.js";
+import { esServicioSnapshot, lockVenta } from "../ventas/service.js";
+import { lockRefundAttempt, refundHash, replayRefund } from "./attempt-service.js";
+import { cantidadDevolucionValida } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 type Tx = Parameters<Parameters<TenantClient["$transaction"]>[0]>[0];
 
 const ZERO = new Decimal(0);
-
-// Namespace seed for pg_advisory_xact_lock keyed por venta: serializa
-// devoluciones concurrentes de la misma venta y cierra el TOCTOU de yaDevuelto.
-const DEVOLUCION_LOCK_NAMESPACE = 6841655n;
-
-async function lockVenta(tx: Tx, ventaId: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ventaId}, ${DEVOLUCION_LOCK_NAMESPACE}))`;
-}
 
 export class DevolucionError extends Error {
   constructor(
@@ -68,6 +70,7 @@ export interface CfdiEgresoInput {
 }
 
 export interface ProcesarDevolucionInput {
+  idempotencyKey?: string;
   motivo: DevolucionMotivo;
   motivoDetalle?: string;
   metodoReembolso: DevolucionReembolsoMetodo;
@@ -98,6 +101,7 @@ async function nextFolio(tx: Tx, sucursalId: string, sucursalCodigo: string): Pr
 }
 
 interface LineaCalc {
+  fiscalOriginal: FiscalSaleLine;
   ventaLineaId: string;
   varianteId: string;
   numero: number;
@@ -118,6 +122,11 @@ async function validateAndCalcLineas(
   ventaId: string,
   input: ProcesarDevolucionInput,
 ): Promise<LineaCalc[]> {
+  if (input.lineas.some((l) => !cantidadDevolucionValida(l.cantidadDevuelta)))
+    throw new DevolucionError(
+      400,
+      "Cantidad debe ser positiva, máximo 3 decimales y 15 dígitos enteros",
+    );
   const ventaLineas = await client.ventaLinea.findMany({
     where: { ventaId, id: { in: input.lineas.map((l) => l.ventaLineaId) } },
     include: {
@@ -168,6 +177,7 @@ async function validateAndCalcLineas(
     const totalLinea = new Decimal(vl.totalLinea.toString()).mul(factor);
 
     return {
+      fiscalOriginal: vl,
       ventaLineaId: vl.id,
       varianteId: vl.varianteId,
       numero: idx + 1,
@@ -177,7 +187,8 @@ async function validateAndCalcLineas(
       ivaTotal,
       iepsTotal,
       totalLinea,
-      reponeStock: inpLine.reponeStock ?? reponeDefault,
+      reponeStock:
+        !esServicioSnapshot(vl.snapshotProducto) && (inpLine.reponeStock ?? reponeDefault),
       motivoLinea: inpLine.motivoLinea,
       snapshot: vl.snapshotProducto,
       cantidadOriginal,
@@ -253,6 +264,7 @@ function validarMetodoReembolso(input: ProcesarDevolucionInput, venta: VentaCarg
 }
 
 interface PersistirDevolucionParams {
+  aperturaId?: string;
   venta: VentaCargada;
   input: ProcesarDevolucionInput;
   lineasCalc: LineaCalc[];
@@ -294,17 +306,12 @@ async function persistirDevolucion(
 
   // El reembolso en efectivo sale del cajón: sin movimiento de caja, el corte
   // reporta un faltante fantasma por el monto devuelto.
-  if (p.input.metodoReembolso === "efectivo" && p.input.cajaId) {
-    const apertura = await tx.cajaApertura.findFirst({
-      where: { cajaId: p.input.cajaId, estado: "abierta" },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!apertura) {
-      throw new DevolucionError(409, "No hay apertura de caja abierta para reembolsar en efectivo");
-    }
+  if (p.input.metodoReembolso === "efectivo") {
+    if (!p.aperturaId) throw new DevolucionError(409, "Falta apertura validada para reembolso");
     await tx.cajaMovimiento.create({
       data: {
-        aperturaId: apertura.id,
+        aperturaId: p.aperturaId,
+        createdAt: new Date(),
         tipo: "salida_otro",
         monto: p.totales.totalDev.toString(),
         motivo: `Reembolso devolución ${folio}`,
@@ -333,6 +340,7 @@ async function persistirDevolucion(
       },
     });
 
+    if (esServicioSnapshot(linea.snapshot)) continue;
     await aplicarAjuste(tx, {
       varianteId: linea.varianteId,
       sucursalId: p.venta.sucursalId,
@@ -472,6 +480,19 @@ interface EmitirEgresoParams {
   usuarioId: string;
 }
 
+function refundFiscalAmounts(lines: LineaCalc[], total: Decimal) {
+  try {
+    return buildRefundFiscalAmounts(
+      lines.map((line) => prorateFiscalLine(line.fiscalOriginal, line.cantidadDevuelta)),
+      total,
+    );
+  } catch (error) {
+    if (error instanceof FiscalSnapshotError)
+      throw new DevolucionError(409, error.message, { code: error.code });
+    throw error;
+  }
+}
+
 async function emitirCfdiEgreso(
   client: TenantClient,
   provider: FiscalProvider,
@@ -487,6 +508,7 @@ async function emitirCfdiEgreso(
   const ingreso = await client.cfdi.findUnique({ where: { id: p.ingresoVigente.id } });
   if (!ingreso) throw new DevolucionError(500, "CFDI Ingreso desapareció");
 
+  const fiscalAmounts = refundFiscalAmounts(p.lineasCalc, p.totales.totalDev);
   const cfg2 = await client.cfdiConfig.update({
     where: { id: cfg.id },
     data: { folioCounter: { increment: 1 } },
@@ -513,10 +535,11 @@ async function emitirCfdiEgreso(
       codigoPostalReceptor: ingreso.codigoPostalReceptor,
       regimenFiscalReceptor: ingreso.regimenFiscalReceptor,
       ...(ingreso.correoReceptor ? { correoReceptor: ingreso.correoReceptor } : {}),
-      subtotal: p.totales.subtotalDev.toString(),
-      iva: p.totales.ivaDev.toString(),
-      ieps: p.totales.iepsDev.toString(),
-      total: p.totales.totalDev.toString(),
+      subtotal: fiscalAmounts.subtotal,
+      descuento: fiscalAmounts.descuento,
+      iva: fiscalAmounts.iva,
+      ieps: fiscalAmounts.ieps,
+      total: fiscalAmounts.total,
       moneda: ingreso.moneda,
       estado: "pendiente",
       emitidoPorId: p.usuarioId,
@@ -548,25 +571,7 @@ async function emitirCfdiEgreso(
       usoCfdi: p.cfdiInput.usoCfdi as UsoCfdi,
       ...(ingreso.correoReceptor ? { correo: ingreso.correoReceptor } : {}),
     },
-    conceptos: p.lineasCalc.map((l) => {
-      const snap = l.snapshot as { skuPadre?: string; nombreProducto?: string };
-      return {
-        claveProdServ: "84111506",
-        claveUnidad: "ACT",
-        cantidad: l.cantidadDevuelta.toString(),
-        unidad: "Devolución",
-        descripcion: snap.nombreProducto ?? snap.skuPadre ?? "Devolución",
-        valorUnitario: l.precioUnitario.toString(),
-        importe: l.subtotal.toString(),
-        aplicaIva: l.ivaTotal.gt(ZERO),
-        tasaIva: l.ivaTotal.gt(ZERO) ? "0.160000" : "0.000000",
-      };
-    }),
-    subtotal: p.totales.subtotalDev.toString(),
-    descuento: "0",
-    iva: p.totales.ivaDev.toString(),
-    ieps: p.totales.iepsDev.toString(),
-    total: p.totales.totalDev.toString(),
+    ...fiscalAmounts,
   };
 
   try {
@@ -604,6 +609,40 @@ function findIngresoVigente(
   return ingreso ? { id: ingreso.id, folioFiscal: ingreso.folioFiscal } : null;
 }
 
+async function bloquearCajaReembolso(
+  tx: Tx,
+  input: ProcesarDevolucionInput,
+  sucursalId: string,
+): Promise<string | undefined> {
+  if (input.metodoReembolso !== "efectivo") return undefined;
+  if (!input.cajaId?.trim())
+    throw new DevolucionError(400, "Reembolso en efectivo requiere cajaId");
+  const caja = await tx.caja.findUnique({
+    where: { id: input.cajaId },
+    include: { sucursal: true },
+  });
+  if (!caja) throw new DevolucionError(404, "Caja no encontrada");
+  if (
+    caja.sucursalId !== sucursalId ||
+    !caja.isActive ||
+    !caja.sucursal.isActive ||
+    caja.sucursal.archivedAt
+  )
+    throw new DevolucionError(409, "Caja debe estar activa y pertenecer a la sucursal de la venta");
+  const apertura = await tx.cajaApertura.findFirst({
+    where: { cajaId: caja.id, estado: "abierta" },
+  });
+  if (!apertura)
+    throw new DevolucionError(409, "No hay apertura de caja abierta para reembolsar en efectivo");
+  try {
+    await lockAperturaAbierta(tx, apertura.id);
+  } catch (err) {
+    if (err instanceof CorteError) throw new DevolucionError(err.statusCode, err.message);
+    throw err;
+  }
+  return apertura.id;
+}
+
 export async function procesarDevolucion(
   client: TenantClient,
   provider: FiscalProvider,
@@ -611,23 +650,43 @@ export async function procesarDevolucion(
   ventaId: string,
   input: ProcesarDevolucionInput,
 ): Promise<ProcesarDevolucionResult> {
+  const key = input.idempotencyKey;
+  if (key && input.cfdiEgreso)
+    throw new DevolucionError(
+      422,
+      "Intento durable no admite cfdiEgreso; requiere conciliación fiscal separada",
+      { code: "REFUND_ATTEMPT_UNSUPPORTED" },
+    );
+  const hash = key ? refundHash(ventaId, input) : "";
+  if (key) {
+    const replay = await replayRefund(client, usuarioId, key, hash);
+    if (replay) return replay;
+  }
   const venta = await cargarVenta(client, ventaId);
   validarMetodoReembolso(input, venta);
 
-  let persisted: {
-    devolucionId: string;
-    folio: string;
-    tipo: "total" | "parcial";
-    lineasCalc: LineaCalc[];
-    totales: { subtotalDev: Decimal; ivaDev: Decimal; iepsDev: Decimal; totalDev: Decimal };
-  };
+  let persisted:
+    | { replay: ProcesarDevolucionResult }
+    | {
+        devolucionId: string;
+        folio: string;
+        tipo: "total" | "parcial";
+        lineasCalc: LineaCalc[];
+        totales: { subtotalDev: Decimal; ivaDev: Decimal; iepsDev: Decimal; totalDev: Decimal };
+      };
   try {
     persisted = await client.$transaction(async (tx) => {
+      if (key) {
+        await lockRefundAttempt(tx, usuarioId, key);
+        const replay = await replayRefund(tx, usuarioId, key, hash);
+        if (replay) return { replay };
+      }
       // Serializa devoluciones concurrentes de la misma venta: sin el lock, dos
       // requests leen yaDevuelto=0 (TOCTOU) y persisten dos devoluciones completas,
       // provocando doble reembolso y doble reposición de stock. El advisory lock
       // es transaccional (se libera al commit/rollback); el segundo request espera y
       // re-valida yaDevuelto ya committeado dentro de esta misma transacción.
+      const aperturaId = await bloquearCajaReembolso(tx, input, venta.sucursalId);
       await lockVenta(tx, ventaId);
 
       const estadoActual = await tx.venta.findUnique({
@@ -649,8 +708,11 @@ export async function procesarDevolucion(
       const totalDev = lineasCalc.reduce((acc, l) => acc.plus(l.totalLinea), ZERO);
       const tipo = determinarTipo(lineasCalc);
       const totales = { subtotalDev, ivaDev, iepsDev, totalDev };
+      // Validate before committing stock/refund effects; historical fiscal gaps need reconciliation.
+      if (input.cfdiEgreso && findIngresoVigente(venta)) refundFiscalAmounts(lineasCalc, totalDev);
 
       const result = await persistirDevolucion(tx, {
+        ...(aperturaId ? { aperturaId } : {}),
         venta,
         input,
         lineasCalc,
@@ -663,6 +725,24 @@ export async function procesarDevolucion(
         montoDevuelto: subtotalDev.toString(),
       });
       await aplicarReembolso(tx, venta, input, totalDev, usuarioId);
+      if (key) {
+        const replay: ProcesarDevolucionResult = {
+          ...result,
+          tipo,
+          totalDevuelto: totalDev.toString(),
+          cfdiEgresoId: null,
+          reembolso: { metodo: input.metodoReembolso, aplicado: totalDev.toString() },
+        };
+        await tx.devolucionAttempt.create({
+          data: {
+            usuarioId,
+            key,
+            requestHash: hash,
+            devolucionId: result.devolucionId,
+            result: replay as unknown as object,
+          },
+        });
+      }
       return { ...result, tipo, lineasCalc, totales };
     });
   } catch (err) {
@@ -677,6 +757,7 @@ export async function procesarDevolucion(
     throw err;
   }
 
+  if ("replay" in persisted) return persisted.replay;
   const { tipo, lineasCalc, totales } = persisted;
   const totalDev = totales.totalDev;
 

@@ -1,5 +1,21 @@
 # CHANGELOG — GaesSoft POS
 
+- **2026-09-08 — tienda en validación:** snapshot de importes, servicio de envío configurable, catálogo/carrito/checkout móvil OXXO-SPEI autenticado, protección de tienda desactivada/productos retirados, bases fiscales y notas de crédito, caja POS verificada y errores recuperables. Contraste oscuro y accesibilidad móvil corregidos tras QA. Evidencia y limitaciones en `docs/estado-entrega-tienda-2026-09-08.md`; sin liberación comercial ni proveedor real.
+
+## 2026-09-08 — Implementación local y validación retail (sin publicar)
+
+- Tablero local con responsables, pendientes y evidencia por alcance; revisión de checkout a 360, 768 y 1440 px con datos ficticios.
+- Corregidos errores de bloqueos transaccionales en cancelación, devoluciones y crédito; endurecidos tokens, sucursales y productos del kiosco.
+- Kiosco móvil distingue fallos de transporte y producto ausente; valida activación antes de persistir. Cliente móvil verifica identidad/tenant y limpia cachés al cambiar cuenta.
+- Compra web deja de presentar error de cotización como envío gratis y vincula pedidos al cliente validado por servidor. Producción sin pago configurado falla antes de crear carrito.
+- Intentos de checkout persistentes y protección de reintentos en backend; migración nueva comprobada exclusivamente en base aislada. Integración web y reconciliación de proveedor aún en validación; consultar el informe de entrega para resultados y límites.
+
+## 2026-09-08 — Auditoría de entrega tienda
+
+- Prioridad actualizada: tienda/POS + móvil con paridad web + kiosco + soporte multiplataforma, con Eleventa como referencia funcional mínima.
+- Nuevo `docs/estado-entrega-tienda-2026-09-08.md`: evidencia de código, límites, criterios de aceptación, matriz de plataformas y plan de cierre. Actualizados enlaces de continuidad; sin cambios funcionales ni despliegue.
+- Verificación local: tipos de API y seis apps, builds POS/admin y 16 pruebas del motor de precios aprobados. Lectura pública: portales 200 y kiosco sin token 401. No acredita operaciones completas de producción.
+
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado [SemVer](https://semver.org/lang/es/) (aplica desde primer release).
 

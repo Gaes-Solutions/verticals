@@ -6,7 +6,7 @@ const config: ExpoConfig = {
   scheme: "gaessoft-kiosko",
   owner: "gaes-soft",
   version: "0.1.0",
-  orientation: "landscape",
+  orientation: "default",
   userInterfaceStyle: "light",
   newArchEnabled: true,
   icon: "./assets/icon.png",

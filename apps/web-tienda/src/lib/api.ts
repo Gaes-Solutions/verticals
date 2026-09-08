@@ -34,7 +34,7 @@ function serviceAccounts(): Record<string, ServiceCreds> {
 }
 
 // Slug del tenant para ESTA petición (lo fija el middleware desde el host).
-async function slugActual(): Promise<string> {
+export async function slugActual(): Promise<string> {
   try {
     const h = await headers();
     return h.get("x-tienda-slug")?.trim() || DEFAULT_SLUG;
@@ -72,6 +72,16 @@ export interface ApiOpts {
   revalidate?: number;
 }
 
+export class ApiError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly code?: string,
+  ) {
+    super("No se pudo completar la solicitud al servicio.");
+    this.name = "ApiError";
+  }
+}
+
 export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
   const token = await getToken(await slugActual());
   const res = await fetch(`${API_URL}/t${path}`, {
@@ -86,8 +96,8 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
       : { cache: "no-store" }),
   });
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`API ${path} → ${res.status}: ${txt}`);
+    const detail = (await res.json().catch(() => null)) as { code?: unknown } | null;
+    throw new ApiError(res.status, typeof detail?.code === "string" ? detail.code : undefined);
   }
   return (await res.json()) as T;
 }

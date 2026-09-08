@@ -6,13 +6,36 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Login() {
-  const { status, error, login, submitMfa } = useAuth();
+  const { status, error, login, submitMfa, restore, logout } = useAuth();
   const [tenant, setTenant] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
 
+  if (status === "loading" || status === "unverified")
+    return (
+      <View style={[s.root, { justifyContent: "center", padding: space.lg }]}>
+        <Text style={s.sub}>{status === "loading" ? "Verificando sesión…" : error}</Text>
+        {status === "unverified" && (
+          <>
+            <Button
+              label="Reintentar verificación"
+              busy={busy}
+              onPress={() => {
+                void restore();
+              }}
+            />
+            <Button
+              label="Cerrar sesión guardada"
+              onPress={() => {
+                void logout();
+              }}
+            />
+          </>
+        )}
+      </View>
+    );
   if (status === "signedIn") return <Redirect href="/(app)" />;
   const esMfa = status === "mfa";
 

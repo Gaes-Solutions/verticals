@@ -1,4 +1,6 @@
+import { ApiError } from "@gaespos/api-client";
 import { api } from "../lib/api";
+import type { CobroPayload, CobroResultado, EstadoIntento } from "../lib/cobro-recovery";
 
 export interface Paged<T> {
   items: T[];
@@ -56,12 +58,17 @@ export interface VarianteItem {
   sku: string;
   precioBase: string;
   isDefault: boolean;
+  nombreVariante: string | null;
+  isActive: boolean;
+  archivedAt: string | null;
 }
 
 export interface ProductoPOS {
   id: string;
   nombre: string;
   skuPadre: string;
+  isActive: boolean;
+  archivedAt: string | null;
   variantes: VarianteItem[];
 }
 
@@ -70,6 +77,8 @@ export interface Sucursal {
   nombre: string;
   codigo: string;
   isDefault: boolean;
+  isActive: boolean;
+  archivedAt?: string | null;
 }
 
 export interface VentaPreview {
@@ -79,36 +88,70 @@ export interface VentaPreview {
   total: string;
 }
 
-export interface VentaCreada {
-  id: string;
-  folio: string;
-  total: string;
-  estado: string;
-}
-
 export interface LineaVenta {
   varianteId: string;
   cantidad: string;
 }
 
-export const listSucursales = () => api.get<Sucursal[]>("/t/sucursales");
+async function posRequest<T>(path: string, body?: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
+  try {
+    return body === undefined
+      ? await api.get<T>(path, { signal: controller.signal })
+      : await api.post<T>(path, body, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const listSucursales = () => posRequest<Sucursal[]>("/t/sucursales");
 
 /** Busca productos para el POS (variantes con id + precio). */
 export const buscarProductosPOS = (q: string) =>
-  api.get<Paged<ProductoPOS>>(`/t/productos?pageSize=25&isActive=true&q=${encodeURIComponent(q)}`);
+  posRequest<Paged<ProductoPOS>>(
+    `/t/productos?pageSize=25&isActive=true&q=${encodeURIComponent(q)}`,
+  );
 
 /** Previsualiza los totales (pricing + promos) sin cobrar. */
 export const previewVenta = (sucursalId: string, lineas: LineaVenta[]) =>
-  api.post<VentaPreview>("/t/ventas/preview", { sucursalId, canal: "pos", lineas });
+  posRequest<VentaPreview>("/t/ventas/preview", { sucursalId, canal: "pos", lineas });
 
-/** Crea y cobra una venta en efectivo (POS). */
-export const cobrarEfectivo = (sucursalId: string, lineas: LineaVenta[], montoTotal: string) =>
-  api.post<VentaCreada>("/t/ventas", {
-    sucursalId,
-    canal: "pos",
-    lineas,
-    pagos: [{ metodo: "efectivo", monto: montoTotal }],
-  });
+export const prepararCobro = () =>
+  posRequest<{ idempotencyKey: string }>("/t/ventas/intentos/preparar", {});
+export const enviarCobroDurable = (payload: CobroPayload) =>
+  posRequest<CobroResultado>("/t/ventas", payload);
+export const cancelarIntentoCobro = (key: string) =>
+  posRequest<EstadoIntento>(`/t/ventas/intentos/${encodeURIComponent(key)}/cancelar`, {});
+export const consultarIntentoCobro = (key: string) =>
+  posRequest<EstadoIntento>(`/t/ventas/intentos/${encodeURIComponent(key)}`);
+
+export interface CajaPOS {
+  id: string;
+  nombre: string;
+  codigo: string;
+  sucursalId: string;
+  isActive: boolean;
+}
+export const listCajasPOS = (sucursalId: string) =>
+  posRequest<CajaPOS[]>(`/t/cajas?sucursalId=${encodeURIComponent(sucursalId)}`);
+export async function verificarAperturaPOS(sucursalId: string, cajaId: string): Promise<boolean> {
+  try {
+    const apertura = await posRequest<{ cajaId: string; sucursalId: string; estado: string }>(
+      `/t/cajas/${encodeURIComponent(cajaId)}/apertura-actual`,
+    );
+    if (
+      apertura.cajaId !== cajaId ||
+      apertura.sucursalId !== sucursalId ||
+      apertura.estado !== "abierta"
+    )
+      throw new Error("La apertura no corresponde a la selección");
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return false;
+    throw error;
+  }
+}
 
 // ---- Inventario ----
 

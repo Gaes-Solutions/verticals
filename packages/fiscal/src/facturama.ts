@@ -119,22 +119,71 @@ export class FacturamaClient implements FiscalProvider {
         CfdiUse: input.receptor.usoCfdi,
         ...(input.receptor.correo ? { Email: input.receptor.correo } : {}),
       },
-      Items: input.conceptos.map((c) => ({
-        ProductCode: c.claveProdServ,
-        UnitCode: c.claveUnidad,
-        Quantity: c.cantidad,
-        Unit: c.unidad,
-        Description: c.descripcion,
-        UnitPrice: c.valorUnitario,
-        Subtotal: c.importe,
-        ...(c.descuento ? { Discount: c.descuento } : {}),
-        Taxes: c.aplicaIva
-          ? [{ Total: "0", Name: "IVA", Rate: c.tasaIva, IsRetention: false }]
-          : [],
-      })),
+      ...(input.cfdisRelacionados
+        ? {
+            Relations: {
+              Type: input.cfdisRelacionados.tipoRelacion,
+              Cfdis: input.cfdisRelacionados.uuids.map((Uuid) => ({ Uuid })),
+            },
+          }
+        : {}),
+      Items: input.conceptos.map((concept) => this.buildConcept(concept)),
       SubTotal: input.subtotal,
       Discount: input.descuento,
       Total: input.total,
+    };
+  }
+
+  private buildConcept(concept: CfdiEmitirInput["conceptos"][number]): Record<string, unknown> {
+    const taxes: Array<Record<string, unknown>> = [];
+    if (concept.aplicaIva) {
+      if (concept.ivaImporte === undefined || concept.ivaBase === undefined)
+        throw new FiscalError("FISCAL_SNAPSHOT_REQUIRED", "Faltan importe y base IVA registrados");
+      taxes.push({
+        Name: "IVA",
+        Rate: concept.tasaIva,
+        Total: concept.ivaImporte,
+        Base: concept.ivaBase,
+        IsRetention: false,
+        IsQuota: false,
+      });
+    }
+    if (concept.aplicaIeps) {
+      if (
+        concept.iepsImporte === undefined ||
+        concept.iepsBase === undefined ||
+        concept.tasaIeps === undefined
+      )
+        throw new FiscalError(
+          "FISCAL_SNAPSHOT_REQUIRED",
+          "Faltan importe, base y tasa/cuota IEPS registrados",
+        );
+      taxes.push({
+        Name: "IEPS",
+        Rate: concept.tasaIeps,
+        Total: concept.iepsImporte,
+        Base: concept.iepsBase,
+        IsRetention: false,
+        IsQuota: concept.iepsCuota === true,
+      });
+    }
+    if (!concept.objetoImpuesto || concept.total === undefined)
+      throw new FiscalError(
+        "FISCAL_SNAPSHOT_REQUIRED",
+        "Falta objeto de impuesto o total registrado del concepto",
+      );
+    return {
+      ProductCode: concept.claveProdServ,
+      UnitCode: concept.claveUnidad,
+      Quantity: concept.cantidad,
+      Unit: concept.unidad,
+      Description: concept.descripcion,
+      UnitPrice: concept.valorUnitario,
+      Subtotal: concept.importe,
+      ...(concept.descuento ? { Discount: concept.descuento } : {}),
+      TaxObject: concept.objetoImpuesto,
+      Taxes: taxes,
+      Total: concept.total,
     };
   }
 

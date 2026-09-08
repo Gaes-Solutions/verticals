@@ -36,6 +36,7 @@ export function totalDenominaciones(d: Denominaciones): Decimal {
 
 export interface AperturaActiva {
   id: string;
+  estado: "abierta";
   cajaId: string;
   sucursalId: string;
   usuarioId: string;
@@ -53,6 +54,7 @@ export async function findAperturaActiva(
   if (!apertura) return null;
   return {
     id: apertura.id,
+    estado: "abierta",
     cajaId: apertura.cajaId,
     sucursalId: apertura.sucursalId,
     usuarioId: apertura.usuarioId,
@@ -72,26 +74,35 @@ export async function abrirCaja(
   client: TenantClient,
   input: AperturaInput,
 ): Promise<{ id: string }> {
-  const caja = await client.caja.findUnique({ where: { id: input.cajaId } });
-  if (!caja) throw new CorteError(404, `Caja "${input.cajaId}" no encontrada`);
-  if (!caja.isActive) throw new CorteError(409, "Caja inactiva");
-  const existente = await findAperturaActiva(client, input.cajaId);
-  if (existente) {
-    throw new CorteError(409, "Caja ya tiene una apertura activa", {
-      aperturaId: existente.id,
-      usuarioId: existente.usuarioId,
+  return client.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT c.id FROM cajas c JOIN sucursales s ON s.id = c.sucursal_id WHERE c.id = ${input.cajaId} FOR UPDATE OF c FOR SHARE OF s`;
+    const caja = await tx.caja.findUnique({
+      where: { id: input.cajaId },
+      include: { sucursal: true },
     });
-  }
-  const apertura = await client.cajaApertura.create({
-    data: {
-      cajaId: caja.id,
-      sucursalId: caja.sucursalId,
-      usuarioId: input.usuarioId,
-      montoInicial: input.montoInicial,
-      ...(input.observaciones ? { observacionesApertura: input.observaciones } : {}),
-    },
+    if (!caja) throw new CorteError(404, `Caja "${input.cajaId}" no encontrada`);
+    if (!caja.isActive) throw new CorteError(409, "Caja inactiva");
+    if (!caja.sucursal.isActive || caja.sucursal.archivedAt)
+      throw new CorteError(409, "Sucursal inactiva");
+    const existing = await tx.cajaApertura.findFirst({
+      where: { cajaId: input.cajaId, estado: "abierta" },
+    });
+    if (existing)
+      throw new CorteError(409, "Caja ya tiene una apertura activa", {
+        aperturaId: existing.id,
+        usuarioId: existing.usuarioId,
+      });
+    const opening = await tx.cajaApertura.create({
+      data: {
+        cajaId: caja.id,
+        sucursalId: caja.sucursalId,
+        usuarioId: input.usuarioId,
+        montoInicial: input.montoInicial,
+        ...(input.observaciones ? { observacionesApertura: input.observaciones } : {}),
+      },
+    });
+    return { id: opening.id };
   });
-  return { id: apertura.id };
 }
 
 interface ArqueoData {
@@ -176,7 +187,7 @@ function serializeDesglose(desglose: Record<string, Decimal>): Record<string, st
 }
 
 async function calcularArqueo(
-  client: TenantClient,
+  client: Pick<TenantClient, "cajaApertura" | "venta" | "cajaMovimiento">,
   aperturaId: string,
   hastaAt: Date,
 ): Promise<ArqueoData> {
@@ -223,25 +234,29 @@ async function nextCorteNumero(tx: Tx, aperturaId: string): Promise<number> {
   return count + 1;
 }
 
+export async function lockAperturaAbierta(tx: Tx, aperturaId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM caja_aperturas WHERE id = ${aperturaId} FOR UPDATE`;
+  const opening = await tx.cajaApertura.findUnique({
+    where: { id: aperturaId },
+    select: { estado: true },
+  });
+  if (!opening) throw new CorteError(404, "Apertura no encontrada");
+  if (opening.estado !== "abierta")
+    throw new CorteError(409, "Apertura ya está cerrada; abre una nueva caja primero");
+}
+
 export async function crearCorte(
   client: TenantClient,
   usuarioId: string,
   input: CorteCreateInput,
 ): Promise<{ corteId: string; tipo: "X" | "Z"; diferencia: string }> {
-  const apertura = await client.cajaApertura.findUnique({
-    where: { id: input.aperturaId },
-  });
-  if (!apertura) throw new CorteError(404, "Apertura no encontrada");
-  if (apertura.estado === "cerrada") {
-    throw new CorteError(409, "Apertura ya está cerrada; abre una nueva caja primero");
-  }
-
-  const ahora = new Date();
-  const arqueo = await calcularArqueo(client, input.aperturaId, ahora);
   const efectivoContado = totalDenominaciones(input.denominaciones);
-  const diferencia = efectivoContado.minus(arqueo.efectivoEsperado);
-
   return client.$transaction(async (tx) => {
+    // All X/Z devices serialize on the opening; check state after acquiring the lock.
+    await lockAperturaAbierta(tx, input.aperturaId);
+    const ahora = new Date();
+    const arqueo = await calcularArqueo(tx, input.aperturaId, ahora);
+    const diferencia = efectivoContado.minus(arqueo.efectivoEsperado);
     const numero = await nextCorteNumero(tx, input.aperturaId);
     const corte = await tx.corte.create({
       data: {
@@ -299,22 +314,20 @@ export async function registrarMovimiento(
     referencia?: string;
   },
 ): Promise<{ id: string }> {
-  const apertura = await client.cajaApertura.findUnique({ where: { id: input.aperturaId } });
-  if (!apertura) throw new CorteError(404, "Apertura no encontrada");
-  if (apertura.estado === "cerrada") {
-    throw new CorteError(409, "No se pueden registrar movimientos sobre apertura cerrada");
-  }
-  const mov = await client.cajaMovimiento.create({
-    data: {
-      aperturaId: input.aperturaId,
-      tipo: input.tipo,
-      monto: input.monto,
-      motivo: input.motivo,
-      ...(input.referencia ? { referencia: input.referencia } : {}),
-      usuarioId,
-    },
+  return client.$transaction(async (tx) => {
+    await lockAperturaAbierta(tx, input.aperturaId);
+    const mov = await tx.cajaMovimiento.create({
+      data: {
+        aperturaId: input.aperturaId,
+        tipo: input.tipo,
+        monto: input.monto,
+        motivo: input.motivo,
+        ...(input.referencia ? { referencia: input.referencia } : {}),
+        usuarioId,
+      },
+    });
+    return { id: mov.id };
   });
-  return { id: mov.id };
 }
 
 export async function requireAperturaAbierta(

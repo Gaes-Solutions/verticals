@@ -41,6 +41,15 @@ const kioskoAdminRoutes: FastifyPluginAsync = async (app) => {
     const body = z
       .object({ nombre: z.string().min(1).max(80), sucursalId: z.string().min(1) })
       .parse(req.body);
+    const branch = await req.tenantPrisma.sucursal.findFirst({
+      where: { id: body.sucursalId, isActive: true, archivedAt: null },
+      select: { id: true },
+    });
+    if (!branch) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Sucursal no disponible" });
+    }
     const { token, hash } = generarToken(req.principal.tenantSlug);
     const device = await req.tenantPrisma.kioskoDevice.create({
       data: { nombre: body.nombre, sucursalId: body.sucursalId, tokenHash: hash },

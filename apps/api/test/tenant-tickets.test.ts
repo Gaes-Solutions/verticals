@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { getTenantClient } from "@gaespos/db";
 import { MockFacturamaClient } from "@gaespos/fiscal";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -50,6 +52,8 @@ beforeAll(async () => {
       precioBase: "116",
       aplicaIva: true,
       tasaIva: "16",
+      claveSat: "50181900",
+      claveUnidadSat: "H87",
     },
   });
   varianteId = (prod.json() as { variantes: Array<{ id: string }> }).variantes[0]!.id;
@@ -231,5 +235,98 @@ describe("GET /t/cortes/:id/ticket", () => {
       headers: authOwner(),
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("ticket disclosure and fiscal identity", () => {
+  it("denies missing permission and unauthenticated callers for sale/detail/cut", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    await client.rol.create({
+      data: { codigo: "no-tickets", nombre: "Sin tickets", permisos: [] },
+    });
+    await createTenantUser(TENANT_SLUG, {
+      email: "no-tickets@test.local",
+      password: OWNER_PASSWORD,
+      rolCodigo: "no-tickets",
+    });
+    const token = (await loginTenantUser(app, TENANT_SLUG, "no-tickets@test.local", OWNER_PASSWORD))
+      .accessToken;
+    for (const url of [
+      `/t/ventas/${ventaId}`,
+      `/t/ventas/${ventaId}/ticket`,
+      `/t/cortes/${corteId}/ticket`,
+    ]) {
+      expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+      expect(
+        (await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } }))
+          .statusCode,
+      ).toBe(403);
+    }
+  });
+  it("owner from another tenant cannot read sale, receipt or cut by known id", async () => {
+    const other = "test-tickets-other";
+    await createTestTenant(other);
+    await createTenantUser(other, {
+      email: OWNER_EMAIL,
+      password: OWNER_PASSWORD,
+      rolCodigo: "dueno",
+    });
+    const token = (await loginTenantUser(app, other, OWNER_EMAIL, OWNER_PASSWORD)).accessToken;
+    for (const url of [
+      `/t/ventas/${ventaId}`,
+      `/t/ventas/${ventaId}/ticket`,
+      `/t/cortes/${corteId}/ticket`,
+    ])
+      expect(
+        (await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } }))
+          .statusCode,
+      ).toBe(404);
+  });
+  it("receipt identifies the income invoice even with a credit note present", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    const template = await client.cfdi.findFirstOrThrow({
+      where: { tipoComprobante: "I", estado: "vigente" },
+    });
+    const common = { ...template, ventaId, serie: "TEST", fechaEmision: new Date(0) };
+    await client.cfdi.create({
+      data: {
+        ...common,
+        id: randomUUID(),
+        folio: "E-1",
+        tipoComprobante: "E",
+        folioFiscal: randomUUID(),
+        facturamaId: randomUUID(),
+      },
+    });
+    const ingresoUuid = randomUUID();
+    await client.cfdi.create({
+      data: {
+        ...common,
+        id: randomUUID(),
+        folio: "I-1",
+        tipoComprobante: "I",
+        folioFiscal: ingresoUuid,
+        facturamaId: randomUUID(),
+      },
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: `/t/ventas/${ventaId}/ticket`,
+      headers: authOwner(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().cfdi.folioFiscal).toBe(ingresoUuid);
+  });
+  it("cancelled sale is identified and never offers self-invoicing", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    await client.venta.update({ where: { id: ventaId }, data: { estado: "cancelada" } });
+    const response = await app.inject({
+      method: "GET",
+      url: `/t/ventas/${ventaId}/ticket`,
+      headers: authOwner(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().venta.estado).toBe("cancelada");
+    expect(response.json().autofactura).toBeNull();
   });
 });

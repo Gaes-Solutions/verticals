@@ -23,6 +23,7 @@ export interface TicketVenta {
     direccion: unknown;
   };
   venta: {
+    estado: string;
     folio: string;
     fecha: string;
     cajero: string;
@@ -80,7 +81,11 @@ export async function generarTicketVenta(
       usuario: { select: { nombre: true, apellidos: true } },
       lineas: { orderBy: { numero: "asc" } },
       pagos: { orderBy: { createdAt: "asc" } },
-      cfdis: { where: { estado: "vigente" }, take: 1 },
+      cfdis: {
+        where: { estado: "vigente", tipoComprobante: "I" },
+        orderBy: { fechaEmision: "desc" },
+        take: 1,
+      },
     },
   });
   if (!venta) throw new TicketError(404, "Venta no encontrada");
@@ -103,6 +108,7 @@ export async function generarTicketVenta(
       direccion: venta.sucursal.direccion,
     },
     venta: {
+      estado: venta.estado,
       folio: venta.folio,
       fecha: (venta.cobradaAt ?? venta.createdAt).toISOString(),
       cajero: [venta.usuario.nombre, venta.usuario.apellidos].filter(Boolean).join(" "),
@@ -156,10 +162,10 @@ export async function generarTicketVenta(
 
 function buildAutofacturaInfo(
   tenantSlug: string,
-  venta: { id: string; cobradaAt: Date | null; createdAt: Date },
+  venta: { id: string; estado: string; cobradaAt: Date | null; createdAt: Date },
   cfg: { autofacturaActiva: boolean; diasAutofactura: number } | null,
 ): TicketVenta["autofactura"] {
-  if (!cfg?.autofacturaActiva) return null;
+  if (!cfg?.autofacturaActiva || venta.estado !== "cobrada") return null;
   const baseAt = venta.cobradaAt ?? venta.createdAt;
   const expiraAt = new Date(baseAt.getTime() + cfg.diasAutofactura * 86400000);
   return {

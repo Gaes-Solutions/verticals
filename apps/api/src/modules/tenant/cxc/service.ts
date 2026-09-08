@@ -13,7 +13,7 @@ const ZERO = new Decimal(0);
 const CREDITO_B2B_LOCK_NAMESPACE = 9274183n;
 
 async function lockCreditoB2b(tx: Tx, clienteB2bId: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clienteB2bId}, ${CREDITO_B2B_LOCK_NAMESPACE}))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clienteB2bId}, ${CREDITO_B2B_LOCK_NAMESPACE}))`;
 }
 
 // Namespace seed para pg_advisory_xact_lock keyed por CxC: serializa los pagos
@@ -22,7 +22,7 @@ async function lockCreditoB2b(tx: Tx, clienteB2bId: string): Promise<void> {
 const CXC_PAGO_LOCK_NAMESPACE = 5518427n;
 
 async function lockCxc(tx: Tx, cuentaCobrarId: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${cuentaCobrarId}, ${CXC_PAGO_LOCK_NAMESPACE}))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${cuentaCobrarId}, ${CXC_PAGO_LOCK_NAMESPACE}))`;
 }
 
 export class CxcError extends Error {

@@ -2,14 +2,17 @@
   "name": "@gaespos/pos-desktop",
   "version": "0.0.0",
   "private": true,
-  "description": "Shell Tauri del POS de escritorio (Windows/macOS/Linux). Empaqueta el web-pos con SQLite local + @gaespos/sync-client para operar offline-first.",
+  "description": "Shell Tauri del POS. Scaffold de empaquetado; almacenamiento SQLite y sincronización persistente pendientes de integración.",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "build:windows": "tauri build --target x86_64-pc-windows-msvc",
-    "build:macos": "tauri build --target universal-apple-darwin",
-    "build:linux": "tauri build --target x86_64-unknown-linux-gnu"
+    "dev": "node scripts/check-native.mjs && tauri dev",
+    "build": "node scripts/build.mjs",
+    "build:windows": "node scripts/build.mjs windows",
+    "build:macos": "node scripts/build.mjs macos",
+    "build:linux": "node scripts/build.mjs linux",
+    "check:assets": "node scripts/check-assets.mjs",
+    "check:native": "node scripts/check-native.mjs",
+    "test": "node --test scripts/build-plan.test.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.1.0"

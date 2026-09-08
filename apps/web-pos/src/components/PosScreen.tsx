@@ -2,6 +2,17 @@ import { CheckCircle2, Printer, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "../App.js";
 import { ApiError, api, puede } from "../lib/api.js";
+import {
+  type CashPayload,
+  type CashResult,
+  type CashScope,
+  cashStorageKey,
+  finishCashAttempt,
+  readCashAttempt,
+  recoverCashAttempt,
+  startCashAttempt,
+} from "../lib/cash-attempt.js";
+import { LatestSearch, findBarcode } from "../lib/product-search.js";
 import type {
   Cliente,
   Producto,
@@ -37,9 +48,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [ticket, setTicket] = useState<TicketLinea[]>([]);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchVersion, setSearchVersion] = useState(0);
+  const [searched, setSearched] = useState(false);
+  const latestSearch = useRef(new LatestSearch());
+  const searchKind = useRef<"text" | "barcode">("text");
   const [cobrando, setCobrando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaDetalle | null>(null);
+  const [ventaRegistrada, setVentaRegistrada] = useState<VentaResponse | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [modalCliente, setModalCliente] = useState(false);
   const [modalCorte, setModalCorte] = useState(false);
@@ -48,6 +65,62 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [modalApartados, setModalApartados] = useState(false);
   const [pesaje, setPesaje] = useState<PesajePendiente | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const saleBusy = useRef(false);
+  const [cashScope, setCashScope] = useState<CashScope | null>(null);
+  const [cashPending, setCashPending] = useState(false);
+  const [cashLoading, setCashLoading] = useState(true);
+  const [cashResult, setCashResult] = useState<CashResult | null>(null);
+  const [cashError, setCashError] = useState<string | null>(null);
+  const [quotedTotal, setQuotedTotal] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    const sync = (scope: CashScope) => {
+      try {
+        setCashPending(!!readCashAttempt(scope));
+      } catch (error) {
+        setCashError(error instanceof Error ? error.message : "No se pudo leer el intento");
+        setCashPending(true);
+      }
+    };
+    let scope: CashScope | null = null;
+    const changed = (event: StorageEvent) => {
+      if (scope && event.key === cashStorageKey(scope)) {
+        sync(scope);
+        setCashResult(null);
+        if (!event.newValue) {
+          clearTicket();
+          setUltimaVenta(null);
+        }
+      }
+    };
+    window.addEventListener("storage", changed);
+    void (async () => {
+      try {
+        const identity = await api<{ id: string; tenantSlug: string }>("/auth/tenant/me");
+        if (!identity.id || !identity.tenantSlug || !session.caja)
+          throw new Error("No se pudo verificar la identidad de la caja.");
+        scope = {
+          userId: identity.id,
+          tenantSlug: identity.tenantSlug,
+          cajaId: session.caja.id,
+          sucursalId: session.sucursal.id,
+        };
+        if (active) {
+          setCashScope(scope);
+          sync(scope);
+        }
+      } catch (error) {
+        if (active)
+          setCashError(error instanceof Error ? error.message : "No se pudo verificar la sesión");
+      } finally {
+        if (active) setCashLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+      window.removeEventListener("storage", changed);
+    };
+  }, [session]);
 
   const [descuentoPct, setDescuentoPct] = useState(0);
   const [descuentoMotivo, setDescuentoMotivo] = useState("");
@@ -59,42 +132,68 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
   useEffect(() => {
     searchRef.current?.focus();
+    const search = latestSearch.current;
+    return () => search.invalidate();
   }, []);
 
-  // Búsqueda con debounce contra /t/productos?q=
+  function updateQuery(value: string) {
+    latestSearch.current.invalidate();
+    setResultados([]);
+    setSearchError(null);
+    setBuscando(false);
+    setSearched(false);
+    setQuery(value);
+  }
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResultados([]);
-      return;
-    }
-    const t = setTimeout(async () => {
+    const current = latestSearch.current.begin();
+    setResultados([]);
+    setSearchError(null);
+    setSearched(false);
+    setBuscando(false);
+    if (query.trim().length < 2) return current.cancel;
+    const timer = setTimeout(async () => {
+      if (!current.current()) return;
+      searchKind.current = "text";
       setBuscando(true);
       try {
-        const res = await api<ProductoList>(
-          `/t/productos?q=${encodeURIComponent(query)}&pageSize=12`,
+        const response = await api<ProductoList>(
+          `/t/productos?q=${encodeURIComponent(query.trim())}&pageSize=12&isActive=true`,
+          { signal: current.signal },
         );
-        setResultados(res.items);
-      } catch {
-        setResultados([]);
+        if (!Array.isArray(response?.items))
+          throw new Error("El servidor devolvió resultados no válidos.");
+        if (current.current()) {
+          setResultados(response.items);
+          setSearched(true);
+        }
+      } catch (error) {
+        if (current.current())
+          setSearchError(
+            error instanceof Error ? error.message : "No se pudo buscar. Revisa la conexión.",
+          );
       } finally {
-        setBuscando(false);
+        if (current.current()) setBuscando(false);
       }
     }, 250);
-    return () => clearTimeout(t);
-  }, [query]);
+    return () => {
+      clearTimeout(timer);
+      current.cancel();
+    };
+  }, [query, searchVersion]);
 
   function agregarProducto(p: Producto) {
     const variante = p.variantes[0];
     if (!variante) return;
+    const nombre = variante.nombreVariante ? `${p.nombre} · ${variante.nombreVariante}` : p.nombre;
     const precio = Number.parseFloat(variante.precioBase);
     if (p.requiresBalanza) {
       setPesaje({
         varianteId: variante.id,
         sku: variante.sku,
-        nombre: p.nombre,
+        nombre,
         precioUnitario: precio,
       });
-      setQuery("");
+      updateQuery("");
       setResultados([]);
       return;
     }
@@ -110,31 +209,40 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         {
           varianteId: variante.id,
           sku: variante.sku,
-          nombre: p.nombre,
+          nombre,
           precioUnitario: precio,
           cantidad: 1,
         },
       ];
     });
-    setQuery("");
+    updateQuery("");
     setResultados([]);
     searchRef.current?.focus();
   }
 
-  // Enter en el buscador: intenta match exacto por código de barras.
   async function onSearchEnter() {
     const code = query.trim();
     if (!code) return;
+    const current = latestSearch.current.begin();
+    searchKind.current = "barcode";
+    setSearchError(null);
+    setResultados([]);
+    setBuscando(true);
+    setSearched(false);
     try {
-      const p = await api<{ variante: { producto: Producto } }>(
-        `/t/productos/buscar/${encodeURIComponent(code)}`,
-      );
-      if (p?.variante?.producto) {
-        agregarProducto(p.variante.producto);
-        return;
-      }
-    } catch {
-      // no es barcode exacto; deja que la búsqueda por texto muestre resultados
+      const product = await findBarcode(code, current.signal);
+      if (!current.current()) return;
+      if (product) agregarProducto(product);
+      else setSearchVersion((version) => version + 1);
+    } catch (error) {
+      if (current.current())
+        setSearchError(
+          error instanceof Error
+            ? error.message
+            : "No se pudo verificar el código. Revisa la conexión.",
+        );
+    } finally {
+      if (current.current()) setBuscando(false);
     }
   }
 
@@ -173,46 +281,334 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     searchRef.current?.focus();
   }
 
-  async function confirmarCobro(pago: CobroResult) {
-    if (ticket.length === 0) return;
+  function saleBase() {
+    return {
+      sucursalId: session.sucursal.id,
+      ...(session.caja ? { cajaId: session.caja.id } : {}),
+      ...(cliente ? { clienteId: cliente.id } : {}),
+      ...(descuentoPct > 0
+        ? {
+            descuentoGlobalPct: String(descuentoPct),
+            descuentoGlobalMotivo: descuentoMotivo || "Descuento en caja",
+          }
+        : {}),
+      canal: "pos" as const,
+      lineas: ticket.map((line) => ({
+        varianteId: line.varianteId,
+        cantidad: String(line.cantidad),
+      })),
+    };
+  }
+  async function quoteSale() {
+    if (saleBusy.current || cashPending) return;
+    saleBusy.current = true;
     setProcesando(true);
     setAviso(null);
     try {
-      const venta = await api<VentaResponse>("/t/ventas", {
-        body: {
-          sucursalId: session.sucursal.id,
-          ...(session.caja ? { cajaId: session.caja.id } : {}),
-          ...(cliente ? { clienteId: cliente.id } : {}),
-          ...(descuentoPct > 0
-            ? {
-                descuentoGlobalPct: String(descuentoPct),
-                descuentoGlobalMotivo: descuentoMotivo || "Descuento en caja",
-              }
-            : {}),
-          canal: "pos",
-          lineas: ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) })),
-          pagos: pago.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto.toFixed(2) })),
-        },
-      });
-      const detalle = await api<VentaDetalle>(`/t/ventas/${venta.ventaId}`);
-      setUltimaVenta(detalle);
-      setTicket([]);
-      setCliente(null);
-      setDescuentoPct(0);
-      setDescuentoMotivo("");
-      setCobrando(false);
-    } catch (err) {
-      setAviso(
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Error al cobrar",
+      const quote = await api<{ total: string }>("/t/ventas/preview", { body: saleBase() });
+      const amount = Number(quote.total);
+      if (!Number.isFinite(amount) || amount <= 0)
+        throw new Error("El total del servidor no es válido.");
+      setQuotedTotal(amount);
+      setCobrando(true);
+    } catch (error) {
+      setAviso(error instanceof Error ? error.message : "No se pudo cotizar la venta.");
+    } finally {
+      saleBusy.current = false;
+      setProcesando(false);
+    }
+  }
+  async function confirmarCobro(pago: CobroResult) {
+    if (!ticket.length || saleBusy.current || quotedTotal === null) return;
+    saleBusy.current = true;
+    setProcesando(true);
+    setAviso(null);
+    const cashOnly =
+      pago.pagos.length > 0 && pago.pagos.every((item) => item.metodo === "efectivo");
+    try {
+      if (cashScope && readCashAttempt(cashScope)) {
+        setCashPending(true);
+        throw new Error("Hay un intento pendiente en esta caja.");
+      }
+      if (cashOnly) {
+        if (!cashScope) throw new Error("No se pudo verificar la identidad de caja.");
+        const payload: CashPayload = {
+          ...saleBase(),
+          cajaId: cashScope.cajaId,
+          expectedTotal: quotedTotal.toFixed(2),
+          pagos: pago.pagos.map((item) => ({ metodo: "efectivo", monto: item.monto.toFixed(2) })),
+        };
+        setCashResult(await startCashAttempt(cashScope, payload));
+        setCobrando(false);
+      } else {
+        const venta = await api<VentaResponse>("/t/ventas", {
+          body: {
+            ...saleBase(),
+            pagos: pago.pagos.map((item) => ({
+              metodo: item.metodo,
+              monto: item.monto.toFixed(2),
+            })),
+          },
+        });
+        setVentaRegistrada(venta);
+        clearTicket();
+        setCobrando(false);
+        await cargarReciboRegistrado(venta.ventaId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo verificar el cobro";
+      setAviso(message);
+      if (cashOnly) {
+        setCashError(message);
+        setCobrando(false);
+      }
+    } finally {
+      if (cashScope) {
+        try {
+          setCashPending(!!readCashAttempt(cashScope));
+        } catch {
+          setCashPending(true);
+        }
+      }
+      saleBusy.current = false;
+      setProcesando(false);
+    }
+  }
+  function clearTicket() {
+    setTicket([]);
+    setCliente(null);
+    setDescuentoPct(0);
+    setDescuentoMotivo("");
+    setQuotedTotal(null);
+  }
+  async function cargarReciboRegistrado(ventaId: string) {
+    setProcesando(true);
+    setAviso(null);
+    try {
+      setUltimaVenta(await api<VentaDetalle>(`/t/ventas/${ventaId}`));
+    } catch {
+      setAviso("La venta está registrada, pero no se pudo cargar el recibo. No vuelvas a cobrar.");
+    } finally {
+      setProcesando(false);
+    }
+  }
+  async function recoverCash(action: "query" | "retry" | "cancel") {
+    if (!cashScope || saleBusy.current) return;
+    saleBusy.current = true;
+    setProcesando(true);
+    setCashError(null);
+    try {
+      setCashResult(await recoverCashAttempt(cashScope, action));
+    } catch (error) {
+      setCashError(error instanceof Error ? error.message : "No se pudo verificar el intento.");
+    } finally {
+      saleBusy.current = false;
+      setProcesando(false);
+    }
+  }
+  async function newCashSale() {
+    if (!cashScope || saleBusy.current) return;
+    saleBusy.current = true;
+    setProcesando(true);
+    try {
+      await finishCashAttempt(cashScope);
+      setUltimaVenta(null);
+      clearTicket();
+      setCashPending(false);
+      setCashResult(null);
+      setCashError(null);
+      setAviso(null);
+    } catch (error) {
+      setCashError(error instanceof Error ? error.message : "No se pudo resolver el intento.");
+    } finally {
+      saleBusy.current = false;
+      setProcesando(false);
+    }
+  }
+  async function cashReceipt() {
+    if (cashResult?.status !== "ready") return;
+    setProcesando(true);
+    try {
+      setUltimaVenta(await api<VentaDetalle>(`/t/ventas/${cashResult.result.ventaId}`));
+    } catch {
+      setCashError(
+        "La venta está registrada, pero no se pudo cargar el recibo. No vuelvas a cobrar.",
       );
     } finally {
       setProcesando(false);
     }
   }
+  if (ventaRegistrada)
+    return (
+      <main className="p-4">
+        <section className="gx-card mx-auto w-full max-w-lg">
+          <h1 className="text-xl font-bold">Venta registrada</h1>
+          <p className="my-3 break-words">
+            {ventaRegistrada.folio} · ${ventaRegistrada.total}
+          </p>
+          {aviso && (
+            <p role="alert" className="my-3 text-red-700">
+              {aviso}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="gx-btn-secondary min-h-10"
+              disabled={procesando}
+              onClick={() => void cargarReciboRegistrado(ventaRegistrada.ventaId)}
+            >
+              {ultimaVenta ? "Actualizar recibo" : "Reintentar recibo"}
+            </button>
+            {ultimaVenta && (
+              <button
+                type="button"
+                className="gx-btn-secondary min-h-10"
+                onClick={() => window.print()}
+              >
+                Imprimir recibo
+              </button>
+            )}
+            <button
+              type="button"
+              className="gx-btn-primary min-h-10"
+              disabled={procesando}
+              onClick={() => {
+                setVentaRegistrada(null);
+                setUltimaVenta(null);
+                setAviso(null);
+              }}
+            >
+              Iniciar nueva venta
+            </button>
+          </div>
+          {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
+        </section>
+      </main>
+    );
+  if (cashLoading || cashPending || !cashScope)
+    return (
+      <main className="flex min-h-full items-center justify-center p-4">
+        <section className="gx-card w-full max-w-lg min-w-0">
+          <h1 className="text-xl font-bold">
+            {cashLoading ? "Verificando caja…" : "Verificar cobro en efectivo"}
+          </h1>
+          <p className="my-3 text-sm">
+            {session.sucursal.nombre} · {session.caja?.codigo}
+          </p>
+          {cashError && (
+            <p role="alert" className="my-3 break-words text-red-700">
+              {cashError}
+            </p>
+          )}
+          {cashPending && cashResult?.status !== "ready" && cashResult?.status !== "cancelled" && (
+            <p className="my-3 text-sm">
+              Hay un intento guardado. No solicites efectivo nuevamente ni inicies otra venta hasta
+              resolverlo.
+            </p>
+          )}
+          {cashResult?.status === "ready" && (
+            <output className="my-3 block text-sm">
+              Venta {cashResult.result.folio} · ${cashResult.result.total} · Estado actual:{" "}
+              {cashResult.ventaEstado}
+            </output>
+          )}
+          {cashResult?.status === "not_found" && (
+            <p className="my-3 text-sm">
+              Aún no hay resultado. El envío puede seguir en tránsito. Puedes consultar, repetir el
+              mismo intento o descartarlo de forma segura.
+            </p>
+          )}
+          {cashResult?.status === "processing" && (
+            <p className="my-3 text-sm">
+              El servidor está procesando el cobro. Espera y consulta nuevamente.
+            </p>
+          )}
+          {cashResult?.status === "cancelled" && (
+            <p className="my-3 text-sm">
+              Intento descartado en el servidor. Un envío tardío con esa clave ya no registrará una
+              venta.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3">
+            {cashScope && cashPending && (
+              <button
+                type="button"
+                className="gx-btn-primary min-h-10"
+                disabled={procesando}
+                onClick={() => void recoverCash("query")}
+              >
+                Consultar estado
+              </button>
+            )}
+            {cashResult?.status === "not_found" && (
+              <button
+                type="button"
+                className="gx-btn-secondary min-h-10"
+                disabled={procesando}
+                onClick={() => void recoverCash("retry")}
+              >
+                Reintentar el mismo cobro
+              </button>
+            )}
+            {cashScope &&
+              cashPending &&
+              cashResult?.status !== "ready" &&
+              cashResult?.status !== "cancelled" && (
+                <button
+                  type="button"
+                  className="gx-btn-secondary min-h-10"
+                  disabled={procesando}
+                  onClick={() => void recoverCash("cancel")}
+                >
+                  Descartar intento sin cancelar ventas
+                </button>
+              )}
+            {cashResult?.status === "ready" && (
+              <button
+                type="button"
+                className="gx-btn-secondary min-h-10"
+                disabled={procesando}
+                onClick={() => void cashReceipt()}
+              >
+                Ver recibo
+              </button>
+            )}
+            {(cashResult?.status === "ready" || cashResult?.status === "cancelled") && (
+              <button
+                type="button"
+                className="gx-btn-primary min-h-10"
+                disabled={procesando}
+                onClick={() => void newCashSale()}
+              >
+                Iniciar nueva venta
+              </button>
+            )}
+            <button
+              type="button"
+              className="gx-btn-ghost min-h-10"
+              disabled={procesando}
+              onClick={onLogout}
+            >
+              Cerrar sesión
+            </button>
+          </div>
+          {ultimaVenta && (
+            <>
+              <p className="my-3 text-sm">Recibo cargado: {ultimaVenta.folio}</p>
+              <button
+                type="button"
+                className="gx-btn-secondary min-h-10"
+                onClick={() => window.print()}
+              >
+                Imprimir recibo
+              </button>
+              <Recibo session={session} venta={ultimaVenta} />
+            </>
+          )}
+        </section>
+      </main>
+    );
 
   return (
     <div className="flex h-full flex-col">
@@ -274,7 +670,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           <input
             ref={searchRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => updateQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void onSearchEnter();
             }}
@@ -283,28 +679,52 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           />
           <div className="mt-3 flex-1 overflow-y-auto">
             {buscando && <p className="text-sm text-slate-400">Buscando…</p>}
-            {resultados.map((p) => {
-              const v = p.variantes[0];
-              return (
+            {searchError && (
+              <div className="my-3">
+                <p role="alert" className="break-words text-sm text-red-700">
+                  {searchError}
+                </p>
                 <button
-                  key={p.id}
                   type="button"
-                  onClick={() => agregarProducto(p)}
-                  className="mb-2 flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-brand"
+                  className="gx-btn-secondary mt-2 min-h-10"
+                  onClick={() => {
+                    if (searchKind.current === "barcode") void onSearchEnter();
+                    else setSearchVersion((version) => version + 1);
+                  }}
                 >
-                  <div>
-                    <p className="font-medium text-slate-800">{p.nombre}</p>
-                    <p className="text-xs text-slate-400">{v?.sku}</p>
-                  </div>
-                  <span className="font-semibold text-brand">
-                    {v ? money(Number.parseFloat(v.precioBase)) : "—"}
-                  </span>
+                  Reintentar búsqueda
                 </button>
-              );
-            })}
-            {!buscando && query.length >= 2 && resultados.length === 0 && (
-              <p className="text-sm text-slate-400">Sin resultados para “{query}”.</p>
+              </div>
             )}
+            {searched && !searchError && !buscando && !resultados.length && (
+              <p className="text-sm text-slate-500">Sin coincidencias para esta búsqueda.</p>
+            )}
+            {resultados
+              .flatMap((product) =>
+                product.variantes.map((variant) => ({ ...product, variantes: [variant] })),
+              )
+              .map((p) => {
+                const v = p.variantes[0];
+                return (
+                  <button
+                    key={`${p.id}-${v?.id}`}
+                    type="button"
+                    onClick={() => agregarProducto(p)}
+                    className="mb-2 flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-brand"
+                  >
+                    <div className="min-w-0 break-words">
+                      <p className="font-medium text-slate-800">
+                        {p.nombre}
+                        {v?.nombreVariante ? ` · ${v.nombreVariante}` : ""}
+                      </p>
+                      <p className="text-xs text-slate-400">{v?.sku}</p>
+                    </div>
+                    <span className="shrink-0 font-semibold text-brand">
+                      {v ? money(Number.parseFloat(v.precioBase)) : "—"}
+                    </span>
+                  </button>
+                );
+              })}
           </div>
         </div>
 
@@ -328,10 +748,10 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                   ticket.map((l) => (
                     <div
                       key={l.varianteId}
-                      className="mb-2 flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-sm"
+                      className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-sm"
                     >
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-800">{l.nombre}</p>
+                      <div className="w-full min-w-0">
+                        <p className="break-words font-medium text-slate-800">{l.nombre}</p>
                         <p className="text-xs text-slate-400">{money(l.precioUnitario)} c/u</p>
                       </div>
                       {l.esBalanza ? (
@@ -346,7 +766,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                               pesoInicial: l.cantidad,
                             })
                           }
-                          className="rounded bg-slate-100 px-2 py-1 text-sm font-medium text-slate-700"
+                          className="min-h-10 rounded bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700"
                         >
                           {l.cantidad.toFixed(3)} kg
                         </button>
@@ -355,7 +775,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                           <button
                             type="button"
                             onClick={() => cambiarCantidad(l.varianteId, -1)}
-                            className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
+                            aria-label={`Quitar una unidad de ${l.nombre}`}
+                            className="h-10 w-10 rounded bg-slate-100 font-bold text-slate-600"
                           >
                             −
                           </button>
@@ -363,7 +784,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                           <button
                             type="button"
                             onClick={() => cambiarCantidad(l.varianteId, 1)}
-                            className="h-7 w-7 rounded bg-slate-100 font-bold text-slate-600"
+                            aria-label={`Agregar una unidad de ${l.nombre}`}
+                            className="h-10 w-10 rounded bg-slate-100 font-bold text-slate-600"
                           >
                             +
                           </button>
@@ -375,7 +797,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                       <button
                         type="button"
                         onClick={() => quitarLinea(l.varianteId)}
-                        className="text-slate-300 hover:text-red-500"
+                        aria-label={`Eliminar ${l.nombre} del ticket`}
+                        className="flex h-10 w-10 items-center justify-center text-slate-600 hover:text-red-700"
                       >
                         <X size={16} />
                       </button>
@@ -401,19 +824,21 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 <span className="text-sm text-slate-500">Descuento</span>
                 <input
                   type="number"
+                  aria-label="Descuento porcentual"
                   min={0}
                   max={100}
                   value={descuentoPct || ""}
                   onChange={(e) =>
                     setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
                   }
-                  className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
+                  className="min-h-10 w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
                   placeholder="0"
                 />
                 <span className="text-sm text-slate-500">%</span>
                 {descuentoPct > 0 && (
                   <input
                     value={descuentoMotivo}
+                    aria-label="Motivo del descuento"
                     onChange={(e) => setDescuentoMotivo(e.target.value)}
                     placeholder="Motivo"
                     className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
@@ -440,7 +865,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 </div>
                 <button
                   type="button"
-                  onClick={() => setCobrando(true)}
+                  onClick={() => void quoteSale()}
                   disabled={ticket.length === 0}
                   className="w-full rounded-lg bg-brand py-4 text-lg font-bold text-white hover:bg-brand-dark disabled:opacity-40"
                 >
@@ -454,7 +879,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
       {cobrando && (
         <CobroModal
-          total={total}
+          total={quotedTotal ?? total}
           saldoMonedero={cliente ? Number(cliente.saldoMonedero ?? 0) : 0}
           clienteNombre={cliente ? cliente.nombre : null}
           procesando={procesando}
@@ -484,7 +909,9 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         />
       )}
 
-      {modalDevolucion && <DevolucionModal onClose={() => setModalDevolucion(false)} />}
+      {modalDevolucion && (
+        <DevolucionModal session={session} onClose={() => setModalDevolucion(false)} />
+      )}
 
       {modalRecarga && <RecargaModal session={session} onClose={() => setModalRecarga(false)} />}
 

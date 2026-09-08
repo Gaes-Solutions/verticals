@@ -7,6 +7,7 @@ import {
   calcularTicket,
 } from "@gaespos/pricing";
 import type { FastifyRequest } from "fastify";
+import { QUANTITY_ERROR, cantidadVentaValida } from "../ventas/quantity.js";
 import type { PreviewInput } from "./schemas.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -171,6 +172,8 @@ export async function calcularPreview(
   usuarioId: string,
   input: PreviewInput,
 ): Promise<TicketCalculado> {
+  if (input.lineas.some((l) => !cantidadVentaValida(l.cantidad)))
+    throw new PreviewError(400, QUANTITY_ERROR);
   const lineas = await loadLineasContext(client, input);
   const reglas = await loadReglasVigentes(client);
   const cupon = await loadCupon(client, input.cuponCodigo);

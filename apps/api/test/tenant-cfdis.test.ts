@@ -84,6 +84,8 @@ beforeAll(async () => {
       precioBase: "116",
       aplicaIva: true,
       tasaIva: "16",
+      claveSat: "50181900",
+      claveUnidadSat: "H87",
     },
   });
   const v = (prod.json() as { variantes: Array<{ id: string }> }).variantes[0];

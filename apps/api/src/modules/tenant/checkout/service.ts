@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { EmailProvider } from "@gaespos/email";
 import type { PagoIntent, PaymentProvider } from "@gaespos/pagos";
 import { PERMISSIONS } from "@gaespos/permissions";
@@ -5,8 +6,13 @@ import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { EnviosError, validarOpcionEnvio } from "../envios/service.js";
 import { notificarCliente, notificarUsuariosConPermiso } from "../notificaciones/service.js";
-import { crearVenta } from "../ventas/service.js";
-import { evaluarCupon, liberarUsoCupon, reservarUsoCupon } from "./cupon-service.js";
+import {
+  crearSnapshotComercial,
+  prepararVentaDesdeSnapshot,
+} from "../ventas/commercial-snapshot.js";
+import { persistirVentaPreparada } from "../ventas/service.js";
+import { evaluarCupon, reservarUsoCupon } from "./cupon-service.js";
+import { enqueuePostPago } from "./post-pago-store.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
 
@@ -29,7 +35,9 @@ interface CarritoItem {
   subtotal: string;
 }
 
-async function nextFolioPublico(client: TenantClient): Promise<string> {
+async function nextFolioPublico(
+  client: Pick<TenantClient, "pedidoEcommerceFolioCounter">,
+): Promise<string> {
   const counter = await client.pedidoEcommerceFolioCounter.upsert({
     where: { id: 1 },
     create: { id: 1, ultimoFolio: 1 },
@@ -40,6 +48,9 @@ async function nextFolioPublico(client: TenantClient): Promise<string> {
 
 export interface IniciarCheckoutInput {
   carritoId: string;
+  idempotencyKey?: string | undefined;
+  requestedBy?: string | undefined;
+  requirePublicStore?: boolean | undefined;
   /** Slug del tenant; viaja en el metadata del pago para resolver el webhook. */
   tenantSlug: string;
   emailComprador: string;
@@ -69,6 +80,124 @@ export interface IniciarCheckoutResult {
   total: string;
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+type CheckoutAttempt = NonNullable<
+  Awaited<ReturnType<TenantClient["checkoutAttempt"]["findUnique"]>>
+>;
+
+function replayAttempt(attempt: CheckoutAttempt): IniciarCheckoutResult {
+  if (attempt.status === "ready" && attempt.result)
+    return attempt.result as unknown as IniciarCheckoutResult;
+  const uncertain =
+    attempt.status === "uncertain" ||
+    (attempt.status === "processing" && Date.now() - attempt.updatedAt.getTime() > 120000);
+  const code = uncertain
+    ? "CHECKOUT_UNCERTAIN"
+    : attempt.status === "failed"
+      ? "CHECKOUT_FAILED"
+      : "CHECKOUT_PROCESSING";
+  throw new CheckoutError(
+    409,
+    uncertain
+      ? "Estamos verificando el resultado del pago. No vuelvas a pagar."
+      : attempt.status === "failed"
+        ? "Este intento no pudo completarse. Solicita ayuda antes de iniciar otro pago."
+        : "El pago se está procesando. Consulta este mismo intento de nuevo.",
+    { code, ...(attempt.pedidoId ? { pedidoId: attempt.pedidoId } : {}) },
+  );
+}
+
+export async function consultarIntentoCheckout(
+  client: TenantClient,
+  key: string,
+  requestedBy: string,
+): Promise<IniciarCheckoutResult> {
+  const attempt = await client.checkoutAttempt.findUnique({ where: { key } });
+  if (!attempt || attempt.requestedBy !== requestedBy)
+    throw new CheckoutError(404, "Intento no encontrado");
+  const pedido = attempt.pedidoId
+    ? await client.pedidoEcommerce.findUnique({ where: { id: attempt.pedidoId } })
+    : null;
+  if (
+    pedido?.statusPago === "pago_confirmado" &&
+    pedido.ventaIdGenerada &&
+    pedido.paymentIntentId
+  ) {
+    return {
+      pedidoId: pedido.id,
+      folioPublico: pedido.folioPublico,
+      intentId: pedido.paymentIntentId,
+      intentStatus: "confirmado",
+      montoCentavos: Math.round(new Decimal(pedido.total.toString()).times(100).toNumber()),
+      total: new Decimal(pedido.total.toString()).toFixed(2),
+    };
+  }
+  const result = replayAttempt(attempt);
+  if (pedido?.statusPago === "pago_fallido" || pedido?.statusPago === "reembolsado") {
+    return { ...result, intentStatus: "fallido" };
+  }
+  if (result.intentStatus === "confirmado") return { ...result, intentStatus: "pendiente" };
+  return result;
+}
+
+function validateAttempt(existing: CheckoutAttempt, owner: string, requestHash: string) {
+  if (existing.requestedBy !== owner) throw new CheckoutError(404, "Intento no encontrado");
+  if (existing.requestHash !== requestHash)
+    throw new CheckoutError(409, "Este intento corresponde a otros datos de compra.", {
+      code: "CHECKOUT_KEY_CONFLICT",
+    });
+  return existing;
+}
+
+async function claimCheckoutAttempt(
+  client: TenantClient,
+  key: string,
+  requestHash: string,
+  carritoId: string,
+  owner: string,
+  cartUpdatedAt: Date,
+): Promise<CheckoutAttempt | null> {
+  try {
+    return await client.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM carritos_ecommerce WHERE id = ${carritoId} FOR UPDATE`;
+      const existing =
+        (await tx.checkoutAttempt.findUnique({ where: { key } })) ??
+        (await tx.checkoutAttempt.findUnique({ where: { carritoId } }));
+      if (existing) return validateAttempt(existing, owner, requestHash);
+      const current = await tx.carritoEcommerce.findUnique({ where: { id: carritoId } });
+      if (!current || current.status !== "activo")
+        throw new CheckoutError(409, "El carrito ya no está activo", { code: "CART_UNAVAILABLE" });
+      if (current.updatedAt.getTime() !== cartUpdatedAt.getTime())
+        throw new CheckoutError(409, "El carrito cambió. Revisa los artículos antes de pagar.", {
+          code: "CART_CHANGED",
+        });
+      await tx.checkoutAttempt.create({
+        data: { key, requestHash, carritoId, requestedBy: owner },
+      });
+      return null;
+    });
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "P2002"))
+      throw error;
+    const existing =
+      (await client.checkoutAttempt.findUnique({ where: { key } })) ??
+      (await client.checkoutAttempt.findUnique({ where: { carritoId } }));
+    if (!existing) throw error;
+    return validateAttempt(existing, owner, requestHash);
+  }
+}
+
 export async function iniciarCheckout(
   client: TenantClient,
   provider: PaymentProvider,
@@ -76,6 +205,69 @@ export async function iniciarCheckout(
 ): Promise<IniciarCheckoutResult> {
   const carrito = await client.carritoEcommerce.findUnique({ where: { id: input.carritoId } });
   if (!carrito) throw new CheckoutError(404, "Carrito no encontrado");
+  const { carritoId, idempotencyKey, requestedBy, ...paymentInput } = input;
+  const key = idempotencyKey ?? `cart:${carritoId}`;
+  const owner = requestedBy ?? "internal";
+  // Cart IDs can change on a BFF replay; hash the purchase snapshot instead.
+  const requestHash = createHash("sha256")
+    .update(
+      canonicalJson({
+        ...paymentInput,
+        provider: provider.codigo,
+        items: carrito.items,
+        total: carrito.total.toString(),
+        moneda: carrito.moneda,
+        cuponCodigo: carrito.cuponCodigo,
+        clienteId: carrito.clienteId,
+        sessionIdAnonimo: carrito.sessionIdAnonimo,
+      }),
+    )
+    .digest("hex");
+  const existing = await claimCheckoutAttempt(
+    client,
+    key,
+    requestHash,
+    carritoId,
+    owner,
+    carrito.updatedAt,
+  );
+  if (existing) return replayAttempt(existing);
+  let providerStarted = false;
+  try {
+    const result = await iniciarCheckoutClaimed(client, provider, input, carrito, key, () => {
+      providerStarted = true;
+    });
+    await client.checkoutAttempt.update({
+      where: { key },
+      data: { status: "ready", result: { ...result } },
+    });
+    return result;
+  } catch (error) {
+    const current = await client.checkoutAttempt.findUniqueOrThrow({ where: { key } });
+    if (!providerStarted && !current.pedidoId) {
+      await client.checkoutAttempt.delete({ where: { key } });
+      throw error;
+    }
+    await client.checkoutAttempt.update({
+      where: { key },
+      data: { status: providerStarted ? "uncertain" : "failed" },
+    });
+    if (providerStarted) {
+      const attempt = await client.checkoutAttempt.findUniqueOrThrow({ where: { key } });
+      return replayAttempt(attempt);
+    }
+    throw error;
+  }
+}
+
+async function iniciarCheckoutClaimed(
+  client: TenantClient,
+  provider: PaymentProvider,
+  input: IniciarCheckoutInput,
+  carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
+  attemptKey: string,
+  onProviderStart: () => void,
+): Promise<IniciarCheckoutResult> {
   if (carrito.status === "convertido") {
     throw new CheckoutError(409, "Carrito ya convertido a pedido");
   }
@@ -114,17 +306,35 @@ export async function iniciarCheckout(
       throw new CheckoutError(422, "Selecciona una opción de envío disponible para tu dirección");
     }
   }
-  // Cupón (si el carrito trae uno válido): descuenta del subtotal o libera el envío.
-  // La reserva del uso es atómica y va ANTES de aplicar el descuento: si dos
-  // checkouts concurrentes corren contra el mismo cupón, solo el que gana el
-  // compare-and-swap obtiene el descuento; el otro ve `agotado` y paga completo.
+  return crearPedidoConIntent(
+    client,
+    provider,
+    input,
+    carrito,
+    { subtotal, costoEnvio, paqueteria },
+    attemptKey,
+    onProviderStart,
+  );
+}
+
+interface CrearPedidoParams {
+  subtotal: Decimal;
+  costoEnvio: Decimal;
+  paqueteria: string | undefined;
+}
+
+async function reservarCuponCheckout(
+  client: Pick<TenantClient, "cuponTenant">,
+  codigo: string | null,
+  subtotal: Decimal,
+  shipping: Decimal,
+) {
+  let costoEnvio = shipping;
   let descuentoTotal = new Decimal(0);
   const cuponesSnapshot: Array<Record<string, unknown>> = [];
-  let cuponReservado: string | undefined;
-  if (carrito.cuponCodigo) {
-    const ev = await evaluarCupon(client, carrito.cuponCodigo, subtotal.toNumber());
-    if (ev.valido && (await reservarUsoCupon(client, carrito.cuponCodigo))) {
-      cuponReservado = carrito.cuponCodigo;
+  if (codigo) {
+    const ev = await evaluarCupon(client, codigo, subtotal.toNumber());
+    if (ev.valido && (await reservarUsoCupon(client, codigo))) {
       descuentoTotal = new Decimal(ev.descuentoSubtotal);
       if (ev.envioGratis) costoEnvio = new Decimal(0);
       cuponesSnapshot.push({
@@ -135,29 +345,40 @@ export async function iniciarCheckout(
     }
   }
   const total = Decimal.max(new Decimal(0), subtotal.minus(descuentoTotal)).plus(costoEnvio);
-
-  try {
-    return await crearPedidoConIntent(client, provider, input, carrito, {
-      subtotal,
-      costoEnvio,
-      descuentoTotal,
-      total,
-      paqueteria,
-      cuponesSnapshot,
-    });
-  } catch (err) {
-    if (cuponReservado) await liberarUsoCupon(client, cuponReservado);
-    throw err;
-  }
+  return { costoEnvio, descuentoTotal, cuponesSnapshot, total };
 }
 
-interface CrearPedidoParams {
-  subtotal: Decimal;
-  costoEnvio: Decimal;
-  descuentoTotal: Decimal;
-  total: Decimal;
-  paqueteria: string | undefined;
-  cuponesSnapshot: Array<Record<string, unknown>>;
+async function validatePublicStore(
+  client: Pick<TenantClient, "$queryRaw" | "configTiendaEcommerce" | "productoVariante">,
+  items: CarritoItem[],
+) {
+  await client.$queryRaw`SELECT id FROM config_tienda_ecommerce ORDER BY id FOR SHARE`;
+  const config = await client.configTiendaEcommerce.findFirst({ select: { activa: true } });
+  if (!config?.activa)
+    throw new CheckoutError(503, "Esta tienda no está recibiendo compras en este momento", {
+      code: "STORE_UNAVAILABLE",
+    });
+  const ids = [...new Set(items.map((item) => item.varianteId))];
+  await client.$queryRaw`SELECT v.id FROM producto_variantes v JOIN productos p ON p.id = v.producto_id JOIN productos_publicados pp ON pp.producto_id = p.id WHERE v.id = ANY(${ids}::text[]) ORDER BY p.id, v.id FOR SHARE OF p, v, pp`;
+  const available = await client.productoVariante.count({
+    where: {
+      id: { in: ids },
+      isActive: true,
+      archivedAt: null,
+      producto: {
+        isActive: true,
+        archivedAt: null,
+        isVisiblePublico: true,
+        productoPublicado: { is: { isPublicado: true } },
+      },
+    },
+  });
+  if (available !== ids.length)
+    throw new CheckoutError(
+      422,
+      "Uno o más artículos ya no están disponibles. Actualiza el carrito.",
+      { code: "PRODUCT_UNAVAILABLE" },
+    );
 }
 
 async function crearPedidoConIntent(
@@ -166,52 +387,77 @@ async function crearPedidoConIntent(
   input: IniciarCheckoutInput,
   carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
   params: CrearPedidoParams,
+  attemptKey: string,
+  onProviderStart: () => void,
 ): Promise<IniciarCheckoutResult> {
-  const { subtotal, costoEnvio, descuentoTotal, total, paqueteria, cuponesSnapshot } = params;
-  const folioPublico = await nextFolioPublico(client);
-  const pedido = await client.pedidoEcommerce.create({
-    data: {
-      folioPublico,
-      carritoOrigenId: carrito.id,
-      ...(carrito.clienteId ? { clienteId: carrito.clienteId } : {}),
-      emailComprador: input.emailComprador,
-      items: carrito.items as object,
-      subtotal: subtotal.toFixed(4),
-      descuentoTotal: descuentoTotal.toFixed(4),
-      ...(cuponesSnapshot.length ? { cuponesSnapshot: cuponesSnapshot as object } : {}),
-      costoEnvio: costoEnvio.toFixed(4),
-      total: total.toFixed(4),
+  const { subtotal, paqueteria } = params;
+  const { pedido, total } = await client.$transaction(async (tx) => {
+    if (input.requirePublicStore)
+      await validatePublicStore(tx, carrito.items as unknown as CarritoItem[]);
+    const { costoEnvio, descuentoTotal, cuponesSnapshot } = await reservarCuponCheckout(
+      tx,
+      carrito.cuponCodigo,
+      subtotal,
+      params.costoEnvio,
+    );
+    const snapshot = await crearSnapshotComercial(tx, {
+      items: carrito.items as unknown as CarritoItem[],
+      subtotal,
+      descuentoTotal,
+      costoEnvio,
       moneda: carrito.moneda,
-      requiereFactura: input.requiereFactura,
-      ...(input.datosFactura ? { datosFactura: input.datosFactura as object } : {}),
-      metodoPago: input.metodoPago,
-      metodoEnvio: input.metodoEnvio,
-      ...(paqueteria
-        ? {
-            paqueteria: paqueteria as
-              | "fedex"
-              | "estafeta"
-              | "paquete_express"
-              | "huipix"
-              | "propio",
-          }
-        : {}),
-      ...(input.sucursalPickupId ? { sucursalPickupId: input.sucursalPickupId } : {}),
-      ...(input.direccionEnvio ? { direccionEnvio: input.direccionEnvio as object } : {}),
-      statusPago: "pendiente",
-      statusPedido: "recibido",
-      eventos: {
-        create: {
-          tipo: "pedido_recibido",
-          descripcion: "Pedido recibido, esperando pago",
-          visibleCliente: true,
+      sucursalPickupId: input.sucursalPickupId,
+    });
+    const folioPublico = await nextFolioPublico(tx);
+    const created = await tx.pedidoEcommerce.create({
+      data: {
+        folioPublico,
+        carritoOrigenId: carrito.id,
+        ...(carrito.clienteId ? { clienteId: carrito.clienteId } : {}),
+        emailComprador: input.emailComprador,
+        items: carrito.items as object,
+        snapshotComercial: snapshot,
+        subtotal: snapshot.subtotalArticulos,
+        descuentoTotal: snapshot.descuentoTotal,
+        ...(cuponesSnapshot.length ? { cuponesSnapshot: cuponesSnapshot as object } : {}),
+        costoEnvio: snapshot.costoEnvio,
+        total: snapshot.total,
+        moneda: carrito.moneda,
+        requiereFactura: input.requiereFactura,
+        ...(input.datosFactura ? { datosFactura: input.datosFactura as object } : {}),
+        metodoPago: input.metodoPago,
+        metodoEnvio: input.metodoEnvio,
+        ...(paqueteria
+          ? {
+              paqueteria: paqueteria as
+                | "fedex"
+                | "estafeta"
+                | "paquete_express"
+                | "huipix"
+                | "propio",
+            }
+          : {}),
+        ...(input.sucursalPickupId ? { sucursalPickupId: input.sucursalPickupId } : {}),
+        ...(input.direccionEnvio ? { direccionEnvio: input.direccionEnvio as object } : {}),
+        statusPago: "pendiente",
+        statusPedido: "recibido",
+        eventos: {
+          create: {
+            tipo: "pedido_recibido",
+            descripcion: "Pedido recibido, esperando pago",
+            visibleCliente: true,
+          },
         },
       },
-    },
+    });
+
+    await tx.checkoutAttempt.update({ where: { key: attemptKey }, data: { pedidoId: created.id } });
+    return { pedido: created, total: new Decimal(snapshot.total) };
   });
 
   const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
   const montoCentavos = Math.round(total.times(100).toNumber());
+  onProviderStart();
   const intent = await provider.crearIntent({
     pedidoId: pedido.id,
     montoCentavos,
@@ -219,11 +465,11 @@ async function crearPedidoConIntent(
     metodo: input.metodoPago,
     emailComprador: input.emailComprador,
     ...(nombreComprador ? { nombreComprador } : {}),
-    descripcion: `Pedido ${folioPublico}`,
+    descripcion: `Pedido ${pedido.folioPublico}`,
     metadata: {
       tenantSlug: input.tenantSlug,
       pedidoId: pedido.id,
-      folioPublico,
+      folioPublico: pedido.folioPublico,
       ...(input.mesesSinIntereses ? { msi: String(input.mesesSinIntereses) } : {}),
     },
     ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
@@ -241,7 +487,7 @@ async function crearPedidoConIntent(
 
   return {
     pedidoId: pedido.id,
-    folioPublico,
+    folioPublico: pedido.folioPublico,
     intentId: intent.intentId,
     intentStatus: intent.status,
     montoCentavos,
@@ -256,6 +502,27 @@ export interface ConfirmarPagoResult {
   folioPublico: string;
   statusPago: string;
   ventaIdGenerada: string | null;
+}
+
+function estadoPagoCompletado(pedido: {
+  id: string;
+  folioPublico: string;
+  statusPago: string;
+  ventaIdGenerada: string | null;
+}): ConfirmarPagoResult | null {
+  if (pedido.statusPago === "pago_confirmado" && !pedido.ventaIdGenerada)
+    throw new CheckoutError(
+      409,
+      "El pago confirmado no tiene venta asociada. Requiere conciliación.",
+      { code: "PAYMENT_RECONCILIATION_REQUIRED" },
+    );
+  if (pedido.statusPago !== "pago_confirmado" && pedido.statusPago !== "reembolsado") return null;
+  return {
+    pedidoId: pedido.id,
+    folioPublico: pedido.folioPublico,
+    statusPago: pedido.statusPago,
+    ventaIdGenerada: pedido.ventaIdGenerada,
+  };
 }
 
 /**
@@ -278,121 +545,86 @@ export async function procesarWebhookPago(
   });
   if (!pedido) throw new CheckoutError(404, "Pedido no encontrado para el intent");
 
-  if (pedido.statusPago === "pago_confirmado") {
-    return {
-      pedidoId: pedido.id,
-      folioPublico: pedido.folioPublico,
-      statusPago: pedido.statusPago,
-      ventaIdGenerada: pedido.ventaIdGenerada,
+  const prepared =
+    evento.status === "confirmado" &&
+    pedido.statusPago !== "pago_confirmado" &&
+    pedido.statusPago !== "reembolsado"
+      ? prepararVentaDesdeSnapshot(pedido.snapshotComercial, usuarioSistemaId, pedido)
+      : null;
+  const result = await client.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM pedidos_ecommerce WHERE id = ${pedido.id} FOR UPDATE`;
+    const current = await tx.pedidoEcommerce.findUniqueOrThrow({ where: { id: pedido.id } });
+    const existing = {
+      pedidoId: current.id,
+      folioPublico: current.folioPublico,
+      statusPago: current.statusPago,
+      ventaIdGenerada: current.ventaIdGenerada,
     };
-  }
-
-  if (evento.status !== "confirmado") {
-    await client.pedidoEcommerce.update({
-      where: { id: pedido.id },
+    if (evento.status === "reembolsado") {
+      throw new CheckoutError(409, "El reembolso requiere conciliación de pago e inventario.", {
+        code: "PAYMENT_RECONCILIATION_REQUIRED",
+      });
+    }
+    const completed = estadoPagoCompletado(current);
+    if (completed) return { value: completed, newlyConfirmed: false };
+    if (evento.status === "fallido") {
+      if (current.statusPago !== "pago_fallido") {
+        await tx.pedidoEcommerce.update({
+          where: { id: current.id },
+          data: {
+            statusPago: "pago_fallido",
+            eventos: {
+              create: {
+                tipo: "pago_fallido",
+                descripcion: "El pago no pudo procesarse",
+                visibleCliente: true,
+              },
+            },
+          },
+        });
+      }
+      return { value: { ...existing, statusPago: "pago_fallido" }, newlyConfirmed: false };
+    }
+    const totalCentavos = Math.round(new Decimal(current.total.toString()).times(100).toNumber());
+    if (evento.montoCentavos !== totalCentavos)
+      throw new CheckoutError(422, "El monto confirmado no coincide con el total del pedido", {
+        esperadoCentavos: totalCentavos,
+        recibidoCentavos: evento.montoCentavos,
+      });
+    if (!prepared)
+      throw new CheckoutError(409, "El pedido requiere conciliación antes de generar la venta.", {
+        code: "PAYMENT_RECONCILIATION_REQUIRED",
+      });
+    const venta = await persistirVentaPreparada(tx, prepared);
+    await tx.pedidoEcommerce.update({
+      where: { id: current.id },
       data: {
-        statusPago: "pago_fallido",
+        statusPago: "pago_confirmado",
+        statusPedido: "pago_confirmado",
+        pagoConfirmadoAt: new Date(),
+        ventaIdGenerada: venta.ventaId,
         eventos: {
           create: {
-            tipo: "pago_fallido",
-            descripcion: "El pago no pudo procesarse",
+            tipo: "pago_confirmado",
+            descripcion: "Pago confirmado, preparando pedido",
             visibleCliente: true,
           },
         },
       },
     });
+    await enqueuePostPago(tx, current.id);
+    if (current.carritoOrigenId) {
+      await tx.carritoEcommerce.update({
+        where: { id: current.carritoOrigenId },
+        data: { status: "convertido", convertidoAPedidoId: current.id },
+      });
+    }
     return {
-      pedidoId: pedido.id,
-      folioPublico: pedido.folioPublico,
-      statusPago: "pago_fallido",
-      ventaIdGenerada: null,
+      value: { ...existing, statusPago: "pago_confirmado", ventaIdGenerada: venta.ventaId },
+      newlyConfirmed: true,
     };
-  }
-
-  // Defensa en profundidad: el monto confirmado debe coincidir con el total del
-  // pedido. En proveedores reales el monto viene firmado por la pasarela; esto
-  // rechaza montos parciales o falsificados (p.ej. montoCentavos:1) para todos.
-  const totalCentavos = Math.round(new Decimal(pedido.total.toString()).times(100).toNumber());
-  if (evento.montoCentavos !== totalCentavos) {
-    throw new CheckoutError(422, "El monto confirmado no coincide con el total del pedido", {
-      esperadoCentavos: totalCentavos,
-      recibidoCentavos: evento.montoCentavos,
-    });
-  }
-
-  // Claim atómico: cierra el TOCTOU del check-then-act (línea ~248). Los
-  // procesadores (Stripe/Conekta) entregan at-least-once y reintentan en
-  // timeout, así que dos entregas del mismo evento pueden pasar el guard a la
-  // vez. updateMany con guarda de estado es un compare-and-swap que Postgres
-  // serializa a nivel de fila: solo una entrega transiciona el pedido a
-  // "pago_confirmado" y ejecuta crearVenta (con su descuento de stock); las
-  // duplicadas obtienen count=0 y salen idempotentes.
-  const estadoPrevio = pedido.statusPago;
-  const claim = await client.pedidoEcommerce.updateMany({
-    where: { id: pedido.id, statusPago: { not: "pago_confirmado" } },
-    data: { statusPago: "pago_confirmado" },
   });
-  if (claim.count === 0) {
-    const yaConfirmado = await client.pedidoEcommerce.findUniqueOrThrow({
-      where: { id: pedido.id },
-      select: { statusPago: true, ventaIdGenerada: true },
-    });
-    return {
-      pedidoId: pedido.id,
-      folioPublico: pedido.folioPublico,
-      statusPago: yaConfirmado.statusPago,
-      ventaIdGenerada: yaConfirmado.ventaIdGenerada,
-    };
-  }
-
-  const items = pedido.items as unknown as CarritoItem[];
-  const sucursal = await resolverSucursal(client, pedido.sucursalPickupId);
-
-  let venta: Awaited<ReturnType<typeof crearVenta>>;
-  try {
-    venta = await crearVenta(client, usuarioSistemaId, {
-      sucursalId: sucursal,
-      canal: "ecommerce",
-      lineas: items.map((i) => ({ varianteId: i.varianteId, cantidad: String(i.cantidad) })),
-      pagos: [
-        {
-          metodo: pedido.metodoPago === "tarjeta" ? "tarjeta_credito" : "transferencia",
-          monto: pedido.subtotal.toString(),
-        },
-      ],
-      ...(pedido.clienteId ? { clienteId: pedido.clienteId } : {}),
-    } as Parameters<typeof crearVenta>[2]);
-  } catch (err) {
-    // Libera el claim para que un reintento del proveedor pueda reprocesar.
-    // La guarda ventaIdGenerada:null evita revertir un pedido ya completado.
-    await client.pedidoEcommerce.updateMany({
-      where: { id: pedido.id, statusPago: "pago_confirmado", ventaIdGenerada: null },
-      data: { statusPago: estadoPrevio },
-    });
-    throw err;
-  }
-
-  await client.pedidoEcommerce.update({
-    where: { id: pedido.id },
-    data: {
-      statusPedido: "pago_confirmado",
-      pagoConfirmadoAt: new Date(),
-      ventaIdGenerada: venta.ventaId,
-      eventos: {
-        create: {
-          tipo: "pago_confirmado",
-          descripcion: "Pago confirmado, preparando pedido",
-          visibleCliente: true,
-        },
-      },
-    },
-  });
-  if (pedido.carritoOrigenId) {
-    await client.carritoEcommerce.update({
-      where: { id: pedido.carritoOrigenId },
-      data: { status: "convertido", convertidoAPedidoId: pedido.id },
-    });
-  }
+  if (!result.newlyConfirmed) return result.value;
 
   // Campana: avisa a los empleados que pueden gestionar pedidos que entró uno nuevo,
   // y al cliente (si tiene cuenta) que su pago se confirmó. Best-effort.
@@ -433,19 +665,5 @@ export async function procesarWebhookPago(
     }
   }
 
-  return {
-    pedidoId: pedido.id,
-    folioPublico: pedido.folioPublico,
-    statusPago: "pago_confirmado",
-    ventaIdGenerada: venta.ventaId,
-  };
-}
-
-async function resolverSucursal(client: TenantClient, pickupId: string | null): Promise<string> {
-  if (pickupId) return pickupId;
-  const def = await client.sucursal.findFirst({ where: { isDefault: true }, select: { id: true } });
-  if (def) return def.id;
-  const any = await client.sucursal.findFirst({ select: { id: true } });
-  if (!any) throw new CheckoutError(500, "No hay sucursal para generar la venta");
-  return any.id;
+  return result.value;
 }

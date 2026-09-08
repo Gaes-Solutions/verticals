@@ -68,6 +68,6 @@ export const kioskoDeviceRoutes: FastifyPluginAsync = async (app) => {
     const auth = await requireKiosko(req, reply);
     if (!auth) return;
     const cfg = await getKioskoConfig(auth.tenantPrisma);
-    return { slides: await contenidoIdle(auth.tenantPrisma, cfg.contenidoReposo) };
+    return { slides: await contenidoIdle(auth.tenantPrisma, cfg.contenidoReposo, auth.sucursalId) };
   });
 };

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GaesSoft · Avance de la tienda</title>
+  <link rel="stylesheet" href="/gaes.css">
+  <link rel="stylesheet" href="/avance.css">
+  <script src="/avance.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">GAESSOFT · ENTREGA RETAIL</p><h1>Avance de la tienda</h1></div><span class="gx-badge-warn">Entrega en validación</span></header>
+    <div class="connection"><span id="connection" role="status">Cargando estado…</span><strong id="activity" role="status">Actividad sin confirmar</strong><time id="updated"></time></div>
+    <section class="current gx-card" aria-labelledby="current-title"><p class="eyebrow">AHORA</p><h2 id="current-title">Consultando avance</h2><p id="current-detail"></p></section>
+    <section class="summary" aria-label="Resumen de tareas"><div class="gx-card"><p>Probadas</p><strong id="done">—</strong></div><div class="gx-card"><p>En desarrollo o revisión</p><strong id="active">—</strong></div><div class="gx-card"><p>Pendientes o con fallos</p><strong id="pending">—</strong></div></section>
+    <section aria-labelledby="work-title"><h2 id="work-title">Plan y evidencia</h2><p class="legend">Cada tarea muestra su alcance probado. Seguridad, errores y adaptación a pantallas se verifican por separado.</p><div id="tasks"></div></section>
+    <section class="gx-card acceptance"><h2>Para aprobar una entrega</h2><ul><li>Flujos funcionales y errores comprobados.</li><li>Permisos y separación de datos revisados.</li><li>Celular, tableta y escritorio verificados.</li><li>Equipo real y entorno de entrega validados.</li></ul><p>Ninguna prueba individual certifica ausencia total de errores o vulnerabilidades.</p></section>
+    <footer>Tablero local de seguimiento · Se consulta el estado cada 5 segundos · Sin datos ni credenciales del cliente</footer>
+  </main>
+</body>
+</html>

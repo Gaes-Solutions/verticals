@@ -1,8 +1,6 @@
 import { QRCodeSVG } from "qrcode.react";
 import { type FormEvent, useState } from "react";
-import type { Session } from "../App.js";
 import { ApiError, api, setPermisos, setToken } from "../lib/api.js";
-import { resolverSession } from "../lib/session.js";
 import { BackupCodes } from "./BackupCodes.js";
 
 const SLUG_KEY = "gaespos_pos_slug";
@@ -38,7 +36,7 @@ function tenantDeSubdominio(): string | null {
 
 type Paso = "password" | "setup" | "verify" | "codes";
 
-export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
+export function Login({ onLogin }: { onLogin: () => void }) {
   const slugFijo = tenantDeSubdominio();
   const [paso, setPaso] = useState<Paso>("password");
   const [tenantSlug, setTenantSlug] = useState(slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "");
@@ -69,7 +67,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
     setToken(ses.accessToken);
     setPermisos(ses.user.permissions);
     localStorage.setItem(SLUG_KEY, tenantSlug);
-    onLogin(await resolverSession(ses.user.nombre));
+    onLogin();
   }
 
   async function submitPassword(e: FormEvent) {

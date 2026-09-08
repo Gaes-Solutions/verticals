@@ -1,5 +1,6 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 import {
   DominioEnUsoError,
   asegurarHostsDisponibles,
@@ -52,6 +53,56 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(err);
   });
 
+  app.get("/servicios-envio", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const { q } = z.object({ q: z.string().trim().max(120).default("") }).parse(req.query);
+    const rows = await req.tenantPrisma.productoVariante.findMany({
+      where: {
+        isActive: true,
+        archivedAt: null,
+        producto: { tipoVenta: "servicio", isActive: true, archivedAt: null },
+        ...(q
+          ? {
+              OR: [
+                { sku: { contains: q, mode: "insensitive" as const } },
+                { nombreVariante: { contains: q, mode: "insensitive" as const } },
+                { producto: { nombre: { contains: q, mode: "insensitive" as const } } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, sku: true, nombreVariante: true, producto: { select: { nombre: true } } },
+      orderBy: [{ producto: { nombre: "asc" } }, { sku: "asc" }],
+      take: 50,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      nombre: row.producto.nombre,
+      nombreVariante: row.nombreVariante,
+      sku: row.sku,
+    }));
+  });
+  app.get("/servicios-envio/:id", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    const { id } = idParamSchema.parse(req.params);
+    const row = await req.tenantPrisma.productoVariante.findFirst({
+      where: {
+        id,
+        isActive: true,
+        archivedAt: null,
+        producto: { tipoVenta: "servicio", isActive: true, archivedAt: null },
+      },
+      select: { id: true, sku: true, nombreVariante: true, producto: { select: { nombre: true } } },
+    });
+    if (!row) return reply.code(404).send({ message: "Servicio de envío no disponible" });
+    return {
+      id: row.id,
+      nombre: row.producto.nombre,
+      nombreVariante: row.nombreVariante,
+      sku: row.sku,
+    };
+  });
+
   app.get("/config", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
     return req.tenantPrisma.configTiendaEcommerce.findFirst();
@@ -60,6 +111,21 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
   app.put("/config", async (req, reply) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
     const body = configTiendaSchema.parse(req.body);
+    if (body.envioVarianteId) {
+      const service = await req.tenantPrisma.productoVariante.findFirst({
+        where: {
+          id: body.envioVarianteId,
+          isActive: true,
+          archivedAt: null,
+          producto: { tipoVenta: "servicio", isActive: true, archivedAt: null },
+        },
+        select: { id: true },
+      });
+      if (!service)
+        return reply
+          .code(422)
+          .send({ message: "Selecciona un servicio de envío activo de este negocio" });
+    }
     const existing = await req.tenantPrisma.configTiendaEcommerce.findFirst();
     await asegurarHostsDisponibles(app.masterPrisma, req.tenantSlug, {
       subdominio: body.subdominio,
@@ -69,6 +135,7 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
           : (body.dominioPropio ?? null),
     });
     const data = {
+      ...(body.envioVarianteId !== undefined ? { envioVarianteId: body.envioVarianteId } : {}),
       subdominio: body.subdominio,
       nombre: body.nombre,
       ...(body.activa !== undefined ? { activa: body.activa } : {}),

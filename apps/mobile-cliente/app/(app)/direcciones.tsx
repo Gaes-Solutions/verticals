@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth-store";
 import {
   type DireccionInput,
   crearDireccion,
@@ -6,6 +7,8 @@ import {
 } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
 import { Badge, Button, EmptyState, Icon, Input, Loading } from "@/ui";
+import { CommerceError } from "@/ui/CommerceError";
+import { Screen } from "@/ui/Screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -20,15 +23,26 @@ import {
 } from "react-native";
 
 export default function Direcciones() {
+  const { tenantSlug, user } = useAuth();
+  const queryKey = ["direcciones", tenantSlug, user?.id];
   const qc = useQueryClient();
   const [nueva, setNueva] = useState(false);
-  const q = useQuery({ queryKey: ["direcciones"], queryFn: listDirecciones });
+  const q = useQuery({ queryKey, retry: false, queryFn: listDirecciones });
   const borrar = useMutation({
     mutationFn: (id: string) => eliminarDireccion(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["direcciones"] }),
-    onError: (e) => Alert.alert("No se pudo", e instanceof Error ? e.message : "Error"),
+    onSuccess: () => void qc.invalidateQueries({ queryKey }),
   });
   if (q.isLoading) return <Loading />;
+  if (q.isError)
+    return (
+      <Screen>
+        <CommerceError
+          error={q.error}
+          message="No pudimos cargar tus direcciones. Revisa tu conexión y vuelve a intentar."
+          retry={() => void q.refetch()}
+        />
+      </Screen>
+    );
 
   return (
     <View style={s.root}>
@@ -39,10 +53,22 @@ export default function Direcciones() {
         refreshing={q.isFetching}
         onRefresh={() => q.refetch()}
         ListHeaderComponent={
-          <Pressable style={s.nuevaBtn} onPress={() => setNueva(true)}>
-            <Icon name="add-circle" size={22} color={colors.brand} />
-            <Text style={s.nuevaText}>Agregar dirección</Text>
-          </Pressable>
+          <>
+            {borrar.isError ? (
+              <CommerceError
+                error={borrar.error}
+                message="No pudimos confirmar la eliminación. Actualiza para revisar tus direcciones."
+                retry={() => {
+                  borrar.reset();
+                  void q.refetch();
+                }}
+              />
+            ) : null}
+            <Pressable style={s.nuevaBtn} onPress={() => setNueva(true)}>
+              <Icon name="add-circle" size={22} color={colors.brand} />
+              <Text style={s.nuevaText}>Agregar dirección</Text>
+            </Pressable>
+          </>
         }
         ListEmptyComponent={<EmptyState icon="location-outline" title="Sin direcciones" />}
         renderItem={({ item }) => (
@@ -83,7 +109,7 @@ export default function Direcciones() {
         onClose={() => setNueva(false)}
         onDone={() => {
           setNueva(false);
-          void qc.invalidateQueries({ queryKey: ["direcciones"] });
+          void qc.invalidateQueries({ queryKey });
         }}
       />
     </View>
@@ -108,7 +134,6 @@ function NuevaModal({
       setF({ etiqueta: "", calle: "", estado: "", codigoPostal: "" });
       onDone();
     },
-    onError: (e) => Alert.alert("No se pudo guardar", e instanceof Error ? e.message : "Error"),
   });
   const valido =
     f.etiqueta.trim() && f.calle.trim() && f.estado.trim() && /^\d{5}$/.test(f.codigoPostal);
@@ -171,6 +196,12 @@ function NuevaModal({
             keyboardType="number-pad"
             maxLength={5}
           />
+          {m.isError ? (
+            <Text accessibilityRole="alert" style={{ color: colors.danger }}>
+              No pudimos confirmar que la dirección se guardó. Cierra este formulario y actualiza la
+              lista antes de intentar crearla nuevamente.
+            </Text>
+          ) : null}
           <Button
             label="Guardar dirección"
             icon="save"

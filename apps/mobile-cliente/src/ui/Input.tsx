@@ -12,7 +12,12 @@ export function Input({
       {label ? <Text style={s.label}>{label}</Text> : null}
       <View style={s.wrap}>
         {icon ? <Icon name={icon} size={18} color={colors.faint} /> : null}
-        <TextInput style={s.input} placeholderTextColor={colors.faint} {...props} />
+        <TextInput
+          accessibilityLabel={label}
+          style={s.input}
+          placeholderTextColor={colors.faint}
+          {...props}
+        />
       </View>
     </View>
   );
@@ -24,7 +29,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,

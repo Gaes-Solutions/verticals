@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { type TenantPrismaClient, getTenantClient } from "@gaespos/db";
+import { type TenantPrismaClient, getTenantClient, masterPrisma } from "@gaespos/db";
+import { cargarPromocionesAplicables } from "../promociones/service.js";
 import { previewVenta } from "../ventas/service.js";
 
 /** El token del dispositivo viaja como `<tenantSlug>.<secreto>`. Guardamos solo el hash. */
@@ -16,11 +17,17 @@ export interface KioskoAuth {
 
 /** Resuelve y valida el token del kiosko; devuelve el tenant + dispositivo o null. */
 export async function resolverKiosko(tokenCompleto: string): Promise<KioskoAuth | null> {
+  if (!/^[a-z][a-z0-9_-]{1,49}\.[A-Za-z0-9_-]{32}$/.test(tokenCompleto)) return null;
   const sep = tokenCompleto.indexOf(".");
   if (sep <= 0) return null;
   const tenantSlug = tokenCompleto.slice(0, sep);
   const secreto = tokenCompleto.slice(sep + 1);
   if (!tenantSlug || !secreto) return null;
+  const tenant = await masterPrisma.tenant.findUnique({
+    where: { slug: tenantSlug },
+    select: { status: true },
+  });
+  if (!tenant || tenant.status === "cancelled") return null;
   let tenantPrisma: TenantPrismaClient;
   try {
     tenantPrisma = getTenantClient(tenantSlug);
@@ -28,7 +35,11 @@ export async function resolverKiosko(tokenCompleto: string): Promise<KioskoAuth 
     return null;
   }
   const device = await tenantPrisma.kioskoDevice.findFirst({
-    where: { tokenHash: hashToken(secreto), activo: true },
+    where: {
+      tokenHash: hashToken(secreto),
+      activo: true,
+      sucursal: { isActive: true, archivedAt: null },
+    },
     select: { id: true, sucursalId: true },
   });
   if (!device) return null;
@@ -41,9 +52,15 @@ export async function resolverKiosko(tokenCompleto: string): Promise<KioskoAuth 
 
 /** Config del kiosko (singleton por tenant). Crea la fila con defaults si no existe. */
 export async function getKioskoConfig(prisma: TenantPrismaClient) {
-  const existing = await prisma.kioskoConfig.findFirst();
+  const orderBy = [{ createdAt: "asc" as const }, { id: "asc" as const }];
+  const existing = await prisma.kioskoConfig.findFirst({ orderBy });
   if (existing) return existing;
-  return prisma.kioskoConfig.create({ data: {} });
+  return prisma.$transaction(async (tx) => {
+    // No singleton key exists, so serialize first initialization across API processes.
+    await tx.$executeRaw`LOCK TABLE "kiosko_config" IN SHARE ROW EXCLUSIVE MODE`;
+    const config = await tx.kioskoConfig.findFirst({ orderBy });
+    return config ?? tx.kioskoConfig.create({ data: {} });
+  });
 }
 
 export interface PrecioKiosko {
@@ -65,13 +82,25 @@ export async function consultarPrecio(
 ): Promise<PrecioKiosko> {
   const prisma = auth.tenantPrisma;
   const barcode = await prisma.productoCodigoBarras.findFirst({
-    where: { codigo },
+    where: {
+      codigo,
+      variante: {
+        isActive: true,
+        archivedAt: null,
+        producto: { isActive: true, archivedAt: null },
+      },
+    },
     select: { variante: { select: { id: true, sku: true, precioBase: true, productoId: true } } },
   });
   const variante =
     barcode?.variante ??
     (await prisma.productoVariante.findFirst({
-      where: { OR: [{ sku: codigo }, { producto: { skuPadre: codigo } }], isActive: true },
+      where: {
+        OR: [{ sku: codigo }, { producto: { skuPadre: codigo } }],
+        isActive: true,
+        archivedAt: null,
+        producto: { isActive: true, archivedAt: null },
+      },
       select: { id: true, sku: true, precioBase: true, productoId: true },
       orderBy: { isDefault: "desc" },
     }));
@@ -120,11 +149,19 @@ export async function consultarPrecio(
 export async function contenidoIdle(
   prisma: TenantPrismaClient,
   contenido: "promociones" | "destacados" | "ambos",
+  sucursalId: string,
 ) {
   const slides: Array<{ tipo: string; titulo: string; imagen: string | null; texto?: string }> = [];
   if (contenido === "promociones" || contenido === "ambos") {
+    const applicable = await cargarPromocionesAplicables(prisma, {
+      canal: "pos",
+      sucursalId,
+      fecha: new Date(),
+      varianteAProducto: new Map(),
+    });
     const promos = await prisma.promocion.findMany({
-      where: { status: "activa" },
+      where: { id: { in: applicable.map((promo) => promo.id) }, visiblePublico: true },
+      orderBy: [{ prioridad: "asc" }, { id: "asc" }],
       select: { nombre: true, descripcion: true },
       take: 10,
     });
@@ -134,7 +171,7 @@ export async function contenidoIdle(
   }
   if (contenido === "destacados" || contenido === "ambos") {
     const prods = await prisma.productoPublicado.findMany({
-      where: { isPublicado: true },
+      where: { isPublicado: true, producto: { isActive: true, archivedAt: null } },
       select: { tituloPublico: true, fotosArray: true },
       take: 10,
     });

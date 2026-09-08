@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cantidadVentaSchema } from "./quantity.js";
 
 const positiveDecimalString = z
   .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
@@ -10,7 +11,7 @@ const nonNegativeDecimalString = z
 
 export const ventaLineaInputSchema = z.object({
   varianteId: z.string().min(1),
-  cantidad: positiveDecimalString,
+  cantidad: cantidadVentaSchema,
   loteId: z.string().optional(),
   serieId: z.string().optional(),
 });
@@ -38,6 +39,8 @@ export const ventaPagoInputSchema = z.object({
 });
 
 export const ventaCreateSchema = z.object({
+  idempotencyKey: z.string().uuid().optional(),
+  expectedTotal: nonNegativeDecimalString.optional(),
   sucursalId: z.string().min(1),
   cajaId: z.string().optional(),
   clienteId: z.string().optional(),

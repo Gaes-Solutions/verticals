@@ -16,12 +16,16 @@ export interface Sucursal {
   codigo: string;
   nombre: string;
   isDefault?: boolean;
+  isActive: boolean;
+  archivedAt?: string | null;
 }
 
 export interface Caja {
   id: string;
   codigo: string;
   nombre?: string | null;
+  sucursalId: string;
+  isActive: boolean;
 }
 
 export interface Variante {
@@ -32,6 +36,7 @@ export interface Variante {
 }
 
 export interface Producto {
+  varianteEncontradaId?: string | null;
   id: string;
   skuPadre: string;
   nombre: string;

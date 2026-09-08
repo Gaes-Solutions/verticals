@@ -38,5 +38,6 @@ body {
     font-family: "Courier New", monospace;
     font-size: 11px;
     color: #000;
+    overflow-wrap: anywhere;
   }
 }

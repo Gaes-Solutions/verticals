@@ -79,12 +79,26 @@ describe("portal de cuenta del cliente", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("mis pedidos incluye pedidos hechos como invitado con el mismo correo", async () => {
-    // simula un pedido guest con el email del cliente (checkout sin cuenta)
+  it("mis pedidos exige identidad vinculada y no adjudica compras por correo", async () => {
+    // Un correo escrito en una compra invitada no prueba propiedad de la cuenta.
     const prisma = getTenantClient(TENANT_SLUG);
-    await prisma.pedidoEcommerce.create({
+    const invitado = await prisma.pedidoEcommerce.create({
       data: {
         folioPublico: `GP-${Date.now().toString().slice(-8)}`,
+        emailComprador: EMAIL,
+        subtotal: "100",
+        total: "100",
+        moneda: "MXN",
+        metodoEnvio: "paqueteria",
+        direccionEnvio: {},
+        statusPedido: "entregado",
+        statusPago: "pago_confirmado",
+      },
+    });
+    const propio = await prisma.pedidoEcommerce.create({
+      data: {
+        folioPublico: `OWN-${Date.now()}`,
+        clienteId,
         emailComprador: EMAIL,
         subtotal: "100",
         total: "100",
@@ -101,8 +115,15 @@ describe("portal de cuenta del cliente", () => {
       headers: { authorization: `Bearer ${clienteToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const pedidos = res.json() as Array<{ emailComprador?: string; total: string }>;
-    expect(pedidos.length).toBeGreaterThanOrEqual(1);
+    const pedidos = res.json() as Array<{ id: string }>;
+    expect(pedidos.map((pedido) => pedido.id)).toContain(propio.id);
+    expect(pedidos.map((pedido) => pedido.id)).not.toContain(invitado.id);
+    const detalleInvitado = await app.inject({
+      method: "GET",
+      url: `/cliente-portal/pedidos/${invitado.folioPublico}`,
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    expect(detalleInvitado.statusCode).toBe(404);
   });
 
   it("clienteId quedó persistido con passwordHash", async () => {

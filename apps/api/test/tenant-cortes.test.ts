@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -154,6 +155,7 @@ describe("apertura de caja", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(Number(res.json().montoInicial)).toBe(500);
+    expect(res.json().estado).toBe("abierta");
   });
 
   it("ventas con apertura activa cobran OK", async () => {
@@ -362,5 +364,61 @@ describe("permisos cortes", () => {
       },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("serialización de apertura", () => {
+  it("dos cajeros concurrentes crean una sola apertura y el otro recibe 409", async () => {
+    await createTenantUser(TENANT_SLUG, {
+      email: "second-c@test.local",
+      password: CASHIER_PASSWORD,
+      rolCodigo: "cajero",
+      nombre: "Segundo cajero",
+    });
+    const secondToken = (
+      await loginTenantUser(app, TENANT_SLUG, "second-c@test.local", CASHIER_PASSWORD)
+    ).accessToken;
+    const client = getTenantClient(TENANT_SLUG);
+    const register = await client.caja.create({
+      data: { codigo: "RACE", nombre: "Concurrencia", sucursalId },
+    });
+    const results = await Promise.all(
+      [cashierToken, secondToken].map((token) =>
+        app.inject({
+          method: "POST",
+          url: `/t/cajas/${register.id}/aperturar`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { montoInicial: "150.25" },
+        }),
+      ),
+    );
+    expect(
+      results.map((response) => response.statusCode).sort(),
+      results.map((r) => r.body).join("\n"),
+    ).toEqual([201, 409]);
+    expect(
+      await client.cajaApertura.count({ where: { cajaId: register.id, estado: "abierta" } }),
+    ).toBe(1);
+  });
+  it.each(["inactiva", "archivada"])("no abre caja en sucursal %s", async (state) => {
+    const client = getTenantClient(TENANT_SLUG);
+    const branch = await client.sucursal.create({
+      data: {
+        codigo: `CLOSED-${state}`,
+        nombre: "Cerrada",
+        ...(state === "inactiva" ? { isActive: false } : { archivedAt: new Date() }),
+      },
+    });
+    const register = await client.caja.create({
+      data: { codigo: `CLOSED-${state}`, nombre: "Cerrada", sucursalId: branch.id },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/t/cajas/${register.id}/aperturar`,
+      headers: authOwner(),
+      payload: { montoInicial: "0" },
+    });
+    expect(response.statusCode, response.body).toBe(409);
+    expect(await client.cajaApertura.count({ where: { cajaId: register.id } })).toBe(0);
   });
 });

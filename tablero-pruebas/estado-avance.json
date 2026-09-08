@@ -1,0 +1,348 @@
+{
+  "updated": "2026-09-08T23:08:20.120632+00:00",
+  "current": "Devoluciones: inventario y recuperación segura",
+  "detail": "Pruebas del servidor aprobadas. Corrigiendo reposición de artículos defectuosos y comprobando que la pantalla no prometa reembolsos bancarios inexistentes.",
+  "tasks": [
+    {
+      "id": "T01",
+      "title": "Ventas, devoluciones, inventario y caja",
+      "owner": "Codex",
+      "status": "en-revision",
+      "description": "Las155 pruebas iniciales siguen documentadas; nuevos defectos de reembolso/cancelación tras corte detectados en revisión integral.",
+      "security": "Cubierta por pruebas existentes; auditoría integral pendiente",
+      "responsive": "No aplica a esta prueba de servidor",
+      "errors": "Reembolso efectivo sin salida de caja detectado; corrección en curso",
+      "evidence": [
+        "7 archivos de pruebas: comercio, ventas, inventario, devoluciones, cortes, crédito y cobro."
+      ]
+    },
+    {
+      "id": "T02",
+      "title": "Kiosco: controles del servidor",
+      "owner": "Agente de seguridad + Codex",
+      "status": "probada",
+      "description": "Tokens, sucursales, productos activos, promociones y concurrencia.",
+      "security": "10 pruebas de integración aprobadas en base aislada",
+      "responsive": "Pendiente revisión del dispositivo",
+      "errors": "Validación de autorización implementada",
+      "evidence": [
+        "Autorización, revocación, aislamiento entre tiendas, permisos, sucursales, concurrencia y promociones comprobados.",
+        "La certificación del dispositivo y autenticación del encargado siguen pendientes en T03."
+      ]
+    },
+    {
+      "id": "T03",
+      "title": "Kiosco: activación y recuperación",
+      "owner": "Agente móvil",
+      "status": "en-revision",
+      "description": "Cámara o lector modo teclado/entrada manual; validación de token y recuperación.",
+      "security": "Confirmación de encargado no sustituye autenticación",
+      "responsive": "Lector verificado360/768/1440; dispositivo nativo pendiente",
+      "errors": "24 pruebas unitarias aprobadas; configuración y anuncios inválidos rechazados",
+      "evidence": [
+        "Tipos y lint aprobados. Pendiente cámara y rotación en equipo real.",
+        "Videos propios no implementados. Actualización de anuncios y administración en corrección.",
+        "Fallo de anuncios oculta contenido; reintento recupera promoción ficticia. Administración carga/error/reintento verificados360/768/1440. Videos aún pendientes."
+      ]
+    },
+    {
+      "id": "T04",
+      "title": "Compra móvil y cuenta del cliente",
+      "owner": "Agentes móvil y comercio",
+      "status": "en-desarrollo",
+      "description": "Catálogo y carrito implementados; continúa checkout móvil autenticado.",
+      "security": "Identidad y aislamiento de intentos validados; tienda/productos revalidados antes del cobro",
+      "responsive": "Flujo de compra360/768/1440 sin desbordamiento; visor web aislado",
+      "errors": "Fallos de envío, carga y recuperación de intento revisados; rechazo de proveedor real pendiente",
+      "evidence": [
+        "54 pruebas móviles, tipos y lint aprobados.",
+        "16 pruebas checkout API aprobadas; OXXO/SPEI implementados.",
+        "Tienda y productos retirados bloqueados; tarjeta y QA nativa pendientes.",
+        "QA: catálogo,detalle,carrito guardado,fallo de envío y referencia ficticia225 pendiente; recuperación tras recargar. Dispositivos reales pendientes."
+      ]
+    },
+    {
+      "id": "T05",
+      "title": "Compra web: envío, pago e identidad",
+      "owner": "Agente de comercio + Codex",
+      "status": "en-revision",
+      "description": "Corregir asociación del pedido a la cuenta y estados engañosos de envío.",
+      "security": "Tienda activa/productos públicos revalidados en snapshot transaccional",
+      "responsive": "Checkout360/768/1440 comprobado; demás pantallas pendientes de cierre",
+      "errors": "No presentar fallo de cotización como envío gratis",
+      "evidence": [
+        "42 pruebas web aprobadas: envíos, identidad, sesión, aislamiento de intentos y origen de peticiones.",
+        "Tipos aprobados. Compra autenticada vincula cliente verificado por servidor.",
+        "Producción sin pago configurado no intenta cobro simulado.",
+        "Pagos reales y revisión comercial completa aún pendientes.",
+        "32 pruebas API pública/snapshot/idempotencia y42 web aprobadas."
+      ]
+    },
+    {
+      "id": "T06",
+      "title": "Aplicación de escritorio y compatibilidad",
+      "owner": "Codex",
+      "status": "en-revision",
+      "description": "Validar instalación y operación por plataforma soportada.",
+      "security": "Pendiente revisión de permisos y almacenamiento",
+      "responsive": "Windows, macOS y Linux sin certificar",
+      "errors": "Pendiente pruebas de instalación y recuperación",
+      "evidence": [
+        "Iconos/preflight preparados;18 pruebas de URL/CSP y configuración de conexión aprobadas.",
+        "Build nativo requiere Rust/WebKitGTK y equipos de destino; no instalador certificado.",
+        "POS web incorpora manifiesto con iconos existentes, analizado sin errores. No instalado ni certificado en sistemas reales; requiere conexión."
+      ]
+    },
+    {
+      "id": "T07",
+      "title": "Revisión visual y manejo de errores",
+      "owner": "Codex",
+      "status": "en-revision",
+      "description": "Probar páginas reales en navegador con tamaños de teléfono, tablet y computadora.",
+      "security": "Sin publicar datos privados en sitios de prueba",
+      "responsive": "Flujos revisados360/768/1440; certificación por dispositivo pendiente",
+      "errors": "Validar errores visibles sin detalles internos",
+      "evidence": [
+        "Tablero comprobado a 360, 768 y 1440 px sin desbordamiento horizontal. Detalles y actualización de estado funcionando.",
+        "Servidor del tablero comprobado: rutas autorizadas 200; índice anterior y acceso fuera de lista 404. Solo escucha en esta computadora.",
+        "Revisados con datos ficticios: checkout/envío, selector/apertura POS, ticket/recuperación, kiosco lector/errores, administración kioscos/postpago, compra móvil y productos básicos del negocio.",
+        "Recibo58mm y modal cobro768×400 comprobados. Estas revisiones no cubren todavía todas las páginas ni certifican teléfonos/impresoras reales."
+      ]
+    },
+    {
+      "id": "T09",
+      "title": "Evitar pedidos y cobros duplicados",
+      "owner": "Agente de seguridad",
+      "status": "en-revision",
+      "description": "Registrar intentos de compra de forma persistente para recuperar reintentos sin volver a cobrar.",
+      "security": "Pago, venta, inventario, evento y carrito confirmados en una sola transacción",
+      "responsive": "La pantalla deberá mostrar resultado pendiente",
+      "errors": "Concurrencia, caída de persistencia y recuperación tras webhook probadas en servidor",
+      "evidence": [
+        "10 pruebas API de idempotencia aprobadas; conjunto comercio/portal/idempotencia: 101/101.",
+        "Web guarda intento y consulta resultado sin reenviar tarjeta. QA: persiste tras recargar y mantiene pago deshabilitado.",
+        "Prueba HTTP real: origen legítimo supera control de origen; origen ajeno rechazado403.",
+        "Nueva tanda: 137/137 pruebas en 8 suites. Incluye rollback al vincular venta o convertir carrito, duplicados concurrentes y evento fallido tardío.",
+        "Cola durable para guías y avisos:22 pruebas aprobadas; panel de pendientes e inciertos revisado360/768/1440, errores recuperables. Conciliación operativa y proveedor real pendientes."
+      ]
+    },
+    {
+      "id": "T10",
+      "title": "Restauración segura de sesión móvil",
+      "owner": "Agente móvil",
+      "status": "en-revision",
+      "description": "Comprobar sesión con servidor y aislar cachés al cerrar o cambiar cuenta.",
+      "security": "17 pruebas mock aprobadas, incluida separación entre tiendas",
+      "responsive": "Pendiente validación de pantallas de sesión",
+      "errors": "Red temporal conserva sesión bloqueada; credenciales inválidas la cierran",
+      "evidence": [
+        "Tipos y Biome aprobados.",
+        "Requiere API nueva con tenantSlug; pendiente dispositivo real y biometría."
+      ]
+    },
+    {
+      "id": "T11",
+      "title": "Envío: fallo, sin cobertura y tarifa válida",
+      "owner": "Agente de comercio + Codex",
+      "status": "probada",
+      "description": "Al fallar la cotización, informa el problema y bloquea pago. La ausencia de cobertura no se presenta como envío gratuito.",
+      "security": "Prueba confirma que no expone detalles internos del error",
+      "responsive": "Checkout revisado a 360, 768 y 1440 px sin desbordamiento horizontal",
+      "errors": "Fallo, sin cobertura, tarifa válida e invalidación al cambiar CP comprobados",
+      "evidence": [
+        "3 pruebas de ruta aprobadas y tipos aprobados.",
+        "Prueba visual con datos ficticios: $150 + $75 = $225; cambiar dirección deshabilita inmediatamente el pago.",
+        "No se efectuó ningún cobro. Proveedor real y validación backend de tarifa pendientes."
+      ]
+    },
+    {
+      "id": "T12",
+      "title": "Tablero visual de seguimiento",
+      "owner": "Codex",
+      "status": "probada",
+      "description": "Página local con estado, responsables, criterios y evidencia por tarea; consulta los cambios cada cinco segundos.",
+      "security": "Contenido sin datos de clientes; solo rutas permitidas y acceso local",
+      "responsive": "Comprobado a 360, 768 y 1440 px",
+      "errors": "Muestra aviso si pierde conexión al estado",
+      "evidence": [
+        "Detalle desplegable y actualización de estado comprobados en navegador.",
+        "Rutas de seguimiento200; índice anterior y acceso fuera de lista404.",
+        "La fecha indica la última actualización de trabajo; conexión al tablero no significa agentes ejecutándose.",
+        "Indicador separado de actividad: trabajando, pausado o sin actualización reciente. Aviso de actividad antigua comprobado en navegador."
+      ]
+    },
+    {
+      "id": "T13",
+      "title": "Conciliar importe cobrado y venta registrada",
+      "owner": "Codex",
+      "status": "probada",
+      "description": "La confirmación debe respetar los importes de la compra original, incluidos descuentos y envío.",
+      "security": "Importes congelados antes del cobro y confirmación transaccional",
+      "responsive": "No aplica al cálculo del servidor",
+      "errors": "6 casos específicos aprobados",
+      "evidence": [
+        "156 pruebas de regresión + 6 específicas aprobadas.",
+        "Cambio de precios, cupón, prorrateo de centavos, envío y servicio sin inventario verificados.",
+        "Pedidos históricos sin snapshot requieren conciliación. Pago real pendiente."
+      ]
+    },
+    {
+      "id": "T14",
+      "title": "Impuestos correctos en factura",
+      "owner": "Agente de seguridad",
+      "status": "en-revision",
+      "description": "Revisar que la factura respete los impuestos registrados en la venta.",
+      "security": "Evitar tasas inferidas incorrectamente",
+      "responsive": "No aplica al servidor",
+      "errors": "16 unitarias fiscales y34 integración aprobadas; proveedor real pendiente",
+      "evidence": [
+        "16 unitarias fiscales y34 integración CFDI/devoluciones aprobadas sin proveedor real.",
+        "Notas de crédito prorratean importes e impuestos originales.",
+        "Objeto exento/no objeto e históricos insuficientes pendientes de datos fiscales explícitos."
+      ]
+    },
+    {
+      "id": "T15",
+      "title": "Caja y sesión del punto de venta",
+      "owner": "Codex",
+      "status": "en-revision",
+      "description": "Apertura, efectivo, recibo y corte probados juntos contra API/DB aisladas. Certificación operativa completa pendiente.",
+      "security": "Sin bypass por permisos o errores; limpia permisos al salir",
+      "responsive": "Selector y ticket a360/768/1440; cobro a768×400 con desplazamiento",
+      "errors": "105 regresiones API y37 pruebas de corte UI aprobadas",
+      "evidence": [
+        "Sucursal/caja elegidas explícitamente y confirmadas con API.",
+        "Fondo500 ingresado y apertura confirmada en fixture; sin efectivo ni operación real.",
+        "Dos cajeros concurrentes: una apertura y rechazo409.",
+        "Sucursal inactiva/archivada bloqueada; permisos e identidad aislados.",
+        "Venta150, recibido200, cambio50 comprobados; reintento conserva una venta y corte neto150.",
+        "Respuesta perdida recuperada por consulta sin repetir cobro. Si falla el recibo se conserva venta confirmada.",
+        "Diálogo modal: Escape cierra y devuelve foco a Cobrar. Controles del ticket de40px. Compilación aprobada.",
+        "Recibos:9 pruebas de autorización/estado en DB aislada y2 unitarias de impresión aprobadas.",
+        "Nombre largo y variante caben en58mm; comprobación visual de impresión, sin impresora física.",
+        "Venta no efectivo confirmada conserva folio aunque falle recibo; reintento sólo consulta. Respuesta POST ambigua no efectivo todavía pendiente.",
+        "Lector usa variante exacta; QA código0012345678901→175. Búsqueda manual separa Chico150/Grande175 y muestra presentación en ticket.",
+        "QA integral:fondo500,venta150,recibido200,cambio50,stock20→19; cortesX/Z650 y diferencia0. Reinicio de sesión exige nuevaapertura."
+      ]
+    },
+    {
+      "id": "T16",
+      "title": "Aplicación del negocio: sesión y operación de caja",
+      "owner": "Agente comercio",
+      "status": "en-revision",
+      "description": "Sesión, recuperación, productos básicos y efectivo recibido/cambio verificados localmente. Paridad completa pendiente.",
+      "security": "Identidad y permisos verificados;19 pruebas de sesión/aislamiento",
+      "responsive": "Visor web360/768/1440 sin desbordamiento; hardware pendiente",
+      "errors": "107 pruebas móviles aprobadas;24 catálogo servidor",
+      "evidence": [
+        "Cobro bloqueado sin caja abierta o cotización válida del servidor.",
+        "61 pruebas móviles: sesión y recuperación de efectivo. Tipos aprobados.",
+        "Cancelación durable y recuperación verificadas en visor web; carrito conservado para recotizar tras cancelar un intento sin venta.",
+        "Alta y edición simple implementadas: QA125.50→fallo→consulta→130; formularios360/768/1440 sin desbordamiento. Variantes/imágenes/categorías avanzadas pendientes.",
+        "Catálogo503 muestra error y reintento; recuperación comprobada sin convertir fallo en lista vacía. Dispositivos físicos y paridad completa aún pendientes.",
+        "QA recibido100 bloquea;200 sobre150 da cambio50. Respuesta perdida recupera los tres importes sin repetir venta.",
+        "Búsqueda móvil separa presentaciones activas; Grande175 seleccionada y cotizada correctamente.",
+        "Usuario sólo consulta:sin alta/guardado; inicio sin caja/reportes no autorizados. QA de permisos aprobada en visor."
+      ]
+    },
+    {
+      "id": "T17",
+      "title": "Anuncios propios del kiosco: archivos y publicación",
+      "owner": "Agente de seguridad + Codex",
+      "status": "en-revision",
+      "description": "Fundación persistente de cargas y cuotas implementada. Carga operativa y reproducción pendientes.",
+      "security": "Separación entre tiendas, cuota atómica y caducidad probadas",
+      "responsive": "Pantallas de carga y reproductor pendientes",
+      "errors": "6 pruebas de servidor aprobadas",
+      "evidence": [
+        "Sesiones idempotentes y cuota retenida hasta confirmar borrado; finalización no publica archivos.",
+        "Migración sólo en base aislada. Faltan almacenamiento real, inspección de archivos y copia inmutable.",
+        "No se consideran videos operativos ni entregados."
+      ]
+    },
+    {
+      "id": "T18",
+      "title": "Productos móviles: alta y edición básica",
+      "owner": "Agente comercio + Codex",
+      "status": "probada",
+      "description": "Alcance: producto por pieza, una variante; nombre, descripción y precio simple. Pruebas locales con datos ficticios.",
+      "security": "Permisos de lectura/creación/edición y guardado atómico",
+      "responsive": "Formulario360/768/1440 comprobado",
+      "errors": "Fallo de catálogo y guardado recuperables;24 pruebas catálogo servidor",
+      "evidence": [
+        "Alta125.50, fallo al editar, consulta de estado y edición130 confirmados en visor.",
+        "Sólo lectura sin alta ni guardar. Variantes avanzadas, imágenes y equipos reales quedan enT16."
+      ]
+    },
+    {
+      "id": "T19",
+      "title": "Caja móvil: recibido, cambio y recuperación",
+      "owner": "Agente comercio + Codex",
+      "status": "probada",
+      "description": "Alcance: efectivo y recuperación con total del servidor, probado en base aislada y visor web.",
+      "security": "Importes persistidos por intento; resultado inconsistente no libera cobro",
+      "responsive": "360/768/1440 comprobado",
+      "errors": "Recibido insuficiente bloquea; respuesta perdida se consulta sin repetir venta",
+      "evidence": [
+        "Total150, recibido200 y cambio50 recuperados tras503 ficticio.",
+        "Forma parte de107 pruebas móviles. Hardware y multipago siguen pendientes enT16."
+      ]
+    },
+    {
+      "id": "T20",
+      "title": "POS: código y selección de presentación",
+      "owner": "Agente seguridad + Codex",
+      "status": "probada",
+      "description": "Alcance: contrato real de búsqueda y elección exacta de variante; visor con datos ficticios.",
+      "security": "Productos/variantes inactivos rechazados y código ambiguo no elige al azar",
+      "responsive": "Búsqueda y ticket comprobados a360",
+      "errors": "27 pruebas catálogo/lector y12 unitarias de búsqueda",
+      "evidence": [
+        "Código0012345678901 selecciona segunda variante175; búsqueda manual separa Chico150/Grande175.",
+        "Conexión de lector físico y certificación de caja completa pendientes enT15."
+      ]
+    },
+    {
+      "id": "T21",
+      "title": "Corte de caja: recorrido integral y concurrencia",
+      "owner": "Agentes seguridad/UI + Codex",
+      "status": "probada",
+      "description": "Alcance: apertura, venta efectivo y cortes X/Z con servidor y DB de prueba.",
+      "security": "Cierre serializado con ventas/movimientos; dobleZ bloqueado",
+      "responsive": "360/768/1440; campos40px y teclado verificados",
+      "errors": "105 regresiones API y37 pruebas UI corte aprobadas",
+      "evidence": [
+        "Fondo500 +venta150 =650; lectura y cierre con diferencia0. Nueva sesión exige apertura.",
+        "RecuperaciónZ consulta servidor sin reenviar. Conciliación de devoluciones posteriores/hardware y liberación completa pendientes."
+      ]
+    },
+    {
+      "id": "T22",
+      "title": "Devoluciones: salida de efectivo y no duplicación",
+      "owner": "Agentes seguridad/UI + Codex",
+      "status": "en-desarrollo",
+      "description": "Exigir caja vigente para reembolso, contabilizar salida y evitar doble reposición/cobro repetido.",
+      "security": "Unificar bloqueo de venta y apertura; validar sucursal",
+      "responsive": "Modal en corrección",
+      "errors": "109 regresiones API aprobadas; clave durable en desarrollo",
+      "evidence": [
+        "Se revisan devoluciones de ventas antiguas y carreras contra cierreZ.",
+        "Cancelación posterior a cierre debe dirigirse a devolución para conservar histórico.",
+        "Pruebas de esta corrección pendientes; no se aprueba liberación comercial.",
+        "Caja requerida, sucursal y bloqueo contraZ corregidos;cancelación con devolución previa bloqueada. Devoluciones online requieren siguiente lote."
+      ]
+    },
+    {
+      "id": "T08",
+      "title": "Liberación comercial",
+      "owner": "Codex",
+      "status": "pendiente",
+      "description": "Cerrar bloqueos, pruebas de dispositivos, pagos y operación del cliente.",
+      "security": "Revisión final pendiente",
+      "responsive": "Compatibilidad real pendiente",
+      "errors": "Recuperación y respaldo pendientes",
+      "evidence": ["Estado actual: no listo para comercializar el paquete completo."]
+    }
+  ],
+  "activity": "working"
+}

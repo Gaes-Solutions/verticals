@@ -1,5 +1,9 @@
 # Plan de liberación — Vertical Retail (meta: 25 de septiembre 2026)
 
+## Actualización vigente — 8-sep-2026
+
+Ver [auditoría y plan de cierre](estado-entrega-tienda-2026-09-08.md). Gaby confirma paridad móvil/web y soporte multiplataforma; no reducir la entrega a Windows ni a apps de consulta. Seguridad y kiosco ya tienen cambios integrados en esta rama: las indicaciones históricas de “sin construir/sin mergear” requieren contrastarse con Git. Migraciones y versión de producción aún deben acreditarse. El kiosco Fase 1 no cubre por sí solo toda la publicidad/periferia/offline. No aplicar recortes de alcance automáticamente a partir de las notas antiguas. La fecha 25-sep se conserva como meta histórica, no como garantía nueva.
+
 > Objetivo: liberar la vertical **Retail** al 100% para **pruebas humanas (piloto)** el
 > **25-sep-2026**, con: web-admin + POS, **app Negocio** (APK), **app Cliente** (APK) y el
 > **kiosko verificador** funcionando; errores encontrados y corregidos, seguridad blindada,

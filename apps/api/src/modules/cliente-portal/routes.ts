@@ -172,7 +172,7 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/me", async (req) => {
     const { clienteId, tenantSlug } = clienteCtx(req);
-    return getClienteMe(getTenantClient(tenantSlug), clienteId);
+    return { ...(await getClienteMe(getTenantClient(tenantSlug), clienteId)), tenantSlug };
   });
 
   app.put("/me", async (req) => {

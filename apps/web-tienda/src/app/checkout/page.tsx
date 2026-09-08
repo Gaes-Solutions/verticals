@@ -2,7 +2,13 @@
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
-import { type CarritoLineaLocal, leerCarrito, sessionId, vaciar } from "@/lib/carrito-store";
+import { type CarritoLineaLocal, leerCarrito, vaciar } from "@/lib/carrito-store";
+import {
+  type CheckoutAttempt,
+  completeAttempt,
+  prepareAttempt,
+  submitAttempt,
+} from "@/lib/checkout-attempt";
 import { CreditCard, ImageOff, Store, Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -68,7 +74,14 @@ export default function CheckoutPage() {
   const [tarifaId, setTarifaId] = useState("");
   const [sucursalId, setSucursalId] = useState("");
   const [cotizando, setCotizando] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  const [errorPickup, setErrorPickup] = useState<string | null>(null);
+  const [cotizacionKey, setCotizacionKey] = useState("");
+  const [pickupSubtotal, setPickupSubtotal] = useState<number | null>(null);
+  const [reintentoEntrega, setReintentoEntrega] = useState(0);
   const [procesando, setProcesando] = useState(false);
+  const [attempt, setAttempt] = useState<CheckoutAttempt | null>(null);
+  const [sessionRetry, setSessionRetry] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,6 +107,24 @@ export default function CheckoutPage() {
     });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/checkout/session", { cache: "no-store" })
+      .then(async (response) => {
+        const data = (await response.json()) as { context?: string; message?: string };
+        if (!response.ok || !data.context)
+          throw new Error(data.message ?? "No se pudo preparar la compra.");
+        const next = await prepareAttempt(data.context);
+        if (active) setAttempt(next);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "No se pudo preparar la compra.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [sessionRetry]);
+
   function usarDireccion(d: DireccionGuardada) {
     setCalle(d.calle);
     setNumero(d.numeroExterior ?? "");
@@ -105,36 +136,77 @@ export default function CheckoutPage() {
 
   const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
 
-  // sucursales con pickup disponibles (no dependen de la dirección)
-  useEffect(() => {
-    if (subtotal === 0) return;
-    fetch(`/api/envios?subtotal=${subtotal}`).then(async (res) => {
-      const cot = (await res.json()) as { pickup: OpcionPickup[] };
-      setPickups(cot.pickup);
-    });
-  }, [subtotal]);
+  const entregaKey = JSON.stringify([cp, estado.trim(), subtotal]);
 
-  // cotiza paquetería cuando hay CP completo + estado
   useEffect(() => {
-    if (cp.length !== 5 || estado.trim().length < 3 || subtotal === 0) {
-      setOpcionesEnvio([]);
-      setTarifaId("");
-      return;
-    }
+    const controller = new AbortController();
+    setPickups([]);
+    setSucursalId("");
+    setPickupSubtotal(null);
+    setErrorPickup(null);
+    if (subtotal === 0) return;
+    fetch(`/api/envios?subtotal=${subtotal}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Entrega no disponible");
+        const cot = (await res.json()) as { pickup: OpcionPickup[] };
+        if (!Array.isArray(cot.pickup)) throw new Error("Cotización inválida");
+        if (controller.signal.aborted) return;
+        setPickups(cot.pickup);
+        setPickupSubtotal(subtotal);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setErrorPickup("No se pudieron consultar las sucursales para recoger tu pedido.");
+        }
+      });
+    return () => controller.abort();
+  }, [subtotal, reintentoEntrega]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setOpcionesEnvio([]);
+    setTarifaId("");
+    setCotizacionKey("");
+    setErrorEnvio(null);
+    setCotizando(false);
+    if (!/^\d{5}$/.test(cp) || estado.trim().length < 3 || subtotal === 0) return;
     setCotizando(true);
     const t = setTimeout(() => {
-      fetch(`/api/envios?cp=${cp}&estado=${encodeURIComponent(estado.trim())}&subtotal=${subtotal}`)
+      fetch(
+        `/api/envios?cp=${cp}&estado=${encodeURIComponent(estado.trim())}&subtotal=${subtotal}`,
+        {
+          signal: controller.signal,
+        },
+      )
         .then(async (res) => {
+          if (!res.ok) throw new Error("Entrega no disponible");
           const cot = (await res.json()) as { opcionesEnvio: OpcionEnvio[] };
+          if (!Array.isArray(cot.opcionesEnvio)) throw new Error("Cotización inválida");
+          if (controller.signal.aborted) return;
           setOpcionesEnvio(cot.opcionesEnvio);
           setTarifaId(cot.opcionesEnvio[0]?.tarifaId ?? "");
+          setCotizacionKey(entregaKey);
         })
-        .finally(() => setCotizando(false));
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setErrorEnvio("No se pudo calcular el envío. Reintenta antes de pagar.");
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setCotizando(false);
+        });
     }, 400);
-    return () => clearTimeout(t);
-  }, [cp, estado, subtotal]);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
+  }, [cp, estado, subtotal, entregaKey, reintentoEntrega]);
 
   const envioSeleccionado = opcionesEnvio.find((o) => o.tarifaId === tarifaId);
+  const entregaLista =
+    modoEntrega === "pickup"
+      ? pickupSubtotal === subtotal && pickups.some((p) => p.sucursalId === sucursalId)
+      : cotizacionKey === entregaKey && !cotizando && Boolean(envioSeleccionado);
   const costoEnvioBase = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
   const cuponOk = cuponInfo?.valido ?? false;
   const descuentoCupon = cuponOk ? Number(cuponInfo?.descuentoSubtotal ?? 0) : 0;
@@ -157,11 +229,16 @@ export default function CheckoutPage() {
     setCuponInfo(r);
   }
   const conektaKey = process.env.NEXT_PUBLIC_CONEKTA_PUBLIC_KEY ?? "";
+  const permiteDemo = process.env.NODE_ENV !== "production";
   // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
   const msiOfrecibles =
     config?.msiHabilitado && total >= Number(config.msiMontoMinimo) ? config.msiMeses : [];
 
   function validar(): boolean {
+    if (!entregaLista) {
+      setError("Selecciona una opción de entrega disponible antes de pagar.");
+      return false;
+    }
     if (!email.trim() || !nombre.trim()) {
       setError("Completa tu correo y nombre");
       return false;
@@ -180,59 +257,116 @@ export default function CheckoutPage() {
     return true;
   }
 
+  async function handleCheckoutResponse(response: Response, current: CheckoutAttempt) {
+    const data = (await response.json()) as {
+      message?: string;
+      intentStatus?: string;
+      folioPublico?: string;
+    };
+    if (!response.ok)
+      throw new Error(data.message ?? "Estamos verificando el pago. No vuelvas a pagar.");
+    if (data.intentStatus !== "confirmado" || !data.folioPublico) {
+      setError(
+        data.intentStatus === "fallido"
+          ? "Este intento no pudo completarse. Contacta a la tienda antes de iniciar otro pago."
+          : "Tu pago sigue pendiente de confirmación. Consulta este mismo intento; no vuelvas a pagar.",
+      );
+      return;
+    }
+    if (guardarDir && modoEntrega === "envio") {
+      await fetch("/api/cuenta/direcciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          etiqueta: "Mi dirección",
+          calle,
+          numeroExterior: numero || undefined,
+          colonia: colonia || undefined,
+          municipio: ciudad || undefined,
+          estado,
+          codigoPostal: cp,
+        }),
+      }).catch(() => {});
+    }
+    await completeAttempt(current, vaciar);
+    router.push(
+      `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}`,
+    );
+  }
+
+  async function consultarPedido() {
+    if (!attempt) return;
+    setProcesando(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ context: attempt.context, idempotencyKey: attempt.key });
+      const response = await fetch(`/api/checkout?${params}`, { cache: "no-store" });
+      await handleCheckoutResponse(response, attempt);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo consultar el pago. Tu intento se conserva.",
+      );
+    } finally {
+      setProcesando(false);
+    }
+  }
+
   async function procesarPedido(cardTokenId?: string, meses?: number | null) {
+    if (!attempt || procesando) return;
+    if (attempt.submitted) {
+      await consultarPedido();
+      return;
+    }
+    if (!cardTokenId && !permiteDemo) {
+      setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
+      return;
+    }
     if (!validar()) return;
     setProcesando(true);
     setError(null);
     try {
-      const res = await fetch("/api/checkout", {
+      const firstSubmission = await submitAttempt(attempt);
+      const current = { ...attempt, submitted: true };
+      setAttempt(current);
+      if (!firstSubmission) {
+        const params = new URLSearchParams({
+          context: current.context,
+          idempotencyKey: current.key,
+        });
+        await handleCheckoutResponse(
+          await fetch(`/api/checkout?${params}`, { cache: "no-store" }),
+          current,
+        );
+        return;
+      }
+      const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionIdAnonimo: sessionId(),
+          checkoutContext: current.context,
+          idempotencyKey: current.key,
           emailComprador: email,
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
           ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
-          ...(cardTokenId ? { cardTokenId, proveedorPago: "conekta" } : {}),
+          ...(cardTokenId ? { cardTokenId } : {}),
           ...(meses ? { mesesSinIntereses: meses } : {}),
           ...(modoEntrega === "pickup"
             ? { sucursalPickupId: sucursalId }
             : {
                 ...(tarifaId ? { tarifaEnvioId: tarifaId } : {}),
-                direccionEnvio: {
-                  nombre,
-                  calle,
-                  numero,
-                  colonia,
-                  ciudad,
-                  estado,
-                  cp,
-                },
+                direccionEnvio: { nombre, calle, numero, colonia, ciudad, estado, cp },
               }),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? "Error en el pago");
-      if (guardarDir && modoEntrega === "envio") {
-        await fetch("/api/cuenta/direcciones", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            etiqueta: "Mi dirección",
-            calle,
-            numeroExterior: numero || undefined,
-            colonia: colonia || undefined,
-            municipio: ciudad || undefined,
-            estado,
-            codigoPostal: cp,
-          }),
-        }).catch(() => {});
-      }
-      vaciar();
-      router.push(`/gracias?folio=${data.folioPublico}&email=${encodeURIComponent(email)}`);
+      await handleCheckoutResponse(response, current);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
+      setError(
+        err instanceof Error ? err.message : "Estamos verificando el pago. No vuelvas a pagar.",
+      );
+    } finally {
       setProcesando(false);
     }
   }
@@ -305,6 +439,19 @@ export default function CheckoutPage() {
           )}
         </div>
 
+        {errorPickup && (
+          <div role="alert" className="space-y-2 text-danger text-sm">
+            <p>{errorPickup}</p>
+            <button
+              type="button"
+              className="gx-btn-secondary"
+              onClick={() => setReintentoEntrega((n) => n + 1)}
+            >
+              Reintentar entrega
+            </button>
+          </div>
+        )}
+
         {modoEntrega === "envio" ? (
           <>
             {direcciones.length > 0 && (
@@ -346,6 +493,8 @@ export default function CheckoutPage() {
               tarifaId={tarifaId}
               onSelect={setTarifaId}
               cotizando={cotizando}
+              error={errorEnvio}
+              onRetry={() => setReintentoEntrega((n) => n + 1)}
               direccionLista={cp.length === 5 && estado.trim().length >= 3}
             />
             <label className="flex items-center gap-2 text-gray-600 text-sm">
@@ -423,55 +572,107 @@ export default function CheckoutPage() {
           )}
           <div className="mb-2 flex justify-between text-gray-600 text-sm">
             <span>Envío</span>
-            <span>{costoEnvio === 0 ? "Gratis" : `$${costoEnvio.toFixed(2)}`}</span>
+            <span>
+              {!entregaLista
+                ? "Por confirmar"
+                : costoEnvio === 0
+                  ? "Gratis"
+                  : `$${costoEnvio.toFixed(2)}`}
+            </span>
           </div>
           <div className="mb-4 flex justify-between text-lg font-bold">
-            <span>Total a pagar</span>
+            <span>{entregaLista ? "Total a pagar" : "Subtotal con descuentos"}</span>
             <span className="text-marca">${total.toFixed(2)}</span>
           </div>
           {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">{error}</p>}
 
-          {conektaKey ? (
-            <PagoTarjetaConekta
-              publicKey={conektaKey}
-              montoTotal={total}
-              msiMeses={msiOfrecibles}
-              procesando={procesando}
-              onPagar={(token, meses) => procesarPedido(token, meses)}
-            />
-          ) : (
-            <>
-              {msiOfrecibles.length > 0 && (
-                <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                  <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
-                    <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
-                  </p>
-                  <div className="space-y-1 text-gray-600 text-sm">
-                    {[...msiOfrecibles]
-                      .sort((a, b) => a - b)
-                      .map((m) => (
-                        <div key={m} className="flex justify-between">
-                          <span>{m} pagos de</span>
-                          <span className="font-semibold">${(total / m).toFixed(2)}</span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+          {!entregaLista && (
+            <output className="mb-3 block text-sm text-slate-600">
+              Confirma una opción de entrega para habilitar el pago.
+            </output>
+          )}
+          {!attempt && (
+            <div className="mb-3 space-y-2 text-sm text-slate-600">
+              <p>Preparando sesión segura de compra…</p>
               <button
                 type="button"
-                onClick={() => procesarPedido()}
-                disabled={procesando}
-                className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
+                className="gx-btn-secondary"
+                onClick={() => setSessionRetry((n) => n + 1)}
               >
-                {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+                Reintentar sesión
               </button>
-              <p className="mt-2 text-center text-gray-400 text-xs">
-                Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar de
-                verdad con MSI.
-              </p>
-            </>
+            </div>
           )}
+          {attempt?.submitted && (
+            <div className="mb-3 space-y-2 text-sm text-slate-600">
+              <p>
+                Hay un intento de compra por verificar. El carrito se conserva hasta confirmar el
+                pago.
+              </p>
+              <button
+                type="button"
+                className="gx-btn-secondary"
+                disabled={procesando}
+                onClick={consultarPedido}
+              >
+                {procesando ? "Consultando…" : "Consultar estado del pago"}
+              </button>
+            </div>
+          )}
+          <fieldset
+            disabled={!entregaLista || !attempt || attempt.submitted || procesando}
+            className="min-w-0"
+          >
+            {conektaKey ? (
+              <PagoTarjetaConekta
+                publicKey={conektaKey}
+                montoTotal={total}
+                msiMeses={msiOfrecibles}
+                procesando={procesando}
+                onPagar={(token, meses) => procesarPedido(token, meses)}
+              />
+            ) : permiteDemo ? (
+              <>
+                {msiOfrecibles.length > 0 && (
+                  <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+                    <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
+                      <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
+                    </p>
+                    <div className="space-y-1 text-gray-600 text-sm">
+                      {[...msiOfrecibles]
+                        .sort((a, b) => a - b)
+                        .map((m) => (
+                          <div key={m} className="flex justify-between">
+                            <span>{m} pagos de</span>
+                            <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => procesarPedido()}
+                  disabled={procesando}
+                  className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
+                >
+                  {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+                </button>
+                <p className="mt-2 text-center text-gray-400 text-xs">
+                  Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar
+                  de verdad con MSI.
+                </p>
+              </>
+            ) : (
+              <p
+                role="alert"
+                className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                El pago en línea no está disponible en este momento. Tu carrito se conserva para que
+                puedas intentarlo más tarde.
+              </p>
+            )}
+          </fieldset>
         </div>
       </div>
     </div>
@@ -484,12 +685,16 @@ function OpcionesEnvio({
   onSelect,
   cotizando,
   direccionLista,
+  error,
+  onRetry,
 }: {
   opciones: OpcionEnvio[];
   tarifaId: string;
   onSelect: (id: string) => void;
   cotizando: boolean;
   direccionLista: boolean;
+  error: string | null;
+  onRetry: () => void;
 }) {
   if (!direccionLista) {
     return <p className="text-xs text-gray-400">Completa estado y CP para cotizar el envío.</p>;
@@ -497,11 +702,21 @@ function OpcionesEnvio({
   if (cotizando) {
     return <p className="text-xs text-gray-400">Cotizando envío…</p>;
   }
+  if (error) {
+    return (
+      <div role="alert" className="space-y-2 text-danger text-sm">
+        <p>{error}</p>
+        <button type="button" className="gx-btn-secondary" onClick={onRetry}>
+          Reintentar envío
+        </button>
+      </div>
+    );
+  }
   if (opciones.length === 0) {
     return (
       <p className="text-xs text-gray-500">
-        Sin tarifas para tu zona — la tienda coordinará el envío contigo (sin costo adicional al
-        pagar).
+        No hay opciones de envío disponibles para esta dirección. Verifica el código postal y
+        estado, elige recoger en tienda o contacta al negocio antes de pagar.
       </p>
     );
   }

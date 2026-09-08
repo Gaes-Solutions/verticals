@@ -3587,6 +3587,7 @@ enum TiendaModo {
 }
 
 model ConfigTiendaEcommerce {
+  envioVarianteId String? @map("envio_variante_id")
   id                             String     @id @default(cuid())
   activa                         Boolean    @default(false)
   subdominio                     String     @unique
@@ -3755,6 +3756,8 @@ model CarritoEcommerce {
 }
 
 model PedidoEcommerce {
+  postPagoEffects PedidoPostPagoEffect[]
+  snapshotComercial Json? @map("snapshot_comercial")
   id               String                     @id @default(cuid())
   folioPublico     String                     @unique @map("folio_publico")
   carritoOrigenId  String?                    @map("carrito_origen_id")
@@ -4837,4 +4840,102 @@ model KioskoConfig {
   updatedAt         DateTime        @updatedAt @map("updated_at")
 
   @@map("kiosko_config")
+}
+
+/// Durable claim before contacting a payment provider; scoped by tenant schema.
+model CheckoutAttempt {
+  key             String   @id
+  requestHash     String   @map("request_hash")
+  carritoId       String   @unique @map("carrito_id")
+  requestedBy     String   @map("requested_by")
+  status          String   @default("processing")
+  pedidoId        String?  @unique @map("pedido_id")
+  result          Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("checkout_attempts")
+}
+
+model PedidoPostPagoEffect {
+  id            String   @id @default(cuid())
+  pedidoId      String   @map("pedido_id")
+  tipo          String
+  status        String   @default("pending")
+  claimToken    String?  @map("claim_token")
+  attempts      Int      @default(0)
+  result        Json?
+  errorCode     String?  @map("error_code")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  pedido        PedidoEcommerce @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@unique([pedidoId, tipo])
+  @@index([status, nextAttemptAt])
+  @@map("pedido_post_pago_effects")
+}
+
+model VentaAttempt {
+  id String @id @default(cuid())
+  key String
+  usuarioId String @map("usuario_id")
+  status String @default("ready")
+  requestHash String? @map("request_hash")
+  ventaId String? @unique @map("venta_id")
+  result Json?
+  cancelledAt DateTime? @map("cancelled_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([usuarioId, key])
+  @@map("venta_attempts")
+}
+
+model KioskoMediaAsset {
+  id String @id
+  tenantId String @map("tenant_id")
+  createdBy String @map("created_by")
+  storageKey String @unique @map("storage_key")
+  declaredMime String @map("declared_mime")
+  status String @default("uploading")
+  verifiedMetadata Json? @map("verified_metadata")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  upload KioskoMediaUpload?
+  @@map("kiosko_media_assets")
+}
+
+model KioskoMediaUpload {
+  id String @id
+  tenantId String @map("tenant_id")
+  createdBy String @map("created_by")
+  requestKey String @map("request_key")
+  requestHash String @map("request_hash")
+  assetId String @unique @map("asset_id")
+  declaredBytes Int @map("declared_bytes")
+  status String @default("uploading")
+  expiresAt DateTime @map("expires_at")
+  inspectionRequestedAt DateTime? @map("inspection_requested_at")
+  storageReleasedAt DateTime? @map("storage_released_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  asset KioskoMediaAsset @relation(fields:[assetId], references:[id], onDelete:Restrict)
+  @@unique([createdBy,requestKey])
+  @@index([tenantId,status,expiresAt])
+  @@map("kiosko_media_uploads")
+}
+
+model DevolucionAttempt {
+  id String @id @default(cuid())
+  key String
+  usuarioId String @map("usuario_id")
+  status String @default("ready")
+  requestHash String? @map("request_hash")
+  devolucionId String? @unique @map("devolucion_id")
+  result Json?
+  cancelledAt DateTime? @map("cancelled_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([usuarioId, key])
+  @@map("devolucion_attempts")
 }

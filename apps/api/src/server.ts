@@ -5,6 +5,7 @@ import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
 import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
+import { startPostPagoScheduler } from "./jobs/post-pago-scheduler.js";
 import { startRecordatoriosScheduler } from "./jobs/recordatorios-scheduler.js";
 import { initSentry } from "./observability/sentry.js";
 
@@ -40,6 +41,8 @@ async function main(): Promise<void> {
     app.log.warn("⚠️  SHIPPING_PROVIDER=mock — usando MockShippingProvider (no apto producción)");
   }
 
+  const stopPostPagoScheduler = startPostPagoScheduler(app);
+
   let stopFlowsScheduler: (() => void) | undefined;
   if (config.FLOWS_SCHEDULER_ENABLED) {
     stopFlowsScheduler = startFlowsScheduler(app.log, config.FLOWS_RUN_INTERVAL_MIN);
@@ -59,6 +62,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "shutdown signal received");
     try {
+      stopPostPagoScheduler();
       stopFlowsScheduler?.();
       stopRecordatoriosScheduler?.();
       await app.close();
