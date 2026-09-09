@@ -114,3 +114,29 @@ Admin: alta usuario+rol · 2FA · reportes.
   Problema de certificado/dominio custom en Railway, PREEXISTENTE (no del deploy). Son verticales
   de **Salud**, NO Retail → no bloquea el piloto del 25-sep, pero arreglar antes de lanzar Salud
   (revisar Custom Domain + SSL de web-clinical y web-marketplace en Railway).
+
+## 10. Hallazgos 8-sep (rama `trabajo/codex-tienda-08sep`)
+
+**Batería de pruebas en verde: 1004/1004.** Los ~40 fallos previos no eran bugs nuevos:
+las pruebas afirmaban el comportamiento anterior al endurecimiento de la auditoría
+(TOTP de un solo uso, cobro conciliado por webhook, consent PHR, sesión de paciente en
+marketplace, dosis en cero). Se actualizaron al contrato nuevo y se agregó cobertura de
+los dos fraudes que ahora se bloquean.
+
+**Migraciones listas para prod (7, todas de tenant, todas aditivas):**
+`checkout_attempts`, `checkout_commercial_snapshot`, `post_pago_effects`, `venta_attempts`,
+`venta_attempt_cancelled`, `kiosko_media_foundation`, `devolucion_attempts`.
+Sin DROP, sin ALTER COLUMN, sin UPDATE/DELETE; las 3 columnas nuevas son nulas o con default.
+Aplicadas y verificadas en la base local. No hay migraciones de master nuevas.
+Orden: aplicar migraciones ANTES del merge (expand-then-deploy).
+
+**Sin ruptura de contrato para las APKs ya instaladas:** `idempotencyKey` es opcional en
+`POST /t/ventas`; no hay variables de entorno nuevas requeridas.
+
+### 🔴 BLOQUEANTE NUEVO para el happy path "emitir factura"
+La emisión de CFDI ahora exige claves SAT congeladas en el producto
+(`claveSat`, `claveUnidadSat`); sin ellas responde `409 FISCAL_RECONCILIATION_REQUIRED`.
+Esos campos existen en la API pero **ninguna pantalla los expone**: ni web-admin, ni POS,
+ni la app Negocio, ni el importador CSV. En prod hay 2 productos demo sin claves y 0 CFDIs
+emitidos, así que no se rompe nada en uso, pero **facturar no funcionará hasta exponer el
+campo**. Tarea previa al piloto: agregar claves SAT al alta/edición de producto y al CSV.
