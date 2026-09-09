@@ -537,7 +537,7 @@ describe("CFDI Egreso sobre venta facturada", () => {
       claveProdServ: "50181900",
       claveUnidad: "H87",
       ivaBase: "100.000000",
-      ivaImporte: "16.000000",
+      ivaImporte: "16.00",
       tasaIva: "0.160000",
     });
 

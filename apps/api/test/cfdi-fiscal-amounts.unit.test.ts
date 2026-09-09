@@ -49,7 +49,7 @@ describe("frozen fiscal amounts", () => {
       claveUnidad: "E48",
       valorUnitario: "100.000000",
       ivaBase: "100.000000",
-      ivaImporte: "16.000000",
+      ivaImporte: "16.00",
     });
   });
   it("distinguishes taxable zero from undefined exemption", () => {
@@ -91,7 +91,7 @@ describe("frozen fiscal amounts", () => {
     expect(result.conceptos[0]).toMatchObject({
       iepsBase: "100.000000",
       tasaIeps: "0.080000",
-      iepsImporte: "8.000000",
+      iepsImporte: "8.00",
       ivaBase: "108.000000",
       iepsCuota: false,
     });
@@ -145,11 +145,56 @@ describe("frozen fiscal amounts", () => {
       total: "104.40",
     });
     expect(result.conceptos[0]).toMatchObject({
-      importe: "100.000000",
-      descuento: "10.000000",
+      importe: "100.00",
+      descuento: "10.00",
       ivaBase: "90.000000",
     });
   });
+  // La identidad que el SAT valida sin tolerancia sobre los importes ya
+  // redondeados. Antes se redondeaba cada componente por su cuenta y el
+  // comprobante podía salir descuadrado por un centavo.
+  it.each([
+    { desc: "descuento de línea con residuo", sub: "12.15", iva: "1.6759", desc2: "1.35" },
+    { desc: "precio con centavo impar", sub: "13.33", iva: "1.8386", desc2: "0" },
+    { desc: "tres decimales al prorratear", sub: "99.99", iva: "13.7917", desc2: "0.01" },
+  ])("cuadra la identidad del comprobante: $desc", ({ sub, iva, desc2 }) => {
+    const r = buildFiscalAmounts(
+      sale(
+        [line({ subtotal: sub, ivaTotal: iva, descuentoUnitario: desc2 })],
+        sub,
+        iva,
+        "0",
+        desc2,
+      ),
+    );
+    const identidad = Number(r.subtotal) - Number(r.descuento) + Number(r.iva) + Number(r.ieps);
+    expect(identidad.toFixed(2)).toBe(r.total);
+    // Y el encabezado debe ser exactamente la suma de los conceptos.
+    const sumaImportes = r.conceptos.reduce((a, c) => a + Number(c.importe), 0);
+    expect(sumaImportes.toFixed(2)).toBe(r.subtotal);
+  });
+
+  it("factura una venta con descuento de ticket (cupón sobre el total)", () => {
+    // Dos líneas de 58.00 y un cupón de 16.00 sobre el ticket: el motor de
+    // precios baja el total pero NO el subtotal de las líneas. Antes esto era
+    // 409 permanente y ninguna venta con cupón se podía facturar.
+    const r = buildFiscalAmounts(
+      sale(
+        [line({ subtotal: "58", ivaTotal: "8" }), line({ subtotal: "58", ivaTotal: "8" })],
+        "100",
+        "16",
+        "0",
+        "16",
+      ),
+    );
+    expect(r.total).toBe("100.00");
+    expect(r.descuento).toBe("16.00");
+    const identidad = Number(r.subtotal) - Number(r.descuento) + Number(r.iva);
+    expect(identidad.toFixed(2)).toBe("100.00");
+    // El descuento del ticket se reparte entre las dos líneas, no cae en una.
+    expect(r.conceptos.map((c) => c.descuento)).toEqual(["8.00", "8.00"]);
+  });
+
   it.each([
     line({ snapshotProducto: {} }),
     line({ snapshotProducto: { ...snapshot, tasaIva: "8" } }),

@@ -99,15 +99,19 @@ export async function emitirCfdi(
   const cfg = await client.cfdiConfig.findFirst();
   if (!cfg || !cfg.isActive) throw new CfdiError(409, "CFDI no configurado o inactivo");
 
-  const sf = await nextFolio(client);
+  // Validar ANTES de tomar el folio. Al revés, cualquier rechazo fiscal quemaba
+  // un folio y dejaba un hueco permanente e ilocalizable en la numeración. El
+  // flujo de notas de crédito ya lo hacía en este orden.
   let payload: FiscalEmitirInput;
   try {
-    payload = buildFiscalPayload(cfg, venta, input, sf);
+    payload = buildFiscalPayload(cfg, venta, input, { serie: cfg.serieDefault, folio: "0" });
   } catch (error) {
     if (error instanceof FiscalSnapshotError)
       throw new CfdiError(error.statusCode, error.message, { code: error.code });
     throw error;
   }
+  const sf = await nextFolio(client);
+  payload = { ...payload, serie: sf.serie, folio: sf.folio };
   const cfdi = await client.cfdi.create({
     data: {
       ventaId: venta.id,
