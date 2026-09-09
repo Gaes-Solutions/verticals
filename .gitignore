@@ -62,3 +62,8 @@ prisma/migrations/dev/
 # Respaldos de base de datos: contienen datos personales de clientes
 *.dump
 respaldos-gaespos/
+
+# Playwright
+tests/e2e/test-results/
+test-results/
+playwright-report/

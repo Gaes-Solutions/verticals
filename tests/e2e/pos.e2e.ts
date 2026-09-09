@@ -25,12 +25,16 @@ test.beforeEach(async ({ page }) => {
   await page.getByLabel("Caja").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Consultar estado de caja" }).click();
 
+  // La consulta es asíncrona: hay que esperar a saber si la caja quedó abierta
+  // de una corrida anterior o si toca abrirla con su fondo.
+  const entrarAVender = page.getByRole("button", { name: "Entrar a vender" });
   const abrir = page.getByRole("button", { name: "Abrir caja con este fondo" });
-  if (await abrir.isVisible().catch(() => false)) {
+  await expect(entrarAVender.or(abrir)).toBeVisible();
+  if (await abrir.isVisible()) {
     await page.getByPlaceholder("Escribe el efectivo contado").fill("1000");
     await abrir.click();
   }
-  await page.getByRole("button", { name: "Entrar a vender" }).click();
+  await entrarAVender.click();
   await expect(page.getByPlaceholder("Buscar producto o escanear código…")).toBeVisible();
 });
 
@@ -51,7 +55,18 @@ test("el cajero cobra una venta en efectivo y el ticket queda limpio", async ({ 
   // El modal propone el importe exacto como recibido; se confirma tal cual.
   await page.getByRole("button", { name: "Confirmar" }).click();
 
-  // Cobrada la venta, el ticket vuelve a cero y el botón de cobrar se apaga.
+  // El cobro en efectivo pasa por la verificación del intento durable, que es
+  // lo que evita cobrar dos veces si se cae la red a media venta.
+  await expect(page.getByRole("heading", { name: "Verificar cobro en efectivo" })).toBeVisible();
+
+  // El folio y el estado son la prueba de que la venta se persistió, no de que
+  // la pantalla cambió.
+  await expect(page.getByRole("status")).toContainText("cobrada");
+  await expect(page.getByRole("status")).toContainText("128");
+
+  // Y el cajero puede arrancar la siguiente venta con el ticket en cero.
+  await page.getByRole("button", { name: "Iniciar nueva venta" }).click();
+  await expect(page.getByPlaceholder("Buscar producto o escanear código…")).toBeVisible();
   await expect(page.getByRole("button", { name: /Cobrar/ })).toBeDisabled();
 });
 

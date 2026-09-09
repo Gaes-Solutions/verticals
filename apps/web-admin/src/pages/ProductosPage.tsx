@@ -434,11 +434,16 @@ function ProductoModal({
   );
 }
 
+// <label> y no <div>: envolver el control asocia la etiqueta con él, así el
+// lector de pantalla la anuncia y tocar el texto enfoca el campo.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="block">
+    // La asociación es real, pero llega por children y la regla estática no puede
+    // verla: las pruebas de navegador localizan estos campos por su etiqueta.
+    // biome-ignore lint/a11y/noLabelWithoutControl: el control viene en children
+    <label className="block">
       <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
