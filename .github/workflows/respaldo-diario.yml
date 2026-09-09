@@ -1,0 +1,65 @@
+name: Respaldo diario de producción
+
+# Railway solo ofrece respaldos automáticos en su plan Pro, así que este flujo
+# es la red de seguridad. Corre en GitHub, o sea FUERA de Railway: si un día se
+# pierde el acceso a esa cuenta, los respaldos siguen existiendo.
+#
+# El archivo se cifra antes de subirse: contiene datos personales de clientes y
+# un artefacto de GitHub no es lugar para tenerlos en claro.
+
+on:
+  schedule:
+    # 09:00 UTC = 3:00 de la mañana en el centro de México. Fuera de horario de
+    # venta, para no competir con la operación de las tiendas.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  respaldar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Verificar que existan los secretos
+        env:
+          URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+          FRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$URL" ]; then echo "Falta el secreto DATABASE_PUBLIC_URL"; exit 1; fi
+          if [ -z "$FRASE" ]; then echo "Falta el secreto BACKUP_PASSPHRASE"; exit 1; fi
+
+      - name: Generar el respaldo
+        env:
+          URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+        run: |
+          # Producción corre Postgres 18 y pg_dump se niega a leer un servidor
+          # más nuevo que él, por eso el cliente sale de la imagen 18.
+          docker run --rm -e PGURL="$URL" postgres:18-alpine \
+            sh -c 'pg_dump -Fc --no-owner --no-privileges "$PGURL"' > respaldo.dump
+          ls -lh respaldo.dump
+
+      - name: Cifrar
+        env:
+          FRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$FRASE" -o respaldo.dump.gpg respaldo.dump
+          rm -f respaldo.dump
+          echo "NOMBRE=gaespos-$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+
+      - name: Guardar
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NOMBRE }}
+          path: respaldo.dump.gpg
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Resumen
+        run: |
+          echo "### Respaldo del $(date -u +%d/%m/%Y) listo" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Se conserva 14 días. Para restaurarlo:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo 'gpg --decrypt respaldo.dump.gpg > respaldo.dump' >> "$GITHUB_STEP_SUMMARY"
+          echo 'bash scripts/restore-ensayo.sh respaldo.dump' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

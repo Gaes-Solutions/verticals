@@ -83,14 +83,38 @@ migraciones del proyecto son aditivas: la versión anterior del código ignora l
 columnas nuevas y sigue funcionando. Nunca metas una migración que borre o renombre sin un plan
 de dos pasos.
 
-## Lo que falta confirmar en el panel de Railway
+## Respaldo automático diario (9-sep)
 
-Desde la terminal no se puede ver si los respaldos automáticos del servicio Postgres están
-encendidos. Hay que entrar al panel, servicio Postgres, sección de respaldos, y confirmar:
+**Railway no ofrece respaldos automáticos en este plan.** Su panel lo dice: programación y
+recuperación a un punto en el tiempo son exclusivas del plan Pro. Lo único que había era un
+respaldo manual suelto de hace semanas.
 
-- que están activados,
-- cada cuánto corren,
-- cuántos días se conservan.
+La red de seguridad quedó en **GitHub Actions**: `.github/workflows/respaldo-diario.yml` corre
+todos los días a las 3 de la mañana del centro de México, cifra el archivo y lo guarda 14 días.
 
-Los scripts de arriba son el respaldo que sí controlamos y que ya está probado. Los automáticos
-de Railway son la segunda red, no la primera.
+Corre **fuera de Railway** a propósito: si un día se pierde el acceso a esa cuenta, los
+respaldos siguen existiendo. Y va cifrado porque un artefacto de GitHub no es lugar para datos
+personales en claro.
+
+Necesita dos secretos en el repositorio, en Settings → Secrets and variables → Actions:
+
+| Secreto | De dónde sale |
+|---|---|
+| `DATABASE_PUBLIC_URL` | Railway → servicio Postgres → Variables |
+| `BACKUP_PASSPHRASE` | una frase larga que inventes y guardes en tu gestor de contraseñas |
+
+**Si pierdes la frase, el respaldo no sirve para nada.** No hay forma de descifrarlo sin ella.
+
+Para restaurar uno de esos archivos:
+
+```bash
+gpg --decrypt respaldo.dump.gpg > respaldo.dump
+bash scripts/restore-ensayo.sh respaldo.dump
+```
+
+### Cuándo conviene pagar el plan Pro
+
+Lo de arriba da un respaldo al día. El plan Pro de Railway da recuperación a un punto en el
+tiempo, es decir volver a cualquier segundo, no solo a la última medianoche. Cuando el piloto
+esté moviendo dinero real todos los días, la diferencia entre perder un día de ventas y perder
+un minuto justifica el costo.
