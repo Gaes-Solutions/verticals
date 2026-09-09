@@ -423,7 +423,7 @@ describe("sale quantity persistence boundaries", () => {
           })
         ).stockActual.toString(),
       };
-      for (const url of ["/t/ventas", "/t/ventas/preview", "/t/listas-precios/preview"]) {
+      for (const url of ["/t/ventas", "/t/ventas/preview", "/t/precios/preview"]) {
         const res = await app.inject({
           method: "POST",
           url,
