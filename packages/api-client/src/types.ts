@@ -33,7 +33,11 @@ export interface ClienteSession {
 }
 
 export interface LoginCredentials {
-  tenantSlug: string;
+  /**
+   * Opcional: el servidor resuelve el negocio a partir del correo. Solo se
+   * manda cuando la persona trabaja en más de uno y ya eligió cuál.
+   */
+  tenantSlug?: string;
   email: string;
   password: string;
 }

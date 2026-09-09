@@ -12,6 +12,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Cuerpo de la respuesta: algunos errores traen datos que la UI necesita. */
+    public readonly data?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -106,7 +108,7 @@ export async function api<T = unknown>(
       res.status >= 500
         ? "El servicio no está disponible. Verifica el resultado antes de repetir una operación."
         : (publicMessage ?? `Error ${res.status}`);
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, data);
   }
   return data as T;
 }

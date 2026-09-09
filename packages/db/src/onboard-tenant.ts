@@ -29,6 +29,29 @@ function generarPassword(): string {
   return `Gaes-${randomBytes(6).toString("hex")}!9`;
 }
 
+/**
+ * Mete al usuario en el índice de correo → negocio. Sin esto, el dueño de un
+ * negocio recién dado de alta tendría que escribir el slug para poder entrar,
+ * que es justo lo que el login dejó de pedir.
+ */
+async function indexarEnDirectorio(slug: string, usuarioId: string, email: string): Promise<void> {
+  try {
+    const tenant = await masterPrisma.tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!tenant) return;
+    const correo = email.trim().toLowerCase();
+    await masterPrisma.usuarioDirectorio.upsert({
+      where: { email_tenantId: { email: correo, tenantId: tenant.id } },
+      create: { email: correo, tenantId: tenant.id, usuarioId, activo: true },
+      update: { usuarioId, activo: true },
+    });
+  } catch {
+    // El alta del negocio no debe fallar por el índice.
+  }
+}
+
 /** Crea (o reusa) el usuario dueño del tenant con el rol `dueno`. Idempotente. */
 async function crearUsuarioDueno(
   slug: string,
@@ -55,6 +78,7 @@ async function crearUsuarioDueno(
     update: {},
     create: { usuarioId: usuario.id, rolId: rol.id },
   });
+  await indexarEnDirectorio(slug, usuario.id, input.email);
   return usuario.id;
 }
 

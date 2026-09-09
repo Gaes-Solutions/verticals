@@ -184,6 +184,20 @@ export async function createTenantUser(
       roles: { create: [{ rolId: rol.id }] },
     },
   });
+  // El login real ya no pide el negocio: lo resuelve por el correo contra este
+  // índice. Un usuario de prueba que no esté aquí no podría entrar.
+  const tenant = await masterPrisma.tenant.findUnique({
+    where: { slug: tenantSlug },
+    select: { id: true },
+  });
+  if (tenant) {
+    const correo = opts.email.trim().toLowerCase();
+    await masterPrisma.usuarioDirectorio.upsert({
+      where: { email_tenantId: { email: correo, tenantId: tenant.id } },
+      create: { email: correo, tenantId: tenant.id, usuarioId: usuario.id, activo: true },
+      update: { usuarioId: usuario.id, activo: true },
+    });
+  }
   return { id: usuario.id, email: opts.email, password: opts.password };
 }
 

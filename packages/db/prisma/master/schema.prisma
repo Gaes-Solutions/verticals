@@ -102,6 +102,7 @@ model Tenant {
   @@index([partnerId])
   @@index([deletedAt])
   @@map("tenants")
+  usuarioDirectorio UsuarioDirectorio[]
 }
 
 enum TenantStatus {
@@ -1305,6 +1306,32 @@ model TenantUserAdmin {
   @@unique([tenantId, email])
   @@index([email])
   @@map("tenant_users_admin")
+}
+
+/**
+ * Índice de correo → tenant para poder iniciar sesión SIN pedir el slug del
+ * negocio. Los usuarios operativos viven en el schema de cada tenant, así que
+ * sin este directorio la única forma de encontrarlos sería recorrer todos los
+ * schemas en cada login.
+ *
+ * Guarda solo lo indispensable para resolver a qué negocio pertenece un correo:
+ * ni contraseña, ni nombre, ni permisos. La autenticación sigue ocurriendo
+ * contra el usuario real dentro del schema del tenant.
+ */
+model UsuarioDirectorio {
+  id        String   @id @default(cuid())
+  email     String
+  tenantId  String   @map("tenant_id")
+  usuarioId String   @map("usuario_id")
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([email, tenantId])
+  @@index([email])
+  @@map("usuario_directorio")
 }
 
 model TenantSettingsMaster {

@@ -7,7 +7,6 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 
 export default function Login() {
   const { status, error, login, submitMfa, restore, logout } = useAuth();
-  const [tenant, setTenant] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -77,15 +76,6 @@ export default function Login() {
           ) : (
             <>
               <Input
-                label="Negocio"
-                icon="business"
-                value={tenant}
-                onChangeText={setTenant}
-                placeholder="mi-negocio"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Input
                 label="Correo"
                 icon="mail"
                 value={email}
@@ -107,7 +97,7 @@ export default function Login() {
                 label="Entrar"
                 icon="log-in"
                 busy={busy}
-                onPress={() => run(() => login(tenant.trim(), email.trim(), password))}
+                onPress={() => run(() => login(email.trim(), password))}
               />
             </>
           )}

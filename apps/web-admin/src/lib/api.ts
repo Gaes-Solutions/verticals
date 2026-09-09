@@ -10,6 +10,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Cuerpo de la respuesta: algunos errores traen datos que la UI necesita. */
+    public readonly data?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -121,7 +123,7 @@ export async function api<T = unknown>(
       window.location.reload();
     }
     const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, data);
   }
   return data as T;
 }
@@ -131,6 +133,8 @@ export async function api<T = unknown>(
 export interface SesionTenant {
   accessToken: string;
   user: { id: string; nombre: string; permissions: string[]; isOwner: boolean };
+  /** El servidor dice a qué negocio entró, porque ya no se pide en la pantalla. */
+  tenant?: { slug: string };
   backupCodes?: string[];
 }
 export interface RetoMfa {
@@ -139,12 +143,24 @@ export interface RetoMfa {
   mfaToken?: string;
 }
 
+/**
+ * El negocio ya no se pide en la pantalla: el servidor lo resuelve por el
+ * correo. Solo se manda cuando la persona trabaja en más de uno y ya eligió.
+ */
 export function loginTenant(
-  tenantSlug: string,
   email: string,
   password: string,
+  tenantSlug?: string,
 ): Promise<SesionTenant & RetoMfa> {
-  return api("/auth/tenant/login", { auth: false, body: { tenantSlug, email, password } });
+  return api("/auth/tenant/login", {
+    auth: false,
+    body: { email, password, ...(tenantSlug ? { tenantSlug } : {}) },
+  });
+}
+
+export interface NegocioOpcion {
+  slug: string;
+  nombre: string;
 }
 
 export interface PlanPublico {

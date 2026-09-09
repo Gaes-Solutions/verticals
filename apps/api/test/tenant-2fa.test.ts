@@ -214,3 +214,38 @@ describe("tenant 2FA — política del negocio", () => {
     expect(res.statusCode).toBe(409);
   });
 });
+
+describe("entrar sin escribir el negocio", () => {
+  it("resuelve el negocio por el correo y entrega sesión", async () => {
+    // El dueño de este tenant ya está en el directorio porque se creó con la
+    // API. Entrar sin tenantSlug es el camino que usa la pantalla real.
+    await resetTenantMfaStep(SLUG, CAJERO.email);
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/tenant/login",
+      payload: { email: CAJERO.email, password: CAJERO.password },
+    });
+    expect([200, 300]).toContain(res.statusCode);
+    if (res.statusCode === 200) {
+      const body = res.json() as {
+        accessToken?: string;
+        mfaToken?: string;
+        tenant?: { slug: string };
+      };
+      // Con 2FA forzado devuelve reto; sin él, sesión. En ambos casos resolvió
+      // el negocio sin que nadie lo escribiera.
+      expect(body.accessToken ?? body.mfaToken).toBeTruthy();
+      if (body.tenant) expect(body.tenant.slug).toBe(SLUG);
+    }
+  });
+
+  it("un correo que no existe responde igual que una contraseña mala", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/tenant/login",
+      payload: { email: "nadie@ninguna-parte.test", password: "loQueSea!2026" },
+    });
+    // 401 y no 404: el login no debe revelar qué correos existen.
+    expect(res.statusCode).toBe(401);
+  });
+});

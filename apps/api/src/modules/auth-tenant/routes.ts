@@ -1,6 +1,7 @@
 import { type TenantPrismaClient, getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { burnPasswordTiming } from "../../lib/password-timing.js";
+import { type NegocioDeCorreo, negociosDelCorreo } from "./directorio.js";
 import { tenantLoginBodySchema, tenantMfaCodeSchema, tenantMfaDisableSchema } from "./schemas.js";
 import {
   type TenantPrincipal,
@@ -107,10 +108,29 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = tenantLoginBodySchema.parse(req.body);
 
-      const tenant = await findTenantBySlug(body.tenantSlug, app.masterPrisma);
+      let slug = body.tenantSlug;
+      if (!slug) {
+        const negocios = await negociosDelCorreo(body.email, app.masterPrisma);
+        if (negocios.length === 0) {
+          // Mismo tiempo y mismo mensaje que una contraseña incorrecta: si no,
+          // este endpoint diría qué correos existen en la plataforma.
+          await burnPasswordTiming(body.password);
+          return unauthorized(reply);
+        }
+        // Una persona que trabaja en más de un negocio sí tiene que elegir.
+        if (negocios.length > 1) {
+          return reply.code(300).send({
+            negocios: negocios.map((n: NegocioDeCorreo) => ({ slug: n.slug, nombre: n.nombre })),
+            message: "Tu correo está en más de un negocio; elige con cuál entrar",
+          });
+        }
+        slug = negocios[0]?.slug as string;
+      }
+
+      const tenant = await findTenantBySlug(slug, app.masterPrisma);
       if (!tenant || tenant.status === "cancelled") return unauthorized(reply);
 
-      const tenantPrisma = getTenantClient(body.tenantSlug);
+      const tenantPrisma = getTenantClient(slug);
       const user = await loadTenantUserForLogin(body.email, tenantPrisma);
       if (!user || !user.isActive) {
         await burnPasswordTiming(body.password);
@@ -118,7 +138,7 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!(await verifyPassword(body.password, user.passwordHash))) return unauthorized(reply);
 
-      const principal = buildTenantPrincipal(user, body.tenantSlug);
+      const principal = buildTenantPrincipal(user, slug);
       const mfa = await loadTenantUserMfa(tenantPrisma, { id: user.id });
       const enrolado = Boolean(mfa?.mfaEnabled && mfa.mfaSecret && mfa.mfaVerifiedAt);
       const requerido = await require2faParaUsuario(
@@ -129,13 +149,13 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
 
       if (enrolado || requerido) {
         const mfaToken = await reply.jwtSign(
-          { sub: user.id, email: user.email, tenantSlug: body.tenantSlug, kind: "tenant_mfa" },
+          { sub: user.id, email: user.email, tenantSlug: slug, kind: "tenant_mfa" },
           { expiresIn: MFA_TOKEN_TTL },
         );
         return enrolado ? { mfaRequired: true, mfaToken } : { mfaSetupRequired: true, mfaToken };
       }
 
-      return issueSession(reply, principal, body.tenantSlug, body.sucursalId);
+      return issueSession(reply, principal, slug, body.sucursalId);
     },
   );
 

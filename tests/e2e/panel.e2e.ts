@@ -14,7 +14,6 @@ const menu = (nombre: string) => ({ name: nombre, exact: true }) as const;
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Negocio (slug)", { exact: true }).fill(CUENTA.tenant);
   await page.getByLabel("Correo", { exact: true }).fill(CUENTA.email);
   await page.getByLabel("Contraseña", { exact: true }).fill(CUENTA.password);
   await page.getByRole("button", { name: "Entrar" }).click();

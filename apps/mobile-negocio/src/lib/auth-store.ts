@@ -16,7 +16,7 @@ interface AuthState {
   biometriaDisponible: boolean;
   restore: () => Promise<void>;
   setBiometria: (on: boolean) => Promise<boolean>;
-  login: (tenantSlug: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   submitMfa: (code: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -173,34 +173,36 @@ export const useAuth = create<AuthState>((set, get) => {
       set({ biometriaActiva: on, biometriaDisponible: available });
       return true;
     },
-    login: async (tenantSlug, email, password) => {
+    // El negocio ya no se pide: el servidor lo resuelve por el correo y lo
+    // devuelve en la sesión.
+    login: async (email, password) => {
       const attempt = ++operation;
       invalidateSessionRequests();
       set({ ...signedOut, error: null });
       try {
         await serialize(clearStorage);
         if (attempt !== operation) return;
-        const result = await loginTenant(authApi, { tenantSlug, email, password });
+        const result = await loginTenant(authApi, { email, password });
         if (attempt !== operation) return;
         if (result.kind === "mfa") {
-          set({ status: "mfa", mfaToken: result.mfaToken, tenantSlug });
+          set({ status: "mfa", mfaToken: result.mfaToken });
           return;
         }
-        await accept(result.session.accessToken, tenantSlug, attempt);
+        await accept(result.session.accessToken, result.session.tenant.slug, attempt);
       } catch (error) {
         if (attempt === operation)
           set({ error: error instanceof Error ? error.message : "No se pudo iniciar sesión" });
       }
     },
     submitMfa: async (code) => {
-      const { mfaToken, tenantSlug } = get();
-      if (!mfaToken || !tenantSlug) return;
+      const { mfaToken } = get();
+      if (!mfaToken) return;
       const attempt = ++operation;
       invalidateSessionRequests();
       set({ error: null });
       try {
         const session = await verifyTenantMfa(authApi, mfaToken, code);
-        await accept(session.accessToken, tenantSlug, attempt);
+        await accept(session.accessToken, session.tenant.slug, attempt);
       } catch (error) {
         if (attempt === operation)
           set({ error: error instanceof Error ? error.message : "Código incorrecto" });

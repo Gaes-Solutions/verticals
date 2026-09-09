@@ -1,6 +1,8 @@
 import { PERMISSIONS, PermissionDeniedError } from "@gaespos/permissions";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
+import type { FastifyInstance } from "fastify";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { bajaDelDirectorio, registrarEnDirectorio } from "../../auth-tenant/directorio.js";
 import {
   type UsuarioUpdateInput,
   assignRolSchema,
@@ -76,6 +78,26 @@ async function buildUsuarioUpdateData(body: UsuarioUpdateInput): Promise<Record<
     data.pinHash = body.pin === null ? null : await argon2Hash(body.pin);
   }
   return data;
+}
+
+/**
+ * Mantiene al día el índice de correo → negocio. Sin él, esa persona tendría
+ * que escribir el slug de su negocio para entrar, que es justo lo que se quitó.
+ */
+async function sincronizarDirectorio(
+  app: FastifyInstance,
+  tenantSlug: string,
+  usuarioId: string,
+  email: string,
+  activo: boolean,
+): Promise<void> {
+  const tenant = await app.masterPrisma.tenant.findUnique({
+    where: { slug: tenantSlug },
+    select: { id: true },
+  });
+  if (!tenant) return;
+  if (activo) await registrarEnDirectorio(tenant.id, usuarioId, email, true, app.masterPrisma);
+  else await bajaDelDirectorio(tenant.id, email, app.masterPrisma);
 }
 
 const usuariosRoutes: FastifyPluginAsync = async (app) => {
@@ -195,6 +217,8 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
     const created = await req.tenantPrisma.usuario.create({
       data: data as Parameters<typeof req.tenantPrisma.usuario.create>[0]["data"],
     });
+    // El directorio es lo que permite entrar sin escribir el negocio.
+    await sincronizarDirectorio(app, req.principal.tenantSlug, created.id, created.email, true);
     return reply.code(201).send({ id: created.id, email: created.email });
   });
 
@@ -210,6 +234,13 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
       where: { id: params.id },
       data,
     });
+    await sincronizarDirectorio(
+      app,
+      req.principal.tenantSlug,
+      updated.id,
+      updated.email,
+      updated.isActive,
+    );
     return { id: updated.id, email: updated.email };
   });
 
@@ -221,6 +252,7 @@ const usuariosRoutes: FastifyPluginAsync = async (app) => {
       where: { id: params.id },
       data: { isActive: false, terminatedAt: new Date() },
     });
+    await sincronizarDirectorio(app, req.principal.tenantSlug, archived.id, archived.email, false);
     return { id: archived.id, isActive: archived.isActive };
   });
 

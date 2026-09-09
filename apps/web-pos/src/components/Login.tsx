@@ -8,6 +8,8 @@ const SLUG_KEY = "gaespos_pos_slug";
 interface SesionTenant {
   accessToken: string;
   user: { id: string; nombre: string; permissions: string[]; isOwner: boolean };
+  /** El servidor dice a qué negocio entró, porque ya no se pide en la pantalla. */
+  tenant?: { slug: string };
   backupCodes?: string[];
 }
 interface RetoMfa {
@@ -39,7 +41,9 @@ type Paso = "password" | "setup" | "verify" | "codes";
 export function Login({ onLogin }: { onLogin: () => void }) {
   const slugFijo = tenantDeSubdominio();
   const [paso, setPaso] = useState<Paso>("password");
-  const [tenantSlug, setTenantSlug] = useState(slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "");
+  // Ya no se pide en la pantalla: el servidor resuelve el negocio por el correo.
+  const tenantSlug = slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "";
+  const [negocios, setNegocios] = useState<Array<{ slug: string; nombre: string }>>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -66,18 +70,20 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   async function entrar(ses: SesionTenant) {
     setToken(ses.accessToken);
     setPermisos(ses.user.permissions);
-    localStorage.setItem(SLUG_KEY, tenantSlug);
+    localStorage.setItem(SLUG_KEY, ses.tenant?.slug ?? tenantSlug);
     onLogin();
   }
 
-  async function submitPassword(e: FormEvent) {
-    e.preventDefault();
+  async function submitPassword(e?: FormEvent, slugElegido?: string) {
+    e?.preventDefault();
     setError(null);
+    setNegocios([]);
     setLoading(true);
+    const slug = slugElegido ?? slugFijo ?? undefined;
     try {
       const res = await api<SesionTenant & RetoMfa>("/auth/tenant/login", {
         auth: false,
-        body: { tenantSlug, email, password },
+        body: { email, password, ...(slug ? { tenantSlug: slug } : {}) },
       });
       if (res.accessToken) {
         await entrar(res);
@@ -96,7 +102,15 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         }
       }
     } catch (err) {
-      fail(err, "Credenciales inválidas");
+      // 300: el correo existe en varios negocios y hay que elegir uno.
+      if (err instanceof ApiError && err.status === 300) {
+        const lista = (err.data as { negocios?: Array<{ slug: string; nombre: string }> } | null)
+          ?.negocios;
+        setNegocios(lista ?? []);
+        setError(null);
+      } else {
+        fail(err, "Credenciales inválidas");
+      }
     } finally {
       setLoading(false);
     }
@@ -147,24 +161,29 @@ export function Login({ onLogin }: { onLogin: () => void }) {
 
         {paso === "password" && (
           <form onSubmit={submitPassword}>
-            {slugFijo ? (
+            {slugFijo && (
               <p className="mb-4 rounded-lg bg-brand/5 px-3 py-2 text-slate-600 text-sm">
                 Negocio: <span className="font-semibold text-brand">{slugFijo}</span>
               </p>
-            ) : (
-              <label className="mb-3 block">
-                <span className="mb-1 block font-medium text-slate-700 text-sm">
-                  Negocio (slug)
-                </span>
-                <input
-                  value={tenantSlug}
-                  onChange={(e) => setTenantSlug(e.target.value)}
-                  autoCapitalize="none"
-                  className={inputCls}
-                  placeholder="mi-negocio"
-                  required
-                />
-              </label>
+            )}
+            {negocios.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 font-medium text-slate-700 text-sm">
+                  Tu correo está en más de un negocio. ¿Con cuál entras?
+                </p>
+                <div className="flex flex-col gap-2">
+                  {negocios.map((n) => (
+                    <button
+                      key={n.slug}
+                      type="button"
+                      onClick={() => void submitPassword(undefined, n.slug)}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-left hover:border-brand"
+                    >
+                      {n.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             <label className="mb-3 block">
               <span className="mb-1 block font-medium text-slate-700 text-sm">Correo</span>

@@ -7,7 +7,10 @@ const slugSchema = z
   .regex(/^[a-z][a-z0-9_-]{1,49}$/, "Slug inválido");
 
 export const tenantLoginBodySchema = z.object({
-  tenantSlug: slugSchema,
+  // Opcional a propósito: nadie se sabe el slug de su negocio. Si no viene, se
+  // resuelve por el correo contra el directorio. Sigue aceptándose para las
+  // sesiones ya guardadas y para el caso de un correo en varios negocios.
+  tenantSlug: slugSchema.optional(),
   email: z.string().email().toLowerCase(),
   password: z.string().min(1),
   sucursalId: z.string().min(1).optional(),

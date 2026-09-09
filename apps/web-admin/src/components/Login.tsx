@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import type { AdminSession } from "../App.js";
 import {
   ApiError,
+  type NegocioOpcion,
   type SesionTenant,
   loginTenant,
   mfaTenantActivate,
@@ -50,7 +51,9 @@ export function Login({
 }: { onLogin: (s: AdminSession) => void; onCrearCuenta?: () => void }) {
   const slugFijo = tenantDeSubdominio();
   const [paso, setPaso] = useState<Paso>("password");
-  const [tenantSlug, setTenantSlug] = useState(slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "");
+  // Ya no se pide: se conserva solo para la huella y para las sesiones guardadas.
+  const tenantSlug = slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "";
+  const [negocios, setNegocios] = useState<NegocioOpcion[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verPassword, setVerPassword] = useState(false);
@@ -79,16 +82,18 @@ export function Login({
     setToken(ses.accessToken);
     setPermisos(ses.user.permissions);
     setUserId(ses.user.id);
-    localStorage.setItem(SLUG_KEY, tenantSlug);
-    onLogin({ nombre: ses.user.nombre, tenantSlug });
+    const slugSesion = ses.tenant?.slug ?? tenantSlug;
+    localStorage.setItem(SLUG_KEY, slugSesion);
+    onLogin({ nombre: ses.user.nombre, tenantSlug: slugSesion });
   }
 
-  async function submitPassword(e: FormEvent) {
-    e.preventDefault();
+  async function submitPassword(e?: FormEvent, slugElegido?: string) {
+    e?.preventDefault();
     setError(null);
+    setNegocios([]);
     setLoading(true);
     try {
-      const res = await loginTenant(tenantSlug, email, password);
+      const res = await loginTenant(email, password, slugElegido ?? slugFijo ?? undefined);
       if (res.accessToken) {
         entrar(res);
       } else if (res.mfaToken) {
@@ -103,7 +108,14 @@ export function Login({
         }
       }
     } catch (err) {
-      fail(err, "Credenciales inválidas");
+      // 300: el correo existe en varios negocios y hay que elegir uno.
+      if (err instanceof ApiError && err.status === 300) {
+        const lista = (err.data as { negocios?: NegocioOpcion[] } | null)?.negocios ?? [];
+        setNegocios(lista);
+        setError(null);
+      } else {
+        fail(err, "Credenciales inválidas");
+      }
     } finally {
       setLoading(false);
     }
@@ -157,24 +169,29 @@ export function Login({
 
         {paso === "password" && (
           <form onSubmit={submitPassword}>
-            {slugFijo ? (
+            {slugFijo && (
               <p className="mb-4 rounded-lg bg-brand/5 px-3 py-2 text-slate-600 text-sm">
                 Negocio: <span className="font-semibold text-brand">{slugFijo}</span>
               </p>
-            ) : (
-              <label className="mb-3 block">
-                <span className="mb-1 block font-medium text-slate-700 text-sm">
-                  Negocio (slug)
-                </span>
-                <input
-                  value={tenantSlug}
-                  onChange={(e) => setTenantSlug(e.target.value)}
-                  autoCapitalize="none"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
-                  placeholder="mi-negocio"
-                  required
-                />
-              </label>
+            )}
+            {negocios.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 font-medium text-slate-700 text-sm">
+                  Tu correo está en más de un negocio. ¿Con cuál entras?
+                </p>
+                <div className="flex flex-col gap-2">
+                  {negocios.map((n) => (
+                    <button
+                      key={n.slug}
+                      type="button"
+                      onClick={() => void submitPassword(undefined, n.slug)}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-left hover:border-brand"
+                    >
+                      {n.nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             <label className="mb-3 block">
               <span className="mb-1 block font-medium text-slate-700 text-sm">Correo</span>

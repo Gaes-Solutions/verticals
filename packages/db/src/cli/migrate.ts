@@ -101,6 +101,19 @@ tenant
   });
 
 tenant
+  .command("directorio")
+  .description("Rellena el índice de correo → negocio (permite entrar sin escribir el slug)")
+  .action(async () => {
+    try {
+      const { sembrarDirectorio } = await import("../directorio-seed.js");
+      const r = await sembrarDirectorio();
+      console.info(`[directorio] ${r.usuarios} usuarios de ${r.tenants} tenants indexados`);
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+
+tenant
   .command("list")
   .description("Lista tenants en master DB")
   .action(async () => {

@@ -143,7 +143,7 @@ it("an invalid restore cannot write an error over a subsequent login", async () 
   const originalLogout = state.logout;
   const logout = vi.spyOn(state, "logout").mockImplementation(async () => {
     await originalLogout();
-    await useAuth.getState().login("a", "test@example.test", "secret");
+    await useAuth.getState().login("test@example.test", "secret");
   });
   try {
     await state.restore();

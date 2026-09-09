@@ -12,7 +12,6 @@ const CAFE = CATALOGO[0];
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Negocio (slug)").fill(CUENTA.tenant);
   await page.getByLabel("Correo").fill(CUENTA.email);
   await page.getByLabel("Contraseña").fill(CUENTA.password);
   await page.getByRole("button", { name: "Entrar" }).click();
