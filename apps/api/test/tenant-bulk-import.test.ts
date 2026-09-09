@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -112,6 +113,58 @@ describe("bulk import de productos (upsert por SKU)", () => {
     const match = items.filter((p) => p.skuPadre === "BULK-A");
     expect(match).toHaveLength(1);
     expect(match[0]?.nombre).toBe("Galletas Premium");
+  });
+
+  it("carga y actualiza las claves SAT, que son las que habilitan facturar", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    const alta = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          {
+            skuPadre: "BULK-SAT",
+            nombre: "Refresco 600ml",
+            precioBase: "20",
+            claveSat: "50202301",
+            claveUnidadSat: "H87",
+          },
+        ],
+      },
+    });
+    expect(alta.json().creados).toBe(1);
+    const creado = await client.producto.findFirstOrThrow({
+      where: { skuPadre: "BULK-SAT" },
+      select: { claveSat: true, claveUnidadSat: true },
+    });
+    expect(creado.claveSat).toBe("50202301");
+    expect(creado.claveUnidadSat).toBe("H87");
+
+    // Re-importar corrige la clave de un producto que ya existía sin ella.
+    const correccion = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          {
+            skuPadre: "BULK-SAT",
+            nombre: "Refresco 600ml",
+            precioBase: "20",
+            claveSat: "50202306",
+            claveUnidadSat: "LTR",
+          },
+        ],
+      },
+    });
+    expect(correccion.json().actualizados).toBe(1);
+    const actualizado = await client.producto.findFirstOrThrow({
+      where: { skuPadre: "BULK-SAT" },
+      select: { claveSat: true, claveUnidadSat: true },
+    });
+    expect(actualizado.claveSat).toBe("50202306");
+    expect(actualizado.claveUnidadSat).toBe("LTR");
   });
 
   it("reutiliza la categoría existente (no la duplica)", async () => {

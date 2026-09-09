@@ -30,6 +30,8 @@ const bulkProductosSchema = z.object({
         aplicaIva: z.boolean().optional(),
         tasaIva: decimalStr.optional(),
         codigoBarras: z.string().max(60).optional(),
+        claveSat: z.string().max(20).optional(),
+        claveUnidadSat: z.string().max(20).optional(),
       }),
     )
     .min(1)
@@ -51,6 +53,8 @@ const COLUMNAS_OPCIONALES = [
   "stockInicial",
   "tasaIva",
   "codigoBarras",
+  "claveSat",
+  "claveUnidadSat",
 ] as const;
 
 const importConfigSchema = z.object({

@@ -47,6 +47,10 @@ export interface ProductoBulkRow {
   aplicaIva?: boolean | undefined;
   tasaIva?: string | undefined;
   codigoBarras?: string | undefined;
+  /** Clave de producto/servicio del SAT (c_ClaveProdServ). Requerida para facturar. */
+  claveSat?: string | undefined;
+  /** Clave de unidad del SAT (c_ClaveUnidad), p. ej. H87 = pieza. */
+  claveUnidadSat?: string | undefined;
 }
 
 /** Cache de categorías por nombre (normalizado) para no re-crear en el mismo import. */
@@ -90,6 +94,8 @@ const ETIQUETA_COLUMNA: Record<string, string> = {
   stockInicial: "Stock",
   tasaIva: "IVA",
   codigoBarras: "Código de barras",
+  claveSat: "Clave SAT",
+  claveUnidadSat: "Unidad SAT",
 };
 
 export async function bulkUpsertProductos(
@@ -149,6 +155,8 @@ export async function bulkUpsertProductos(
             ...(categoriaId ? { categoriaId } : {}),
             ...(row.aplicaIva !== undefined ? { aplicaIva: row.aplicaIva } : {}),
             ...(row.tasaIva !== undefined ? { tasaIva: row.tasaIva } : {}),
+            ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
+            ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
           },
         });
         const varDefault = existente.variantes[0];
@@ -168,6 +176,8 @@ export async function bulkUpsertProductos(
             ...(categoriaId ? { categoriaId } : {}),
             aplicaIva: row.aplicaIva ?? true,
             tasaIva: row.tasaIva ?? "16",
+            ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
+            ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
             variantes: {
               create: [
                 {

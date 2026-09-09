@@ -29,7 +29,8 @@ const TIPOS: TipoImport[] = [
     key: "productos",
     label: "Productos",
     descripcion:
-      "Alta y actualización de productos (upsert por SKU). Crea la categoría si no existe.",
+      "Alta y actualización de productos (upsert por SKU). Crea la categoría si no existe. " +
+      "ClaveSAT y UnidadSAT son necesarias para poder facturar el producto.",
     endpoint: "/t/productos/bulk",
     columnas: [
       { header: "SKU", campo: "skuPadre", req: true, ejemplo: "ABA-001", core: true },
@@ -40,6 +41,8 @@ const TIPOS: TipoImport[] = [
       { header: "Stock", campo: "stockInicial", req: false, ejemplo: "50" },
       { header: "IVA", campo: "tasaIva", req: false, ejemplo: "16" },
       { header: "CodigoBarras", campo: "codigoBarras", req: false, ejemplo: "7501000123457" },
+      { header: "ClaveSAT", campo: "claveSat", req: false, ejemplo: "50181900" },
+      { header: "UnidadSAT", campo: "claveUnidadSat", req: false, ejemplo: "H87" },
     ],
   },
   {

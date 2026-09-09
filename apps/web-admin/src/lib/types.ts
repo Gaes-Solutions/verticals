@@ -27,6 +27,8 @@ export interface Producto {
   requiresBalanza?: boolean;
   isActive?: boolean;
   categoriaId?: string | null;
+  claveSat?: string | null;
+  claveUnidadSat?: string | null;
   variantes: Variante[];
 }
 

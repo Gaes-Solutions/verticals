@@ -2,6 +2,41 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 import type { Categoria, Paged, Producto } from "../lib/types.js";
 
+// Atajos del catálogo del SAT para el comercio mexicano típico. NO es el catálogo
+// completo (son decenas de miles de claves): el campo acepta cualquier otra.
+const CLAVES_PRODSERV = [
+  { clave: "01010101", etiqueta: "01010101 — No existe en el catálogo (genérico)" },
+  { clave: "50192700", etiqueta: "50192700 — Botanas y snacks" },
+  { clave: "50181900", etiqueta: "50181900 — Pan y galletas" },
+  { clave: "50202301", etiqueta: "50202301 — Refrescos y bebidas" },
+  { clave: "50202306", etiqueta: "50202306 — Agua embotellada" },
+  { clave: "50131600", etiqueta: "50131600 — Lácteos y quesos" },
+  { clave: "50161500", etiqueta: "50161500 — Dulces y chocolates" },
+  { clave: "50202200", etiqueta: "50202200 — Cerveza, vinos y licores" },
+  { clave: "51000000", etiqueta: "51000000 — Medicamentos" },
+  { clave: "53102500", etiqueta: "53102500 — Ropa" },
+  { clave: "53111600", etiqueta: "53111600 — Calzado" },
+  { clave: "47131800", etiqueta: "47131800 — Limpieza del hogar" },
+  { clave: "53131600", etiqueta: "53131600 — Higiene personal" },
+  { clave: "44121700", etiqueta: "44121700 — Papelería" },
+  { clave: "43211500", etiqueta: "43211500 — Cómputo y electrónica" },
+  { clave: "10101500", etiqueta: "10101500 — Alimento para mascotas" },
+  { clave: "78102200", etiqueta: "78102200 — Servicio de envío" },
+];
+
+const CLAVES_UNIDAD = [
+  { clave: "H87", etiqueta: "H87 — Pieza" },
+  { clave: "KGM", etiqueta: "KGM — Kilogramo" },
+  { clave: "GRM", etiqueta: "GRM — Gramo" },
+  { clave: "LTR", etiqueta: "LTR — Litro" },
+  { clave: "MLT", etiqueta: "MLT — Mililitro" },
+  { clave: "MTR", etiqueta: "MTR — Metro" },
+  { clave: "XBX", etiqueta: "XBX — Caja" },
+  { clave: "XPK", etiqueta: "XPK — Paquete" },
+  { clave: "XUN", etiqueta: "XUN — Unidad" },
+  { clave: "E48", etiqueta: "E48 — Servicio" },
+];
+
 export function ProductosPage() {
   const [items, setItems] = useState<Producto[]>([]);
   const [query, setQuery] = useState("");
@@ -152,6 +187,8 @@ function ProductoModal({
   const [aplicaIeps, setAplicaIeps] = useState(producto?.aplicaIeps ?? false);
   const [tasaIeps, setTasaIeps] = useState(producto?.tasaIeps ?? "");
   const [requiresBalanza, setRequiresBalanza] = useState(producto?.requiresBalanza ?? false);
+  const [claveSat, setClaveSat] = useState(producto?.claveSat ?? "");
+  const [claveUnidadSat, setClaveUnidadSat] = useState(producto?.claveUnidadSat ?? "H87");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoriaId, setCategoriaId] = useState(producto?.categoriaId ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +209,9 @@ function ProductoModal({
         aplicaIeps,
         requiresBalanza,
         ...(aplicaIeps && tasaIeps ? { tasaIeps } : {}),
+        // Sin estas claves el SAT no acepta el concepto: facturar responde 409.
+        ...(claveSat.trim() ? { claveSat: claveSat.trim() } : {}),
+        ...(claveUnidadSat.trim() ? { claveUnidadSat: claveUnidadSat.trim() } : {}),
       };
       if (editando && producto) {
         await api(`/t/productos/${producto.id}`, {
@@ -288,6 +328,51 @@ function ProductoModal({
               ))}
             </select>
           </Field>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="font-semibold text-slate-700 text-sm">Datos para facturar (SAT)</p>
+            <p className="mb-3 text-slate-500 text-xs">
+              Obligatorios para emitir factura de este producto. Si no facturas, puedes dejarlos
+              como están.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Clave del producto">
+                <input
+                  list="claves-prodserv-sat"
+                  value={claveSat}
+                  onChange={(e) => setClaveSat(e.target.value)}
+                  placeholder="Ej. 50192700"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                />
+                <datalist id="claves-prodserv-sat">
+                  {CLAVES_PRODSERV.map((c) => (
+                    <option key={c.clave} value={c.clave}>
+                      {c.etiqueta}
+                    </option>
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Unidad">
+                <input
+                  list="claves-unidad-sat"
+                  value={claveUnidadSat}
+                  onChange={(e) => setClaveUnidadSat(e.target.value)}
+                  placeholder="H87"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                />
+                <datalist id="claves-unidad-sat">
+                  {CLAVES_UNIDAD.map((c) => (
+                    <option key={c.clave} value={c.clave}>
+                      {c.etiqueta}
+                    </option>
+                  ))}
+                </datalist>
+              </Field>
+            </div>
+            <p className="mt-2 text-slate-500 text-xs">
+              La lista trae las más usadas. Puedes escribir cualquier otra clave del catálogo del
+              SAT; si no encuentras la del producto, usa 01010101.
+            </p>
+          </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
