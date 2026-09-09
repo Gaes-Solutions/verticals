@@ -159,7 +159,12 @@ export async function checkoutMobile(
       "Prepara este carrito antes de pagar; no cambies la clave del intento.",
     );
   try {
-    return await recuperarCheckoutMobile(client, clienteId, key);
+    const previo = await recuperarCheckoutMobile(client, clienteId, key);
+    // Un intento que ya terminó sin pago (voucher vencido, pago rechazado) no
+    // debe secuestrar el carrito para siempre: se descarta y el cliente puede
+    // volver a pagar. El pedido anterior conserva su historial.
+    if (previo.intentStatus !== "fallido") return previo;
+    await client.checkoutAttempt.deleteMany({ where: { key, requestedBy: owner(clienteId) } });
   } catch (error) {
     if (!(error instanceof ComercioError) || error.statusCode !== 404) throw error;
   }

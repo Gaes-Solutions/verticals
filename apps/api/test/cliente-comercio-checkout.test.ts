@@ -249,6 +249,34 @@ describe("checkout móvil autenticado sin proveedores reales", () => {
     expect(saved.ventaIdGenerada).toBeTruthy();
     expect(saved.clienteId).toBe(clienteId);
   });
+  it("un voucher vencido no deja al cliente sin poder comprar nunca más", async () => {
+    const input = await prepared();
+    await post("/checkout", input);
+    const client = getTenantClient(A);
+    const order = await client.pedidoEcommerce.findFirstOrThrow({
+      where: { carritoOrigenId: input.carritoId },
+    });
+    // El voucher OXXO expira: el pedido queda en pago_fallido y el intento
+    // seguía bloqueando el carrito para siempre.
+    await client.pedidoEcommerce.update({
+      where: { id: order.id },
+      data: { statusPago: "pago_fallido" },
+    });
+
+    // El carrito vuelve a ser editable.
+    const editar = await post("/carrito", { items: [{ varianteId: variant, cantidad: 2 }] });
+    expect(editar.statusCode).toBe(200);
+
+    // Y se puede pagar otra vez: nace un intento nuevo, no el fallido.
+    const reintento = await post("/checkout", await prepared());
+    expect(reintento.statusCode).toBe(200);
+    expect(reintento.json().intentStatus).not.toBe("fallido");
+
+    // El pedido anterior conserva su historial.
+    const previo = await client.pedidoEcommerce.findUniqueOrThrow({ where: { id: order.id } });
+    expect(previo.statusPago).toBe("pago_fallido");
+  });
+
   it("SPEI con envío calcula tarifa servidor dentro del monto", async () => {
     const input = await prepared();
     const response = await post("/checkout", {

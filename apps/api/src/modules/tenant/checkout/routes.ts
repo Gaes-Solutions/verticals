@@ -157,6 +157,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/intentos/:key", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
     const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
     try {
       return await consultarIntentoCheckout(req.tenantPrisma, key, req.principal.userId);
@@ -171,6 +172,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
     ["/tienda/iniciar", true],
   ] as const) {
     app.post(path, async (req, reply) => {
+      req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
       const body = iniciarCheckoutSchema.parse(req.body);
       const provider = resolverProvider(app, body.proveedorPago, reply);
       if (!provider) return;
@@ -192,6 +194,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
   }
 
   app.post("/webhook", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
     const body = webhookSchema.parse(req.body);
     const provider = resolverProvider(app, body.proveedorPago, reply);
     if (!provider) return;
@@ -221,6 +224,7 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
   // Confirma un pago mock sin webhook externo (solo dev/demo, requiere MockPaymentProvider).
   // En producción la confirmación llega por webhook del proveedor real.
   app.post("/confirmar-mock", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
     const { intentId } = z.object({ intentId: z.string().min(1) }).parse(req.body);
     const provider = resolverProvider(app, "mock", reply);
     if (!provider) return;

@@ -182,6 +182,35 @@ function cartDto(cart: {
   };
 }
 
+/**
+ * Un intento de checkout solo debe bloquear el carrito mientras el pago sigue
+ * vivo. Cuando el voucher OXXO vence o el pago falla, el pedido queda en
+ * `pago_fallido` pero el intento seguía ahí: el cliente no podía modificar,
+ * vaciar ni crear otro carrito, así que no volvía a comprar nunca desde la app.
+ */
+const PAGO_SIN_DESENLACE: Array<"pendiente" | "pago_confirmado"> = ["pendiente", "pago_confirmado"];
+
+export async function hayPagoPorVerificar(
+  tx: Pick<TenantPrismaClient, "checkoutAttempt" | "pedidoEcommerce">,
+  carritoIds: string[],
+): Promise<boolean> {
+  if (!carritoIds.length) return false;
+  const intentos = await tx.checkoutAttempt.findMany({
+    where: { carritoId: { in: carritoIds } },
+    select: { pedidoId: true },
+  });
+  if (!intentos.length) return false;
+  // Sin pedido todavía = la petición sigue en curso: bloquea.
+  if (intentos.some((i) => !i.pedidoId)) return true;
+  const vivos = await tx.pedidoEcommerce.count({
+    where: {
+      id: { in: intentos.map((i) => i.pedidoId as string) },
+      statusPago: { in: PAGO_SIN_DESENLACE },
+    },
+  });
+  return vivos > 0;
+}
+
 export async function guardarCarritoComercio(
   client: TenantPrismaClient,
   clienteId: string,
@@ -231,7 +260,7 @@ export async function guardarCarritoComercio(
     };
     if (previous) {
       await tx.$queryRaw`SELECT id FROM carritos_ecommerce WHERE id = ${previous.id} FOR UPDATE`;
-      if (await tx.checkoutAttempt.count({ where: { carritoId: previous.id } }))
+      if (await hayPagoPorVerificar(tx, [previous.id]))
         throw new ComercioError(409, "Este carrito tiene un pago por verificar. No lo modifiques.");
       const updated = await tx.carritoEcommerce.updateMany({
         where: { id: previous.id, clienteId, canal: "mobile", status: "activo" },
@@ -278,9 +307,10 @@ export async function vaciarCarritoComercio(client: TenantPrismaClient, clienteI
     for (const cart of active)
       await tx.$queryRaw`SELECT id FROM carritos_ecommerce WHERE id = ${cart.id} FOR UPDATE`;
     if (
-      await tx.checkoutAttempt.count({
-        where: { carritoId: { in: active.map((cart) => cart.id) } },
-      })
+      await hayPagoPorVerificar(
+        tx,
+        active.map((cart) => cart.id),
+      )
     )
       throw new ComercioError(409, "Hay un pago por verificar. No se puede vaciar el carrito.");
     await tx.carritoEcommerce.updateMany({

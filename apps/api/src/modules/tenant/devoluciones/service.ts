@@ -451,7 +451,10 @@ async function aplicarReembolso(
       try {
         await aplicarMovimientoTx(tx, usuarioId, venta.clienteId, {
           tipo: "abono",
-          monto: montoMonedero.toNumber(),
+          // Redondear en Decimal antes de pasar a número: `toNumber()` seguido del
+          // `toFixed(2)` del monedero redondea sobre la representación binaria y
+          // pierde un centavo en montos que terminan en medio centavo.
+          monto: Number(montoMonedero.toFixed(2)),
           motivo: `Reembolso devolución${input.referenciaReembolso ? ` ${input.referenciaReembolso}` : ""}`,
           refTipo: "devolucion",
         });
