@@ -20,7 +20,7 @@ const config: ExpoConfig = {
   android: {
     package: "com.gaessoft.kiosko",
     permissions: ["CAMERA"],
-    adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#0f766e" },
+    adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#c2410c" },
   },
   plugins: [
     "expo-router",
