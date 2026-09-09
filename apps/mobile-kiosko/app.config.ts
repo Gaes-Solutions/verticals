@@ -41,7 +41,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "https://app.angaes.com/api",
-    eas: { projectId: "" },
+    eas: { projectId: "3bebc91b-9933-4838-9fa8-3af4eeb36a26" },
   },
 };
 
