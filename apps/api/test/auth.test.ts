@@ -57,7 +57,7 @@ describe("auth module", () => {
       // Asegura el admin enrolado con un secret conocido.
       await masterPrisma.adminUser.update({
         where: { email: TEST_ADMIN_EMAIL },
-        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date(), mfaLastStep: null },
       });
       const res = await app.inject({
         method: "POST",
@@ -76,7 +76,7 @@ describe("auth module", () => {
     it("completar TOTP (verify) emite sesión + set-cookie HttpOnly Path=/auth", async () => {
       await masterPrisma.adminUser.update({
         where: { email: TEST_ADMIN_EMAIL },
-        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date(), mfaLastStep: null },
       });
       const login = await app.inject({
         method: "POST",
@@ -105,7 +105,7 @@ describe("auth module", () => {
     it("código TOTP incorrecto → 401", async () => {
       await masterPrisma.adminUser.update({
         where: { email: TEST_ADMIN_EMAIL },
-        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+        data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date(), mfaLastStep: null },
       });
       const login = await app.inject({
         method: "POST",

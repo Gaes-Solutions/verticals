@@ -1,3 +1,4 @@
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -66,7 +67,7 @@ describe("cobros / links de pago", () => {
     expect(res.json().concepto).toBe("Anticipo pedido");
   });
 
-  it("pagar (mock) marca el cobro como pagado", async () => {
+  it("pagar NO liquida el link hasta que la pasarela confirma", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/t/cobros/publico/${tokenCobro}/pagar`,
@@ -74,17 +75,24 @@ describe("cobros / links de pago", () => {
       payload: { metodo: "tarjeta" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("pagado");
+    // Un intent "pendiente" no es dinero recibido: liquidarlo sería liquidez fantasma.
+    expect(res.json().status).toBe("pendiente");
 
     const check = await app.inject({
       method: "GET",
       url: `/t/cobros/publico/${tokenCobro}`,
       headers: auth(),
     });
-    expect(check.json().status).toBe("pagado");
+    expect(check.json().status).toBe("pendiente");
   });
 
-  it("no se puede pagar dos veces (409)", async () => {
+  it("no se puede pagar dos veces una vez conciliado (409)", async () => {
+    // Simula la conciliación por webhook, que es lo único que liquida el link.
+    const client = getTenantClient(SLUG);
+    await client.linkPago.updateMany({
+      where: { token: tokenCobro },
+      data: { status: "pagado", pagadoAt: new Date() },
+    });
     const res = await app.inject({
       method: "POST",
       url: `/t/cobros/publico/${tokenCobro}/pagar`,

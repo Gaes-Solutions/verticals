@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { authenticator } from "otplib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildTestApp, cleanupTestTenants, createTenantUser, createTestTenant } from "./helpers.js";
+import {
+  buildTestApp,
+  cleanupTestTenants,
+  createTenantUser,
+  createTestTenant,
+  resetTenantMfaStep,
+} from "./helpers.js";
 
 const SLUG = "test-2fa";
 const OWNER = { email: "owner-2fa@test.local", password: "Owner!2026x" };
@@ -37,6 +43,7 @@ async function ownerToken(): Promise<string> {
   const l = await login(OWNER.email, OWNER.password);
   const body = l.json() as { accessToken?: string; mfaToken?: string };
   if (body.accessToken) return body.accessToken;
+  await resetTenantMfaStep(SLUG, OWNER.email);
   const res = await app.inject({
     method: "POST",
     url: "/auth/tenant/mfa/verify",
@@ -100,6 +107,7 @@ describe("tenant 2FA — opt-in self-service", () => {
   it("verify con TOTP correcto → sesión", async () => {
     const l = await login(OWNER.email, OWNER.password);
     const mfaToken = (l.json() as { mfaToken: string }).mfaToken;
+    await resetTenantMfaStep(SLUG, OWNER.email);
     const res = await app.inject({
       method: "POST",
       url: "/auth/tenant/mfa/verify",
@@ -174,6 +182,7 @@ describe("tenant 2FA — política del negocio", () => {
     });
     expect(setup.statusCode).toBe(200);
     const secret = (setup.json() as { secret: string }).secret;
+    await resetTenantMfaStep(SLUG, CAJERO.email);
     const activate = await app.inject({
       method: "POST",
       url: "/auth/tenant/mfa/activate",

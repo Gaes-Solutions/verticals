@@ -32,6 +32,8 @@ let professionalId: string;
 let slugSeo: string;
 let reviewLimpiaId: string;
 let reviewSpamId: string;
+let pacienteToken = "";
+let tokenPacienteOk = "";
 let otpOk = "";
 let otpSpam = "";
 
@@ -270,7 +272,6 @@ describe("validación admin GaesSoft", () => {
 });
 
 describe("reservas (bookings desde el portal)", () => {
-  let pacienteMasterId: string;
   let bookingId: string;
 
   it("registra y verifica un paciente que va a reservar", async () => {
@@ -286,7 +287,6 @@ describe("reservas (bookings desde el portal)", () => {
     });
     expect(reg.statusCode).toBe(201);
     const regBody = reg.json() as { id: string; otpDev?: string };
-    pacienteMasterId = regBody.id;
     expect(regBody.otpDev).toMatch(/^\d{6}$/);
     // Con código incorrecto → 401.
     const malo = await app.inject({
@@ -301,15 +301,20 @@ describe("reservas (bookings desde el portal)", () => {
       payload: { email: PACIENTE_BOOKING, codigo: regBody.otpDev },
     });
     expect(conf.statusCode).toBe(200);
-    expect((conf.json() as { verificado: boolean }).verificado).toBe(true);
+    const confBody = conf.json() as { verificado: boolean; accessToken: string };
+    expect(confBody.verificado).toBe(true);
+    // Reservar y reseñar exigen sesión del paciente: la identidad sale del token,
+    // no de un id o correo en el cuerpo (evita reservar/reseñar en nombre de otro).
+    pacienteToken = confBody.accessToken;
+    expect(pacienteToken).toBeTruthy();
   });
 
   it("el paciente reserva una cita (queda pendiente)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/reservar`,
+      headers: { authorization: `Bearer ${pacienteToken}` },
       payload: {
-        pacienteMasterId,
         fechaHora: new Date(Date.now() + 3 * 86_400_000).toISOString(),
         modalidad: "presencial",
         motivo: "Chequeo general",
@@ -364,8 +369,8 @@ describe("reservas (bookings desde el portal)", () => {
     const reserva = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/reservar`,
+      headers: { authorization: `Bearer ${pacienteToken}` },
       payload: {
-        pacienteMasterId,
         fechaHora: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         modalidad: "telemedicina",
         motivo: "Consulta a distancia",
@@ -390,8 +395,8 @@ describe("reservas (bookings desde el portal)", () => {
     const reserva = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/reservar`,
+      headers: { authorization: `Bearer ${pacienteToken}` },
       payload: {
-        pacienteMasterId,
         fechaHora: new Date(Date.now() + 5 * 86_400_000).toISOString(),
         modalidad: "presencial",
       },
@@ -444,33 +449,35 @@ describe("búsqueda y perfil público", () => {
 });
 
 describe("reseñas verificadas", () => {
-  it("paciente no verificado no puede reseñar → 403", async () => {
+  it("paciente no verificado no puede reseñar → 401 (no hay sesión)", async () => {
     const reg = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/registro",
       payload: { email: PACIENTE_OK, nombre: "Ana López" },
     });
     otpOk = (reg.json() as { otpDev: string }).otpDev;
+    // Sin verificar no hay token, y el endpoint ya no acepta identidad por correo.
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/resenas`,
-      payload: { pacienteEmail: PACIENTE_OK, ratingGeneral: 5, comentario: "Muy bien" },
+      payload: { ratingGeneral: 5, comentario: "Muy bien" },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
   });
 
   it("reseña limpia de paciente verificado se publica automáticamente", async () => {
-    await app.inject({
+    const conf = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/confirmar",
       payload: { email: PACIENTE_OK, codigo: otpOk },
     });
+    tokenPacienteOk = (conf.json() as { accessToken: string }).accessToken;
+    const tokenOk = tokenPacienteOk;
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/resenas`,
+      headers: { authorization: `Bearer ${tokenOk}` },
       payload: {
-        pacienteEmail: PACIENTE_OK,
-        bookingId: "booking-123",
         ratingGeneral: 5,
         ratingTrato: 5,
         comentario: "Excelente trato, muy claro al explicar.",
@@ -481,6 +488,16 @@ describe("reseñas verificadas", () => {
     expect(r.publicada).toBe(true);
     expect(r.moderacionStatus).toBe("publicado");
     reviewLimpiaId = r.id;
+  });
+
+  it("no se puede reclamar visita verificada con una cita inexistente → 403", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/marketplace/profesionales/${professionalId}/resenas`,
+      headers: { authorization: `Bearer ${tokenPacienteOk}` },
+      payload: { bookingId: "booking-inexistente", ratingGeneral: 5, comentario: "Todo bien" },
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it("recalcula score del profesional tras publicar reseña", async () => {
@@ -497,16 +514,17 @@ describe("reseñas verificadas", () => {
       payload: { email: PACIENTE_SPAM, nombre: "Beto Spam" },
     });
     otpSpam = (reg.json() as { otpDev: string }).otpDev;
-    await app.inject({
+    const confSpam = await app.inject({
       method: "POST",
       url: "/marketplace/pacientes/confirmar",
       payload: { email: PACIENTE_SPAM, codigo: otpSpam },
     });
+    const tokenSpam = (confSpam.json() as { accessToken: string }).accessToken;
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/resenas`,
+      headers: { authorization: `Bearer ${tokenSpam}` },
       payload: {
-        pacienteEmail: PACIENTE_SPAM,
         ratingGeneral: 1,
         comentario: "Es un charlatan, pura estafa",
       },
@@ -528,7 +546,8 @@ describe("reseñas verificadas", () => {
     const res = await app.inject({
       method: "POST",
       url: `/marketplace/profesionales/${professionalId}/resenas`,
-      payload: { pacienteEmail: PACIENTE_OK, ratingGeneral: 4, comentario: "Otra vez" },
+      headers: { authorization: `Bearer ${tokenPacienteOk}` },
+      payload: { ratingGeneral: 4, comentario: "Otra vez" },
     });
     expect(res.statusCode).toBe(409);
   });

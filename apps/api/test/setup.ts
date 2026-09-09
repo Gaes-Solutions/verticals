@@ -1,4 +1,7 @@
 import { masterPrisma } from "@gaespos/db";
+// El proveedor de pago mock exige opt-in explícito fuera de producción (evita el
+// bypass de cobro). La batería lo necesita para ejercer cobros y checkout.
+process.env.PAGOS_ALLOW_MOCK = "true";
 import { afterAll, beforeAll } from "vitest";
 import {
   TEST_ADMIN_EMAIL,

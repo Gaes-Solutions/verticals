@@ -66,6 +66,8 @@ beforeAll(async () => {
       aplicaIva: true,
       tasaIva: "16",
       aplicaIeps: true,
+      claveSat: "50202200",
+      claveUnidadSat: "H87",
       tasaIeps: { tipo: "porcentaje", valor: 160 },
     },
   });
@@ -84,6 +86,8 @@ beforeAll(async () => {
       aplicaIva: true,
       tasaIva: "16",
       aplicaIeps: true,
+      claveSat: "50202200",
+      claveUnidadSat: "H87",
       tasaIeps: { tipo: "porcentaje", valor: 53 },
     },
   });
@@ -104,6 +108,8 @@ beforeAll(async () => {
       aplicaIva: true,
       tasaIva: "16",
       aplicaIeps: true,
+      claveSat: "50202200",
+      claveUnidadSat: "H87",
       tasaIeps: { tipo: "cuota_por_unidad", valor: 1.5375 },
     },
   });

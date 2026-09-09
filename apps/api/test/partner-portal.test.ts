@@ -2,7 +2,7 @@ import { masterPrisma } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { authenticator } from "otplib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildTestApp, loginAdmin } from "./helpers.js";
+import { buildTestApp, loginAdmin, resetPartnerMfaStep } from "./helpers.js";
 
 const CODIGO = "pt-portal-1";
 const EMAIL = "portal-partner@test.local";
@@ -189,6 +189,7 @@ describe("2FA TOTP opt-in del partner", () => {
     });
     expect(mal.statusCode).toBe(401);
 
+    await resetPartnerMfaStep(CODIGO);
     const bien = await app.inject({
       method: "POST",
       url: "/partner/auth/mfa/verify",

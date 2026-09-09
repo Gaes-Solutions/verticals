@@ -157,12 +157,25 @@ describe("consent gating clínica → PHR", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("la clínica registra el consentimiento obtenido (full_phr)", async () => {
+  it("la clínica NO puede auto-atribuirse un consent full_phr (400)", async () => {
+    // Un consent atestiguado por la clínica, sin verificación del paciente, se
+    // acota a tipos declarados: full_phr solo lo otorga el paciente en su portal.
     const res = await app.inject({
       method: "POST",
       url: "/t/phr/consentimientos",
       headers: authA(),
       payload: { patientId, scope: "full_phr" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("el paciente otorga full_phr a la clínica A desde su portal", async () => {
+    const tenantA = await masterPrisma.tenant.findUniqueOrThrow({ where: { slug: TENANT_A } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/patient-portal/consents",
+      headers: authPatient(),
+      payload: { tenantId: tenantA.id, scope: "full_phr" },
     });
     expect(res.statusCode).toBe(201);
   });
@@ -184,12 +197,16 @@ describe("consent gating clínica → PHR", () => {
   });
 
   it("clínica B con consent prescriptions_only NO puede publicar Immunization", async () => {
-    await app.inject({
+    // La clínica no puede fabricar la relación: el consent nace en el portal del
+    // paciente, que es también lo que la vincula al consultorio.
+    const tenantB = await masterPrisma.tenant.findUniqueOrThrow({ where: { slug: TENANT_B } });
+    const otorgado = await app.inject({
       method: "POST",
-      url: "/t/phr/consentimientos",
-      headers: authB(),
-      payload: { patientId, scope: "prescriptions_only" },
+      url: "/patient-portal/consents",
+      headers: authPatient(),
+      payload: { tenantId: tenantB.id, scope: "prescriptions_only" },
     });
+    expect(otorgado.statusCode).toBe(201);
     const res = await app.inject({
       method: "POST",
       url: "/t/phr/registros",

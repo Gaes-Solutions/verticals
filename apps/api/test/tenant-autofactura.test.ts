@@ -72,7 +72,15 @@ beforeAll(async () => {
     method: "POST",
     url: "/t/productos",
     headers: authOwner(),
-    payload: { skuPadre: "AF-A", nombre: "Producto AF", precioBase: "116", aplicaIva: true },
+    payload: {
+      skuPadre: "AF-A",
+      nombre: "Producto AF",
+      precioBase: "116",
+      aplicaIva: true,
+      tasaIva: "16",
+      claveSat: "50181900",
+      claveUnidadSat: "H87",
+    },
   });
   varianteId = (prod.json() as { variantes: Array<{ id: string }> }).variantes[0]!.id;
   await app.inject({

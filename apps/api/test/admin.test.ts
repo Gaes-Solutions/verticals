@@ -3,7 +3,12 @@ import { hash as argon2Hash } from "@node-rs/argon2";
 import type { FastifyInstance } from "fastify";
 import { authenticator } from "otplib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildTestApp, cleanupTestTenants, createTestTenant } from "./helpers.js";
+import {
+  buildTestApp,
+  cleanupTestTenants,
+  createTestTenant,
+  resetAdminMfaStep,
+} from "./helpers.js";
 
 const SUPER = { email: "super-admin@test.local", password: "ChangeMe!Super1" };
 const SUPPORT = { email: "support-admin@test.local", password: "ChangeMe!Supp1" };
@@ -107,6 +112,7 @@ describe("auth admin + MFA TOTP", () => {
     const admin = await masterPrisma.adminUser.findUniqueOrThrow({
       where: { email: SUPER.email },
     });
+    await resetAdminMfaStep(SUPER.email);
     const code = authenticator.generate(admin.mfaSecret as string);
     const verify = await app.inject({
       method: "POST",

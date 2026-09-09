@@ -75,7 +75,7 @@ export async function loginAdmin(
   // verificado para que el login sea de un paso (password → verify) en tests.
   await masterPrisma.adminUser.update({
     where: { email },
-    data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date() },
+    data: { mfaSecret: TEST_ADMIN_MFA_SECRET, mfaVerifiedAt: new Date(), mfaLastStep: null },
   });
 
   const login = await app.inject({
@@ -216,4 +216,25 @@ export async function loginTenantUser(
     userId: body.user.id,
     permissions: body.user.permissions,
   };
+}
+
+/**
+ * Borra el marcador de replay TOTP (`mfaLastStep`) de un usuario de tenant.
+ * El endurecimiento de seguridad rechaza un código ya consumido, así que un test
+ * que enrola y verifica dentro del mismo paso de 30s necesita limpiarlo. Úsalo
+ * solo donde el objetivo NO sea probar la protección de replay.
+ */
+export async function resetTenantMfaStep(tenantSlug: string, email: string): Promise<void> {
+  const client = getTenantClient(tenantSlug);
+  await client.usuario.updateMany({ where: { email }, data: { mfaLastStep: null } });
+}
+
+/** Igual que `resetTenantMfaStep`, para el admin de la plataforma. */
+export async function resetAdminMfaStep(email: string = TEST_ADMIN_EMAIL): Promise<void> {
+  await masterPrisma.adminUser.updateMany({ where: { email }, data: { mfaLastStep: null } });
+}
+
+/** Igual que `resetTenantMfaStep`, para un partner del portal contable. */
+export async function resetPartnerMfaStep(codigo: string): Promise<void> {
+  await masterPrisma.partner.updateMany({ where: { codigo }, data: { mfaLastStep: null } });
 }
