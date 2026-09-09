@@ -82,3 +82,12 @@ test("un código inexistente no agrega nada al ticket", async ({ page }) => {
   await buscador.press("Enter");
   await expect(page.getByRole("button", { name: /Cobrar/ })).toBeDisabled();
 });
+
+test("el corte abre con el conteo de efectivo listo", async ({ page }) => {
+  await page.getByRole("button", { name: "Corte", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Corte de caja" })).toBeVisible();
+
+  // El conteo por denominación es lo que el cajero llena cada noche.
+  await expect(page.getByLabel("Billetes: cantidad de 100 pesos")).toBeVisible();
+  await expect(page.getByLabel("Monedas: cantidad de 10 pesos")).toBeVisible();
+});
