@@ -58,3 +58,7 @@ prisma/migrations/dev/
 # Misc
 *.pem
 .vercel
+
+# Respaldos de base de datos: contienen datos personales de clientes
+*.dump
+respaldos-gaespos/
