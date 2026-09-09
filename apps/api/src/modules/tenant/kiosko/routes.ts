@@ -28,10 +28,26 @@ async function requireKiosko(req: FastifyRequest, reply: FastifyReply): Promise<
   return auth;
 }
 
+// Límites por ruta. Sin ellos solo aplica el global, que alcanza para volcar el
+// catálogo completo con precios y promociones desde un token robado. Se expresan
+// como fracción del global para que el entorno mande: en producción el global es
+// 100/min y esto deja 30/10/20, y una batería de pruebas que lo sube no se topa.
+// Un cliente escaneando hace ~4 consultas por minuto: 30 da margen a varios
+// kioskos tras la misma IP y aun así corta la enumeración masiva.
+const fraccion = (global: number, pct: number) =>
+  ({ max: Math.max(1, Math.round((global * pct) / 100)), timeWindow: "1 minute" }) as const;
+
 /** Rutas del DISPOSITIVO kiosko (auth por token de dispositivo). Prefijo /kiosko. */
-export const kioskoDeviceRoutes: FastifyPluginAsync = async (app) => {
+export const kioskoDeviceRoutes: FastifyPluginAsync<{ rateLimitMax: number }> = async (
+  app,
+  opts,
+) => {
+  const LIMITE_PRECIO = fraccion(opts.rateLimitMax, 30);
+  const LIMITE_CONFIG = fraccion(opts.rateLimitMax, 10);
+  const LIMITE_IDLE = fraccion(opts.rateLimitMax, 20);
   // Config que el dispositivo lee al arrancar (tiempos, colores, idioma…).
-  app.get("/config", async (req, reply) => {
+  // Un kiosko real la consulta al arrancar y al reconectar, no en bucle.
+  app.get("/config", { config: { rateLimit: LIMITE_CONFIG } }, async (req, reply) => {
     const auth = await requireKiosko(req, reply);
     if (!auth) return;
     const cfg = await getKioskoConfig(auth.tenantPrisma);
@@ -49,7 +65,7 @@ export const kioskoDeviceRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Verificación de precio por código (barcode/sku).
-  app.get("/precio/:codigo", async (req, reply) => {
+  app.get("/precio/:codigo", { config: { rateLimit: LIMITE_PRECIO } }, async (req, reply) => {
     const auth = await requireKiosko(req, reply);
     if (!auth) return;
     const { codigo } = z.object({ codigo: z.string().min(1).max(80) }).parse(req.params);
@@ -64,7 +80,7 @@ export const kioskoDeviceRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Contenido del modo reposo (carrusel de anuncios).
-  app.get("/idle", async (req, reply) => {
+  app.get("/idle", { config: { rateLimit: LIMITE_IDLE } }, async (req, reply) => {
     const auth = await requireKiosko(req, reply);
     if (!auth) return;
     const cfg = await getKioskoConfig(auth.tenantPrisma);

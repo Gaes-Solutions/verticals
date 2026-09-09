@@ -230,7 +230,10 @@ export async function buildApp(
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
   await app.register(comercioRoutes, { prefix: "/cliente-portal/comercio" });
   await app.register(comercioCheckoutRoutes, { prefix: "/cliente-portal/comercio" });
-  await app.register(kioskoDeviceRoutes, { prefix: "/kiosko" });
+  await app.register(kioskoDeviceRoutes, {
+    prefix: "/kiosko",
+    rateLimitMax: config.RATE_LIMIT_MAX,
+  });
   await app.register(b2bAuthRoutes, { prefix: "/auth/cliente-b2b" });
   await app.register(b2bPortalRoutes, { prefix: "/b2b-portal" });
 

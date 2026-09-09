@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { writeAudit } from "../../../lib/audit.js";
 import { generarToken, getKioskoConfig } from "./service.js";
 
 const configSchema = z.object({
@@ -55,6 +56,16 @@ const kioskoAdminRoutes: FastifyPluginAsync = async (app) => {
       data: { nombre: body.nombre, sucursalId: body.sucursalId, tokenHash: hash },
       select: { id: true, nombre: true, sucursalId: true },
     });
+    // Emitir un token de kiosko es emitir una credencial de larga vida sobre el
+    // catálogo y los precios: queda registrado quién lo generó y cuándo.
+    await writeAudit(app.masterPrisma, {
+      actor: req.principal.email,
+      action: "kiosko.token_emitido",
+      resource: "kiosko_device",
+      resourceId: device.id,
+      metadata: { tenantSlug: req.principal.tenantSlug, nombre: device.nombre },
+      ipAddress: req.ip,
+    });
     // El token en claro se muestra UNA sola vez (no se vuelve a poder ver).
     return reply.code(201).send({ device, token });
   });
@@ -63,6 +74,14 @@ const kioskoAdminRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.CONFIGURACION_ACTUALIZAR);
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     await req.tenantPrisma.kioskoDevice.update({ where: { id }, data: { activo: false } });
+    await writeAudit(app.masterPrisma, {
+      actor: req.principal.email,
+      action: "kiosko.token_revocado",
+      resource: "kiosko_device",
+      resourceId: id,
+      metadata: { tenantSlug: req.principal.tenantSlug },
+      ipAddress: req.ip,
+    });
     return reply.code(204).send();
   });
 
