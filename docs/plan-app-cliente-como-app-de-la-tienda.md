@@ -84,10 +84,47 @@ Hacer **B primero y A2 después**, en ese orden, porque:
 - **Precio consistente.** El precio que ve el comprador debe salir del mismo motor que el punto
   de venta, como ya hace el kiosko. Tema PROFECO.
 
-## Decisión que necesito de Gaby
+## Recomendación (9-sep)
 
-Para el piloto del 25, ¿la app del Cliente va como **una sola app** donde el comprador elige la
-tienda la primera vez (A2), o quieres desde ya **la app propia del cliente piloto** con su nombre
-y su icono (A1)?
+### El hallazgo que la cambia
 
-La respuesta no cambia el trabajo de B, que arranca igual en los dos casos.
+**La tienda web ya es instalable.** Tiene `manifest.webmanifest` y service worker: un comprador
+puede darle "agregar a pantalla de inicio" y le queda un icono como cualquier app, sin pasar por
+Google Play.
+
+Lo que falla es que el manifiesto está **fijo**: dice *"Tienda GaesSoft"* con un icono genérico.
+Así que hoy al comprador le queda en su teléfono un icono que dice "Tienda", no el nombre del
+negocio. Y eso es exactamente lo que Gaby quiere evitar.
+
+Hacerlo por tienda es barato: Next.js puede generar el manifiesto según el dominio, con el
+nombre, el logo y el color de ese negocio.
+
+### El orden que recomiendo
+
+**1. Catálogo sin cuenta.** Va primero pase lo que pase: lo necesitan los tres caminos.
+
+**2. Manifiesto por tienda en la web.** Con esto, cada cliente tiene "su app" el mismo día: el
+comprador entra por el enlace que la tienda le manda, le da agregar a inicio, y le queda el icono
+del negocio con su nombre. Cero fricción de instalación, cero revisión de Google, y funciona en
+iPhone y Android por igual. Para una tienda de barrio esto **es** la app de la tienda.
+
+**3. Una sola app nativa, con la tienda elegida al primer uso.** La nativa aporta lo que la web
+no: notificaciones push confiables, cámara para escanear, y trabajar sin señal. Va para el
+piloto y para quien quiera app de verdad.
+
+**4. Marca blanca por tienda, como nivel de pago.** Cuando un cliente la pida y esté dispuesto a
+pagarla.
+
+### Por qué NO arrancar con la marca blanca
+
+- **Cuesta operación permanente.** Una ficha en Google Play por cliente, con su revisión, sus
+  capturas, su aviso de privacidad. Y cada actualización se revisa por separado, en cada ficha.
+  Con cinco clientes se aguanta; con cincuenta se vuelve un trabajo de tiempo completo.
+- **Nadie busca una tienda de barrio en Google Play.** El comprador llega porque la tienda le
+  mandó el enlace por WhatsApp o vio el código en el mostrador. Ese camino lo resuelven igual de
+  bien el paso 2 y el 3, hoy y sin esperar revisiones.
+- **Es un buen argumento de venta, no un requisito del piloto.** Guardarla como nivel superior le
+  da valor. Regalarla desde el día uno la vuelve costo fijo.
+
+Nada de esto se contradice: los cuatro pasos comparten el mismo código, y el cuarto es el
+tercero con la tienda ya puesta.
