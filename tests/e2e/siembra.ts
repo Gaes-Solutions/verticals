@@ -15,6 +15,8 @@ export const CUENTA = {
   password: "E2ePruebas!2026",
 };
 
+export const PROMO = "20% en azúcar (e2e)";
+
 export const CATALOGO = [
   { sku: "E2E-CAFE", nombre: "Café molido 500g", precio: "128.00", codigo: "7500000000018" },
   { sku: "E2E-AZUCAR", nombre: "Azúcar estándar 1kg", precio: "36.50", codigo: "7500000000025" },
@@ -72,6 +74,46 @@ export default async function siembra() {
   const sucursales = await api<Array<{ id: string }>>("/t/sucursales", {}, token);
   const sucursalId = sucursales[0]?.id;
   if (!sucursalId) throw new Error("El tenant de pruebas no tiene sucursal");
+
+  // Promoción del 20% sobre el azúcar: el punto de venta debe aplicarla sola,
+  // sin que el cajero haga nada. Es lo que el checklist llama "promoción activa
+  // aplica en venta".
+  const azucar = await api<{ id: string; variantes: Array<{ id: string }> }>(
+    `/t/productos/buscar/${CATALOGO[1]?.codigo}`,
+    {},
+    token,
+  );
+  // El listado devuelve un arreglo plano, no paginado.
+  const promos = await api<Array<{ id: string; nombre: string; status: string }>>(
+    "/t/promociones",
+    {},
+    token,
+  ).catch(() => []);
+  // Buscar o crear, y SIEMPRE dejarla activa: una promoción en borrador no
+  // aplica, y una corrida anterior pudo dejarla a medias.
+  const existente = promos.find((p) => p.nombre === PROMO);
+  const promoId =
+    existente?.id ??
+    (
+      await api<{ id: string }>(
+        "/t/promociones",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            nombre: PROMO,
+            tipo: "descuento_pct",
+            acciones: { valor: 20 },
+            vigenciaInicio: new Date(Date.now() - 86_400_000).toISOString(),
+            canales: ["todos"],
+            productos: [{ productoId: azucar.id, rol: "incluido" }],
+          }),
+        },
+        token,
+      )
+    ).id;
+  if (existente?.status !== "activa") {
+    await api(`/t/promociones/${promoId}/activar`, { method: "POST", body: "{}" }, token);
+  }
 
   // Existencias altas: que ninguna prueba falle por inventario agotado de
   // corridas anteriores.

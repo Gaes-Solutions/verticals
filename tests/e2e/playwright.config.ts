@@ -40,6 +40,10 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter @gaespos/api dev",
+      // Cada prueba entra de cero y el login está limitado a 20 por minuto en
+      // producción. Ese límite protege al sistema real, no es lo que estas
+      // pruebas verifican, así que se afloja solo para el servidor de pruebas.
+      env: { RATE_LIMIT_MAX: "100000" },
       url: `${API}/health`,
       reuseExistingServer: true,
       timeout: 120_000,

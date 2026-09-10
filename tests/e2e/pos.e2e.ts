@@ -9,6 +9,7 @@ import { CATALOGO, CUENTA } from "./siembra.js";
 test.use({ baseURL: "http://127.0.0.1:5173" });
 
 const CAFE = CATALOGO[0];
+const AZUCAR = CATALOGO[1] as (typeof CATALOGO)[number];
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -112,4 +113,55 @@ test("una lectura X que falla deja reintentar, no bloquea la caja", async ({ pag
   await reintentar.click();
   await page.getByRole("button", { name: "Corte X (lectura)" }).click();
   await expect(page.getByText("Diferencia vs esperado:")).toBeVisible();
+});
+
+test("devolver un producto de una venta cobrada", async ({ page }) => {
+  // Vender primero, para tener un folio real que devolver.
+  const buscador = page.getByPlaceholder("Buscar producto o escanear código…");
+  await buscador.fill(CAFE.codigo);
+  await buscador.press("Enter");
+  await page.getByRole("button", { name: /Cobrar/ }).click();
+  await page.getByRole("button", { name: "Confirmar" }).click();
+  await expect(page.getByRole("heading", { name: "Verificar cobro en efectivo" })).toBeVisible();
+
+  const folio = ((await page.getByRole("status").textContent()) ?? "").match(/[A-Z-]+\d{6}/)?.[0];
+  expect(folio, "la venta debe traer folio para poder devolverla").toBeTruthy();
+  await page.getByRole("button", { name: "Iniciar nueva venta" }).click();
+
+  await page.getByRole("button", { name: "Devolución", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Devolución" })).toBeVisible();
+  await page.getByLabel("Folio exacto de la venta").fill(folio as string);
+  await page.getByRole("button", { name: "Buscar", exact: true }).click();
+
+  // Devolver una pieza del café.
+  const cantidad = page.getByLabel(/Cantidad a devolver de/).first();
+  await expect(cantidad).toBeVisible();
+  await cantidad.fill("1");
+
+  const devolver = page.getByRole("button", { name: /Devolver 1 producto/ });
+  await expect(devolver).toBeEnabled();
+  await devolver.click();
+
+  // El dinero sale: la devolución tiene que quedar registrada con su propio
+  // folio, no basta con que la pantalla cambie.
+  await expect(page.getByText("Devolución registrada")).toBeVisible();
+  await expect(page.getByText(/^Folio /)).toBeVisible();
+});
+
+test("una promoción activa se aplica sola al cobrar", async ({ page }) => {
+  const buscador = page.getByPlaceholder("Buscar producto o escanear código…");
+  await buscador.fill(AZUCAR.codigo);
+  await buscador.press("Enter");
+  await expect(page.getByText(AZUCAR.nombre).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /Cobrar/ }).click();
+  await page.getByRole("button", { name: "Confirmar" }).click();
+  await expect(page.getByRole("heading", { name: "Verificar cobro en efectivo" })).toBeVisible();
+
+  // El azúcar es de 36.50 y trae 20% de promoción: la venta registrada tiene
+  // que quedar por debajo del precio de lista, sin que el cajero haga nada.
+  const linea = (await page.getByRole("status").textContent()) ?? "";
+  const cobrado = Number((linea.match(/\$\s?([\d.]+)/) ?? [])[1]);
+  expect(cobrado, `la venta dice: ${linea}`).toBeGreaterThan(0);
+  expect(cobrado).toBeLessThan(Number(AZUCAR.precio));
 });

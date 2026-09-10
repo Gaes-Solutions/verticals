@@ -41,11 +41,22 @@ El catálogo y las existencias se siembran solos antes de cada corrida (`siembra
 | Carga masiva | Que la plantilla traiga las columnas fiscales |
 | Corte de caja | Que el modal abra con el conteo por denominación listo |
 | Lectura X fallida | Que se pueda reintentar en vez de dejar la caja trabada |
+| Devolución | Devolver una pieza de una venta cobrada y que quede con folio propio |
+| Promoción | Que un 20% activo se aplique solo, sin que el cajero haga nada |
 
 ## Lo que falta
 
-Devoluciones, corte Z, promoción aplicada en venta, y el recorrido del cliente en la tienda.
-Van en la siguiente tanda.
+Corte Z y el recorrido del cliente en la tienda.
+
+## Dos cosas que salieron al escribirlas
+
+**El cajero no ve la promoción hasta que cobra.** El botón de cobrar muestra el total de lista;
+el descuento aparece hasta el modal de cobro, porque es el servidor quien calcula el precio real.
+Funciona, pero conviene revisar si el ticket debería mostrarlo antes.
+
+**El límite de peticiones ahoga a las pruebas.** Cada prueba entra de cero y el login permite 20
+por minuto. Ese límite protege al sistema real, así que se afloja solo para el servidor que
+levanta Playwright, nunca en el código.
 
 ### El corte X: qué se encontró y qué se corrigió
 
