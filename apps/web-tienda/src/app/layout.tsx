@@ -7,12 +7,22 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Tienda GaesSoft",
-  description: "Tienda en línea impulsada por GaesSoft POS",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Tienda", statusBarStyle: "default" },
-};
+/**
+ * El título, el icono y el manifiesto salen del negocio, no de la plataforma:
+ * el comprador entró a SU tienda, y así es como la ve en la pestaña, en el
+ * historial y cuando la agrega a su pantalla de inicio.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getTiendaConfig().catch(() => null);
+  const nombre = config?.nombre?.trim() || "Tienda";
+  return {
+    title: { default: nombre, template: `%s · ${nombre}` },
+    description: config?.lema?.trim() || `Compra en línea en ${nombre}`,
+    manifest: "/manifest.webmanifest",
+    icons: { icon: "/icono.svg", apple: "/icono.svg" },
+    appleWebApp: { capable: true, title: nombre, statusBarStyle: "default" },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#0d9488",
