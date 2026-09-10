@@ -90,3 +90,26 @@ test("el corte abre con el conteo de efectivo listo", async ({ page }) => {
   await expect(page.getByLabel("Billetes: cantidad de 100 pesos")).toBeVisible();
   await expect(page.getByLabel("Monedas: cantidad de 10 pesos")).toBeVisible();
 });
+
+test("una lectura X que falla deja reintentar, no bloquea la caja", async ({ page }) => {
+  // El corte X solo consulta: si el envío se cae, repetirlo es inofensivo.
+  // Antes el punto de venta decía "no lo vuelvas a enviar" y dejaba al cajero
+  // sin salida hasta recargar la página.
+  await page.route("**/t/cortes", (ruta) =>
+    ruta.request().method() === "POST" ? ruta.abort("failed") : ruta.continue(),
+  );
+
+  await page.getByRole("button", { name: "Corte", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Corte de caja" })).toBeVisible();
+  await expect(page.getByLabel("Billetes: cantidad de 100 pesos")).toBeVisible();
+  await page.getByRole("button", { name: "Corte X (lectura)" }).click();
+
+  const reintentar = page.getByRole("button", { name: "Volver a intentar la lectura" });
+  await expect(reintentar).toBeVisible();
+
+  // Al reintentar con la red restablecida, la lectura sale.
+  await page.unroute("**/t/cortes");
+  await reintentar.click();
+  await page.getByRole("button", { name: "Corte X (lectura)" }).click();
+  await expect(page.getByText("Diferencia vs esperado:")).toBeVisible();
+});

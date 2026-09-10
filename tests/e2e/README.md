@@ -40,25 +40,31 @@ El catálogo y las existencias se siembran solos antes de cada corrida (`siembra
 | Alta de producto | Que pida las claves del SAT, con la unidad propuesta en pieza |
 | Carga masiva | Que la plantilla traiga las columnas fiscales |
 | Corte de caja | Que el modal abra con el conteo por denominación listo |
+| Lectura X fallida | Que se pueda reintentar en vez de dejar la caja trabada |
 
 ## Lo que falta
 
 Devoluciones, corte Z, promoción aplicada en venta, y el recorrido del cliente en la tienda.
 Van en la siguiente tanda.
 
-### Por qué el corte no se ejecuta en la prueba
+### El corte X: qué se encontró y qué se corrigió
 
-Intenté verificar la aritmética del corte haciendo dos lecturas X seguidas con conteos que
-difieren en cien pesos. Al hacerlo apareció un comportamiento a revisar: **la segunda lectura no
-confirma y deja la caja bloqueada**, con el aviso "Hay un corte X sin confirmar, no repitas el
-envío" y el botón deshabilitado.
+Al escribir estas pruebas apareció un aviso de "corte X sin confirmar" que dejaba la caja
+trabada. La primera lectura del síntoma fue equivocada: **no es que un segundo corte X falle**.
+Se comprobó de los dos lados. En la API, dos lecturas X seguidas responden 201 y la diferencia
+cambia exactamente lo que cambia el conteo (`tenant-cortes.test.ts`). En el navegador, dos
+lecturas seguidas también salen bien.
 
-El X es de lectura y no cierra nada, así que dejar la caja atorada es un modo de falla más duro
-del que amerita. Queda pendiente entender si es una carrera entre las dos lecturas o algo del
-mecanismo de intentos durables.
+Lo que sí había era un modo de falla desproporcionado: **cuando el envío de una lectura X no se
+confirmaba** (un corte de red, una petición abortada), el punto de venta mostraba "no lo vuelvas
+a enviar" y no ofrecía ninguna salida. El cajero quedaba trabado hasta recargar la página.
 
-Mientras tanto la prueba solo abre el modal y comprueba el conteo. Una prueba que ensucia el
-estado compartido de la caja no sirve: la deja rota para las siguientes corridas.
+Esa advertencia es correcta para el corte Z, que cierra el turno y no debe duplicarse. Para el X
+no: solo consulta, no mueve dinero, no toca inventario y no cierra la apertura, así que repetirlo
+es inofensivo. Ahora el X ofrece "Volver a intentar la lectura" y el Z conserva la advertencia
+estricta con su consulta al servidor.
+
+La prueba de arriba corta la red a propósito para verificarlo.
 
 ## Un hallazgo del camino
 

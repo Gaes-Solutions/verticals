@@ -103,6 +103,19 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
   const validCounts = conteoValido(billetes) && conteoValido(monedas);
   const inputsBlocked = procesando || cargando || !!pendiente || !!resultado;
   const blocked = inputsBlocked || !validCounts;
+  /**
+   * El corte X solo lee: no mueve dinero, no toca inventario y no cierra la
+   * apertura. Si el envío no se confirmó, repetirlo es inofensivo, así que el
+   * cajero puede volver a intentar en vez de quedarse trabado. El Z sí cierra
+   * el turno, por eso conserva la advertencia estricta.
+   */
+  function reintentarLecturaX() {
+    if (pendiente?.tipo !== "X") return;
+    clearCortePendiente(scope);
+    setPendiente(undefined);
+    setError(null);
+  }
+
   async function hacerCorte(tipo: "X" | "Z") {
     if (!apertura || guard.current || blocked || !canRead || (tipo === "Z" && !canClose)) return;
     guard.current = true;
@@ -121,7 +134,9 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
     } catch {
       if (active.current)
         setError(
-          "No se pudo confirmar el corte. No lo vuelvas a enviar. Consulta el cierre en el servidor o revisa los cortes con el encargado.",
+          tipo === "Z"
+            ? "No se pudo confirmar el cierre. No lo vuelvas a enviar: consúltalo en el servidor."
+            : "No se pudo confirmar la lectura. Puedes volver a intentarla.",
         );
     } finally {
       guard.current = false;
@@ -190,6 +205,7 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
     blocked,
     canClose,
     hacerCorte,
+    reintentarLecturaX,
   };
 }
 export function CorteModal(props: CorteProps) {
@@ -218,6 +234,7 @@ export function CorteModal(props: CorteProps) {
     blocked,
     canClose,
     hacerCorte,
+    reintentarLecturaX,
   } = useCorte(props);
   return (
     <dialog
@@ -261,6 +278,7 @@ export function CorteModal(props: CorteProps) {
         resultado={resultado}
         disabled={procesando || cargando || !canRead}
         recuperar={recuperar}
+        reintentarLecturaX={reintentarLecturaX}
       />
       {!validCounts ? (
         <p role="alert" className="text-red-700">
@@ -351,35 +369,43 @@ function CortePendiente({
   resultado,
   disabled,
   recuperar,
+  reintentarLecturaX,
 }: {
   pendiente: CutPending | undefined;
   resultado: CorteResultado | null;
   disabled: boolean;
   recuperar: () => Promise<void>;
+  reintentarLecturaX: () => void;
 }) {
+  if (!pendiente || resultado) return null;
+  const esCierre = pendiente.tipo === "Z";
   return (
-    <>
-      {pendiente && !resultado ? (
-        <div className="mb-4 space-y-2">
-          <p role="alert" className="text-sm text-amber-800">
-            Hay un corte {pendiente.tipo} sin confirmar. No repitas el envío ni recargues para
-            intentarlo otra vez.
-          </p>
-          {pendiente.tipo === "Z" ? (
-            <button
-              type="button"
-              disabled={disabled}
-              className="min-h-10 rounded border border-brand px-3 text-brand disabled:opacity-50"
-              onClick={() => void recuperar()}
-            >
-              Consultar cierre en el servidor
-            </button>
-          ) : (
-            <p className="text-sm">Revisa la lectura X en el historial con el encargado.</p>
-          )}
-        </div>
-      ) : null}
-    </>
+    <div className="mb-4 space-y-2">
+      <p role="alert" className="text-sm text-amber-800">
+        {esCierre
+          ? "El cierre de turno no se confirmó. No repitas el envío ni recargues: consúltalo primero."
+          : "La lectura no se confirmó. Puedes volver a intentarla: el corte X solo consulta, no cierra la caja ni mueve dinero."}
+      </p>
+      {esCierre ? (
+        <button
+          type="button"
+          disabled={disabled}
+          className="min-h-10 rounded border border-brand px-3 text-brand disabled:opacity-50"
+          onClick={() => void recuperar()}
+        >
+          Consultar cierre en el servidor
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          className="min-h-10 rounded border border-brand px-3 text-brand disabled:opacity-50"
+          onClick={reintentarLecturaX}
+        >
+          Volver a intentar la lectura
+        </button>
+      )}
+    </div>
   );
 }
 

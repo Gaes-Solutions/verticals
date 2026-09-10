@@ -240,6 +240,27 @@ describe("corte X — parcial informativo", () => {
     expect(Number(body.diferencia)).toBe(0);
   });
 
+  it("un segundo corte X sobre la misma apertura también responde", async () => {
+    // El X es de lectura: el cajero puede consultar cuantas veces quiera. Si el
+    // servidor fallara aquí, el punto de venta deja la caja bloqueada con
+    // "corte X sin confirmar" y el cajero se queda sin poder cortar.
+    const segundo = await app.inject({
+      method: "POST",
+      url: "/t/cortes",
+      headers: authOwner(),
+      payload: {
+        aperturaId,
+        tipo: "X",
+        denominaciones: { billetes: { "500": 1, "200": 2, "50": 1, "100": 1 }, monedas: {} },
+      },
+    });
+    expect(segundo.statusCode).toBe(201);
+    const body = segundo.json() as { tipo: string; diferencia: string };
+    expect(body.tipo).toBe("X");
+    // Cien pesos de más que en la lectura anterior, que cerraba en cero.
+    expect(Number(body.diferencia)).toBe(100);
+  });
+
   it("corte X NO cierra la apertura", async () => {
     const res = await app.inject({
       method: "GET",
