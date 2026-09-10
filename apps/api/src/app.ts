@@ -36,6 +36,7 @@ import phrTenantRoutes, {
   patientEmergencyPublicRoutes,
   patientPortalRoutes,
 } from "./modules/patient-portal/routes.js";
+import catalogoPublicoRoutes from "./modules/storefront/catalogo-publico.js";
 import storefrontPublicRoutes from "./modules/storefront/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
 import apartadosRoutes from "./modules/tenant/apartados/routes.js";
@@ -213,6 +214,7 @@ export async function buildApp(
   await app.register(autofacturaPublicRoutes);
   await app.register(citasPublicRoutes);
   await app.register(storefrontPublicRoutes);
+  await app.register(catalogoPublicoRoutes);
   await app.register(b2bPublicRoutes);
   await app.register(billingAdminTenantRoutes);
   // Webhook mock SIN auth ni firma: marca invoices como pagadas. Solo dev/tests.
