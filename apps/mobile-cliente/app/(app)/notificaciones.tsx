@@ -2,13 +2,22 @@ import { useAuth } from "@/lib/auth-store";
 import { fecha } from "@/lib/format";
 import { listNotificaciones, marcarLeida, marcarTodasLeidas } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { EmptyState, Loading } from "@/ui";
+import { EmptyState, EntraParaVer, Loading } from "@/ui";
 import { CommerceError } from "@/ui/CommerceError";
 import { Screen } from "@/ui/Screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function Notificaciones() {
+  const conSesion = useAuth((sel) => sel.status) === "signedIn";
+  if (!conSesion)
+    return (
+      <EntraParaVer
+        icono="notifications"
+        titulo="Tus avisos"
+        texto="Te avisamos cuando tu pedido cambie de estado o haya una promoción."
+      />
+    );
   const { tenantSlug, user } = useAuth();
   const queryKey = ["notificaciones", tenantSlug, user?.id];
   const qc = useQueryClient();

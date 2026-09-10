@@ -2,13 +2,22 @@ import { useAuth } from "@/lib/auth-store";
 import { money } from "@/lib/format";
 import { listWishlist, quitarWishlist } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { EmptyState, Icon, Loading } from "@/ui";
+import { EmptyState, EntraParaVer, Icon, Loading } from "@/ui";
 import { CommerceError } from "@/ui/CommerceError";
 import { Screen } from "@/ui/Screen";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 
 export default function Favoritos() {
+  const conSesion = useAuth((sel) => sel.status) === "signedIn";
+  if (!conSesion)
+    return (
+      <EntraParaVer
+        icono="heart"
+        titulo="Tus favoritos"
+        texto="Guarda lo que te gusta para encontrarlo rápido la próxima vez."
+      />
+    );
   const { tenantSlug, user } = useAuth();
   const queryKey = ["wishlist", tenantSlug, user?.id];
   const qc = useQueryClient();

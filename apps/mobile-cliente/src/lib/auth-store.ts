@@ -6,6 +6,7 @@ import { BIOMETRIA_KEY, TENANT_KEY, TOKEN_KEY } from "../config";
 import { authApi, invalidateSessionRequests, setUnauthorizedHandler } from "./api";
 import { clearAccountCache } from "./query-client";
 import { secureStorage } from "./storage";
+import { marcarSesion } from "./tienda";
 
 type Status = "loading" | "signedOut" | "signedIn" | "unverified";
 
@@ -80,6 +81,10 @@ async function unlockAccount() {
   return { success: result.success, biometriaDisponible: disponible, biometriaActiva: active };
 }
 
+function limpiarSesion(): void {
+  marcarSesion(null);
+}
+
 const signedOut = {
   status: "signedOut" as const,
   user: null,
@@ -109,8 +114,8 @@ export const useAuth = create<AuthState>((set, get) => {
       if (attempt !== operation) return;
       await persistSession(session.accessToken, slug);
     });
-    if (attempt === operation)
-      set({ status: "signedIn", user: session.cliente, tenantSlug: slug, biometriaActiva: false });
+    if (attempt === operation) marcarSesion(slug);
+    set({ status: "signedIn", user: session.cliente, tenantSlug: slug, biometriaActiva: false });
   };
 
   const restoreFailed = async (error: unknown, attempt: number) => {
@@ -141,6 +146,7 @@ export const useAuth = create<AuthState>((set, get) => {
     restore: async () => {
       const attempt = ++operation;
       invalidateSessionRequests();
+      limpiarSesion();
       set({ ...signedOut, status: "loading", error: null });
       try {
         await clearAccountCache();
@@ -159,7 +165,10 @@ export const useAuth = create<AuthState>((set, get) => {
           return;
         }
         const user = await loadIdentity(token, slug);
-        if (attempt === operation) set({ status: "signedIn", user, tenantSlug: slug });
+        if (attempt === operation) {
+          marcarSesion(slug);
+          set({ status: "signedIn", user, tenantSlug: slug });
+        }
       } catch (error) {
         await restoreFailed(error, attempt);
       }
@@ -214,6 +223,7 @@ export const useAuth = create<AuthState>((set, get) => {
     logout: async () => {
       ++operation;
       invalidateSessionRequests();
+      limpiarSesion();
       set({ ...signedOut, error: null });
       await clearAccountCache();
       try {

@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth-store";
+import { tiendaActual } from "@/lib/tienda";
 import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 
@@ -11,5 +12,8 @@ export default function Index() {
       </View>
     );
   }
-  return <Redirect href={status === "signedIn" ? "/(app)" : "/login"} />;
+  // Sin sesión NO se manda al login: se abre la tienda, como cualquier tienda
+  // en línea. El login solo aparece si todavía no sabemos de qué tienda es.
+  if (status === "signedIn") return <Redirect href="/(app)" />;
+  return <Redirect href={tiendaActual() ? "/(app)/tienda" : "/login"} />;
 }

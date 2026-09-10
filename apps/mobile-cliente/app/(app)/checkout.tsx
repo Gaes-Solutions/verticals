@@ -6,7 +6,7 @@ import { money } from "@/lib/format";
 import { deliveryOptions, paymentConfig } from "@/services/checkout";
 import { listDirecciones } from "@/services/cliente";
 import { colors, radius, space } from "@/theme";
-import { Button, Input } from "@/ui";
+import { Button, EntraParaVer, Input } from "@/ui";
 import { CommerceError } from "@/ui/CommerceError";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -14,7 +14,17 @@ import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Checkout() {
-  const { tenantSlug, user } = useAuth();
+  const { status, tenantSlug, user } = useAuth();
+  // Mirar el catálogo es libre; pagar no. Aquí sí hace falta correo y
+  // dirección, así que es el único punto donde se pide la cuenta.
+  if (status !== "signedIn")
+    return (
+      <EntraParaVer
+        icono="lock-closed"
+        titulo="Crea tu cuenta para pagar"
+        texto="Necesitamos un correo y una dirección para enviarte tu pedido. Tu carrito se conserva."
+      />
+    );
   const owner = tenantSlug && user ? accountCartKey(tenantSlug, user.id) : "";
   return <CheckoutScreen key={owner} owner={owner} name={user?.nombre ?? ""} />;
 }

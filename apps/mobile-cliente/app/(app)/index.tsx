@@ -2,7 +2,7 @@ import { useAuth } from "@/lib/auth-store";
 import { fecha, money } from "@/lib/format";
 import { getPedidoDetalle, listPedidos } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { Badge, EmptyState, Icon, Loading } from "@/ui";
+import { Badge, EmptyState, EntraParaVer, Icon, Loading } from "@/ui";
 import { CommerceError } from "@/ui/CommerceError";
 import { Screen } from "@/ui/Screen";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +17,15 @@ const PAGO_TONE: Record<string, "ok" | "warn" | "danger" | "neutral"> = {
 };
 
 export default function Pedidos() {
+  const conSesion = useAuth((sel) => sel.status) === "signedIn";
+  if (!conSesion)
+    return (
+      <EntraParaVer
+        icono="bag-handle"
+        titulo="Tus pedidos"
+        texto="Aquí verás lo que has comprado y en dónde viene cada pedido."
+      />
+    );
   const { tenantSlug, user } = useAuth();
   const queryKey = ["pedidos", tenantSlug, user?.id];
   const [folio, setFolio] = useState<string | null>(null);

@@ -1,12 +1,21 @@
 import { useAuth } from "@/lib/auth-store";
 import { getPerfil } from "@/services/cliente";
 import { colors, shadow, space } from "@/theme";
-import { Button, Card, Icon, type IconName } from "@/ui";
+import { Button, Card, EntraParaVer, Icon, type IconName } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
 export default function Cuenta() {
+  const conSesion = useAuth((sel) => sel.status) === "signedIn";
+  if (!conSesion)
+    return (
+      <EntraParaVer
+        icono="person-circle"
+        titulo="Tu cuenta"
+        texto="Tus datos, direcciones y forma de entrar a la app."
+      />
+    );
   const { user, tenantSlug, logout, biometriaActiva, biometriaDisponible, setBiometria } =
     useAuth();
   const q = useQuery({ queryKey: ["perfil"], queryFn: getPerfil });
