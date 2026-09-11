@@ -1,5 +1,5 @@
 import { masterPrisma } from "./client.js";
-import { getTenantClient } from "./tenant-client.js";
+import { createTenantClient } from "./tenant-client.js";
 
 /**
  * Rellena el índice de correo → negocio con los usuarios que ya existían antes
@@ -14,8 +14,11 @@ export async function sembrarDirectorio(): Promise<{ tenants: number; usuarios: 
   });
   let usuarios = 0;
   for (const tenant of tenants) {
+    let client: ReturnType<typeof createTenantClient> | null = null;
     try {
-      const client = getTenantClient(tenant.slug);
+      // Cliente propio y cerrado al terminar: con uno en caché por negocio,
+      // una base con muchas tiendas se queda sin conexiones a medio recorrido.
+      client = createTenantClient(tenant.slug);
       const lista = await client.usuario.findMany({
         select: { id: true, email: true, isActive: true },
       });
@@ -30,6 +33,8 @@ export async function sembrarDirectorio(): Promise<{ tenants: number; usuarios: 
       }
     } catch {
       // Un tenant con el schema a medias no debe detener al resto.
+    } finally {
+      await client?.$disconnect();
     }
   }
   return { tenants: tenants.length, usuarios };

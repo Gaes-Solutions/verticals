@@ -14,6 +14,25 @@ function cnameTarget(): string {
   return process.env.STOREFRONT_CNAME_TARGET?.trim() || "stores.gaessoft.mx";
 }
 
+/**
+ * Dirección pública de la tienda: la que va en el QR del mostrador. El dominio
+ * propio manda solo si ya está verificado. Un QR impreso que apunte a un
+ * dominio sin conectar deja al comprador en una página rota, y ese papel pegado
+ * en el mostrador ya no se puede corregir.
+ */
+export function urlPublicaTienda(input: {
+  subdominio: string | null;
+  dominioPropio: string | null;
+  dominioVerificado: boolean;
+}): string | null {
+  if (input.dominioPropio && input.dominioVerificado) {
+    return `https://${input.dominioPropio.toLowerCase()}`;
+  }
+  const apex = apexPlataforma();
+  if (apex && input.subdominio) return `https://${input.subdominio.toLowerCase()}.${apex}`;
+  return null;
+}
+
 export function tokenVerificacion(): string {
   return randomBytes(16).toString("hex");
 }

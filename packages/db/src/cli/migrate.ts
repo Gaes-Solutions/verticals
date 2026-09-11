@@ -114,6 +114,20 @@ tenant
   });
 
 tenant
+  .command("dominios")
+  .description("Registra la dirección de cada tienda en el índice host → tienda (para el QR)")
+  .action(async () => {
+    try {
+      const { sembrarDominios } = await import("../dominios-seed.js");
+      const r = await sembrarDominios();
+      console.info(`[dominios] ${r.registrados} tiendas con dirección registrada`);
+      for (const o of r.omitidos) console.info(`[dominios] omitida: ${o}`);
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+
+tenant
   .command("list")
   .description("Lista tenants en master DB")
   .action(async () => {

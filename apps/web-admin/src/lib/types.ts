@@ -89,6 +89,8 @@ export interface ConfigTienda {
   activa?: boolean;
   subdominio?: string | null;
   dominioPropio?: string | null;
+  /** Dirección pública final (la del QR). Solo lectura: la calcula el servidor. */
+  urlPublica?: string | null;
   nombre?: string | null;
   msiHabilitado?: boolean;
   msiMeses?: number[];

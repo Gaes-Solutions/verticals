@@ -7,6 +7,7 @@ import {
   instruccionesDns,
   sincronizarDominioMaster,
   tokenVerificacion,
+  urlPublicaTienda,
   verificarTxt,
 } from "./dominio-service.js";
 import {
@@ -105,7 +106,10 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/config", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
-    return req.tenantPrisma.configTiendaEcommerce.findFirst();
+    const config = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    if (!config) return config;
+    // El panel necesita la dirección final para armar el QR del mostrador.
+    return { ...config, urlPublica: urlPublicaTienda(config) };
   });
 
   app.put("/config", async (req, reply) => {
@@ -203,7 +207,7 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       dominioVerificado: cfg.dominioVerificado,
       dominioPropioAnterior: existing?.dominioPropio ?? null,
     });
-    return reply.code(existing ? 200 : 201).send(cfg);
+    return reply.code(existing ? 200 : 201).send({ ...cfg, urlPublica: urlPublicaTienda(cfg) });
   });
 
   // Estado del dominio propio + instrucciones DNS que el sistema recomienda.

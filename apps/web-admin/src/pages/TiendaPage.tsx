@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { QrTienda } from "../components/QrTienda.js";
 import { ShippingServicePicker } from "../components/ShippingServicePicker.js";
 import { ApiError, api, puede } from "../lib/api.js";
 import type { ConfigTienda, Paged, Producto } from "../lib/types.js";
@@ -81,7 +82,7 @@ export function TiendaPage() {
     setMsg(null);
     setGuardando(true);
     try {
-      await api("/t/ecommerce/config", {
+      const guardada = await api<ConfigTienda>("/t/ecommerce/config", {
         method: "PUT",
         body: {
           activa: config.activa ?? false,
@@ -109,6 +110,8 @@ export function TiendaPage() {
           politicasHtml: config.politicasHtml ?? {},
         },
       });
+      // El QR se arma con la dirección que el servidor ya tiene guardada.
+      setConfig((c) => ({ ...c, urlPublica: guardada?.urlPublica ?? null }));
       setMsg("Configuración guardada");
       setDominioKey((k) => k + 1);
     } catch (err) {
@@ -218,6 +221,13 @@ export function TiendaPage() {
         >
           {guardando ? "Guardando…" : "Guardar"}
         </button>
+        {configLoaded && (
+          <QrTienda
+            url={config.urlPublica ?? null}
+            nombre={config.nombre ?? ""}
+            activa={config.activa ?? false}
+          />
+        )}
       </section>
 
       <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
