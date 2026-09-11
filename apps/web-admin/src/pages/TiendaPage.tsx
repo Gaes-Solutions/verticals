@@ -44,6 +44,7 @@ export function TiendaPage() {
   const [configRetry, setConfigRetry] = useState(0);
   const [configLoading, setConfigLoading] = useState(true);
   const [apexTienda, setApexTienda] = useState<string | null>(null);
+  const [productosPublicados, setProductosPublicados] = useState<number | null>(null);
   // Un subdominio ya guardado no se toca solo: cambiarlo deja inservibles los
   // QR que el negocio ya imprimió.
   const [subdominioGuardado, setSubdominioGuardado] = useState(false);
@@ -88,12 +89,19 @@ export function TiendaPage() {
     return () => clearTimeout(t);
   }, [buscarPub, canPublish]);
 
-  useEffect(() => {
+  const cargarEstado = useCallback(() => {
     if (!canConfigure) return;
-    api<{ apexTienda: string | null }>("/t/ecommerce/plataforma")
-      .then((r) => setApexTienda(r.apexTienda))
+    api<{ apexTienda: string | null; productosPublicados: number }>("/t/ecommerce/estado")
+      .then((r) => {
+        setApexTienda(r.apexTienda);
+        setProductosPublicados(r.productosPublicados);
+      })
       .catch(() => setApexTienda(null));
   }, [canConfigure]);
+
+  useEffect(() => {
+    cargarEstado();
+  }, [cargarEstado]);
 
   async function guardarConfig() {
     if (!canConfigure || !configLoaded) return;
@@ -156,10 +164,14 @@ export function TiendaPage() {
         },
       });
       setMsg(`"${p.nombre}" publicado en la tienda`);
+      cargarEstado();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al publicar (¿ya estaba publicado?)");
     }
   }
+
+  // Sin nada publicado la tienda no se enciende (el servidor también lo impide).
+  const sinProductos = productosPublicados === 0 && !config.activa;
 
   return (
     <div className="max-w-2xl">
@@ -188,14 +200,22 @@ export function TiendaPage() {
 
       <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-4 font-bold text-slate-800">Configuración</h2>
-        <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={config.activa ?? false}
-            onChange={(e) => setConfig({ ...config, activa: e.target.checked })}
-          />
-          Tienda activa (visible al público)
-        </label>
+        <div className="mb-3">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={config.activa ?? false}
+              disabled={sinProductos}
+              onChange={(e) => setConfig({ ...config, activa: e.target.checked })}
+            />
+            Tienda activa (visible al público)
+          </label>
+          {sinProductos && (
+            <p className="mt-1 text-amber-700 text-xs">
+              Publica al menos un producto (más abajo) para poder activarla.
+            </p>
+          )}
+        </div>
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-medium text-slate-700">Nombre de la tienda</span>
           <input

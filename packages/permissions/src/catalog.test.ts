@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_PERMISSIONS,
+  PERMISOS_DE_SISTEMA,
   PERMISSIONS,
   categoryArea,
+  isAssignablePermission,
   isKnownPermission,
   listPermissionsByArea,
   listPermissionsByCategory,
   permissionMeta,
 } from "./catalog.js";
+
+// Lo que ve el editor de roles: todo menos los permisos de accesos de sistema.
+const ASIGNABLES = ALL_PERMISSIONS.filter((p) => !PERMISOS_DE_SISTEMA.has(p));
 
 describe("catalog", () => {
   it("expone códigos únicos", () => {
@@ -35,7 +40,7 @@ describe("catalog", () => {
     expect(grouped.ventas).toBeDefined();
     expect(grouped.usuarios).toBeDefined();
     const allFromGroups = Object.values(grouped).flat();
-    expect(allFromGroups.length).toBe(ALL_PERMISSIONS.length);
+    expect(allFromGroups.length).toBe(ASIGNABLES.length);
   });
 
   it("isKnownPermission detecta válidos e inválidos", () => {
@@ -68,7 +73,7 @@ describe("catalog", () => {
 
   it("sin vertical devuelve TODO el catálogo", () => {
     const todo = listPermissionsByCategory();
-    expect(Object.values(todo).flat().length).toBe(ALL_PERMISSIONS.length);
+    expect(Object.values(todo).flat().length).toBe(ASIGNABLES.length);
   });
 
   it("categoryArea clasifica por área", () => {
@@ -82,7 +87,7 @@ describe("catalog", () => {
   it("listPermissionsByArea: muestra TODO (mezclable) y marca aplica por vertical", () => {
     const areas = listPermissionsByArea("retail_mayoreo");
     const total = areas.flatMap((a) => a.categorias.flatMap((c) => c.permisos)).length;
-    expect(total).toBe(ALL_PERMISSIONS.length); // no oculta nada → se puede mezclar
+    expect(total).toBe(ASIGNABLES.length); // no oculta nada asignable → se puede mezclar
 
     const salud = areas.find((a) => a.area === "salud");
     const general = areas.find((a) => a.area === "general");
@@ -90,5 +95,15 @@ describe("catalog", () => {
     expect(general?.aplica).toBe(true);
     // las áreas que aplican van primero
     expect(areas[0]?.aplica).toBe(true);
+  });
+
+  it("los permisos de sistema no se listan ni se pueden asignar a un rol", () => {
+    const listados = Object.values(listPermissionsByCategory())
+      .flat()
+      .map((m) => m.code);
+    expect(listados).not.toContain(PERMISSIONS.ECOMMERCE_TIENDA_WEB);
+    expect(isKnownPermission(PERMISSIONS.ECOMMERCE_TIENDA_WEB)).toBe(true);
+    expect(isAssignablePermission(PERMISSIONS.ECOMMERCE_TIENDA_WEB)).toBe(false);
+    expect(isAssignablePermission(PERMISSIONS.POS_USAR)).toBe(true);
   });
 });

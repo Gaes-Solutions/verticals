@@ -1,5 +1,6 @@
 import { type TenantPrismaClient, getTenantClient } from "@gaespos/db";
 import {
+  PERMISSIONS,
   type PermissionCode,
   PermissionDeniedError,
   type PermissionPrincipal,
@@ -9,6 +10,7 @@ import {
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { buildTenantPrincipal, loadTenantUserById } from "../modules/auth-tenant/service.js";
+import { TIENDA_WEB_EMAIL } from "../modules/storefront/tienda-web.js";
 
 export interface TenantPrincipal extends PermissionPrincipal {
   userId: string;
@@ -37,7 +39,7 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
         message: "Token inválido o expirado",
       });
     }
-    if (req.user.kind !== "tenant") {
+    if (req.user.kind !== "tenant" && req.user.kind !== "tienda_web") {
       return reply.code(401).send({
         statusCode: 401,
         error: "Unauthorized",
@@ -58,7 +60,10 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
 
     const tenantPrisma = getTenantClient(req.user.tenantSlug);
     const user = await loadTenantUserById(req.user.sub, tenantPrisma);
-    if (!user || !user.isActive) {
+    // Un token de tienda solo vale para el usuario de sistema de la tienda: si
+    // apunta a una persona, alguien lo fabricó.
+    const esTiendaWeb = req.user.kind === "tienda_web";
+    if (!user || !user.isActive || (esTiendaWeb && user.email !== TIENDA_WEB_EMAIL)) {
       return reply.code(401).send({
         statusCode: 401,
         error: "Unauthorized",
@@ -73,8 +78,9 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
       userId: fresh.id,
       email: fresh.email,
       tenantSlug: req.user.tenantSlug,
-      permissions: fresh.permissions,
-      isOwner: fresh.isOwner,
+      // La tienda solo hace lo que hace un comprador, tenga los roles que tenga.
+      permissions: esTiendaWeb ? [PERMISSIONS.ECOMMERCE_TIENDA_WEB] : fresh.permissions,
+      isOwner: esTiendaWeb ? false : fresh.isOwner,
     };
     req.requirePerm = (perm) => {
       if (!hasPermission(req.principal, perm)) {

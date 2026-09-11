@@ -1,9 +1,9 @@
-import { ALL_PERMISSIONS, isKnownPermission } from "@gaespos/permissions";
+import { ALL_PERMISSIONS, isAssignablePermission } from "@gaespos/permissions";
 import { z } from "zod";
 
 const permissionListSchema = z.array(
   z.string().refine(
-    (v) => v === "*" || isKnownPermission(v),
+    (v) => v === "*" || isAssignablePermission(v),
     (v) => ({
       message: `Permiso desconocido: "${v}". Usa uno de ${ALL_PERMISSIONS.join(", ")} o "*"`,
     }),

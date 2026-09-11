@@ -27,6 +27,15 @@ type TenantTokenPayload = {
   kind: "tenant";
 };
 
+// Acceso de la tienda web a un negocio: lo emite /public/storefront/token a
+// cambio de la llave de plataforma. No es una persona ni hereda roles.
+type TiendaWebTokenPayload = {
+  sub: string;
+  email: string;
+  tenantSlug: string;
+  kind: "tienda_web";
+};
+
 // Token intermedio del usuario del negocio: password validada, falta el reto TOTP.
 type TenantMfaTokenPayload = {
   sub: string;
@@ -87,6 +96,7 @@ type TokenPayload =
   | AdminTokenPayload
   | AdminMfaTokenPayload
   | TenantTokenPayload
+  | TiendaWebTokenPayload
   | TenantMfaTokenPayload
   | PatientTokenPayload
   | AdminTenantTokenPayload

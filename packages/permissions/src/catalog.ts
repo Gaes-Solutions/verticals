@@ -122,6 +122,8 @@ export const PERMISSIONS = {
   ECOMMERCE_PEDIDOS_GESTIONAR: "ecommerce.pedidos_gestionar",
   ECOMMERCE_RESENAS_MODERAR: "ecommerce.resenas_moderar",
   ECOMMERCE_ENVIOS_GESTIONAR: "ecommerce.envios_gestionar",
+  // De sistema: solo lo recibe el acceso de la tienda web, nunca un rol.
+  ECOMMERCE_TIENDA_WEB: "ecommerce.tienda_web",
 
   PROMOCIONES_GESTIONAR: "promociones.gestionar",
   SEGMENTOS_GESTIONAR: "segmentos.gestionar",
@@ -216,6 +218,14 @@ export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export const ALL_PERMISSIONS: ReadonlyArray<PermissionCode> = Object.freeze(
   Object.values(PERMISSIONS) as PermissionCode[],
 );
+
+/**
+ * Permisos de accesos de sistema. Nunca van en un rol: no aparecen en el editor
+ * de roles y la API rechaza guardar un rol que los tenga.
+ */
+export const PERMISOS_DE_SISTEMA: ReadonlySet<PermissionCode> = new Set<PermissionCode>([
+  PERMISSIONS.ECOMMERCE_TIENDA_WEB,
+]);
 
 export interface PermissionMeta {
   code: PermissionCode;
@@ -494,6 +504,11 @@ const META: Record<PermissionCode, Omit<PermissionMeta, "code">> = {
     category: "ecommerce",
     description: "Transicionar estado de pedidos (preparar, enviar, entregar)",
   },
+  "ecommerce.tienda_web": {
+    category: "ecommerce",
+    description:
+      "Acceso de la tienda en línea: lo mismo que un comprador (catálogo, carrito, pago)",
+  },
   "ecommerce.resenas_moderar": {
     category: "ecommerce",
     description: "Moderar y responder reseñas de productos",
@@ -718,6 +733,7 @@ export function categoryAppliesToVertical(category: string, vertical: string): b
 export function listPermissionsByCategory(vertical?: string): Record<string, PermissionMeta[]> {
   const grouped: Record<string, PermissionMeta[]> = {};
   for (const code of ALL_PERMISSIONS) {
+    if (PERMISOS_DE_SISTEMA.has(code)) continue;
     const meta = permissionMeta(code);
     if (vertical && !categoryAppliesToVertical(meta.category, vertical)) continue;
     const bucket = grouped[meta.category];
@@ -732,6 +748,11 @@ export function listPermissionsByCategory(vertical?: string): Record<string, Per
 
 export function isKnownPermission(value: string): value is PermissionCode {
   return (ALL_PERMISSIONS as ReadonlyArray<string>).includes(value);
+}
+
+/** Conocido y apto para un rol: los permisos de sistema no se asignan. */
+export function isAssignablePermission(value: string): value is PermissionCode {
+  return isKnownPermission(value) && !PERMISOS_DE_SISTEMA.has(value);
 }
 
 // ── Áreas de negocio (para agrupar y mezclar roles por vertical) ─────────────

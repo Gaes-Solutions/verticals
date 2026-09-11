@@ -3,6 +3,7 @@ import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
 import type { FastifyInstance } from "fastify";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { bajaDelDirectorio, registrarEnDirectorio } from "../../auth-tenant/directorio.js";
+import { TIENDA_WEB_EMAIL } from "../../storefront/tienda-web.js";
 import {
   type UsuarioUpdateInput,
   assignRolSchema,
@@ -101,9 +102,26 @@ async function sincronizarDirectorio(
 }
 
 const usuariosRoutes: FastifyPluginAsync = async (app) => {
+  // El usuario de sistema de la tienda en línea no es parte del equipo: no se
+  // lista ni se edita. Si el dueño lo desactivara, su tienda dejaría de cargar.
+  app.addHook("preHandler", async (req, reply) => {
+    const id = (req.params as { id?: string } | undefined)?.id;
+    if (!id) return;
+    const usuario = await req.tenantPrisma.usuario.findUnique({
+      where: { id },
+      select: { email: true },
+    });
+    if (usuario?.email === TIENDA_WEB_EMAIL) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Usuario no encontrado" });
+    }
+  });
+
   app.get("/", async (req) => {
     req.requirePerm(PERMISSIONS.USUARIOS_LEER);
     const items = await req.tenantPrisma.usuario.findMany({
+      where: { email: { not: TIENDA_WEB_EMAIL } },
       orderBy: { email: "asc" },
       include: {
         roles: { include: { rol: { select: { id: true, codigo: true, nombre: true } } } },

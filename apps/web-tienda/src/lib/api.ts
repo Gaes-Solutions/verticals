@@ -1,37 +1,20 @@
 /**
  * Cliente API server-side (BFF). La tienda Next.js resuelve QUÉ tenant mostrar
- * por el host de la petición (lo fija el middleware en `x-tienda-slug`) y hace
- * login con la cuenta de servicio de ese tenant; cachea el token por slug. Así
- * un mismo deployment sirve varias tiendas por dominio. Sin host resuelto, cae
- * al tenant configurado por env (deployment de una sola tienda).
+ * por el host de la petición (lo fija el middleware en `x-tienda-slug`) y pide
+ * al API un token de tienda para ese negocio presentando la llave de plataforma;
+ * cachea el token por slug. Así un mismo deployment sirve todas las tiendas sin
+ * guardar contraseñas de nadie. Sin host resuelto, cae al tenant por env.
  *
  * Env:
  *   API_URL                 (default http://localhost:3000)
- *   TIENDA_TENANT_SLUG      slug por defecto (deployment de una sola tienda)
- *   TIENDA_USER_EMAIL       cuenta de servicio por defecto
- *   TIENDA_USER_PASSWORD
- *   TIENDA_SERVICE_ACCOUNTS JSON opcional {"slug":{"email":"..","password":".."}}
- *                           credenciales por tenant para multi-tienda por dominio
+ *   TIENDA_TENANT_SLUG      slug por defecto (host sin tienda resuelta)
+ *   STOREFRONT_SERVICE_KEY  llave de plataforma, la misma que tiene el API
  */
 import { headers } from "next/headers";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 const DEFAULT_SLUG = process.env.TIENDA_TENANT_SLUG ?? "";
-const DEFAULT_EMAIL = process.env.TIENDA_USER_EMAIL ?? "";
-const DEFAULT_PASSWORD = process.env.TIENDA_USER_PASSWORD ?? "";
-
-interface ServiceCreds {
-  email: string;
-  password: string;
-}
-
-function serviceAccounts(): Record<string, ServiceCreds> {
-  try {
-    return JSON.parse(process.env.TIENDA_SERVICE_ACCOUNTS ?? "{}") as Record<string, ServiceCreds>;
-  } catch {
-    return {};
-  }
-}
+const STOREFRONT_KEY = process.env.STOREFRONT_SERVICE_KEY ?? "";
 
 // Slug del tenant para ESTA petición (lo fija el middleware desde el host).
 export async function slugActual(): Promise<string> {
@@ -43,23 +26,18 @@ export async function slugActual(): Promise<string> {
   }
 }
 
-function credsPara(slug: string): ServiceCreds {
-  return serviceAccounts()[slug] ?? { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD };
-}
-
 const tokenCache = new Map<string, { token: string; expira: number }>();
 
 async function getToken(slug: string): Promise<string> {
   const hit = tokenCache.get(slug);
   if (hit && hit.expira > Date.now()) return hit.token;
-  const creds = credsPara(slug);
-  const res = await fetch(`${API_URL}/auth/tenant/login`, {
+  const res = await fetch(`${API_URL}/public/storefront/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenantSlug: slug, email: creds.email, password: creds.password }),
+    headers: { "Content-Type": "application/json", "x-storefront-key": STOREFRONT_KEY },
+    body: JSON.stringify({ tenantSlug: slug }),
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Login tienda (${slug}) falló: ${res.status}`);
+  if (!res.ok) throw new Error(`Acceso de tienda (${slug}) falló: ${res.status}`);
   const body = (await res.json()) as { accessToken: string };
   // access token vive 15min; cacheamos 12min por slug para margen
   tokenCache.set(slug, { token: body.accessToken, expira: Date.now() + 12 * 60_000 });

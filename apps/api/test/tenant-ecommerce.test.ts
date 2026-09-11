@@ -93,12 +93,23 @@ afterAll(async () => {
 });
 
 describe("config tienda + publicar producto", () => {
-  it("dueño configura la tienda", async () => {
+  it("no deja activar la tienda sin productos publicados", async () => {
     const res = await app.inject({
       method: "PUT",
       url: "/t/ecommerce/config",
       headers: auth(ownerToken),
       payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", activa: true },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().message).toMatch(/Publica al menos un producto/);
+  });
+
+  it("dueño configura la tienda", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(ownerToken),
+      payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", activa: false },
     });
     expect([200, 201]).toContain(res.statusCode);
     expect(res.json().subdominio).toBe("demo-tienda");
@@ -119,6 +130,17 @@ describe("config tienda + publicar producto", () => {
     });
     expect(res.statusCode).toBe(201);
     productoPublicadoId = res.json().id;
+  });
+
+  it("ya con un producto publicado, la tienda se activa", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(ownerToken),
+      payload: { subdominio: "demo-tienda", nombre: "Mi Tienda Demo", activa: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().activa).toBe(true);
   });
 
   async function prodId(): Promise<string> {

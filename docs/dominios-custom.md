@@ -21,10 +21,10 @@ Tienda → Dominio propio**; el sistema le recomienda los registros DNS.
   verificados).
 - `web-tienda/src/middleware.ts` lee el `host` de la petición, resuelve el slug y
   lo fija en el header `x-tienda-slug`.
-- El BFF (`web-tienda/src/lib/api.ts`) usa ese slug por petición y hace login con
-  la cuenta de servicio del tenant correspondiente (token cacheado por slug). Sin
-  host resuelto (o en localhost) cae al tenant por env: el deployment de una sola
-  tienda sigue funcionando igual.
+- El BFF (`web-tienda/src/lib/api.ts`) usa ese slug por petición y pide un token
+  de tienda con la llave de plataforma (`POST /public/storefront/token`, ver
+  ADR 026). El token solo hace lo que hace un comprador y se cachea por slug.
+  Sin host resuelto (o en localhost) cae al tenant por env.
 
 ## Variables de entorno
 
@@ -32,8 +32,8 @@ Tienda → Dominio propio**; el sistema le recomienda los registros DNS.
 |-----|-------|----------|
 | `STOREFRONT_APEX` | API | Apex de subdominios de plataforma. Decisión 2026-07-22: `shop.angaes.com`. Si se define, el subdominio del tenant se registra como host verificado. |
 | `STOREFRONT_CNAME_TARGET` | API | Destino CNAME recomendado al dueño (default `stores.gaessoft.mx`). |
-| `TIENDA_SERVICE_ACCOUNTS` | web-tienda | JSON `{"slug":{"email":"..","password":".."}}` con la cuenta de servicio por tenant, para servir varias tiendas por dominio desde un mismo deployment. Si falta un slug, usa `TIENDA_USER_EMAIL/PASSWORD`. |
-| `TIENDA_TENANT_SLUG` / `TIENDA_USER_EMAIL` / `TIENDA_USER_PASSWORD` | web-tienda | Tenant + credenciales por defecto (deployment de una sola tienda). |
+| `STOREFRONT_SERVICE_KEY` | API **y** web-tienda | Llave de plataforma (≥32 caracteres, la misma en ambos). Con ella la tienda web obtiene el token de tienda de cualquier negocio. Sin ella el API responde 503 y ninguna tienda carga. |
+| `TIENDA_TENANT_SLUG` | web-tienda | Tenant que se muestra cuando el host no resuelve a ninguna tienda. |
 
 ## Activación en producción (decisión 2026-07-22: `shop.angaes.com`)
 
@@ -45,8 +45,9 @@ dominio ya comprado (angaes.com, Hostinger). Tres pasos, una sola vez:
    `*.shop.angaes.com` (Railway da un CNAME target).
 2. **Hostinger** (DNS de angaes.com): crear el CNAME comodín
    `*.shop → <target de Railway>` (mismo target que ya usa `shop`).
-3. **Backfill** (registra las tiendas ya configuradas):
-   `pnpm --filter @gaespos/api backfill:tienda-dominios`.
+3. **Backfill** (registra las tiendas ya configuradas; idempotente y nunca le
+   quita a un negocio una dirección que ya es de otro): `./scripts/prod-dominios-tienda.sh`.
+   Con el apex puesto, guardar la tienda en el panel también registra su dirección.
 
 `shop.angaes.com` sin subdominio sigue sirviendo el tenant por env
 (`TIENDA_TENANT_SLUG`), igual que hoy.
@@ -57,7 +58,7 @@ dominio ya comprado (angaes.com, Hostinger). Tres pasos, una sola vez:
    (Cloudflare for SaaS / "Custom Domains" de Railway / wildcard). El CNAME target
    debe existir y terminar la conexión TLS para cada dominio del cliente.
 4. **Deploy**: una instancia de web-tienda multi-tenant detrás de ese CNAME, con
-   `TIENDA_SERVICE_ACCOUNTS` poblado (o un esquema de credenciales por tenant).
+   `STOREFRONT_SERVICE_KEY` (resuelto en ADR 026: sin credenciales por tenant).
 
 Hasta cerrar 3 y 4, el flujo end-to-end no enruta tráfico real de un dominio
 externo; las Piezas 1 y 2 dejan toda la lógica de aplicación lista y probada.

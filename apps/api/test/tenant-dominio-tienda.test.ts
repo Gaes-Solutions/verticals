@@ -128,11 +128,11 @@ describe("terminación de las direcciones de tienda", () => {
     try {
       const res = await app.inject({
         method: "GET",
-        url: "/t/ecommerce/plataforma",
+        url: "/t/ecommerce/estado",
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ apexTienda: "shop.ejemplo-test.com" });
+      expect(res.json()).toEqual({ apexTienda: "shop.ejemplo-test.com", productosPublicados: 0 });
     } finally {
       if (original === undefined) Reflect.deleteProperty(process.env, "STOREFRONT_APEX");
       else process.env.STOREFRONT_APEX = original;
@@ -140,7 +140,7 @@ describe("terminación de las direcciones de tienda", () => {
   });
 
   it("sin sesión no se entrega", async () => {
-    const res = await app.inject({ method: "GET", url: "/t/ecommerce/plataforma" });
+    const res = await app.inject({ method: "GET", url: "/t/ecommerce/estado" });
     expect(res.statusCode).toBe(401);
   });
 });

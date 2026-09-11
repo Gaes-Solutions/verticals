@@ -113,11 +113,15 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
     return { ...config, urlPublica: urlPublicaTienda(config) };
   });
 
-  // Terminación de las direcciones de tienda: el panel la usa para enseñar
-  // "tu dirección será …" antes de guardar, incluso en un negocio sin tienda aún.
-  app.get("/plataforma", async (req) => {
+  // Lo que el panel necesita antes de guardar, aun sin tienda configurada: la
+  // terminación de la dirección ("tu dirección será …") y si ya hay algo
+  // publicado, porque sin productos la tienda no se puede activar.
+  app.get("/estado", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
-    return { apexTienda: apexPlataforma() };
+    const productosPublicados = await req.tenantPrisma.productoPublicado.count({
+      where: { isPublicado: true },
+    });
+    return { apexTienda: apexPlataforma(), productosPublicados };
   });
 
   app.put("/config", async (req, reply) => {
@@ -139,6 +143,20 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
           .send({ message: "Selecciona un servicio de envío activo de este negocio" });
     }
     const existing = await req.tenantPrisma.configTiendaEcommerce.findFirst();
+    // Una tienda encendida sin nada que vender es una página vacía para quien
+    // escanea el QR: primero se publica, luego se enciende.
+    if (body.activa && !existing?.activa) {
+      const publicados = await req.tenantPrisma.productoPublicado.count({
+        where: { isPublicado: true },
+      });
+      if (publicados === 0) {
+        return reply.code(422).send({
+          statusCode: 422,
+          error: "Unprocessable Entity",
+          message: "Publica al menos un producto antes de activar tu tienda",
+        });
+      }
+    }
     await asegurarHostsDisponibles(app.masterPrisma, req.tenantSlug, {
       subdominio: body.subdominio,
       dominioPropio:
@@ -278,7 +296,7 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/categorias", async (req) => {
-    req.requirePerm(PERMISSIONS.ECOMMERCE_PUBLICAR_PRODUCTO);
+    req.requireAnyPerm([PERMISSIONS.ECOMMERCE_PUBLICAR_PRODUCTO, PERMISSIONS.ECOMMERCE_TIENDA_WEB]);
     return req.tenantPrisma.categoriaPublica.findMany({ orderBy: { orden: "asc" } });
   });
 

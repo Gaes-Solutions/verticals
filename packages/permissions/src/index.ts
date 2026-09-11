@@ -1,10 +1,12 @@
 export {
   ALL_PERMISSIONS,
   AREA_LABEL,
+  PERMISOS_DE_SISTEMA,
   PERMISSIONS,
   areaAppliesToVertical,
   categoryAppliesToVertical,
   categoryArea,
+  isAssignablePermission,
   isKnownPermission,
   listPermissionsByArea,
   listPermissionsByCategory,

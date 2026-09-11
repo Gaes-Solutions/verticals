@@ -1,5 +1,5 @@
 import { propagarEliminacionPlantilla, propagarPlantilla } from "@gaespos/db";
-import { isKnownPermission, listPermissionsByArea } from "@gaespos/permissions";
+import { isAssignablePermission, listPermissionsByArea } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
@@ -15,7 +15,7 @@ const VERTICALES: { value: string; label: string }[] = [
 ];
 const VERTICAL_VALUES = VERTICALES.map((v) => v.value);
 
-const permisoSchema = z.string().refine((p) => p === "*" || isKnownPermission(p), {
+const permisoSchema = z.string().refine((p) => p === "*" || isAssignablePermission(p), {
   message: "Permiso desconocido",
 });
 
