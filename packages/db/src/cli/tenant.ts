@@ -1,8 +1,6 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { execa } from "execa";
 import { masterPrisma } from "../client.js";
 import { seedTenantDefaults } from "../seed-tenant.js";
+import { prismaMigrateDeploy } from "./prisma-cli.js";
 import {
   requireEnv,
   tenantDatabaseUrl,
@@ -10,8 +8,6 @@ import {
   validateSlug,
   withPgClient,
 } from "./utils.js";
-
-const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 export interface CreateTenantOptions {
   slug: string;
@@ -45,19 +41,51 @@ export async function createTenant(opts: CreateTenantOptions): Promise<void> {
   });
   console.info(`[tenant create] master row id=${tenant.id}`);
 
-  await withPgClient(masterUrl, async (client) => {
+  const schemaExistia = await withPgClient(masterUrl, async (client) => {
+    const previo = await client.query(
+      "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
+      [schemaName],
+    );
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+    return (previo.rowCount ?? 0) > 0;
   });
   console.info(`[tenant create] postgres schema "${schemaName}" creado`);
 
-  await migrateTenant(opts.slug);
-
-  const seedResult = await seedTenantDefaults(opts.slug);
-  console.info(
-    `[tenant create] seed defaults: roles_creados=${seedResult.rolesCreated}, sucursal_creada=${seedResult.sucursalCreated}, caja_creada=${seedResult.cajaCreated}, lista_creada=${seedResult.listaPrecioCreated}, cliente_publico=${seedResult.clientePublicoCreated}`,
-  );
+  try {
+    await migrateTenant(opts.slug);
+    const seedResult = await seedTenantDefaults(opts.slug);
+    console.info(
+      `[tenant create] seed defaults: roles_creados=${seedResult.rolesCreated}, sucursal_creada=${seedResult.sucursalCreated}, caja_creada=${seedResult.cajaCreated}, lista_creada=${seedResult.listaPrecioCreated}, cliente_publico=${seedResult.clientePublicoCreated}`,
+    );
+  } catch (err) {
+    await deshacerAlta(masterUrl, tenant.id, schemaName, schemaExistia);
+    throw err;
+  }
 
   console.info(`[tenant create] ${opts.slug} listo (status=trial)`);
+}
+
+/**
+ * Un alta a medias deja el identificador tomado y un negocio sin tablas: nadie
+ * puede reintentar con ese nombre. Se deshace lo creado aquí; un esquema que ya
+ * existía antes no es de esta alta y no se toca.
+ */
+async function deshacerAlta(
+  masterUrl: string,
+  tenantId: string,
+  schemaName: string,
+  schemaExistia: boolean,
+): Promise<void> {
+  try {
+    if (!schemaExistia) {
+      await withPgClient(masterUrl, async (client) => {
+        await client.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      });
+    }
+    await masterPrisma.tenant.delete({ where: { id: tenantId } });
+  } catch (limpieza) {
+    console.error(`[tenant create] no se pudo deshacer el alta de "${schemaName}"`, limpieza);
+  }
 }
 
 export async function migrateTenant(slug: string): Promise<void> {
@@ -67,15 +95,10 @@ export async function migrateTenant(slug: string): Promise<void> {
   const tenantUrl = tenantDatabaseUrl(baseUrl, schemaName);
 
   console.info(`[tenant migrate] ${slug} → schema="${schemaName}"`);
-  await execa(
-    "pnpm",
-    ["exec", "prisma", "migrate", "deploy", "--schema=./prisma/tenant/schema.prisma"],
-    {
-      cwd: PACKAGE_ROOT,
-      stdio: "inherit",
-      env: { ...process.env, DATABASE_URL_TENANT: tenantUrl },
-    },
-  );
+  await prismaMigrateDeploy("./prisma/tenant/schema.prisma", {
+    ...process.env,
+    DATABASE_URL_TENANT: tenantUrl,
+  });
 }
 
 export async function migrateAllTenants(): Promise<void> {
