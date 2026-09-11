@@ -5,7 +5,7 @@ import type { MasterPrismaClient } from "@gaespos/db";
 const VERIFY_PREFIX = "_gaessoft-verify";
 
 /** Apex de la plataforma para subdominios de tienda (ej. "mitienda.gaessoft.shop"). */
-function apexPlataforma(): string | null {
+export function apexPlataforma(): string | null {
   return process.env.STOREFRONT_APEX?.trim() || null;
 }
 

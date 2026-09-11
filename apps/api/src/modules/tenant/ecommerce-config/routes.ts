@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import {
   DominioEnUsoError,
+  apexPlataforma,
   asegurarHostsDisponibles,
   instruccionesDns,
   sincronizarDominioMaster,
@@ -110,6 +111,13 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
     if (!config) return config;
     // El panel necesita la dirección final para armar el QR del mostrador.
     return { ...config, urlPublica: urlPublicaTienda(config) };
+  });
+
+  // Terminación de las direcciones de tienda: el panel la usa para enseñar
+  // "tu dirección será …" antes de guardar, incluso en un negocio sin tienda aún.
+  app.get("/plataforma", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
+    return { apexTienda: apexPlataforma() };
   });
 
   app.put("/config", async (req, reply) => {

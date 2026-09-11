@@ -120,3 +120,27 @@ describe("resolución pública host → tenant", () => {
     expect(res.json().tenantSlug).toBe(SLUG);
   });
 });
+
+describe("terminación de las direcciones de tienda", () => {
+  it("el panel recibe el apex para enseñar la dirección antes de guardar", async () => {
+    const original = process.env.STOREFRONT_APEX;
+    process.env.STOREFRONT_APEX = "shop.ejemplo-test.com";
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/t/ecommerce/plataforma",
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ apexTienda: "shop.ejemplo-test.com" });
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(process.env, "STOREFRONT_APEX");
+      else process.env.STOREFRONT_APEX = original;
+    }
+  });
+
+  it("sin sesión no se entrega", async () => {
+    const res = await app.inject({ method: "GET", url: "/t/ecommerce/plataforma" });
+    expect(res.statusCode).toBe(401);
+  });
+});

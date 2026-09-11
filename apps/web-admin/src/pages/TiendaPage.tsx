@@ -24,6 +24,12 @@ function slugify(s: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** Subdominio sugerido a partir del nombre, con las reglas que acepta el servidor. */
+function sugerirSubdominio(nombre: string): string {
+  const s = slugify(nombre).slice(0, 63).replace(/-+$/, "");
+  return s.length >= 3 ? s : "";
+}
+
 export function TiendaPage() {
   const [config, setConfig] = useState<ConfigTienda>({});
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -37,6 +43,11 @@ export function TiendaPage() {
   const [configLoaded, setConfigLoaded] = useState(false);
   const [configRetry, setConfigRetry] = useState(0);
   const [configLoading, setConfigLoading] = useState(true);
+  const [apexTienda, setApexTienda] = useState<string | null>(null);
+  // Un subdominio ya guardado no se toca solo: cambiarlo deja inservibles los
+  // QR que el negocio ya imprimió.
+  const [subdominioGuardado, setSubdominioGuardado] = useState(false);
+  const [subdominioTocado, setSubdominioTocado] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,6 +59,7 @@ export function TiendaPage() {
       .then((c) => {
         if (!active) return;
         setConfig(c ?? {});
+        setSubdominioGuardado(Boolean(c?.subdominio));
         setConfigLoaded(true);
       })
       .catch(() => {
@@ -75,6 +87,13 @@ export function TiendaPage() {
     }, 250);
     return () => clearTimeout(t);
   }, [buscarPub, canPublish]);
+
+  useEffect(() => {
+    if (!canConfigure) return;
+    api<{ apexTienda: string | null }>("/t/ecommerce/plataforma")
+      .then((r) => setApexTienda(r.apexTienda))
+      .catch(() => setApexTienda(null));
+  }, [canConfigure]);
 
   async function guardarConfig() {
     if (!canConfigure || !configLoaded) return;
@@ -112,6 +131,7 @@ export function TiendaPage() {
       });
       // El QR se arma con la dirección que el servidor ya tiene guardada.
       setConfig((c) => ({ ...c, urlPublica: guardada?.urlPublica ?? null }));
+      setSubdominioGuardado(Boolean(config.subdominio));
       setMsg("Configuración guardada");
       setDominioKey((k) => k + 1);
     } catch (err) {
@@ -180,7 +200,15 @@ export function TiendaPage() {
           <span className="mb-1 block text-sm font-medium text-slate-700">Nombre de la tienda</span>
           <input
             value={config.nombre ?? ""}
-            onChange={(e) => setConfig({ ...config, nombre: e.target.value })}
+            onChange={(e) => {
+              const nombre = e.target.value;
+              const sugerir = !subdominioGuardado && !subdominioTocado;
+              setConfig({
+                ...config,
+                nombre,
+                ...(sugerir ? { subdominio: sugerirSubdominio(nombre) } : {}),
+              });
+            }}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
           />
         </label>
@@ -189,10 +217,26 @@ export function TiendaPage() {
           <input
             data-tour="tienda-subdominio"
             value={config.subdominio ?? ""}
-            onChange={(e) => setConfig({ ...config, subdominio: e.target.value })}
+            onChange={(e) => {
+              setSubdominioTocado(true);
+              setConfig({ ...config, subdominio: e.target.value.toLowerCase() });
+            }}
             placeholder="mi-tienda"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
           />
+          {apexTienda && config.subdominio && (
+            <span className="mt-1 block break-all text-slate-600 text-xs">
+              Tu dirección:{" "}
+              <b>
+                https://{config.subdominio}.{apexTienda}
+              </b>
+            </span>
+          )}
+          <span className="mt-1 block text-slate-400 text-xs">
+            {subdominioGuardado
+              ? "Si lo cambias, los QR que ya imprimiste dejan de funcionar."
+              : "Se llena solo con el nombre de la tienda; puedes cambiarlo."}
+          </span>
         </label>
         <label className="mb-1 block">
           <span className="mb-1 block text-sm font-medium text-slate-700">
