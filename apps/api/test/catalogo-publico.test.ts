@@ -11,6 +11,7 @@ import { buildTestApp, cleanupTestTenants, createTestTenant } from "./helpers.js
 
 const ABIERTA = "test-cat-abierta";
 const CERRADA = "test-cat-cerrada";
+const VACIA = "test-cat-vacia";
 let app: FastifyInstance;
 
 async function sembrar(tenant: string, slug: string, precio: string, activa: boolean) {
@@ -55,6 +56,10 @@ beforeAll(async () => {
   await createTestTenant(CERRADA, "Tienda Cerrada");
   await sembrar(ABIERTA, "cafe-abierto", "125", true);
   await sembrar(CERRADA, "cafe-cerrado", "900", false);
+  await createTestTenant(VACIA, "Tienda Vacía");
+  await getTenantClient(VACIA).configTiendaEcommerce.create({
+    data: { nombre: "Tienda Vacía", subdominio: VACIA, activa: true },
+  });
 });
 
 afterAll(async () => {
@@ -63,6 +68,11 @@ afterAll(async () => {
 });
 
 describe("catálogo público", () => {
+  it("encendida pero sin productos publicados tampoco se muestra", async () => {
+    const res = await app.inject({ method: "GET", url: `/public/tiendas/${VACIA}/catalogo` });
+    expect(res.statusCode).toBe(404);
+  });
+
   it("cualquiera ve el catálogo de una tienda encendida, sin sesión", async () => {
     const res = await app.inject({ method: "GET", url: `/public/tiendas/${ABIERTA}/catalogo` });
     expect(res.statusCode).toBe(200);

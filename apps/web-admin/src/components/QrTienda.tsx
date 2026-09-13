@@ -10,11 +10,11 @@ import { useRef } from "react";
 export function QrTienda({
   url,
   nombre,
-  activa,
+  abierta,
 }: {
   url: string | null;
   nombre: string;
-  activa: boolean;
+  abierta: boolean;
 }) {
   const lienzo = useRef<HTMLCanvasElement>(null);
 
@@ -76,10 +76,10 @@ export function QrTienda({
           >
             {url} <ExternalLink size={14} className="shrink-0" />
           </a>
-          {!activa && (
+          {!abierta && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
-              Tu tienda está apagada: el código funciona, pero quien lo escanee verá "tienda no
-              disponible" hasta que la enciendas arriba.
+              Tu tienda todavía no está abierta: quien escanee el código verá "Abriremos pronto"
+              hasta que esté encendida y tenga al menos un producto publicado.
             </p>
           )}
           <button type="button" onClick={descargar} className="gx-btn-secondary">

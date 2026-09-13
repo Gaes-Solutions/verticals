@@ -124,6 +124,9 @@ export async function getCategorias(): Promise<CategoriaPublica[]> {
 
 /** Funciones del storefront que el tenant activó (MSI, zoom, rating, cupón…). */
 export interface TiendaConfig {
+  /** Encendida y con al menos un producto publicado; lo decide el API. */
+  abierta: boolean;
+  motivo: "apagada" | "sin_productos" | null;
   nombre: string;
   lema: string | null;
   msiHabilitado: boolean;
@@ -143,6 +146,8 @@ export interface TiendaConfig {
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
+  abierta: false,
+  motivo: "apagada",
   nombre: "Tienda",
   lema: null,
   msiHabilitado: false,

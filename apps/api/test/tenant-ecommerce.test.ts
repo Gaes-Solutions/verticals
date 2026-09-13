@@ -25,6 +25,21 @@ function auth(t: string) {
   return { authorization: `Bearer ${t}` };
 }
 
+const LLAVE_TIENDA = "llave-de-prueba-ecommerce".padEnd(48, "x");
+
+// Token con el que entra la tienda web: ve lo que ve un comprador.
+async function tokenTiendaWeb(): Promise<string> {
+  process.env.STOREFRONT_SERVICE_KEY = LLAVE_TIENDA;
+  const res = await app.inject({
+    method: "POST",
+    url: "/public/storefront/token",
+    headers: { "x-storefront-key": LLAVE_TIENDA },
+    payload: { tenantSlug: TENANT_SLUG },
+  });
+  expect(res.statusCode).toBe(200);
+  return res.json().accessToken as string;
+}
+
 beforeAll(async () => {
   pagoMock = new MockPaymentProvider();
   shippingMock = new MockShippingProvider();
@@ -115,6 +130,29 @@ describe("config tienda + publicar producto", () => {
     expect(res.json().subdominio).toBe("demo-tienda");
   });
 
+  it("apagada, el comprador no ve el catálogo (el dueño sí, para revisarla)", async () => {
+    const token = await tokenTiendaWeb();
+    const cfg = await app.inject({
+      method: "GET",
+      url: "/t/tienda/config-publica",
+      headers: auth(token),
+    });
+    expect(cfg.json()).toMatchObject({ abierta: false, motivo: "apagada" });
+    const comprador = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo",
+      headers: auth(token),
+    });
+    expect(comprador.statusCode).toBe(404);
+    expect(comprador.json().code).toBe("STORE_UNAVAILABLE");
+    const dueno = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo",
+      headers: auth(ownerToken),
+    });
+    expect(dueno.statusCode).toBe(200);
+  });
+
   it("publica un producto a la tienda", async () => {
     const res = await app.inject({
       method: "POST",
@@ -141,6 +179,23 @@ describe("config tienda + publicar producto", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().activa).toBe(true);
+  });
+
+  it("encendida y con un producto, la tienda abre para el comprador", async () => {
+    const token = await tokenTiendaWeb();
+    const cfg = await app.inject({
+      method: "GET",
+      url: "/t/tienda/config-publica",
+      headers: auth(token),
+    });
+    expect(cfg.json()).toMatchObject({ abierta: true, motivo: null });
+    const catalogo = await app.inject({
+      method: "GET",
+      url: "/t/tienda/catalogo",
+      headers: auth(token),
+    });
+    expect(catalogo.statusCode).toBe(200);
+    expect(catalogo.json().items.length).toBeGreaterThan(0);
   });
 
   async function prodId(): Promise<string> {

@@ -1,7 +1,8 @@
 import { BarraFiltros, PanelFiltros } from "@/components/filtros";
 import { Paginacion } from "@/components/paginacion";
 import { ProductoGrid } from "@/components/producto-card";
-import { type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
+import { TiendaCerrada } from "@/components/tienda-cerrada";
+import { ApiError, type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
 import { Flame, PackageSearch, Sparkles, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -94,6 +95,9 @@ export default async function CatalogoPage({
   if (soloOfertas) qs.set("soloOfertas", soloOfertas);
   if (soloDisponibles) qs.set("soloDisponibles", soloDisponibles);
 
+  const tienda = await getTiendaConfig();
+  if (!tienda.abierta) return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
+
   let data: CatalogoResponse;
   let categorias: Awaited<ReturnType<typeof getCategorias>>;
   let cfg: Awaited<ReturnType<typeof getTiendaConfig>> | null = null;
@@ -116,6 +120,10 @@ export default async function CatalogoPage({
       ]);
     }
   } catch (err) {
+    // Se cerró entre que se leyó la configuración y el catálogo.
+    if (err instanceof ApiError && err.code === "STORE_UNAVAILABLE") {
+      return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
+    }
     return (
       <div className="rounded border border-red-200 bg-red-50 p-6 text-red-700">
         <h1 className="font-bold">No se pudo cargar el catálogo</h1>

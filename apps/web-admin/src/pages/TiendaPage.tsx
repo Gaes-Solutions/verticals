@@ -172,6 +172,8 @@ export function TiendaPage() {
 
   // Sin nada publicado la tienda no se enciende (el servidor también lo impide).
   const sinProductos = productosPublicados === 0 && !config.activa;
+  // Encendida pero sin nada publicado: sigue oculta hasta que publique algo.
+  const encendidaVacia = productosPublicados === 0 && Boolean(config.activa);
 
   return (
     <div className="max-w-2xl">
@@ -213,6 +215,12 @@ export function TiendaPage() {
           {sinProductos && (
             <p className="mt-1 text-amber-700 text-xs">
               Publica al menos un producto (más abajo) para poder activarla.
+            </p>
+          )}
+          {encendidaVacia && (
+            <p className="mt-1 text-amber-700 text-xs">
+              Tu tienda está encendida, pero no se muestra al público hasta que publiques al menos
+              un producto (más abajo).
             </p>
           )}
         </div>
@@ -289,7 +297,7 @@ export function TiendaPage() {
           <QrTienda
             url={config.urlPublica ?? null}
             nombre={config.nombre ?? ""}
-            activa={config.activa ?? false}
+            abierta={(config.activa ?? false) && productosPublicados !== 0}
           />
         )}
       </section>

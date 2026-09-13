@@ -1,7 +1,8 @@
 import { PERMISSIONS } from "@gaespos/permissions";
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { evaluarCupon } from "../checkout/cupon-service.js";
+import { estadoTienda } from "../ecommerce-config/estado-tienda.js";
 import { crearAvisoStock } from "../stock-alerts/service.js";
 import {
   enriquecerDetalle,
@@ -38,6 +39,20 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
   return false;
 }
 
+const TIENDA_CERRADA = {
+  statusCode: 404,
+  error: "Not Found",
+  message: "Tienda no disponible",
+  code: "STORE_UNAVAILABLE",
+} as const;
+
+// El comprador (la tienda web) no ve el catálogo de una tienda cerrada; el
+// dueño y su equipo sí, para revisarla antes de abrir.
+async function cerradaParaComprador(req: FastifyRequest): Promise<boolean> {
+  if (req.user.kind !== "tienda_web") return false;
+  return !(await estadoTienda(req.tenantPrisma)).abierta;
+}
+
 /**
  * Endpoints de catálogo público + carrito. Bajo /t (el frontend Next.js
  * actúa como BFF con token de servicio del tenant). Carrito anónimo se
@@ -54,7 +69,10 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { montoMinimoEnvioGratis: "asc" },
       select: { montoMinimoEnvioGratis: true },
     });
+    const estado = await estadoTienda(req.tenantPrisma);
     return {
+      abierta: estado.abierta,
+      motivo: estado.motivo,
       nombre: c.nombre,
       lema: c.lema,
       monedas: c.monedas,
@@ -108,13 +126,15 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // --- Catálogo público (lectura) ---
-  app.get("/catalogo", async (req) => {
+  app.get("/catalogo", async (req, reply) => {
+    if (await cerradaParaComprador(req)) return reply.code(404).send(TIENDA_CERRADA);
     const q: CatalogoQuery = catalogoQuerySchema.parse(req.query);
     const config = await ventaConfig(req.tenantPrisma);
     return listarCatalogo(req.tenantPrisma, config, q);
   });
 
   app.get("/catalogo/:slug", async (req, reply) => {
+    if (await cerradaParaComprador(req)) return reply.code(404).send(TIENDA_CERRADA);
     const slug = (req.params as { slug: string }).slug;
     const prod = await req.tenantPrisma.productoPublicado.findUnique({
       where: { slugSeo: slug },

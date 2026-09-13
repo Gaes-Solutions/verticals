@@ -8,6 +8,7 @@ import {
   productoComercio,
 } from "../cliente-portal/comercio-service.js";
 import { catalogoQuerySchema } from "../tenant/carrito/schemas.js";
+import { estadoTienda } from "../tenant/ecommerce-config/estado-tienda.js";
 
 /**
  * Catálogo público de una tienda: se mira sin cuenta, como en cualquier tienda
@@ -46,8 +47,9 @@ interface TiendaAbierta {
 }
 
 /**
- * Resuelve la tienda por su slug y exige que esté encendida. Una tienda
- * apagada no debe poder navegarse: antes solo se notaba al intentar pagar.
+ * Resuelve la tienda por su slug y exige que esté abierta: encendida y con al
+ * menos un producto publicado. Antes, una tienda apagada solo se notaba al
+ * intentar pagar.
  */
 async function abrirTienda(
   req: FastifyRequest,
@@ -65,8 +67,7 @@ async function abrirTienda(
     return null;
   }
   const client = getTenantClient(tienda);
-  const config = await client.configTiendaEcommerce.findFirst({ select: { activa: true } });
-  if (!config?.activa) {
+  if (!(await estadoTienda(client)).abierta) {
     noDisponible();
     return null;
   }

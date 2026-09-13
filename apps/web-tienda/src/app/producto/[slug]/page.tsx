@@ -5,6 +5,7 @@ import { PreguntasProducto } from "@/components/preguntas-producto";
 import { ProductoGrid } from "@/components/producto-card";
 import { ProductoCompra } from "@/components/producto-compra";
 import { ResenasResumen } from "@/components/resenas-resumen";
+import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { RegistrarVisto, VistosRecientes } from "@/components/vistos-recientes";
 import { type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
@@ -160,6 +161,8 @@ function BreadcrumbJsonLd({ prod, slug }: { prod: ProductoDetalle; slug: string 
 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const config = await getTiendaConfig();
+  if (!config.abierta) return <TiendaCerrada nombre={config.nombre} lema={config.lema} />;
   let prod: ProductoDetalle;
   try {
     prod = await api<ProductoDetalle>(`/tienda/catalogo/${slug}`);
@@ -173,8 +176,6 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
       </div>
     );
   }
-  const config = await getTiendaConfig();
-
   const ratings = prod.resenas.map((r) => r.rating);
   const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
 
