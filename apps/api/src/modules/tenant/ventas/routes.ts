@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PERMISSIONS, hasPermission } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { LISTA_MAYOREO_CODIGO, precioMayoreoDisponible } from "../listas-precios/mayoreo.js";
 import {
   cancelarIntentoVenta,
   consultarIntentoVenta,
@@ -66,6 +67,15 @@ const ventasRoutes: FastifyPluginAsync = async (app) => {
           .send({ statusCode: error.statusCode, message: error.message, ...error.extra });
       throw error;
     }
+  });
+
+  // El POS ofrece "Precio de mayoreo" solo si el negocio ya cargó esos precios.
+  app.get("/precio-mayoreo", async (req) => {
+    req.requirePerm(PERMISSIONS.VENTAS_CREAR);
+    return {
+      disponible: await precioMayoreoDisponible(req.tenantPrisma),
+      codigo: LISTA_MAYOREO_CODIGO,
+    };
   });
 
   app.get("/", async (req) => {

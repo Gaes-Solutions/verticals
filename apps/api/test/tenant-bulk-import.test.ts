@@ -361,3 +361,106 @@ describe("bulk conteo físico de inventario", () => {
     expect(res.json().errores).toBe(2);
   });
 });
+
+describe("precio de mayoreo y mínimos/máximos", () => {
+  const cliente = () => getTenantClient(TENANT_SLUG);
+
+  async function importar(filas: Array<Record<string, string>>) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: { filas },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().errores).toBe(0);
+  }
+
+  async function idsDe(sku: string) {
+    const variante = await cliente().productoVariante.findUniqueOrThrow({ where: { sku } });
+    const sucursal = await cliente().sucursal.findFirstOrThrow({
+      where: { codigo: sucursalCodigo },
+    });
+    return { varianteId: variante.id, sucursalId: sucursal.id };
+  }
+
+  it("guarda el mayoreo en la lista Mayoreo y los límites en la sucursal principal", async () => {
+    await importar([
+      {
+        skuPadre: "MAY-A",
+        nombre: "Globo metálico",
+        precioBase: "30",
+        precioMayoreo: "22",
+        stockMinimo: "5",
+        stockMaximo: "40",
+      },
+      {
+        skuPadre: "MAY-B",
+        nombre: "Vela chispera",
+        precioBase: "9",
+        precioMayoreo: "0",
+        stockMaximo: "0",
+      },
+    ]);
+    const lista = await cliente().listaPrecio.findUniqueOrThrow({
+      where: { codigo: "MAYOREO" },
+      include: { items: { include: { variante: { select: { sku: true } } } } },
+    });
+    expect(lista.items.map((i) => [i.variante.sku, i.precio.toString()])).toEqual([
+      ["MAY-A", "22"],
+    ]);
+
+    const a = await idsDe("MAY-A");
+    const inv = await cliente().inventarioSucursal.findUniqueOrThrow({
+      where: { varianteId_sucursalId: a },
+    });
+    expect(inv.stockMinimo.toString()).toBe("5");
+    expect(inv.stockMaximo?.toString()).toBe("40");
+
+    // Máximo en 0 significa "sin máximo".
+    const b = await idsDe("MAY-B");
+    const invB = await cliente().inventarioSucursal.findUniqueOrThrow({
+      where: { varianteId_sucursalId: b },
+    });
+    expect(invB.stockMaximo).toBeNull();
+  });
+
+  it("mayoreo en 0 al re-importar le quita el precio de mayoreo al producto", async () => {
+    await importar([
+      { skuPadre: "MAY-A", nombre: "Globo metálico", precioBase: "30", precioMayoreo: "0" },
+    ]);
+    const { varianteId } = await idsDe("MAY-A");
+    expect(await cliente().listaPrecioItem.count({ where: { varianteId } })).toBe(0);
+    await importar([
+      { skuPadre: "MAY-A", nombre: "Globo metálico", precioBase: "30", precioMayoreo: "22" },
+    ]);
+    expect(await cliente().listaPrecioItem.count({ where: { varianteId } })).toBe(1);
+  });
+
+  it("el POS sabe que hay precio de mayoreo y la venta lo cobra más barato", async () => {
+    const disponible = await app.inject({
+      method: "GET",
+      url: "/t/ventas/precio-mayoreo",
+      headers: auth(ownerToken),
+    });
+    expect(disponible.json()).toEqual({ disponible: true, codigo: "MAYOREO" });
+
+    const { varianteId, sucursalId } = await idsDe("MAY-A");
+    const base = { sucursalId, canal: "pos", lineas: [{ varianteId, cantidad: "2" }] };
+    const normal = await app.inject({
+      method: "POST",
+      url: "/t/ventas/preview",
+      headers: auth(ownerToken),
+      payload: base,
+    });
+    const mayoreo = await app.inject({
+      method: "POST",
+      url: "/t/ventas/preview",
+      headers: auth(ownerToken),
+      payload: { ...base, listaPrecioCodigo: "MAYOREO" },
+    });
+    expect(normal.statusCode).toBe(200);
+    expect(mayoreo.statusCode).toBe(200);
+    expect(Number(mayoreo.json().total)).toBeLessThan(Number(normal.json().total));
+  });
+});

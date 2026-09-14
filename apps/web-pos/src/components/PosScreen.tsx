@@ -124,6 +124,24 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
 
   const [descuentoPct, setDescuentoPct] = useState(0);
   const [descuentoMotivo, setDescuentoMotivo] = useState("");
+  const [precioMayoreo, setPrecioMayoreo] = useState(false);
+  const [mayoreoDisponible, setMayoreoDisponible] = useState(false);
+
+  // El botón solo aparece si el negocio ya cargó precios de mayoreo.
+  useEffect(() => {
+    if (!puede("ventas.crear")) return;
+    let activo = true;
+    api<{ disponible: boolean }>("/t/ventas/precio-mayoreo")
+      .then((r) => {
+        if (activo) setMayoreoDisponible(r.disponible);
+      })
+      .catch(() => {
+        if (activo) setMayoreoDisponible(false);
+      });
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const subtotalTicket = ticket.reduce((s, l) => s + l.precioUnitario * l.cantidad, 0);
   const descuentoMonto = subtotalTicket * (descuentoPct / 100);
@@ -292,6 +310,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             descuentoGlobalMotivo: descuentoMotivo || "Descuento en caja",
           }
         : {}),
+      ...(precioMayoreo ? { listaPrecioCodigo: "MAYOREO" } : {}),
       canal: "pos" as const,
       lineas: ticket.map((line) => ({
         varianteId: line.varianteId,
@@ -379,6 +398,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     setCliente(null);
     setDescuentoPct(0);
     setDescuentoMotivo("");
+    setPrecioMayoreo(false);
     setQuotedTotal(null);
   }
   async function cargarReciboRegistrado(ventaId: string) {
@@ -846,6 +866,21 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 )}
               </div>
 
+              {mayoreoDisponible && (
+                <label className="mb-2 flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                  <span className="text-slate-600">Precio de mayoreo</span>
+                  <input
+                    type="checkbox"
+                    checked={precioMayoreo}
+                    onChange={(e) => {
+                      setPrecioMayoreo(e.target.checked);
+                      setQuotedTotal(null);
+                    }}
+                    className="h-5 w-5 accent-brand"
+                  />
+                </label>
+              )}
+
               <div className="border-t border-slate-200 pt-3">
                 {descuentoPct > 0 && (
                   <div className="mb-1 flex items-center justify-between text-sm text-slate-500">
@@ -863,6 +898,11 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                   <span>Total</span>
                   <span>{money(total)}</span>
                 </div>
+                {precioMayoreo && (
+                  <p className="-mt-2 mb-3 text-right text-slate-500 text-xs">
+                    Con precio de mayoreo: el total final se confirma al cobrar.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => void quoteSale()}
@@ -926,6 +966,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             setCliente(null);
             setDescuentoPct(0);
             setDescuentoMotivo("");
+            setPrecioMayoreo(false);
           }}
         />
       )}

@@ -9,6 +9,7 @@ interface Columna {
   req: boolean;
   ejemplo: string;
   core?: boolean; // columna fija (no se puede quitar ni desmarcar como opcional)
+  alias?: string[]; // otros encabezados con que llega (inventarios exportados de otros sistemas)
 }
 
 interface ImportConfig {
@@ -30,19 +31,88 @@ const TIPOS: TipoImport[] = [
     label: "Productos",
     descripcion:
       "Alta y actualización de productos (upsert por SKU). Crea la categoría si no existe. " +
-      "ClaveSAT y UnidadSAT son necesarias para poder facturar el producto.",
+      "ClaveSAT y UnidadSAT son necesarias para poder facturar el producto. " +
+      "También acepta el inventario exportado de tu sistema anterior (Código, Producto, P. Venta, " +
+      "P. Mayoreo, Existencia, Departamento…). El precio de mayoreo se cobra en caja con el botón " +
+      "Precio de mayoreo.",
     endpoint: "/t/productos/bulk",
     columnas: [
-      { header: "SKU", campo: "skuPadre", req: true, ejemplo: "ABA-001", core: true },
-      { header: "Nombre", campo: "nombre", req: true, ejemplo: "Galletas Marías 170g", core: true },
-      { header: "Categoria", campo: "categoriaNombre", req: false, ejemplo: "Abarrotes" },
-      { header: "Costo", campo: "costo", req: false, ejemplo: "9.00" },
-      { header: "Precio", campo: "precioBase", req: true, ejemplo: "15.50", core: true },
-      { header: "Stock", campo: "stockInicial", req: false, ejemplo: "50" },
+      {
+        header: "SKU",
+        campo: "skuPadre",
+        req: true,
+        ejemplo: "ABA-001",
+        core: true,
+        alias: ["Código", "Clave", "Código del producto"],
+      },
+      {
+        header: "Nombre",
+        campo: "nombre",
+        req: true,
+        ejemplo: "Galletas Marías 170g",
+        core: true,
+        alias: ["Producto", "Descripción"],
+      },
+      {
+        header: "Categoria",
+        campo: "categoriaNombre",
+        req: false,
+        ejemplo: "Abarrotes",
+        alias: ["Departamento"],
+      },
+      {
+        header: "Costo",
+        campo: "costo",
+        req: false,
+        ejemplo: "9.00",
+        alias: ["P. Costo", "Precio costo", "Precio de costo"],
+      },
+      {
+        header: "Precio",
+        campo: "precioBase",
+        req: true,
+        ejemplo: "15.50",
+        core: true,
+        alias: ["P. Venta", "Precio venta", "Precio de venta", "Precio público"],
+      },
+      {
+        header: "Stock",
+        campo: "stockInicial",
+        req: false,
+        ejemplo: "50",
+        alias: ["Existencia", "Existencias", "Inventario"],
+      },
       { header: "IVA", campo: "tasaIva", req: false, ejemplo: "16" },
-      { header: "CodigoBarras", campo: "codigoBarras", req: false, ejemplo: "7501000123457" },
+      {
+        header: "CodigoBarras",
+        campo: "codigoBarras",
+        req: false,
+        ejemplo: "7501000123457",
+        alias: ["Código de barras", "EAN"],
+      },
       { header: "ClaveSAT", campo: "claveSat", req: false, ejemplo: "50181900" },
       { header: "UnidadSAT", campo: "claveUnidadSat", req: false, ejemplo: "H87" },
+      {
+        header: "PrecioMayoreo",
+        campo: "precioMayoreo",
+        req: false,
+        ejemplo: "13.00",
+        alias: ["P. Mayoreo", "Precio mayoreo", "Precio de mayoreo"],
+      },
+      {
+        header: "StockMinimo",
+        campo: "stockMinimo",
+        req: false,
+        ejemplo: "10",
+        alias: ["Inv. Mínimo", "Inventario mínimo", "Mínimo"],
+      },
+      {
+        header: "StockMaximo",
+        campo: "stockMaximo",
+        req: false,
+        ejemplo: "100",
+        alias: ["Inv. Máximo", "Inventario máximo", "Máximo"],
+      },
     ],
   },
   {
@@ -74,6 +144,33 @@ function norm(s: string): string {
     .replace(/\p{Diacritic}/gu, "")
     .trim()
     .toLowerCase();
+}
+
+// "P. Venta", "p venta" y "PVenta" son el mismo encabezado.
+function claveEncabezado(s: string): string {
+  return norm(s).replace(/[^a-z0-9]/g, "");
+}
+
+const CAMPOS_NUMERICOS = new Set([
+  "precioBase",
+  "costo",
+  "stockInicial",
+  "tasaIva",
+  "precioMayoreo",
+  "stockMinimo",
+  "stockMaximo",
+  "cantidadFisica",
+]);
+
+// Los inventarios exportados traen "$1,250.00", saltos de línea dentro del
+// nombre y "- Sin Departamento -" en lugar de dejar la categoría vacía.
+function limpiarValor(campo: string, valor: unknown): string {
+  const texto = String(valor).replace(/\s+/g, " ").trim();
+  if (CAMPOS_NUMERICOS.has(campo)) return texto.replace(/[$,\s]/g, "");
+  if (campo === "categoriaNombre" && /^-?\s*sin (departamento|categoria)\s*-?$/.test(norm(texto))) {
+    return "";
+  }
+  return texto;
 }
 
 interface ResumenResp {
@@ -152,16 +249,29 @@ export function ImportadorPage() {
       if (!sheet) throw new Error("El archivo no tiene hojas");
       const crudas = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       // mapea encabezados de la plantilla → campos del backend
-      const mapHeader = new Map(columnas.map((c) => [norm(c.header), c]));
+      const mapHeader = new Map(
+        columnas.flatMap((c) => [c.header, ...(c.alias ?? [])].map((h) => [claveEncabezado(h), c])),
+      );
+      const importaCodigoBarras = columnas.some((c) => c.campo === "codigoBarras");
       const parsed: Record<string, string>[] = [];
       for (const cruda of crudas) {
         const fila: Record<string, string> = {};
         for (const [k, v] of Object.entries(cruda)) {
-          const col = mapHeader.get(norm(k));
+          const col = mapHeader.get(claveEncabezado(k));
           if (col) {
-            const val = String(v).trim();
+            const val = limpiarValor(col.campo, v);
             if (val !== "") fila[col.campo] = val;
           }
+        }
+        // Un código de solo dígitos es el código de barras: así se escanea en caja.
+        if (
+          esProductos &&
+          importaCodigoBarras &&
+          fila.skuPadre &&
+          !fila.codigoBarras &&
+          /^\d{8,14}$/.test(fila.skuPadre)
+        ) {
+          fila.codigoBarras = fila.skuPadre;
         }
         // ignora filas totalmente vacías
         if (Object.keys(fila).length > 0) parsed.push(fila);

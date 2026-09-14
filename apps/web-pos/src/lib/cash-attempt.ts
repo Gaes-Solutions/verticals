@@ -11,6 +11,7 @@ export interface CashPayload {
   sucursalId: string;
   cajaId: string;
   clienteId?: string;
+  listaPrecioCodigo?: string;
   canal: "pos";
   lineas: { varianteId: string; cantidad: string }[];
   pagos: { metodo: "efectivo"; monto: string }[];

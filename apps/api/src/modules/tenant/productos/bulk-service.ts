@@ -1,6 +1,7 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import Decimal from "decimal.js";
 import { aplicarAjuste } from "../inventario/service.js";
+import { asegurarListaMayoreo } from "../listas-precios/mayoreo.js";
 
 /** Resultado por fila — el front lo muestra como reporte de importación. */
 export interface FilaResultado {
@@ -51,6 +52,11 @@ export interface ProductoBulkRow {
   claveSat?: string | undefined;
   /** Clave de unidad del SAT (c_ClaveUnidad), p. ej. H87 = pieza. */
   claveUnidadSat?: string | undefined;
+  /** Va a la lista "Mayoreo". 0 = el producto no tiene precio de mayoreo. */
+  precioMayoreo?: string | undefined;
+  /** Mínimo y máximo de la sucursal principal. Máximo 0 = sin máximo. */
+  stockMinimo?: string | undefined;
+  stockMaximo?: string | undefined;
 }
 
 /** Cache de categorías por nombre (normalizado) para no re-crear en el mismo import. */
@@ -96,6 +102,9 @@ const ETIQUETA_COLUMNA: Record<string, string> = {
   codigoBarras: "Código de barras",
   claveSat: "Clave SAT",
   claveUnidadSat: "Unidad SAT",
+  precioMayoreo: "Precio mayoreo",
+  stockMinimo: "Mínimo",
+  stockMaximo: "Máximo",
 };
 
 export async function bulkUpsertProductos(
@@ -106,6 +115,7 @@ export async function bulkUpsertProductos(
 ): Promise<BulkResumen> {
   const filas: FilaResultado[] = [];
   const catCache = new Map<string, string>();
+  let listaMayoreoId: string | null = null;
 
   // Sucursal principal (para el stock inicial). Se resuelve una sola vez.
   const sucursalPrincipal = await prisma.sucursal.findFirst({
@@ -222,6 +232,37 @@ export async function bulkUpsertProductos(
             }),
           );
         }
+      }
+
+      if (row.precioMayoreo !== undefined && varianteId) {
+        listaMayoreoId ??= await asegurarListaMayoreo(prisma);
+        const precio = new Decimal(row.precioMayoreo);
+        if (precio.gt(0)) {
+          await prisma.listaPrecioItem.upsert({
+            where: { listaPrecioId_varianteId: { listaPrecioId: listaMayoreoId, varianteId } },
+            create: { listaPrecioId: listaMayoreoId, varianteId, precio: precio.toString() },
+            update: { precio: precio.toString() },
+          });
+        } else {
+          await prisma.listaPrecioItem.deleteMany({
+            where: { listaPrecioId: listaMayoreoId, varianteId },
+          });
+        }
+      }
+
+      const hayLimites = row.stockMinimo !== undefined || row.stockMaximo !== undefined;
+      if (hayLimites && varianteId && sucursalPrincipal) {
+        const limites = {
+          ...(row.stockMinimo !== undefined ? { stockMinimo: row.stockMinimo } : {}),
+          ...(row.stockMaximo !== undefined
+            ? { stockMaximo: new Decimal(row.stockMaximo).gt(0) ? row.stockMaximo : null }
+            : {}),
+        };
+        await prisma.inventarioSucursal.upsert({
+          where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
+          create: { varianteId, sucursalId: sucursalPrincipal.id, ...limites },
+          update: limites,
+        });
       }
     } catch (err) {
       filas.push({
