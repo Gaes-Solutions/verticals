@@ -1,5 +1,13 @@
 # Hito 3 — Verticales especializados
 
+## Seguimiento de revisión — 14-sep-2026
+
+- [x] Integrar en `gaespos-integracion` la conservación de pedidos ante fallos transitorios y de sesión.
+- [x] Preservar pedidos agregados durante sincronización y compartir llamadas concurrentes de la misma instancia (17 pruebas offline).
+- [x] Revertir completamente una fila de importación fallida, incluidos existencias, movimientos y mayoreo (17 pruebas de importación en DB aislada).
+- [ ] Fiabilidad offline completa: idempotencia del servidor, aislamiento de cachés por identidad y coordinación entre pestañas; no cubiertos por esta corrección.
+
+
 > **Estado:** 🎉 CERRADO al 100% (2026-05-26) · 5 verticales piloto cubiertos · 3.1✅ 3.2✅ 3.3✅ 3.4✅ 3.5✅ 3.6✅
 > **Análisis:** [4.14 Abarrotes](../analisis/04-modelo-datos/4.14-abarrotes.md) · [4.15 Salud pacientes+consultas](../analisis/04-modelo-datos/4.15-salud-pacientes-consultas.md) · [4.16 Salud N3](../analisis/04-modelo-datos/4.16-salud-n3.md) · [4.2 Partners](../analisis/04-modelo-datos/4.2-partners.md) · [4.12 Compras/CFDIs recibidos](../analisis/04-modelo-datos/4.12-compras-cfdis-recibidos.md) · [Flujo 2 Cajero abarrotes](../analisis/03-flujos/02-cajero-abarrotes.md) · [Flujo 4 Veterinario](../analisis/03-flujos/04-veterinario.md) · [Flujo 9 Partner Contador](../analisis/03-flujos/09-partner-contador.md)
 

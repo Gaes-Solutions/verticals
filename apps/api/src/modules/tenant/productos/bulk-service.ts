@@ -61,7 +61,7 @@ export interface ProductoBulkRow {
 
 /** Cache de categorías por nombre (normalizado) para no re-crear en el mismo import. */
 async function resolverCategoriaId(
-  prisma: TenantPrismaClient,
+  prisma: Pick<TenantPrismaClient, "categoria">,
   cache: Map<string, string>,
   nombre: string,
 ): Promise<string> {
@@ -142,128 +142,132 @@ export async function bulkUpsertProductos(
         });
         continue;
       }
-      const categoriaId = row.categoriaNombre
-        ? await resolverCategoriaId(prisma, catCache, row.categoriaNombre)
-        : undefined;
-      const datosCosto =
-        row.costo !== undefined ? { costoUltimo: row.costo, costoPromedio: row.costo } : {};
+      const rowCatCache = new Map(catCache);
+      let rowListaMayoreoId: string | null = listaMayoreoId;
+      const accion = await prisma.$transaction(async (tx) => {
+        const categoriaId = row.categoriaNombre
+          ? await resolverCategoriaId(tx, rowCatCache, row.categoriaNombre)
+          : undefined;
+        const datosCosto =
+          row.costo !== undefined ? { costoUltimo: row.costo, costoPromedio: row.costo } : {};
 
-      const existente = await prisma.producto.findFirst({
-        where: { skuPadre: row.skuPadre },
-        select: {
-          id: true,
-          variantes: { where: { isDefault: true }, select: { id: true }, take: 1 },
-        },
-      });
-
-      let varianteId: string | undefined;
-      if (existente) {
-        await prisma.producto.update({
-          where: { id: existente.id },
-          data: {
-            nombre: row.nombre,
-            ...(categoriaId ? { categoriaId } : {}),
-            ...(row.aplicaIva !== undefined ? { aplicaIva: row.aplicaIva } : {}),
-            ...(row.tasaIva !== undefined ? { tasaIva: row.tasaIva } : {}),
-            ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
-            ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
+        const existente = await tx.producto.findFirst({
+          where: { skuPadre: row.skuPadre },
+          select: {
+            id: true,
+            variantes: { where: { isDefault: true }, select: { id: true }, take: 1 },
           },
         });
-        const varDefault = existente.variantes[0];
-        if (varDefault) {
-          varianteId = varDefault.id;
-          await prisma.productoVariante.update({
-            where: { id: varDefault.id },
-            data: { precioBase: row.precioBase, ...datosCosto },
-          });
-        }
-        filas.push({ fila: numFila, sku: row.skuPadre, accion: "actualizado" });
-      } else {
-        const creado = await prisma.producto.create({
-          data: {
-            skuPadre: row.skuPadre,
-            nombre: row.nombre,
-            ...(categoriaId ? { categoriaId } : {}),
-            aplicaIva: row.aplicaIva ?? true,
-            tasaIva: row.tasaIva ?? "16",
-            ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
-            ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
-            variantes: {
-              create: [
-                {
-                  sku: row.skuPadre,
-                  precioBase: row.precioBase,
-                  isDefault: true,
-                  ...datosCosto,
-                  ...(row.codigoBarras
-                    ? {
-                        codigosBarras: {
-                          create: [{ codigo: row.codigoBarras, isPrimary: true, tipo: "ean13" }],
-                        },
-                      }
-                    : {}),
-                },
-              ],
+
+        let varianteId: string | undefined;
+        if (existente) {
+          await tx.producto.update({
+            where: { id: existente.id },
+            data: {
+              nombre: row.nombre,
+              ...(categoriaId ? { categoriaId } : {}),
+              ...(row.aplicaIva !== undefined ? { aplicaIva: row.aplicaIva } : {}),
+              ...(row.tasaIva !== undefined ? { tasaIva: row.tasaIva } : {}),
+              ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
+              ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
             },
-          },
-          select: { variantes: { where: { isDefault: true }, select: { id: true }, take: 1 } },
-        });
-        varianteId = creado.variantes[0]?.id;
-        filas.push({ fila: numFila, sku: row.skuPadre, accion: "creado" });
-      }
+          });
+          const varDefault = existente.variantes[0];
+          if (varDefault) {
+            varianteId = varDefault.id;
+            await tx.productoVariante.update({
+              where: { id: varDefault.id },
+              data: { precioBase: row.precioBase, ...datosCosto },
+            });
+          }
+        } else {
+          const creado = await tx.producto.create({
+            data: {
+              skuPadre: row.skuPadre,
+              nombre: row.nombre,
+              ...(categoriaId ? { categoriaId } : {}),
+              aplicaIva: row.aplicaIva ?? true,
+              tasaIva: row.tasaIva ?? "16",
+              ...(row.claveSat !== undefined ? { claveSat: row.claveSat } : {}),
+              ...(row.claveUnidadSat !== undefined ? { claveUnidadSat: row.claveUnidadSat } : {}),
+              variantes: {
+                create: [
+                  {
+                    sku: row.skuPadre,
+                    precioBase: row.precioBase,
+                    isDefault: true,
+                    ...datosCosto,
+                    ...(row.codigoBarras
+                      ? {
+                          codigosBarras: {
+                            create: [{ codigo: row.codigoBarras, isPrimary: true, tipo: "ean13" }],
+                          },
+                        }
+                      : {}),
+                  },
+                ],
+              },
+            },
+            select: { variantes: { where: { isDefault: true }, select: { id: true }, take: 1 } },
+          });
+          varianteId = creado.variantes[0]?.id;
+        }
 
-      // Stock inicial: ajusta la sucursal principal al valor absoluto contado.
-      if (row.stockInicial !== undefined && varianteId && sucursalPrincipal) {
-        const inv = await prisma.inventarioSucursal.findUnique({
-          where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
-          select: { stockActual: true },
-        });
-        const actual = new Decimal(inv?.stockActual?.toString() ?? "0");
-        const delta = new Decimal(row.stockInicial).minus(actual);
-        if (!delta.isZero()) {
-          await prisma.$transaction((tx) =>
-            aplicarAjuste(tx, {
+        // Stock inicial: ajusta la sucursal principal al valor absoluto contado.
+        if (row.stockInicial !== undefined && varianteId && sucursalPrincipal) {
+          const inv = await tx.inventarioSucursal.findUnique({
+            where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
+            select: { stockActual: true },
+          });
+          const actual = new Decimal(inv?.stockActual?.toString() ?? "0");
+          const delta = new Decimal(row.stockInicial).minus(actual);
+          if (!delta.isZero()) {
+            await aplicarAjuste(tx, {
               varianteId,
               sucursalId: sucursalPrincipal.id,
               tipo: delta.gt(0) ? "ajuste_positivo" : "ajuste_negativo",
               cantidad: delta.abs().toString(),
               motivo: "Stock inicial (carga masiva)",
               usuarioId,
-            }),
-          );
+            });
+          }
         }
-      }
 
-      if (row.precioMayoreo !== undefined && varianteId) {
-        listaMayoreoId ??= await asegurarListaMayoreo(prisma);
-        const precio = new Decimal(row.precioMayoreo);
-        if (precio.gt(0)) {
-          await prisma.listaPrecioItem.upsert({
-            where: { listaPrecioId_varianteId: { listaPrecioId: listaMayoreoId, varianteId } },
-            create: { listaPrecioId: listaMayoreoId, varianteId, precio: precio.toString() },
-            update: { precio: precio.toString() },
-          });
-        } else {
-          await prisma.listaPrecioItem.deleteMany({
-            where: { listaPrecioId: listaMayoreoId, varianteId },
+        if (row.precioMayoreo !== undefined && varianteId) {
+          rowListaMayoreoId ??= await asegurarListaMayoreo(tx);
+          const precio = new Decimal(row.precioMayoreo);
+          if (precio.gt(0)) {
+            await tx.listaPrecioItem.upsert({
+              where: { listaPrecioId_varianteId: { listaPrecioId: rowListaMayoreoId, varianteId } },
+              create: { listaPrecioId: rowListaMayoreoId, varianteId, precio: precio.toString() },
+              update: { precio: precio.toString() },
+            });
+          } else {
+            await tx.listaPrecioItem.deleteMany({
+              where: { listaPrecioId: rowListaMayoreoId, varianteId },
+            });
+          }
+        }
+
+        const hayLimites = row.stockMinimo !== undefined || row.stockMaximo !== undefined;
+        if (hayLimites && varianteId && sucursalPrincipal) {
+          const limites = {
+            ...(row.stockMinimo !== undefined ? { stockMinimo: row.stockMinimo } : {}),
+            ...(row.stockMaximo !== undefined
+              ? { stockMaximo: new Decimal(row.stockMaximo).gt(0) ? row.stockMaximo : null }
+              : {}),
+          };
+          await tx.inventarioSucursal.upsert({
+            where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
+            create: { varianteId, sucursalId: sucursalPrincipal.id, ...limites },
+            update: limites,
           });
         }
-      }
-
-      const hayLimites = row.stockMinimo !== undefined || row.stockMaximo !== undefined;
-      if (hayLimites && varianteId && sucursalPrincipal) {
-        const limites = {
-          ...(row.stockMinimo !== undefined ? { stockMinimo: row.stockMinimo } : {}),
-          ...(row.stockMaximo !== undefined
-            ? { stockMaximo: new Decimal(row.stockMaximo).gt(0) ? row.stockMaximo : null }
-            : {}),
-        };
-        await prisma.inventarioSucursal.upsert({
-          where: { varianteId_sucursalId: { varianteId, sucursalId: sucursalPrincipal.id } },
-          create: { varianteId, sucursalId: sucursalPrincipal.id, ...limites },
-          update: limites,
-        });
-      }
+        return existente ? ("actualizado" as const) : ("creado" as const);
+      });
+      for (const [name, id] of rowCatCache) catCache.set(name, id);
+      listaMayoreoId = rowListaMayoreoId;
+      filas.push({ fila: numFila, sku: row.skuPadre, accion });
     } catch (err) {
       filas.push({
         fila: numFila,

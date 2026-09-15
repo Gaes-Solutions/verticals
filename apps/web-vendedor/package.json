@@ -5,6 +5,7 @@
   "type": "module",
   "description": "PWA de campo del vendedor mayorista: ruta de visitas del día, CRM ligero del cliente, pedidos con firma (offline-first) y comisiones gamificadas. SPA Vite+React conectada a la API GaesSoft.",
   "scripts": {
+    "test": "vitest run",
     "dev": "vite --port 5179",
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 5179",

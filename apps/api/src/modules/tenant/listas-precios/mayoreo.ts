@@ -8,7 +8,9 @@ export const LISTA_MAYOREO_CODIGO = "MAYOREO";
  * con un botón. Así se cobra a mayoreo en el mostrador, y es la columna de
  * precio de mayoreo que traen los inventarios de otros puntos de venta.
  */
-export async function asegurarListaMayoreo(prisma: TenantPrismaClient): Promise<string> {
+export async function asegurarListaMayoreo(
+  prisma: Pick<TenantPrismaClient, "listaPrecio">,
+): Promise<string> {
   const lista = await prisma.listaPrecio.upsert({
     where: { codigo: LISTA_MAYOREO_CODIGO },
     create: { codigo: LISTA_MAYOREO_CODIGO, nombre: "Mayoreo", tipo: "mayoreo_nivel" },

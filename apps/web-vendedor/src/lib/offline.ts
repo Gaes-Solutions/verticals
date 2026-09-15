@@ -1,4 +1,4 @@
-import { OfflineError, api } from "./api.js";
+import { ApiError, api } from "./api.js";
 import type { LineaCarrito, ProductoCatalogo } from "./types.js";
 
 /**
@@ -99,14 +99,25 @@ export function encolarPedido(item: Omit<PedidoEncolado, "idLocal" | "encoladoAt
 }
 
 /**
- * Reintenta subir la cola en orden. Se detiene al primer fallo de red (sigue
- * sin señal); los errores de negocio (4xx) sacan el pedido de la cola y lo
- * reportan para que el vendedor lo corrija — reintentarlo jamás lo arreglaría.
+ * Only confirmed business rejections leave the queue. Session failures,
+ * transient responses and unknown errors must not discard unsent orders.
  */
-export async function subirCola(): Promise<{
+type UploadResult = {
   subidos: number;
   rechazados: Array<{ clienteNombre: string; motivo: string }>;
-}> {
+};
+
+let activeUpload: Promise<UploadResult> | null = null;
+
+export function subirCola(): Promise<UploadResult> {
+  if (activeUpload) return activeUpload;
+  activeUpload = uploadBatch().finally(() => {
+    activeUpload = null;
+  });
+  return activeUpload;
+}
+
+async function uploadBatch(): Promise<UploadResult> {
   const cola = leerCola();
   const rechazados: Array<{ clienteNombre: string; motivo: string }> = [];
   let subidos = 0;
@@ -118,15 +129,22 @@ export async function subirCola(): Promise<{
       cola.shift();
       subidos += 1;
     } catch (err) {
-      if (err instanceof OfflineError) break;
+      if (
+        !(err instanceof ApiError) ||
+        err.status < 400 ||
+        err.status >= 500 ||
+        [401, 403, 408, 425, 429].includes(err.status)
+      ) {
+        break;
+      }
       cola.shift();
       rechazados.push({
         clienteNombre: item.clienteNombre,
         motivo: err instanceof Error ? err.message : "Error desconocido",
       });
     }
-    escribirCola(cola);
+    // Remove only the processed order; another action may have appended orders while awaiting.
+    escribirCola(leerCola().filter((pending) => pending.idLocal !== item.idLocal));
   }
-  escribirCola(cola);
   return { subidos, rechazados };
 }

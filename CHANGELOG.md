@@ -1,5 +1,12 @@
 # CHANGELOG — GaesSoft POS
 
+## 2026-09-14 — Correcciones de sincronización e importación
+
+- Vendedor: conservar pedidos ante errores de red, servidor y sesión; evitar sobrescribir pedidos agregados durante una subida y compartir sincronizaciones concurrentes de la misma instancia.
+- Importación: guardar cada fila completa en una transacción, revertir los cambios ante un fallo y contabilizar un solo resultado por fila. Categorías/lista mayoreo en caché solo tras commit.
+- Regresiones: 17 pruebas offline y 17 de importación en PostgreSQL aislado aprobadas.
+
+
 - **2026-09-08 — tienda en validación:** snapshot de importes, servicio de envío configurable, catálogo/carrito/checkout móvil OXXO-SPEI autenticado, protección de tienda desactivada/productos retirados, bases fiscales y notas de crédito, caja POS verificada y errores recuperables. Contraste oscuro y accesibilidad móvil corregidos tras QA. Evidencia y limitaciones en `docs/estado-entrega-tienda-2026-09-08.md`; sin liberación comercial ni proveedor real.
 
 ## 2026-09-08 — Implementación local y validación retail (sin publicar)

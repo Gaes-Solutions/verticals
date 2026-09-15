@@ -1,5 +1,16 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Revisión de entrega — 14-sep-2026
+
+650 pruebas aprobadas en la revisión local (265 API, 328 POS/apps, 47 tienda web y 10 navegador). Build tienda y tipos correctos. La vertical completa sigue pendiente por reembolso online sin ejecución bancaria, tarjeta móvil, videos del kiosco y entrega nativa/hardware. Ver [diagnóstico y criterios de cierre](docs/revision-tienda-2026-09-14.md). No certifica producción ni cambios posteriores de la sesión concurrente de importación.
+
+## Correcciones verificadas — 14-sep-2026
+
+En `gaespos-integracion` (`trabajo/codex-tienda-08sep`): integrada la protección de pedidos ante errores transitorios que estaba local en `gaespos-verticales`. La cola conserva pedidos añadidos durante una subida y comparte las llamadas concurrentes dentro de la misma instancia de la app. Importación de productos: transacción por fila, resultado único tras commit y cachés actualizadas solo al confirmar; un fallo revierte también stock, movimientos y mayoreo.
+
+Verificación: 17 pruebas vendedor y build aprobados; 17 pruebas de importación con PostgreSQL en base aislada `qa_fixes_20260915`, incluidos rollback de altas/ediciones y continuación del lote; tipos API aprobados. No se modificó producción. La idempotencia de pedidos del vendedor en servidor, aislamiento de cachés por usuario/tenant y coordinación entre pestañas siguen fuera de este cierre; no declarar offline completo. Se observaron cambios concurrentes de otra sesión en revisión previa del importador y se preservaron.
+
+
 ## Prioridad vigente — 2026-09-08: entrega de la tienda
 
 Gaby prioriza tienda web + POS/administración + apps móviles con paridad funcional + kiosco de precios/publicidad, para múltiples sistemas operativos. Fuente actual: esta carpeta, rama `mobile/apps`; no usar `gaespos-verticales` como inventario completo de lo ya construido. Ver [Estado de entrega de tienda — 8-sep](docs/estado-entrega-tienda-2026-09-08.md).

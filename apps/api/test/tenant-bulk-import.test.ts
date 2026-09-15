@@ -464,3 +464,119 @@ describe("precio de mayoreo y mínimos/máximos", () => {
     expect(Number(mayoreo.json().total)).toBeLessThan(Number(normal.json().total));
   });
 });
+
+describe("rollback por fila de importación", () => {
+  it("revierte producto, categoría y stock si falla mayoreo, y procesa la fila siguiente", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          {
+            skuPadre: "ROLLBACK-BAD",
+            nombre: "No guardar",
+            precioBase: "10",
+            categoriaNombre: "Categoria rollback",
+            stockInicial: "5",
+            precioMayoreo: "10000000000",
+          },
+          {
+            skuPadre: "ROLLBACK-GOOD",
+            nombre: "Sí guardar",
+            precioBase: "10",
+            categoriaNombre: "Categoria rollback",
+            stockInicial: "7",
+            precioMayoreo: "8",
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      total: 2,
+      creados: 1,
+      actualizados: 0,
+      errores: 1,
+      filas: [
+        { fila: 1, accion: "error" },
+        { fila: 2, accion: "creado" },
+      ],
+    });
+    expect(await client.producto.findFirst({ where: { skuPadre: "ROLLBACK-BAD" } })).toBeNull();
+    expect(await client.productoVariante.findFirst({ where: { sku: "ROLLBACK-BAD" } })).toBeNull();
+    const good = await client.producto.findFirstOrThrow({
+      where: { skuPadre: "ROLLBACK-GOOD" },
+      include: { categoria: true, variantes: true },
+    });
+    expect(good.categoria?.nombre).toBe("Categoria rollback");
+    const variant = good.variantes[0];
+    if (!variant) throw new Error("Missing imported variant");
+    const stock = await client.inventarioSucursal.findFirstOrThrow({
+      where: { varianteId: variant.id },
+    });
+    expect(stock.stockActual.toString()).toBe("7");
+    const price = await client.listaPrecioItem.findFirstOrThrow({
+      where: { varianteId: variant.id },
+    });
+    expect(price.precio.toString()).toBe("8");
+  });
+
+  it("revierte cambios de un producto existente y el mayoreo si falla el límite de inventario", async () => {
+    const client = getTenantClient(TENANT_SLUG);
+    const filas = [
+      {
+        skuPadre: "ROLLBACK-UPDATE",
+        nombre: "Original",
+        precioBase: "10",
+        stockInicial: "4",
+        precioMayoreo: "8",
+        stockMinimo: "2",
+      },
+    ];
+    const initial = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: { filas },
+    });
+    expect(initial.json().creados).toBe(1);
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          {
+            ...filas[0],
+            nombre: "Cambio fallido",
+            precioBase: "20",
+            stockInicial: "15",
+            precioMayoreo: "18",
+            stockMinimo: "1000000000000000",
+          },
+        ],
+      },
+    });
+    expect(res.json()).toMatchObject({ total: 1, creados: 0, actualizados: 0, errores: 1 });
+    const prod = await client.producto.findFirstOrThrow({
+      where: { skuPadre: "ROLLBACK-UPDATE" },
+      include: { variantes: true },
+    });
+    expect(prod.nombre).toBe("Original");
+    const variant = prod.variantes[0];
+    if (!variant) throw new Error("Missing imported variant");
+    expect(variant.precioBase.toString()).toBe("10");
+    const stock = await client.inventarioSucursal.findFirstOrThrow({
+      where: { varianteId: variant.id },
+    });
+    expect(stock.stockActual.toString()).toBe("4");
+    expect(stock.stockMinimo.toString()).toBe("2");
+    expect(await client.inventarioMovimiento.count({ where: { varianteId: variant.id } })).toBe(1);
+    const price = await client.listaPrecioItem.findFirstOrThrow({
+      where: { varianteId: variant.id },
+    });
+    expect(price.precio.toString()).toBe("8");
+  });
+});
