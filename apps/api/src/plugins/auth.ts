@@ -92,7 +92,10 @@ type ClienteB2bTokenPayload = {
   kind: "cliente_b2b";
 };
 
+type KioskoMediaTokenPayload = { kind: "kiosko_media"; sub: string; tenantSlug: string; deviceId: string; publicationId: string };
+
 type TokenPayload =
+  | KioskoMediaTokenPayload
   | AdminTokenPayload
   | AdminMfaTokenPayload
   | TenantTokenPayload
@@ -149,6 +152,7 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
   app.decorate("authenticate", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
+      if (req.user.kind === "kiosko_media") return rejectUnauthorized(reply, "Este enlace solo permite leer el anuncio autorizado");
     } catch (_err) {
       return rejectUnauthorized(reply, "Token inválido o expirado");
     }

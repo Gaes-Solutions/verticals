@@ -2,6 +2,7 @@ import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../../lib/audit.js";
+import { mediaAdminRoutes } from "./media-routes.js";
 import { generarToken, getKioskoConfig } from "./service.js";
 
 const configSchema = z.object({
@@ -21,6 +22,7 @@ const configSchema = z.object({
 
 /** Gestión de kioskos desde el panel del dueño. Bajo /t/kioskos. */
 const kioskoAdminRoutes: FastifyPluginAsync = async (app) => {
+  await app.register(mediaAdminRoutes);
   // Dispositivos
   app.get("/", async (req) => {
     req.requirePerm(PERMISSIONS.CONFIGURACION_LEER);

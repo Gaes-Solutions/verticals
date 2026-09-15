@@ -35,7 +35,7 @@ export function buildCsp(source, origin) {
     .map((part) => part.trim())
     .filter(Boolean);
   const remaining = directives.filter((part) => !/^connect-src(?:\s|$)/i.test(part));
-  return [...remaining, `connect-src 'self' ${origin}`].join("; ");
+  return [...remaining, `connect-src 'self' ${origin} http://127.0.0.1:9876 ipc: http://ipc.localhost`].join("; ");
 }
 
 export function buildPlan(value, sourceCsp, target = "native", host = process.platform) {

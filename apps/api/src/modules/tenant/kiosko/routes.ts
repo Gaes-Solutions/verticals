@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { mediaDeviceRoutes, mediaSlides } from "./media-routes.js";
 import {
   type KioskoAuth,
   consultarPrecio,
@@ -42,6 +43,7 @@ export const kioskoDeviceRoutes: FastifyPluginAsync<{ rateLimitMax: number }> = 
   app,
   opts,
 ) => {
+  await app.register(mediaDeviceRoutes);
   const LIMITE_PRECIO = fraccion(opts.rateLimitMax, 30);
   const LIMITE_CONFIG = fraccion(opts.rateLimitMax, 10);
   const LIMITE_IDLE = fraccion(opts.rateLimitMax, 20);
@@ -84,6 +86,11 @@ export const kioskoDeviceRoutes: FastifyPluginAsync<{ rateLimitMax: number }> = 
     const auth = await requireKiosko(req, reply);
     if (!auth) return;
     const cfg = await getKioskoConfig(auth.tenantPrisma);
-    return { slides: await contenidoIdle(auth.tenantPrisma, cfg.contenidoReposo, auth.sucursalId) };
+    return {
+      slides: [
+        ...(await mediaSlides(app, auth)),
+        ...(await contenidoIdle(auth.tenantPrisma, cfg.contenidoReposo, auth.sucursalId)),
+      ],
+    };
   });
 };

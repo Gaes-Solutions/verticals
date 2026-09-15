@@ -8,6 +8,7 @@ import { listDirecciones } from "@/services/cliente";
 import { colors, radius, space } from "@/theme";
 import { Button, EntraParaVer, Input } from "@/ui";
 import { CommerceError } from "@/ui/CommerceError";
+import { CardPayment } from "@/ui/payments/CardPayment";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
@@ -40,7 +41,7 @@ function useCheckoutForm({ owner, name }: { owner: string; name: string }) {
   });
   const [mode, setMode] = useState<"paqueteria" | "click_collect">("paqueteria");
   const [selection, setSelection] = useState<{ context: string; id: string } | null>(null);
-  const [payment, setPayment] = useState<"oxxo" | "spei" | null>(null);
+  const [payment, setPayment] = useState<"oxxo" | "spei" | "tarjeta" | null>(null);
   const sameCart =
     cart.owner === owner && cart.sync === "saved" && !!cart.cartId && cart.lines.length > 0;
   const context = deliveryContext(cart.cartId ?? "", cart.revision, address);
@@ -86,14 +87,15 @@ function useCheckoutForm({ owner, name }: { owner: string; name: string }) {
     !delivery.isFetching &&
     !config.isError &&
     payment &&
-    config.data?.proveedor === "conekta" &&
-    config.data.metodos.includes(payment) &&
+    config.data?.metodos.includes(payment) &&
     (mode === "click_collect" || validCheckoutAddress(address));
-  const submit = () => {
+  const submit = (cardTokenId?: string) => {
     if (!canSubmit || !cart.cartId || !selected || !payment) return;
+    if (payment === "tarjeta" && config.data?.tarjetaRequiereToken && !cardTokenId) return;
     void initiateCheckout(owner, {
       carritoId: cart.cartId,
       metodoPago: payment,
+      ...(cardTokenId ? { cardTokenId } : {}),
       metodoEnvio: mode,
       ...(mode === "click_collect"
         ? { sucursalPickupId: selected }
@@ -150,6 +152,24 @@ function CheckoutScreen({ owner, name }: { owner: string; name: string }) {
         onPress={() => router.push("/(app)/carrito")}
       />
       <AttemptStatus owner={owner} />
+      {checkout.owner === owner &&
+        checkout.attempt?.paymentProvider === "stripe" &&
+        checkout.attempt.clientSecret &&
+        checkout.outcome === "pending" &&
+        config.data?.proveedor === "stripe" &&
+        config.data.publicKey && (
+          <CardPayment
+            provider="stripe"
+            publicKey={config.data.publicKey}
+            clientSecret={checkout.attempt.clientSecret}
+            stripeAccountId={checkout.attempt.stripeAccountId}
+            disabled={checkout.busy}
+            onToken={() => {}}
+            onConfirmed={() => {
+              void recoverCheckout(owner);
+            }}
+          />
+        )}
       {sameCart && !locked ? (
         <>
           <Text style={s.title}>Entrega y pago</Text>
@@ -179,16 +199,38 @@ function CheckoutScreen({ owner, name }: { owner: string; name: string }) {
             <CommerceError error={config.error} retry={() => void config.refetch()} />
           ) : null}
           <PaymentChoices form={form} />
+          {form.payment === "tarjeta" &&
+          config.data?.proveedor === "conekta" &&
+          config.data.publicKey ? (
+            canSubmit ? (
+              <CardPayment
+                provider="conekta"
+                publicKey={config.data.publicKey}
+                disabled={checkout.busy}
+                onToken={(token) => submit(token)}
+                onConfirmed={() => {
+                  void recoverCheckout(owner);
+                }}
+              />
+            ) : (
+              <Text style={s.text}>Completa la entrega para ingresar tu tarjeta.</Text>
+            )
+          ) : (
+            <Button
+              label={
+                form.payment === "tarjeta"
+                  ? "Continuar al pago seguro"
+                  : "Generar referencia de pago"
+              }
+              busy={checkout.busy}
+              disabled={!canSubmit}
+              onPress={() => submit()}
+            />
+          )}
           <Text style={s.text}>
-            Tarjeta no disponible en esta versión. Generar una referencia OXXO/SPEI no significa que
-            el pago esté recibido.
+            Tu pedido se confirma cuando el servidor verifica el pago. Una referencia OXXO/SPEI
+            todavía no es un pago recibido.
           </Text>
-          <Button
-            label="Generar referencia de pago"
-            busy={checkout.busy}
-            disabled={!canSubmit}
-            onPress={submit}
-          />
         </>
       ) : null}
     </ScrollView>
@@ -211,16 +253,15 @@ function DeliveryMode({ form }: { form: ReturnType<typeof useCheckoutForm> }) {
   );
 }
 function PaymentChoices({ form }: { form: ReturnType<typeof useCheckoutForm> }) {
-  const methods = (["oxxo", "spei"] as const).filter(
-    (method) =>
-      form.config.data?.proveedor === "conekta" && form.config.data.metodos.includes(method),
+  const methods = (["tarjeta", "oxxo", "spei"] as const).filter((method) =>
+    form.config.data?.metodos.includes(method),
   );
   return (
     <View style={s.row}>
       {methods.map((method) => (
         <Button
           key={method}
-          label={method.toUpperCase()}
+          label={method === "tarjeta" ? "Tarjeta" : method.toUpperCase()}
           variant={form.payment === method ? "primary" : "outline"}
           onPress={() => form.setPayment(method)}
         />

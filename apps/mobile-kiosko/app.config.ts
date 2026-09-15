@@ -24,6 +24,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    ["expo-video", { supportsBackgroundPlayback: false, supportsPictureInPicture: false }],
     "expo-secure-store",
     [
       "expo-camera",

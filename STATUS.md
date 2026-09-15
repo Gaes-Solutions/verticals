@@ -1,5 +1,12 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Entrega parcial de pendientes tienda — 15-sep-2026
+
+Reembolsos duraderos, tarjeta móvil, publicación de video inspeccionado e impresión
+ESC/POS implementados y probados. El POS offline, instaladores y validación real
+de proveedores/hardware siguen pendientes. Ver [entrega y límites](docs/entrega-pendientes-tienda-2026-09-15.md).
+
+
 ## Revisión de entrega — 14-sep-2026
 
 650 pruebas aprobadas en la revisión local (265 API, 328 POS/apps, 47 tienda web y 10 navegador). Build tienda y tipos correctos. La vertical completa sigue pendiente por reembolso online sin ejecución bancaria, tarjeta móvil, videos del kiosco y entrega nativa/hardware. Ver [diagnóstico y criterios de cierre](docs/revision-tienda-2026-09-14.md). No certifica producción ni cambios posteriores de la sesión concurrente de importación.

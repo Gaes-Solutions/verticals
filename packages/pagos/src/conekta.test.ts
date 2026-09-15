@@ -206,3 +206,47 @@ describe("ConektaClient", () => {
     );
   });
 });
+
+describe("Conekta refund receipts", () => {
+  const receipt = (id: string, amount = -1234) => ({ id, object: "refund", amount });
+  const order = (refunds: unknown[]) => ({
+    id: "ord_original",
+    charges: { data: [{ refunds: { data: refunds } }] },
+  });
+  it("returns the individual refund id, not the order id", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(order([receipt("re_old")]))))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(order([receipt("re_old"), receipt("re_new")]))),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(order([receipt("re_old"), receipt("re_new")]))),
+      );
+    const result = await new ConektaClient(OPTS).reembolsar("ord_original", 1234, {
+      requestKey: "job",
+    });
+    expect(result).toMatchObject({ reembolsoId: "re_new", status: "procesado" });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it("does not infer a lost receipt just from its amount", async () => {
+    const fetch = mockFetch(200, order([receipt("re_other")]));
+    expect(
+      await new ConektaClient(OPTS).consultarReembolso("ord_original", null, { requestKey: "job" }),
+    ).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("verifies an explicit individual receipt against the original order", async () => {
+    mockFetch(200, order([receipt("re_ours")]));
+    expect(
+      await new ConektaClient(OPTS).consultarReembolso("ord_original", "re_ours", {
+        requestKey: "job",
+      }),
+    ).toEqual({
+      intentId: "ord_original",
+      amountCents: 1234,
+      reembolsoId: "re_ours",
+      status: "procesado",
+    });
+  });
+});

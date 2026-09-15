@@ -14,7 +14,8 @@ import { ComercioError } from "./comercio-service.js";
 export interface MobileCheckoutInput {
   carritoId: string;
   idempotencyKey: string;
-  metodoPago: "oxxo" | "spei";
+  metodoPago: "oxxo" | "spei" | "tarjeta";
+  cardTokenId?: string | undefined;
   metodoEnvio: "paqueteria" | "click_collect" | "envio_local";
   tarifaEnvioId?: string | undefined;
   sucursalPickupId?: string | undefined;
@@ -102,14 +103,34 @@ export async function configPagoMobile(app: FastifyInstance, client: TenantPrism
   const cfg = await client.configTiendaEcommerce.findFirst({
     select: { pasarelaPagoProvider: true, activa: true },
   });
-  if (!cfg?.activa || cfg.pasarelaPagoProvider !== "conekta")
-    return { proveedor: null, metodos: [] as string[], tarjetaRequiereToken: true };
+  const unavailable = {
+    proveedor: null,
+    metodos: [] as string[],
+    tarjetaRequiereToken: true,
+    publicKey: null as string | null,
+  };
+  if (!cfg?.activa || !cfg.pasarelaPagoProvider) return unavailable;
+  const provider = cfg.pasarelaPagoProvider;
+  if (provider !== "stripe" && provider !== "conekta") return unavailable;
   try {
-    app.pagoProviderFactory("conekta");
+    app.pagoProviderFactory(provider);
   } catch {
-    return { proveedor: null, metodos: [] as string[], tarjetaRequiereToken: true };
+    return unavailable;
   }
-  return { proveedor: "conekta", metodos: ["oxxo", "spei"], tarjetaRequiereToken: true };
+  const publicKey =
+    provider === "stripe"
+      ? (process.env.STRIPE_PUBLISHABLE_KEY ?? process.env.STRIPE_PUBLIC_KEY)
+      : process.env.CONEKTA_PUBLIC_KEY;
+  const cardReady = !!publicKey && (provider !== "stripe" || publicKey.startsWith("pk_"));
+  return {
+    proveedor: provider,
+    metodos: [
+      ...(provider === "conekta" ? ["oxxo", "spei"] : []),
+      ...(cardReady ? ["tarjeta"] : []),
+    ],
+    tarjetaRequiereToken: provider === "conekta",
+    publicKey: cardReady ? publicKey : null,
+  };
 }
 function resultDto(result: IniciarCheckoutResult, key: string, carritoId: string) {
   return {
@@ -118,6 +139,11 @@ function resultDto(result: IniciarCheckoutResult, key: string, carritoId: string
     folioPublico: result.folioPublico,
     total: result.total,
     intentStatus: result.intentStatus,
+    ...(result.paymentProvider ? { paymentProvider: result.paymentProvider } : {}),
+    ...(result.paymentProvider === "stripe" && result.clientSecret
+      ? { clientSecret: result.clientSecret }
+      : {}),
+    ...(result.stripeAccountId ? { stripeAccountId: result.stripeAccountId } : {}),
     ...(result.referenciaPago ? { referenciaPago: result.referenciaPago } : {}),
   };
 }
@@ -198,15 +224,34 @@ export async function checkoutMobile(
     throw new ComercioError(409, "Completa tu cuenta con un correo válido antes de pagar");
   if (!actor) throw new ComercioError(503, "La tienda no está disponible para recibir pagos");
   const config = await configPagoMobile(app, client);
-  if (config.proveedor !== "conekta")
+  if (
+    (config.proveedor !== "stripe" && config.proveedor !== "conekta") ||
+    !config.metodos.includes(input.metodoPago)
+  )
     throw new ComercioError(503, "El pago móvil no está disponible en esta tienda");
-  const result = await iniciarCheckout(client, app.pagoProviderFactory("conekta"), {
+  const connect =
+    config.proveedor === "stripe"
+      ? await app.masterPrisma.tenant.findUnique({
+          where: { slug: tenant },
+          select: { stripeAccountId: true, stripeAccountStatus: true },
+        })
+      : null;
+  const stripeAccountId =
+    connect?.stripeAccountStatus === "enabled" ? connect.stripeAccountId : null;
+  const result = await iniciarCheckout(client, app.pagoProviderFactory(config.proveedor), {
     carritoId: cart.id,
     idempotencyKey: key,
     requestedBy: owner(clienteId),
     tenantSlug: tenant,
     emailComprador: profile.emailPrincipal,
     metodoPago: input.metodoPago,
+    ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
+    ...(stripeAccountId
+      ? {
+          stripeAccountId,
+          platformFeeBps: Math.max(0, Number(process.env.STRIPE_PLATFORM_FEE_BPS ?? "0") || 0),
+        }
+      : {}),
     metodoEnvio: input.metodoEnvio,
     requiereFactura: false,
     requirePublicStore: true,

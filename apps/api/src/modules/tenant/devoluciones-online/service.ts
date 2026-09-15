@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FiscalProvider } from "@gaespos/fiscal";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyRequest } from "fastify";
@@ -126,34 +127,10 @@ export async function listarSolicitudesAdmin(
     orderBy: { createdAt: "desc" },
     include: {
       pedido: { select: { folioPublico: true, emailComprador: true } },
+      bankRefund: { select: { state: true, refundId: true, amountCents: true, lastError: true } },
       cliente: { select: { nombre: true } },
     },
   });
-}
-
-interface SolicitudCargada {
-  id: string;
-  estado: string;
-  clienteId: string;
-  pedidoEcommerceId: string;
-  items: unknown;
-  motivo: DevolucionMotivo;
-  pedido: { folioPublico: string; ventaIdGenerada: string | null };
-}
-
-async function cargarSolicitudPendiente(
-  client: TenantClient,
-  solicitudId: string,
-): Promise<SolicitudCargada> {
-  const s = await client.solicitudDevolucion.findUnique({
-    where: { id: solicitudId },
-    include: { pedido: { select: { folioPublico: true, ventaIdGenerada: true } } },
-  });
-  if (!s) throw new DevolucionOnlineError(404, "Solicitud no encontrada");
-  if (s.estado !== "solicitada") {
-    throw new DevolucionOnlineError(409, `La solicitud ya está ${s.estado}`);
-  }
-  return s as unknown as SolicitudCargada;
 }
 
 /**
@@ -164,11 +141,47 @@ async function cargarSolicitudPendiente(
 export async function aprobarSolicitud(
   client: TenantClient,
   provider: FiscalProvider,
-  usuarioId: string,
+  requestedUserId: string,
   solicitudId: string,
-  input: { metodoReembolso: DevolucionReembolsoMetodo; emitirCfdiEgreso?: boolean },
+  requestedInput: {
+    metodoReembolso: DevolucionReembolsoMetodo;
+    emitirCfdiEgreso?: boolean;
+    reponeStock?: boolean;
+    cajaId?: string;
+  },
 ): Promise<{ devolucionId: string; folio: string; totalDevuelto: string }> {
-  const solicitud = await cargarSolicitudPendiente(client, solicitudId);
+  const solicitud = await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${solicitudId}, 7710023))`;
+    if (await tx.onlineBankRefund.findUnique({ where: { solicitudId } }))
+      throw new DevolucionOnlineError(409, "La solicitud tiene un reembolso bancario en curso");
+    const current = await tx.solicitudDevolucion.findUnique({
+      where: { id: solicitudId },
+      include: { pedido: true, devolucion: true },
+    });
+    if (!current) throw new DevolucionOnlineError(404, "Solicitud no encontrada");
+    if (current.estado === "aprobada" && current.devolucion) return current;
+    if (current.estado !== "solicitada")
+      throw new DevolucionOnlineError(409, "La solicitud ya no está pendiente");
+    if (current.approvalKey) return current;
+    return tx.solicitudDevolucion.update({
+      where: { id: solicitudId },
+      data: {
+        approvalKey: randomUUID(),
+        approvalRequest: requestedInput,
+        approvalUserId: requestedUserId,
+      },
+      include: { pedido: true, devolucion: true },
+    });
+  });
+  if (solicitud.estado === "aprobada" && solicitud.devolucion)
+    return {
+      devolucionId: solicitud.devolucion.id,
+      folio: solicitud.devolucion.folio,
+      totalDevuelto: solicitud.devolucion.totalDevuelto.toString(),
+    };
+  const input = solicitud.approvalRequest as typeof requestedInput;
+  const usuarioId = solicitud.approvalUserId ?? requestedUserId;
+
   const ventaId = solicitud.pedido.ventaIdGenerada;
   if (!ventaId) throw new DevolucionOnlineError(409, "El pedido no tiene venta asociada");
 
@@ -179,7 +192,9 @@ export async function aprobarSolicitud(
   });
   if (!venta) throw new DevolucionOnlineError(409, "Venta asociada no encontrada");
 
-  const items = (Array.isArray(solicitud.items) ? solicitud.items : []) as ItemSolicitud[];
+  const items = (Array.isArray(solicitud.items)
+    ? solicitud.items
+    : []) as unknown as ItemSolicitud[];
   const lineas = items
     .map((it) => {
       const ventaLinea = venta.lineas.find((l) => l.varianteId === it.varianteId);
@@ -193,43 +208,55 @@ export async function aprobarSolicitud(
   }
 
   const result = await procesarDevolucion(client, provider, usuarioId, ventaId, {
+    ...(solicitud.approvalKey ? { idempotencyKey: solicitud.approvalKey } : {}),
     motivo: solicitud.motivo,
     metodoReembolso: input.metodoReembolso,
+    reponeStockDefault: input.reponeStock ?? false,
+    ...(input.cajaId ? { cajaId: input.cajaId } : {}),
     notas: `Devolución online ${solicitud.pedido.folioPublico}`,
     lineas,
     ...(input.emitirCfdiEgreso ? { cfdiEgreso: { formaPago: "03", usoCfdi: "G02" } } : {}),
   });
 
-  await client.solicitudDevolucion.update({
-    where: { id: solicitudId },
-    data: {
-      estado: "aprobada",
-      devolucionId: result.devolucionId,
-      resueltaPorId: usuarioId,
-      resueltaAt: new Date(),
-    },
-  });
-  await client.pedidoEcommerce.update({
-    where: { id: solicitud.pedidoEcommerceId },
-    data: {
-      statusPago: "reembolsado",
-      eventos: {
-        create: {
-          tipo: "devolucion_aprobada",
-          descripcion: `Devolución aprobada (${result.folio}). Reembolso $${result.totalDevuelto}.`,
-          visibleCliente: true,
+  const resolved = await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${solicitudId}, 7710023))`;
+    const current = await tx.solicitudDevolucion.findUniqueOrThrow({ where: { id: solicitudId } });
+    if (current.estado === "aprobada") return false;
+    await tx.solicitudDevolucion.update({
+      where: { id: solicitudId },
+      data: {
+        estado: "aprobada",
+        devolucionId: result.devolucionId,
+        resueltaPorId: usuarioId,
+        resueltaAt: new Date(),
+      },
+    });
+    await tx.pedidoEcommerce.update({
+      where: { id: solicitud.pedidoEcommerceId },
+      data: {
+        ...(Number(result.totalDevuelto) >= Number(solicitud.pedido.total)
+          ? { statusPago: "reembolsado" as const }
+          : {}),
+        eventos: {
+          create: {
+            tipo: "devolucion_aprobada",
+            descripcion: `Devolución aprobada (${result.folio}). Reembolso $${result.totalDevuelto}.`,
+            visibleCliente: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  await notificarCliente(client, solicitud.clienteId, {
-    tipo: "devolucion_resuelta",
-    titulo: `Devolución aprobada · ${solicitud.pedido.folioPublico}`,
-    cuerpo: `Tu devolución fue aprobada. Reembolso por $${result.totalDevuelto}.`,
-    link: `/cuenta/pedidos/${solicitud.pedido.folioPublico}`,
-    metadata: { folioPublico: solicitud.pedido.folioPublico, estado: "aprobada" },
+    return true;
   });
+  if (resolved)
+    await notificarCliente(client, solicitud.clienteId, {
+      tipo: "devolucion_resuelta",
+      titulo: `Devolución aprobada · ${solicitud.pedido.folioPublico}`,
+      cuerpo: `Tu devolución fue aprobada. Reembolso por $${result.totalDevuelto}.`,
+      link: `/cuenta/pedidos/${solicitud.pedido.folioPublico}`,
+      metadata: { folioPublico: solicitud.pedido.folioPublico, estado: "aprobada" },
+    });
 
   return {
     devolucionId: result.devolucionId,
@@ -244,15 +271,26 @@ export async function rechazarSolicitud(
   solicitudId: string,
   motivo: string,
 ): Promise<{ id: string; estado: string }> {
-  const solicitud = await cargarSolicitudPendiente(client, solicitudId);
-  await client.solicitudDevolucion.update({
-    where: { id: solicitudId },
-    data: {
-      estado: "rechazada",
-      rechazoMotivo: motivo,
-      resueltaPorId: usuarioId,
-      resueltaAt: new Date(),
-    },
+  const solicitud = await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${solicitudId}, 7710023))`;
+    if (await tx.onlineBankRefund.findUnique({ where: { solicitudId } }))
+      throw new DevolucionOnlineError(409, "La solicitud tiene un reembolso bancario en curso");
+    const current = await tx.solicitudDevolucion.findUnique({
+      where: { id: solicitudId },
+      include: { pedido: { select: { folioPublico: true } } },
+    });
+    if (!current || current.estado !== "solicitada" || current.approvalKey)
+      throw new DevolucionOnlineError(409, "La solicitud ya no está pendiente");
+    await tx.solicitudDevolucion.update({
+      where: { id: solicitudId },
+      data: {
+        estado: "rechazada",
+        rechazoMotivo: motivo,
+        resueltaPorId: usuarioId,
+        resueltaAt: new Date(),
+      },
+    });
+    return current;
   });
   await notificarCliente(client, solicitud.clienteId, {
     tipo: "devolucion_resuelta",

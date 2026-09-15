@@ -22,6 +22,7 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
+    ["@stripe/stripe-react-native", { enableGooglePay: false }],
     "expo-router",
     "expo-secure-store",
     [

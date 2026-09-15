@@ -138,3 +138,56 @@ describe("StripeClient", () => {
     expect(form.get("amount")).toBe("1000");
   });
 });
+
+describe("refund verification", () => {
+  it("uses the original Connect account and stable request key", async () => {
+    const fetch = mockFetch(200, { id: "re_1", status: "succeeded" });
+    await new StripeClient(OPTS).reembolsar("pi_original", 1234, {
+      requestKey: "job_1",
+      stripeAccountId: "acct_original",
+    });
+    const options = fetch.mock.calls[0]?.[1];
+    expect(new Headers(options?.headers).get("Idempotency-Key")).toBe("job_1");
+    expect(new Headers(options?.headers).get("Stripe-Account")).toBe("acct_original");
+    expect(String(options?.body)).toContain("metadata%5Bgaes_refund_key%5D=job_1");
+  });
+  it("recovers a lost response only by matching its metadata", async () => {
+    mockFetch(200, {
+      data: [
+        {
+          id: "re_other",
+          payment_intent: "pi_original",
+          amount: 1234,
+          status: "succeeded",
+          metadata: { gaes_refund_key: "other" },
+        },
+        {
+          id: "re_ours",
+          payment_intent: "pi_original",
+          amount: 1234,
+          status: "pending",
+          metadata: { gaes_refund_key: "job_1" },
+        },
+      ],
+    });
+    expect(
+      await new StripeClient(OPTS).consultarReembolso("pi_original", null, { requestKey: "job_1" }),
+    ).toEqual({
+      intentId: "pi_original",
+      amountCents: 1234,
+      reembolsoId: "re_ours",
+      status: "pendiente",
+    });
+  });
+  it("rejects a receipt for another payment", async () => {
+    mockFetch(200, {
+      id: "re_other",
+      payment_intent: "pi_other",
+      amount: 1234,
+      status: "succeeded",
+    });
+    await expect(
+      new StripeClient(OPTS).consultarReembolso("pi_original", "re_other", { requestKey: "job_1" }),
+    ).rejects.toThrow();
+  });
+});

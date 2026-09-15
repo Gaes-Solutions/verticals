@@ -34,7 +34,7 @@ test("replaces connect-src and preserves all other CSP directives", () => {
   const plan = buildPlan("https://api.example.test/api", csp);
   assert.equal(
     plan.override.app.security.csp,
-    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.example.test",
+    "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.example.test http://127.0.0.1:9876 ipc: http://ipc.localhost",
   );
   assert.equal(plan.apiBase, "https://api.example.test/api");
   assert.deepEqual(plan.args, ["build"]);

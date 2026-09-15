@@ -1,63 +1,52 @@
-# GaesSoft Print Bridge
+# Puente de impresión ESC/POS 0.2.0
 
-Sidecar nativo Tauri 2.x + Rust que expone un HTTP server local
-(`127.0.0.1:9876`) para que el POS web (browser o desktop) imprima
-tickets y cortes en impresoras ESC/POS (Epson TM-T20III/T88VI/etc.) y
-otros equipos del hardware certificado por GaesSoft.
+Envía tickets de venta y corte por TCP a una impresora ESC/POS, o al spooler
+`lp` de Linux/macOS. Escucha únicamente en `127.0.0.1:9876`.
 
-## Por qué existe
+## Configuración por equipo
 
-Los browsers no pueden hablar directo con USB sin permisos especiales
-(WebUSB tiene cobertura inconsistente) ni con impresoras térmicas via
-ESC/POS. El POS web hace `POST localhost:9876/print/ticket` con el JSON
-estructurado que devuelve `GET /t/ventas/:id/ticket` del backend, y
-este sidecar:
+Define estas variables antes de ejecutar `gaespos-print-bridge`:
 
-1. Carga la impresora configurada para esta caja (USB/red local).
-2. Genera los comandos ESC/POS desde el JSON.
-3. Imprime.
+- `GAES_PRINT_TOKEN`: clave aleatoria de al menos 32 caracteres. Genera una con
+  `openssl rand -hex 32`, guárdala y pégala en «Impresión directa ESC/POS» del POS.
+- `GAES_PRINT_ORIGIN`: origen exacto del POS, por ejemplo `https://pos.example.com`.
+  Para Tauri usa el origen mostrado por la pantalla de impresión del equipo.
+- `GAES_PRINT_TCP`: dirección IP y puerto de la impresora, por ejemplo
+  `192.168.1.50:9100`. Disponible en los sistemas que compilen este binario.
+- Alternativa: `GAES_PRINT_SPOOL`: nombre de la cola local, por ejemplo `Tickets`.
+  Requiere `lp` y una cola que acepte ESC/POS sin transformar los bytes.
+- `GAES_PRINT_JOBS`: directorio absoluto, persistente y privado del usuario.
+  No borres su contenido mientras existan impresiones por revisar.
+- `GAES_PRINT_COLUMNS`: `32` (58 mm) o `48` (80 mm); predeterminado 32.
+- `GAES_PRINT_CUT=1`: activa corte de papel solamente en equipos compatibles.
 
-## Estado actual (Hito 1.6.a)
+No abre el cajón automáticamente. Un modelo USB de Windows necesita un
+transporte propio o una impresora accesible por TCP; no se certificó USB Windows.
 
-- ✅ Estructura del crate Rust + Tauri scaffold
-- ✅ Contrato JSON estable (tipos del backend en `apps/api/src/modules/tenant/tickets/service.ts`)
-- ✅ Endpoint backend `/t/ventas/:id/ticket` y `/t/cortes/:id/ticket`
-- ⏳ Implementación ESC/POS Rust (`escpos-rs` crate) — pendiente para
-  cuando Gaby tenga la TM-T20III en escritorio
-- ⏳ Descubrimiento USB con `rusb`
-- ⏳ Build de instalador Tauri por OS (Windows .msi, macOS .dmg, Linux
-  .AppImage)
+## Uso
 
-## Cómo arrancar local (cuando esté implementado)
+En el recibo del POS abre **Impresión directa ESC/POS**, captura la clave local
+y pulsa **Enviar / consultar mismo ticket**. Conserva el mismo identificador
+entre reintentos y después de reiniciar el puente. **Imprimir otra copia** genera
+un identificador nuevo y debe usarse después de revisar el papel.
+
+`accepted` significa que el transporte aceptó todos los bytes; no demuestra
+que haya papel ni que el cabezal haya impreso. Una respuesta perdida o fallo de
+registro queda incierto y no provoca otro envío automático. La clave se guarda
+solo durante la sesión del navegador. Las impresiones conservan su registro en
+el directorio indicado. No se permiten comandos ESC/POS provenientes de los
+nombres de productos: se normaliza el texto y se eliminan los controles.
+
+## Construcción y verificación
 
 ```bash
-# Instalar Rust + Tauri prerequisites (una vez):
-# https://tauri.app/start/prerequisites/
-
-cd apps/print-bridge
-cargo tauri dev
+cargo test --locked
+cargo build --release --locked
+python3 tests/transport.py
 ```
 
-El sidecar abre tray icon y escucha en `127.0.0.1:9876`. Configurar el
-POS web con `printBridgeUrl: "http://127.0.0.1:9876"`.
-
-## Contrato JSON (estable)
-
-Ver `TicketVenta` y `TicketCorte` en
-`apps/api/src/modules/tenant/tickets/service.ts`. El backend genera
-estos objetos; el bridge solo los renderiza a ESC/POS.
-
-## Decisiones cerradas
-
-- **Standalone, no embebido en pos-desktop**: el bridge es independiente
-  para que también funcione cuando el cajero usa el POS web desde
-  Chrome sin desktop.
-- **Solo USB V1**: red TCP/IP (impresoras IP) → V1.5.
-- **Solo Epson V1**: Star TSP650, Zebra ZD230, etc. → V1.5 cuando
-  cliente lo pida.
-- **Sin cola persistente V1**: si la impresora falla, el bridge devuelve
-  error y el POS muestra modal "Reintentar / saltar impresión". Cola
-  con BullMQ Redis local → V1.5.
-- **Sin firma de comandos V1**: el bridge solo acepta requests de
-  `127.0.0.1`. CORS abierto a `localhost:*`. Si en V1.5 se necesita
-  multi-equipo en red local, agregar token compartido.
+La prueba integra el proceso real con un receptor TCP local: verifica bytes,
+autorización, estado de venta cancelada, reintento y reinicio sin duplicación.
+Se compiló y ejecutó en Linux x64. Faltan pruebas con la impresora física y
+construcciones/firmas de Windows/macOS. Este puente no completa el POS offline
+ni sustituye el instalador Tauri.

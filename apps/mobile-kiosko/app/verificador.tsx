@@ -8,6 +8,7 @@ import { ReaderInput } from "@/ui/ReaderInput";
 import { useQuery } from "@tanstack/react-query";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -370,12 +371,17 @@ function Reposo({
   // Never keep showing an obsolete promotion after a refresh fails.
   const slides = idle.isError ? [] : (idle.data?.slides ?? []);
   const [i, setI] = useState(0);
+  const slide = slides[i % Math.max(slides.length, 1)];
+  const next = () => setI((x) => x + 1);
   useEffect(() => {
     if (slides.length === 0) return;
-    const t = setInterval(() => setI((x) => (x + 1) % slides.length), slideMs);
-    return () => clearInterval(t);
-  }, [slides.length, slideMs]);
-  const slide = slides[i % Math.max(slides.length, 1)];
+    const expiresIn = slide?.expiresAt
+      ? Date.parse(slide.expiresAt) - Date.now()
+      : Number.POSITIVE_INFINITY;
+    const duration = Math.min(slide?.durationMs ?? slideMs, expiresIn);
+    const t = setTimeout(() => setI((x) => x + 1), Math.max(1000, duration));
+    return () => clearTimeout(t);
+  }, [slides.length, slideMs, slide, i]);
   return (
     <Pressable style={[s.overlay, s.reposoBg]} onPress={onSalir}>
       <ScrollView
@@ -395,9 +401,11 @@ function Reposo({
           </>
         ) : idle.isLoading ? (
           <ActivityIndicator size="large" color={colors.white} />
-        ) : slide ? (
+        ) : slide && (!slide.expiresAt || Date.parse(slide.expiresAt) > Date.now()) ? (
           <>
-            {slide.imagen ? (
+            {slide.video ? (
+              <IdleVideo key={`${slide.id}-${i}`} url={slide.video} onNext={next} />
+            ) : slide.imagen ? (
               <Image source={{ uri: slide.imagen }} style={s.reposoImg} resizeMode="cover" />
             ) : (
               <View style={[s.reposoIcon, { backgroundColor: acento }]}>
@@ -415,6 +423,37 @@ function Reposo({
         <Text style={s.reposoHint}>Toca o escanea para verificar un precio</Text>
       </ScrollView>
     </Pressable>
+  );
+}
+
+function IdleVideo({ url, onNext }: { url: string; onNext: () => void }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.muted = true;
+    p.loop = false;
+    p.play();
+  });
+  useEffect(() => {
+    const end = player.addListener("playToEnd", onNext);
+    const status = player.addListener("statusChange", (event) => {
+      if (event.status === "error") onNext();
+    });
+    const timeout = setTimeout(() => {
+      if (player.status !== "readyToPlay") onNext();
+    }, 5000);
+    return () => {
+      clearTimeout(timeout);
+      end.remove();
+      status.remove();
+    };
+  }, [player, onNext]);
+  return (
+    <VideoView
+      player={player}
+      style={{ width: "100%", height: 420 }}
+      contentFit="contain"
+      nativeControls={false}
+      allowsPictureInPicture={false}
+    />
   );
 }
 

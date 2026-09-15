@@ -26,6 +26,7 @@ import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
 import { CorteModal } from "./CorteModal.js";
 import { DevolucionModal } from "./DevolucionModal.js";
+import { DirectPrint } from "./DirectPrint.js";
 import { PesoModal } from "./PesoModal.js";
 import { RecargaModal } from "./RecargaModal.js";
 import { Recibo } from "./Recibo.js";
@@ -502,7 +503,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               Iniciar nueva venta
             </button>
           </div>
-          {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
+          {ultimaVenta && (
+            <>
+              <DirectPrint saleId={ultimaVenta.id} />
+              <Recibo session={session} venta={ultimaVenta} />
+            </>
+          )}
         </section>
       </main>
     );
@@ -623,6 +629,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               >
                 Imprimir recibo
               </button>
+              <DirectPrint saleId={ultimaVenta.id} />
               <Recibo session={session} venta={ultimaVenta} />
             </>
           )}
@@ -981,7 +988,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         />
       )}
 
-      {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
+      {ultimaVenta && (
+        <>
+          <DirectPrint saleId={ultimaVenta.id} />
+          <Recibo session={session} venta={ultimaVenta} />
+        </>
+      )}
     </div>
   );
 }
@@ -1032,6 +1044,7 @@ function TicketResultado({
         >
           <Printer size={18} /> Imprimir
         </button>
+        <DirectPrint saleId={venta.id} />
         <button
           type="button"
           onClick={facturar}

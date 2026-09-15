@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, puede } from "../lib/api.js";
 
 interface Solicitud {
+  bankRefund?: { state: string; refundId: string | null; lastError: string | null } | null;
   id: string;
   folio: string;
   motivo: string;
@@ -25,7 +26,6 @@ const MOTIVOS: Record<string, string> = {
 
 const METODOS_REEMBOLSO: Array<{ value: string; label: string }> = [
   { value: "tarjeta_misma", label: "Tarjeta original" },
-  { value: "transferencia", label: "Transferencia" },
   { value: "efectivo", label: "Efectivo" },
   { value: "saldo_a_favor", label: "Saldo a favor" },
   { value: "vale", label: "Vale" },
@@ -138,27 +138,31 @@ export function DevolucionesPage() {
                 </li>
               ))}
             </ul>
+            {s.bankRefund && <BankRefundStatus solicitud={s} onReload={cargar} />}
             {s.rechazoMotivo && (
               <p className="mt-1 text-red-600 text-sm">Rechazo: {s.rechazoMotivo}</p>
             )}
-            {s.estado === "solicitada" && puedeResolver && !blocked.includes(s.id) && (
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAccion({ s, tipo: "aprobar" })}
-                  className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-sm text-white hover:bg-brand-dark"
-                >
-                  Aprobar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccion({ s, tipo: "rechazar" })}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 text-sm hover:bg-slate-50"
-                >
-                  Rechazar
-                </button>
-              </div>
-            )}
+            {!s.bankRefund &&
+              s.estado === "solicitada" &&
+              puedeResolver &&
+              !blocked.includes(s.id) && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAccion({ s, tipo: "aprobar" })}
+                    className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-sm text-white hover:bg-brand-dark"
+                  >
+                    Aprobar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccion({ s, tipo: "rechazar" })}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 text-sm hover:bg-slate-50"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              )}
           </div>
         ))}
         {!loading && !loadError && solicitudes.length === 0 && (
@@ -199,6 +203,17 @@ function AccionModal({
   onDone: () => void;
   onError: (m: string) => void;
 }) {
+  const [reponeStock, setReponeStock] = useState(false);
+  const [cajaId, setCajaId] = useState("");
+  const [cajas, setCajas] = useState<
+    Array<{ id: string; codigo: string; sucursal: { nombre: string } }>
+  >([]);
+  useEffect(() => {
+    if (puede("cajas.leer"))
+      void api<typeof cajas>("/t/cajas")
+        .then(setCajas)
+        .catch(() => setCajas([]));
+  }, []);
   const [metodoReembolso, setMetodoReembolso] = useState("tarjeta_misma");
   const [motivo, setMotivo] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -208,13 +223,21 @@ function AccionModal({
 
   async function ejecutar() {
     if (guard.current || failed || !puede("ventas.devolver")) return;
+    if (tipo === "aprobar" && metodoReembolso === "efectivo" && !cajaId) {
+      setErr("Selecciona la caja que entrega el efectivo");
+      return;
+    }
     guard.current = true;
     setGuardando(true);
     setErr(null);
     try {
       if (tipo === "aprobar") {
         await api(`/t/devoluciones-online/${solicitud.id}/aprobar`, {
-          body: { metodoReembolso },
+          body: {
+            metodoReembolso,
+            reponeStock,
+            ...(metodoReembolso === "efectivo" ? { cajaId } : {}),
+          },
         });
       } else {
         if (motivo.trim().length < 3) {
@@ -248,8 +271,17 @@ function AccionModal({
         {tipo === "aprobar" ? (
           <>
             <p className="mb-3 text-slate-600 text-sm">
-              Se repondrá el stock y se registrará el reembolso. Elige el método:
+              El reembolso bancario queda pendiente hasta que el proveedor lo confirme. Elige el
+              método:
             </p>
+            <label className="gx-label mb-3 flex min-h-10 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={reponeStock}
+                onChange={(e) => setReponeStock(e.target.checked)}
+              />
+              Producto recibido y apto para volver a vender
+            </label>
             <select
               value={metodoReembolso}
               onChange={(e) => setMetodoReembolso(e.target.value)}
@@ -261,6 +293,24 @@ function AccionModal({
                 </option>
               ))}
             </select>
+            {metodoReembolso === "efectivo" && (
+              <label className="gx-label">
+                Caja que entrega el efectivo
+                <select
+                  className="gx-input"
+                  required
+                  value={cajaId}
+                  onChange={(e) => setCajaId(e.target.value)}
+                >
+                  <option value="">Selecciona una caja abierta</option>
+                  {cajas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.sucursal.nombre} · {c.codigo}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </>
         ) : (
           <textarea
@@ -290,6 +340,76 @@ function AccionModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BankRefundStatus({
+  solicitud,
+  onReload,
+}: { solicitud: Solicitud; onReload: () => Promise<void> }) {
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const guard = useRef(false);
+  const labels: Record<string, string> = {
+    preparing: "Preparando devolución",
+    ready: "Reembolso por enviar",
+    sending: "Consultando banco",
+    pending: "Pendiente del banco",
+    uncertain: "Por conciliar",
+    completed: "Reembolso bancario confirmado",
+    failed: "Reembolso rechazado por el banco",
+  };
+  async function check() {
+    if (guard.current) return;
+    guard.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/t/devoluciones-online/${solicitud.id}/conciliar`, {
+        body: { ...(reference.trim() ? { reference: reference.trim() } : {}) },
+      });
+      await onReload();
+    } catch {
+      setError(
+        "No se pudo confirmar. Conserva la referencia; consultar no vuelve a enviar dinero.",
+      );
+    } finally {
+      guard.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="gx-card mt-3 p-3" aria-live="polite">
+      <p className="font-semibold">
+        {labels[solicitud.bankRefund?.state ?? ""] ?? "Reembolso por revisar"}
+      </p>
+      {solicitud.bankRefund?.refundId && (
+        <p className="break-all text-sm">Referencia: {solicitud.bankRefund.refundId}</p>
+      )}
+      {solicitud.bankRefund?.state !== "completed" && puede("ventas.devolver") && (
+        <div className="mt-2 space-y-2">
+          <label className="gx-label">
+            Referencia del proveedor (si te la proporcionó)
+            <input
+              className="gx-input"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              maxLength={150}
+            />
+          </label>
+          <button
+            type="button"
+            className="gx-btn-secondary min-h-10"
+            disabled={busy}
+            onClick={() => void check()}
+          >
+            {busy ? "Consultando…" : "Consultar reembolso"}
+          </button>
+          {error && <p className="text-danger text-sm">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

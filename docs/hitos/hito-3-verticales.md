@@ -290,3 +290,11 @@ Cierre del Hito 3 = 5 clientes piloto operativos.
 - Procesar recarga (incl. llamada provider): <2s P95
 - Consulta saldo prefondeado: <100ms P95
 - Búsqueda histórico recargas con 10K registros: <200ms P95
+
+### 15-sep-2026 — Pendientes operativos de tienda
+
+Implementados reembolsos bancarios duraderos, tarjeta móvil, anuncios propios del
+kiosco e impresión ESC/POS. La revisión conjunta con activación solo Retail pasó
+102 casos API afectados; detalle de pruebas y limitaciones en
+[entrega de pendientes](../entrega-pendientes-tienda-2026-09-15.md).
+No cerrar el hito de POS offline/instaladores ni certificación física con esta entrega.

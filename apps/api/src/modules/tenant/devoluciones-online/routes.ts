@@ -8,6 +8,8 @@ import {
   rechazarSolicitud,
 } from "./service.js";
 
+import { approveBankRefund, reconcileBankRefund } from "./bank-refund.js";
+
 const idParam = z.object({ id: z.string().min(1) });
 const listQuery = z.object({
   estado: z.enum(["solicitada", "aprobada", "rechazada", "cancelada"]).optional(),
@@ -25,6 +27,8 @@ const aprobarSchema = z.object({
     ])
     .default("tarjeta_misma"),
   emitirCfdiEgreso: z.boolean().optional(),
+  reponeStock: z.boolean().default(false),
+  cajaId: z.string().min(1).optional(),
 });
 const rechazarSchema = z.object({ motivo: z.string().min(3).max(500) });
 
@@ -40,6 +44,8 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.VENTAS_DEVOLVER);
     const { id } = idParam.parse(req.params);
     const body = aprobarSchema.parse(req.body);
+    if (body.metodoReembolso === "efectivo" && !body.cajaId)
+      return reply.code(422).send({ message: "Selecciona la caja que entrega el efectivo" });
     const cfg = await req.tenantPrisma.cfdiConfig.findFirst();
     const provider = app.fiscalProviderFactory(
       cfg
@@ -54,8 +60,35 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     try {
+      if (body.metodoReembolso === "transferencia")
+        throw new DevolucionOnlineError(
+          422,
+          "La transferencia requiere un comprobante bancario conciliado; no se registra como pagada desde esta pantalla",
+        );
+      if (body.metodoReembolso === "tarjeta_misma") {
+        if (body.emitirCfdiEgreso)
+          throw new DevolucionOnlineError(
+            422,
+            "Emite la nota fiscal después de confirmar el reembolso bancario",
+          );
+        return await approveBankRefund(
+          req.tenantPrisma,
+          provider,
+          app.pagoProviderFactory,
+          req.principal.userId,
+          id,
+          body.reponeStock,
+        );
+      }
+      if (await req.tenantPrisma.onlineBankRefund.findUnique({ where: { solicitudId: id } }))
+        throw new DevolucionOnlineError(
+          409,
+          "La solicitud ya tiene un reembolso bancario en curso",
+        );
       return await aprobarSolicitud(req.tenantPrisma, provider, req.principal.userId, id, {
         metodoReembolso: body.metodoReembolso,
+        reponeStock: body.reponeStock,
+        ...(body.cajaId ? { cajaId: body.cajaId } : {}),
         ...(body.emitirCfdiEgreso !== undefined ? { emitirCfdiEgreso: body.emitirCfdiEgreso } : {}),
       });
     } catch (err) {
@@ -65,6 +98,29 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
           .send({ statusCode: err.statusCode, error: "Error", message: err.message });
       }
       throw err;
+    }
+  });
+
+  app.post("/:id/conciliar", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.VENTAS_DEVOLVER);
+    const { id } = idParam.parse(req.params);
+    const body = z
+      .object({ reference: z.string().min(1).max(150).optional() })
+      .parse(req.body ?? {});
+    try {
+      return await reconcileBankRefund(
+        req.tenantPrisma,
+        app.pagoProviderFactory,
+        id,
+        body.reference,
+      );
+    } catch (error) {
+      if (error instanceof DevolucionOnlineError)
+        return reply.code(error.statusCode).send({ message: error.message });
+      return reply.code(503).send({
+        message:
+          "No se pudo consultar el banco. Conserva la referencia y vuelve a consultar; no repitas el reembolso.",
+      });
     }
   });
 
