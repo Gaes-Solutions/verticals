@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { stripUndefined } from "../../../lib/strip-undefined.js";
 import { bulkActualizarPrecios, bulkUpsertProductos } from "./bulk-service.js";
+import { problemasDeIntegridad, revisarImportacion } from "./revision-importacion.js";
 import {
   type ProductoCreateInput,
   type ProductoUpdateInput,
@@ -37,6 +38,14 @@ const bulkProductosSchema = z.object({
         stockMaximo: decimalStr.optional(),
       }),
     )
+    .min(1)
+    .max(5000),
+});
+
+// La revisión recibe el archivo tal cual: justo su trabajo es encontrar lo que no cuadra.
+const revisarImportacionSchema = z.object({
+  filas: z
+    .array(z.record(z.string(), z.string().max(1000)))
     .min(1)
     .max(5000),
 });
@@ -214,9 +223,30 @@ const productosRoutes: FastifyPluginAsync = async (app) => {
       : req.tenantPrisma.configImportacionProductos.create({ data });
   });
 
-  app.post("/bulk", async (req) => {
+  // Revisión en seco: no guarda nada. El panel la muestra para que el usuario
+  // corrija o confirme antes de importar.
+  app.post("/bulk/revisar", async (req) => {
+    req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
+    const body = revisarImportacionSchema.parse(req.body);
+    const cfg = await req.tenantPrisma.configImportacionProductos.findFirst();
+    const requeridas = (cfg?.columnasObligatorias as string[] | undefined) ?? [];
+    return revisarImportacion(req.tenantPrisma, body.filas, requeridas);
+  });
+
+  app.post("/bulk", async (req, reply) => {
     req.requirePerm(PERMISSIONS.PRODUCTOS_BULK_IMPORT);
     const body = bulkProductosSchema.parse(req.body);
+    // Lo que rompería el catálogo no se importa aunque alguien se salte la revisión.
+    const integridad = await problemasDeIntegridad(req.tenantPrisma, body.filas);
+    if (integridad.length > 0) {
+      return reply.code(422).send({
+        statusCode: 422,
+        error: "Unprocessable Entity",
+        message:
+          "Hay códigos repetidos o que ya usa otro producto. Resuélvelos en la revisión antes de importar.",
+        problemas: integridad,
+      });
+    }
     const cfg = await req.tenantPrisma.configImportacionProductos.findFirst();
     const requeridas = (cfg?.columnasObligatorias as string[] | undefined) ?? [];
     return bulkUpsertProductos(req.tenantPrisma, req.principal.userId, body.filas, requeridas);

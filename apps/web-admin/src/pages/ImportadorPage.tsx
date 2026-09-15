@@ -1,7 +1,18 @@
 import { Download, FileText, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { ResultadoImportacion } from "../components/importacion/ResultadoImportacion.js";
+import { RevisionImportacion } from "../components/importacion/RevisionImportacion.js";
 import { ApiError, api } from "../lib/api.js";
+import {
+  type BorradorImportacion,
+  type RenglonReporte,
+  type ResultadoRevision,
+  type ResumenImportacion,
+  armarReporte,
+  filasParaImportar,
+  indicesActivos,
+} from "../lib/importacion.js";
 
 interface Columna {
   header: string; // nombre de la columna en la plantilla
@@ -192,6 +203,16 @@ export function ImportadorPage() {
   const [resumen, setResumen] = useState<ResumenResp | null>(null);
   const [config, setConfig] = useState<ImportConfig | null>(null);
   const [configurando, setConfigurando] = useState(false);
+  // Productos: primero se revisa el archivo y el usuario corrige o confirma.
+  const [borrador, setBorrador] = useState<BorradorImportacion | null>(null);
+  const [revision, setRevision] = useState<ResultadoRevision | null>(null);
+  const [indicesRevisados, setIndicesRevisados] = useState<number[]>([]);
+  const [desactualizada, setDesactualizada] = useState(false);
+  const [revisando, setRevisando] = useState(false);
+  const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
+  const [destinos, setDestinos] = useState<Record<string, string>>({});
+  const [reporte, setReporte] = useState<RenglonReporte[] | null>(null);
+  const temporizadorRevision = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // La config de columnas solo aplica a productos (las otras son fijas).
@@ -219,6 +240,13 @@ export function ImportadorPage() {
     setNombreArchivo("");
     setErrorArchivo(null);
     setResumen(null);
+    setBorrador(null);
+    setRevision(null);
+    setIndicesRevisados([]);
+    setDesactualizada(false);
+    setConfirmados(new Set());
+    setDestinos({});
+    setReporte(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -254,7 +282,8 @@ export function ImportadorPage() {
       );
       const importaCodigoBarras = columnas.some((c) => c.campo === "codigoBarras");
       const parsed: Record<string, string>[] = [];
-      for (const cruda of crudas) {
+      const filaExcel: number[] = [];
+      for (const [idx, cruda] of crudas.entries()) {
         const fila: Record<string, string> = {};
         for (const [k, v] of Object.entries(cruda)) {
           const col = mapHeader.get(claveEncabezado(k));
@@ -274,12 +303,26 @@ export function ImportadorPage() {
           fila.codigoBarras = fila.skuPadre;
         }
         // ignora filas totalmente vacías
-        if (Object.keys(fila).length > 0) parsed.push(fila);
+        if (Object.keys(fila).length > 0) {
+          parsed.push(fila);
+          // __rowNum__ lo pone la librería: fila real de la hoja, contando desde 0.
+          filaExcel.push(((cruda as { __rowNum__?: number }).__rowNum__ ?? idx + 1) + 1);
+        }
       }
       if (parsed.length === 0) {
         throw new Error("No se encontraron filas con datos. ¿Usaste la plantilla?");
       }
-      setFilas(parsed);
+      if (esProductos) {
+        const nuevo: BorradorImportacion = { filas: parsed, filaExcel, quitadas: {} };
+        setRevision(null);
+        setReporte(null);
+        setConfirmados(new Set());
+        setDestinos({});
+        setBorrador(nuevo);
+        void revisar(nuevo);
+      } else {
+        setFilas(parsed);
+      }
     } catch (err) {
       setFilas([]);
       setErrorArchivo(err instanceof Error ? err.message : "No se pudo leer el archivo");
@@ -289,6 +332,66 @@ export function ImportadorPage() {
   // validación cliente: campos requeridos presentes por fila
   const requeridos = columnas.filter((c) => c.req).map((c) => c.campo);
   const filasInvalidas = filas.filter((f) => requeridos.some((r) => !f[r]));
+
+  async function revisar(actual: BorradorImportacion) {
+    const indices = indicesActivos(actual);
+    if (indices.length === 0) {
+      setRevision(null);
+      setErrorArchivo("Quitaste todas las filas. Elige otro archivo para importar.");
+      return;
+    }
+    setRevisando(true);
+    setErrorArchivo(null);
+    try {
+      const r = await api<ResultadoRevision>("/t/productos/bulk/revisar", {
+        body: { filas: indices.map((i) => actual.filas[i]) },
+      });
+      setRevision(r);
+      setIndicesRevisados(indices);
+      setDesactualizada(false);
+      setDestinos((previos) => {
+        const siguientes = { ...previos };
+        for (const d of r.departamentos) {
+          if (siguientes[d.nombre] === undefined) {
+            siguientes[d.nombre] = d.sugerencia?.marcada ? d.sugerencia.unirEn : d.nombre;
+          }
+        }
+        return siguientes;
+      });
+    } catch (err) {
+      setErrorArchivo(err instanceof ApiError ? err.message : "No se pudo revisar el archivo");
+    } finally {
+      setRevisando(false);
+    }
+  }
+
+  // Cada corrección vuelve a revisar en cuanto el usuario deja de teclear.
+  function cambiarBorrador(siguiente: BorradorImportacion) {
+    setBorrador(siguiente);
+    setDesactualizada(true);
+    if (temporizadorRevision.current) clearTimeout(temporizadorRevision.current);
+    temporizadorRevision.current = setTimeout(() => void revisar(siguiente), 700);
+  }
+
+  async function importarRevisado() {
+    if (!borrador) return;
+    const { filas: aSubir, indices } = filasParaImportar(borrador, destinos);
+    setEnviando(true);
+    setErrorArchivo(null);
+    try {
+      const r = await api<ResumenImportacion>("/t/productos/bulk", { body: { filas: aSubir } });
+      setReporte(armarReporte(borrador, indices, r));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        setErrorArchivo(err.message);
+        await revisar(borrador);
+      } else {
+        setErrorArchivo(err instanceof ApiError ? err.message : "Error al importar");
+      }
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   async function importar() {
     setEnviando(true);
@@ -391,6 +494,36 @@ export function ImportadorPage() {
 
       {errorArchivo && (
         <p className="mb-4 rounded-lg bg-danger-light p-3 text-sm text-danger">{errorArchivo}</p>
+      )}
+
+      {esProductos && borrador && !revision && revisando && (
+        <p className="gx-card mb-4 text-sm text-slate-600">Revisando tu archivo…</p>
+      )}
+
+      {esProductos && borrador && revision && !reporte && (
+        <RevisionImportacion
+          borrador={borrador}
+          revision={revision}
+          indicesRevisados={indicesRevisados}
+          desactualizada={desactualizada}
+          revisando={revisando}
+          enviando={enviando}
+          confirmados={confirmados}
+          destinos={destinos}
+          conCodigoBarras={columnas.some((c) => c.campo === "codigoBarras")}
+          onBorrador={cambiarBorrador}
+          onConfirmar={(claves) => setConfirmados((prev) => new Set([...prev, ...claves]))}
+          onDestino={(departamento, destino) =>
+            setDestinos((prev) => ({ ...prev, [departamento]: destino }))
+          }
+          onRevisar={() => void revisar(borrador)}
+          onImportar={() => void importarRevisado()}
+          onCancelar={reset}
+        />
+      )}
+
+      {esProductos && reporte && (
+        <ResultadoImportacion renglones={reporte} nombreArchivo={nombreArchivo} onOtro={reset} />
       )}
 
       {/* Previsualización */}

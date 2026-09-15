@@ -580,3 +580,200 @@ describe("rollback por fila de importación", () => {
     expect(price.precio.toString()).toBe("8");
   });
 });
+
+describe("revisión antes de importar", () => {
+  type Revision = {
+    total: number;
+    nuevos: number;
+    actualizar: number;
+    bloqueantes: number;
+    problemas: Array<{ tipo: string; severidad: string; filas: number[] }>;
+    departamentos: Array<{
+      nombre: string;
+      productos: number;
+      existeEnCatalogo: boolean;
+      soloNumero: boolean;
+      sugerencia: { unirEn: string; motivo: string; marcada: boolean } | null;
+    }>;
+  };
+
+  let revision: Revision;
+  const problemasDe = (tipo: string) => revision.problemas.filter((p) => p.tipo === tipo);
+  const departamento = (nombre: string) => revision.departamentos.find((d) => d.nombre === nombre);
+
+  beforeAll(async () => {
+    const base = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          {
+            skuPadre: "EXIST-1",
+            nombre: "Cuaderno",
+            precioBase: "40",
+            categoriaNombre: "Papelería",
+            codigoBarras: "7500000000001",
+          },
+        ],
+      },
+    });
+    expect(base.statusCode).toBe(200);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk/revisar",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          { skuPadre: "REV-1", nombre: "Globo", precioBase: "10", categoriaNombre: "papeleria" },
+          { skuPadre: "REV-1", nombre: "Globo repetido", precioBase: "11" },
+          { skuPadre: "VELAS ONDULADAS", nombre: "13905", precioBase: "9" },
+          { skuPadre: "REV-3", nombre: "PRECIO CAJA $132", precioBase: "198" },
+          { skuPadre: "REV-4", nombre: "Jabón", precioBase: "73", costo: "75" },
+          { skuPadre: "REV-5", nombre: "Esponja", precioBase: "145", stockInicial: "0.01" },
+          { skuPadre: "REV-6", nombre: "Otro", precioBase: "20", codigoBarras: "7500000000001" },
+          {
+            skuPadre: "REV-7",
+            nombre: "Bolsa",
+            precioBase: "5",
+            categoriaNombre: "BOLSAS DE REGALO",
+          },
+          {
+            skuPadre: "REV-8",
+            nombre: "Bolsa 2",
+            precioBase: "5",
+            categoriaNombre: "BOLSA DE REGALO",
+          },
+          {
+            skuPadre: "REV-9",
+            nombre: "Bolsa 3",
+            precioBase: "5",
+            categoriaNombre: "BOLSA DE REGALO",
+          },
+          { skuPadre: "REV-10", nombre: "Globo 18", precioBase: "5", categoriaNombre: "GLOBO 18" },
+          { skuPadre: "REV-11", nombre: "Globo 10", precioBase: "5", categoriaNombre: "GLOBO 10" },
+          { skuPadre: "REV-12", nombre: "Algo", precioBase: "5", categoriaNombre: "48" },
+          {
+            skuPadre: "REV-13",
+            nombre: "Crema",
+            precioBase: "5",
+            categoriaNombre: "FAVOR BAEAUTY",
+          },
+          {
+            skuPadre: "REV-14",
+            nombre: "Crema 2",
+            precioBase: "5",
+            categoriaNombre: "FAVOR BEAUTY",
+          },
+          {
+            skuPadre: "REV-15",
+            nombre: "Crema 3",
+            precioBase: "5",
+            categoriaNombre: "FAVOR BEAUTY",
+          },
+          { skuPadre: "EXIST-1", nombre: "Cuaderno", precioBase: "5" },
+          { skuPadre: "REV-17", nombre: "Sin precio" },
+          { skuPadre: "REV-18", nombre: "Precio en texto", precioBase: "abc" },
+          {
+            skuPadre: "REV-19",
+            nombre: "Esmalte rojo",
+            precioBase: "5",
+            categoriaNombre: "pintura de uñas",
+          },
+          {
+            skuPadre: "REV-20",
+            nombre: "Esmalte azul",
+            precioBase: "5",
+            categoriaNombre: "pintura de uñas",
+          },
+          {
+            skuPadre: "REV-21",
+            nombre: "Esmalte verde",
+            precioBase: "5",
+            categoriaNombre: "PINTURA DE UÑAS",
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    revision = res.json() as Revision;
+  });
+
+  it("detecta lo que hay que resolver antes de importar", () => {
+    expect(problemasDe("codigo_repetido").map((p) => p.filas)).toEqual([[0, 1]]);
+    expect(problemasDe("codigo_barras_en_uso").map((p) => p.filas)).toEqual([[6]]);
+    expect(problemasDe("dato_faltante").map((p) => p.filas)).toEqual([[17]]);
+    expect(problemasDe("dato_invalido").map((p) => p.filas)).toEqual([[18]]);
+    for (const tipo of [
+      "codigo_repetido",
+      "codigo_barras_en_uso",
+      "dato_faltante",
+      "dato_invalido",
+    ]) {
+      expect(
+        problemasDe(tipo).every((p) => p.severidad === "bloqueante"),
+        tipo,
+      ).toBe(true);
+    }
+    expect(revision.bloqueantes).toBe(4);
+  });
+
+  it("avisa lo que parece error de captura, sin bloquear", () => {
+    expect(problemasDe("codigo_nombre_invertidos").map((p) => p.filas)).toEqual([[2]]);
+    expect(problemasDe("nombre_sospechoso").map((p) => p.filas)).toEqual([[3]]);
+    expect(problemasDe("precio_bajo_costo").map((p) => p.filas)).toEqual([[4]]);
+    expect(problemasDe("existencia_decimal").map((p) => p.filas)).toEqual([[5]]);
+    expect(problemasDe("cambio_precio_grande").map((p) => p.filas)).toEqual([[16]]);
+  });
+
+  it("compara contra el catálogo: qué es nuevo y qué se actualiza", () => {
+    expect(revision.actualizar).toBe(1);
+    expect(revision.nuevos).toBe(20);
+  });
+
+  it("sugiere unir departamentos sin confundir tamaños", () => {
+    expect(departamento("papeleria")).toMatchObject({
+      existeEnCatalogo: true,
+      sugerencia: { unirEn: "Papelería", motivo: "escritura", marcada: true },
+    });
+    expect(departamento("BOLSAS DE REGALO")?.sugerencia).toEqual({
+      unirEn: "BOLSA DE REGALO",
+      motivo: "forma",
+      marcada: true,
+    });
+    expect(departamento("FAVOR BAEAUTY")?.sugerencia).toEqual({
+      unirEn: "FAVOR BEAUTY",
+      motivo: "parecido",
+      marcada: false,
+    });
+    expect(departamento("GLOBO 18")?.sugerencia).toBeNull();
+    expect(departamento("GLOBO 10")?.sugerencia).toBeNull();
+    expect(departamento("48")).toMatchObject({ soloNumero: true, sugerencia: null });
+    // El archivo escribe en mayúsculas: esa versión gana aunque la otra se repita más.
+    expect(departamento("pintura de uñas")?.sugerencia).toEqual({
+      unirEn: "PINTURA DE UÑAS",
+      motivo: "escritura",
+      marcada: true,
+    });
+  });
+
+  it("no revisar no sirve para colar códigos repetidos: la importación los rechaza", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/t/productos/bulk",
+      headers: auth(ownerToken),
+      payload: {
+        filas: [
+          { skuPadre: "DUP-1", nombre: "Uno", precioBase: "10" },
+          { skuPadre: "DUP-1", nombre: "Dos", precioBase: "12" },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().problemas[0]).toMatchObject({ tipo: "codigo_repetido", filas: [0, 1] });
+    expect(
+      await getTenantClient(TENANT_SLUG).producto.count({ where: { skuPadre: "DUP-1" } }),
+    ).toBe(0);
+  });
+});
