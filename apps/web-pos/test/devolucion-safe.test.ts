@@ -19,10 +19,14 @@ const venta = {
   lineas: [{ id: "line", cantidad: "2" }],
 } as VentaDevolucion;
 describe("devolución caja", () => {
-  it("incluye cajaId sólo al reembolsar efectivo", () => {
+  it("incluye la caja al reembolsar efectivo", () => {
     expect(armarDevolucion(venta, { line: 1 }, "defectuoso", "efectivo", "c").cajaId).toBe("c");
-    expect(armarDevolucion(venta, { line: 1 }, "defectuoso", "vale", "c").cajaId).toBeUndefined();
   });
+  // Vale, tarjeta y demás tienen su propio flujo de reembolso: esta pantalla no los arma.
+  it("rechaza reembolsos que no son en efectivo", () =>
+    expect(() => armarDevolucion(venta, { line: 1 }, "defectuoso", "vale", "c")).toThrow(
+      "solo admite devolución en efectivo",
+    ));
   it("bloquea efectivo sin caja", () =>
     expect(() => armarDevolucion(venta, { line: 1 }, "defectuoso", "efectivo")).toThrow("caja"));
   it("bloquea cantidad superior a lo vendido", () =>

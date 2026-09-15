@@ -124,7 +124,7 @@ export function armarDevolucion(
     motivo,
     metodoReembolso,
     lineas,
-    ...(metodoReembolso === "efectivo" && cajaId ? { cajaId } : {}),
+    cajaId,
   };
 }
 export function mensajeFalloDevolucion(failure: unknown, enviada: boolean) {
