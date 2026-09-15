@@ -1,5 +1,11 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { ApiError, type PlanPublico, planesPublicos, signupTenant } from "../lib/api.js";
+import {
+  ApiError,
+  type PlanPublico,
+  planesPublicos,
+  signupTenant,
+  verticalesActivas,
+} from "../lib/api.js";
 
 const VERTICALES: { value: string; label: string }[] = [
   { value: "retail_mayoreo", label: "Retail / Mayoreo" },
@@ -26,6 +32,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
   const [slug, setSlug] = useState("");
   const [slugTocado, setSlugTocado] = useState(false);
   const [vertical, setVertical] = useState("retail_mayoreo");
+  const [activas, setActivas] = useState<string[] | null>(null);
   const [planCode, setPlanCode] = useState("");
   const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,6 +48,18 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
         if (p[0]) setPlanCode(p[0].code);
       })
       .catch(() => setPlanes([]));
+  }, []);
+
+  // Solo se ofrecen los giros que atiende la plataforma.
+  useEffect(() => {
+    verticalesActivas()
+      .then((r) => {
+        setActivas(r.verticales);
+        setVertical((actual) =>
+          r.verticales.includes(actual) ? actual : (r.verticales[0] ?? actual),
+        );
+      })
+      .catch(() => setActivas(null));
   }, []);
 
   async function enviar(e: FormEvent) {
@@ -124,7 +143,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               onChange={(e) => setVertical(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
             >
-              {VERTICALES.map((v) => (
+              {VERTICALES.filter((v) => !activas || activas.includes(v.value)).map((v) => (
                 <option key={v.value} value={v.value}>
                   {v.label}
                 </option>

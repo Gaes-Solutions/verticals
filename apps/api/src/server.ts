@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
 import { startPostPagoScheduler } from "./jobs/post-pago-scheduler.js";
 import { startRecordatoriosScheduler } from "./jobs/recordatorios-scheduler.js";
+import { modulosActivos, verticalesActivas } from "./lib/verticales.js";
 import { initSentry } from "./observability/sentry.js";
 
 async function main(): Promise<void> {
@@ -49,7 +50,9 @@ async function main(): Promise<void> {
   }
 
   let stopRecordatoriosScheduler: (() => void) | undefined;
-  if (config.RECORDATORIOS_SCHEDULER_ENABLED) {
+  // Los recordatorios son de citas y vacunas: sin salud activa no hay a quién mandarlos.
+  const saludActiva = modulosActivos(verticalesActivas(config.VERTICALES_ACTIVAS)).salud;
+  if (config.RECORDATORIOS_SCHEDULER_ENABLED && saludActiva) {
     stopRecordatoriosScheduler = startRecordatoriosScheduler(
       app.log,
       config.RECORDATORIOS_RUN_INTERVAL_MIN,

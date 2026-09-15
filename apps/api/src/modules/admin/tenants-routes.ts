@@ -2,17 +2,9 @@ import { onboardTenant } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+import { VERTICALES } from "../../lib/verticales.js";
 
 const ROLES_COBRANZA = new Set(["superadmin", "billing"]);
-
-const VERTICALES = [
-  "retail_mayoreo",
-  "abarrotes",
-  "salud_vet",
-  "salud_humana",
-  "despacho_contable",
-  "otro",
-] as const;
 
 const crearSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{3,40}$/, "Slug: 3-40 caracteres [a-z 0-9 -]"),
@@ -117,6 +109,13 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (req, reply) => {
     if (!requireSuperadmin(req, reply)) return;
     const body = crearSchema.parse(req.body);
+    if (body.vertical && !app.verticalesActivas.has(body.vertical)) {
+      return reply.code(422).send({
+        statusCode: 422,
+        error: "Unprocessable Entity",
+        message: "Esta instalación no atiende ese giro por ahora",
+      });
+    }
 
     const problema = await validarAlta(body);
     if (problema) {

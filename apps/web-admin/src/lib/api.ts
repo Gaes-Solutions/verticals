@@ -190,6 +190,11 @@ export function signupTenant(
   return api("/auth/signup", { auth: false, body: input });
 }
 
+/** Giros que atiende la plataforma: el registro solo ofrece estos. */
+export function verticalesActivas(): Promise<{ verticales: string[] }> {
+  return api("/public/verticales", { auth: false });
+}
+
 export function mfaTenantSetup(mfaToken: string): Promise<{ secret: string; otpauthUrl: string }> {
   return api("/auth/tenant/mfa/setup", { token: mfaToken, method: "POST" });
 }

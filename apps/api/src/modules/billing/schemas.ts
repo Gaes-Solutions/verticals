@@ -1,13 +1,7 @@
 import { z } from "zod";
+import { VERTICALES } from "../../lib/verticales.js";
 
-export const verticalEnum = z.enum([
-  "retail_mayoreo",
-  "abarrotes",
-  "salud_vet",
-  "salud_humana",
-  "despacho_contable",
-  "otro",
-]);
+export const verticalEnum = z.enum(VERTICALES);
 
 export const signupSchema = z.object({
   slug: z

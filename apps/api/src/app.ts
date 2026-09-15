@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Config } from "./config.js";
+import { modulosActivos, verticalesActivas } from "./lib/verticales.js";
 import adminAuditRoutes from "./modules/admin/audit-routes.js";
 import adminBillingOpsRoutes from "./modules/admin/billing-ops-routes.js";
 import adminCatalogoRoutes from "./modules/admin/catalogo-routes.js";
@@ -36,6 +37,7 @@ import phrTenantRoutes, {
   patientEmergencyPublicRoutes,
   patientPortalRoutes,
 } from "./modules/patient-portal/routes.js";
+import plataformaRoutes from "./modules/plataforma/routes.js";
 import catalogoPublicoRoutes from "./modules/storefront/catalogo-publico.js";
 import storefrontPublicRoutes from "./modules/storefront/routes.js";
 import agendaRoutes from "./modules/tenant/agenda/routes.js";
@@ -188,7 +190,13 @@ export async function buildApp(
     opts.telemedicineProviderFactory ? { factory: opts.telemedicineProviderFactory } : {},
   );
 
+  // Solo se carga lo de los giros que atiende esta instalación (VERTICALES_ACTIVAS).
+  const activas = verticalesActivas(config.VERTICALES_ACTIVAS);
+  const modulos = modulosActivos(activas);
+  app.decorate("verticalesActivas", activas);
+
   await app.register(healthRoutes);
+  await app.register(plataformaRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });
   await app.register(passkeyRoutes, { prefix: "/auth/tenant" });
@@ -202,17 +210,17 @@ export async function buildApp(
   await app.register(adminCatalogoRoutes, { prefix: "/admin/catalogo" });
   await app.register(adminObservabilidadRoutes, { prefix: "/admin/observabilidad" });
   await app.register(adminTicketsRoutes, { prefix: "/admin/tickets" });
-  await app.register(partnersRoutes, { prefix: "/partners" });
-  await app.register(partnerPortalRoutes, { prefix: "/partner" });
-  await app.register(partnersPublicRoutes);
-  await app.register(marketplaceAdminRoutes);
-  await app.register(marketplacePublicRoutes);
-  await app.register(patientAuthRoutes, { prefix: "/auth/patient" });
-  await app.register(patientPortalRoutes, { prefix: "/patient-portal" });
-  await app.register(patientEmergencyPublicRoutes);
+  if (modulos.partners) await app.register(partnersRoutes, { prefix: "/partners" });
+  if (modulos.partners) await app.register(partnerPortalRoutes, { prefix: "/partner" });
+  if (modulos.partners) await app.register(partnersPublicRoutes);
+  if (modulos.salud) await app.register(marketplaceAdminRoutes);
+  if (modulos.salud) await app.register(marketplacePublicRoutes);
+  if (modulos.salud) await app.register(patientAuthRoutes, { prefix: "/auth/patient" });
+  if (modulos.salud) await app.register(patientPortalRoutes, { prefix: "/patient-portal" });
+  if (modulos.salud) await app.register(patientEmergencyPublicRoutes);
   await app.register(billingPublicRoutes);
   await app.register(autofacturaPublicRoutes);
-  await app.register(citasPublicRoutes);
+  if (modulos.salud) await app.register(citasPublicRoutes);
   await app.register(storefrontPublicRoutes);
   await app.register(catalogoPublicoRoutes);
   await app.register(b2bPublicRoutes);
@@ -270,28 +278,30 @@ export async function buildApp(
       await tenantApp.register(cotizacionesRoutes, { prefix: "/cotizaciones" });
       await tenantApp.register(pedidosRoutes, { prefix: "/pedidos" });
       await tenantApp.register(devolucionesRoutes);
-      await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
+      if (modulos.abarrotes) await tenantApp.register(recargasRoutes, { prefix: "/recargas" });
       await tenantApp.register(reportesRoutes, { prefix: "/reportes" });
       await tenantApp.register(seguridadRoutes, { prefix: "/seguridad" });
       await tenantApp.register(configVentasRoutes, { prefix: "/config-ventas" });
       await tenantApp.register(kioskoAdminRoutes, { prefix: "/kioskos" });
-      await tenantApp.register(recordatoriosRoutes, { prefix: "/recordatorios" });
+      if (modulos.salud)
+        await tenantApp.register(recordatoriosRoutes, { prefix: "/recordatorios" });
       await tenantApp.register(cobrosRoutes, { prefix: "/cobros" });
       await tenantApp.register(monederoRoutes, { prefix: "/monedero" });
       await tenantApp.register(inventarioInsightsRoutes, { prefix: "/inventario-insights" });
       await tenantApp.register(vistasGuardadasRoutes, { prefix: "/vistas-guardadas" });
-      await tenantApp.register(pacientesRoutes, { prefix: "/pacientes" });
-      await tenantApp.register(medicosRoutes, { prefix: "/medicos" });
-      await tenantApp.register(agendaRoutes, { prefix: "/agenda" });
-      await tenantApp.register(citasRoutes, { prefix: "/citas" });
-      await tenantApp.register(consultasRoutes, { prefix: "/consultas" });
-      await tenantApp.register(recetasRoutes, { prefix: "/recetas" });
-      await tenantApp.register(mascotasRoutes, { prefix: "/mascotas" });
-      await tenantApp.register(vacunacionesRoutes, { prefix: "/vacunaciones" });
-      await tenantApp.register(camasRoutes, { prefix: "/camas" });
-      await tenantApp.register(hospitalizacionesRoutes, { prefix: "/hospitalizaciones" });
-      await tenantApp.register(laboratorioRoutes, { prefix: "/laboratorio" });
-      await tenantApp.register(imagenologiaRoutes, { prefix: "/imagenologia" });
+      if (modulos.salud) await tenantApp.register(pacientesRoutes, { prefix: "/pacientes" });
+      if (modulos.salud) await tenantApp.register(medicosRoutes, { prefix: "/medicos" });
+      if (modulos.salud) await tenantApp.register(agendaRoutes, { prefix: "/agenda" });
+      if (modulos.salud) await tenantApp.register(citasRoutes, { prefix: "/citas" });
+      if (modulos.salud) await tenantApp.register(consultasRoutes, { prefix: "/consultas" });
+      if (modulos.salud) await tenantApp.register(recetasRoutes, { prefix: "/recetas" });
+      if (modulos.salud) await tenantApp.register(mascotasRoutes, { prefix: "/mascotas" });
+      if (modulos.salud) await tenantApp.register(vacunacionesRoutes, { prefix: "/vacunaciones" });
+      if (modulos.salud) await tenantApp.register(camasRoutes, { prefix: "/camas" });
+      if (modulos.salud)
+        await tenantApp.register(hospitalizacionesRoutes, { prefix: "/hospitalizaciones" });
+      if (modulos.salud) await tenantApp.register(laboratorioRoutes, { prefix: "/laboratorio" });
+      if (modulos.salud) await tenantApp.register(imagenologiaRoutes, { prefix: "/imagenologia" });
       await tenantApp.register(cfdisRecibidosRoutes, { prefix: "/cfdis-recibidos" });
       await tenantApp.register(ordenesCompraRoutes, { prefix: "/ordenes-compra" });
       await tenantApp.register(diotRoutes, { prefix: "/diot" });
@@ -309,8 +319,9 @@ export async function buildApp(
       await tenantApp.register(segmentosRoutes, { prefix: "/segmentos" });
       await tenantApp.register(campanasRoutes, { prefix: "/campanas" });
       await tenantApp.register(lealtadRoutes, { prefix: "/lealtad" });
-      await tenantApp.register(marketplaceTenantRoutes, { prefix: "/marketplace" });
-      await tenantApp.register(phrTenantRoutes, { prefix: "/phr" });
+      if (modulos.salud)
+        await tenantApp.register(marketplaceTenantRoutes, { prefix: "/marketplace" });
+      if (modulos.salud) await tenantApp.register(phrTenantRoutes, { prefix: "/phr" });
       await tenantApp.register(syncRoutes, { prefix: "/sync" });
     },
     { prefix: "/t" },

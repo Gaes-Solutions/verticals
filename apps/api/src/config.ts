@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VERTICALES, type Vertical } from "./lib/verticales.js";
 
 const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -38,6 +39,28 @@ const configSchema = z.object({
   // Base pública del API para armar el link de confirmación de citas que se
   // manda al tutor (anti-no-show). En prod = dominio del API.
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),
+  // Giros que atiende esta instalación, separados por coma (p. ej. "retail_mayoreo").
+  // Vacío = todos. Lo que no está activo ni se carga en el API ni se ofrece al
+  // dar de alta un negocio: así el piloto de Retail no expone módulos de salud.
+  VERTICALES_ACTIVAS: z
+    .string()
+    .optional()
+    .transform((valor, ctx): Vertical[] | undefined => {
+      const lista = (valor ?? "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      if (lista.length === 0) return undefined;
+      const desconocidas = lista.filter((v) => !(VERTICALES as readonly string[]).includes(v));
+      if (desconocidas.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Verticales desconocidas: ${desconocidas.join(", ")}. Usa: ${VERTICALES.join(", ")}`,
+        });
+        return z.NEVER;
+      }
+      return lista as Vertical[];
+    }),
   // Billing de la plataforma (cobro de suscripción al tenant). Ambas son opcionales
   // (dev/tests usan el cobro mock), pero si hay STRIPE_API_KEY el webhook queda vivo
   // y el secreto de firma es OBLIGATORIO: sin él la verificación fallaría-abierto.

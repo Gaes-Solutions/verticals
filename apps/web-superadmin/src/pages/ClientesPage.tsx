@@ -1,6 +1,15 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, esSuperadmin } from "../lib/api.js";
 
+const GIROS = [
+  { value: "retail_mayoreo", label: "Tienda / Retail / Mayoreo" },
+  { value: "abarrotes", label: "Abarrotes" },
+  { value: "salud_vet", label: "Veterinaria" },
+  { value: "salud_humana", label: "Salud humana / Consultorio" },
+  { value: "despacho_contable", label: "Despacho contable" },
+  { value: "otro", label: "Otro" },
+];
+
 interface Tenant {
   id: string;
   slug: string;
@@ -392,9 +401,22 @@ function CrearClienteModal({
   const [slugTocado, setSlugTocado] = useState(false);
   const [planCode, setPlanCode] = useState("");
   const [vertical, setVertical] = useState("retail_mayoreo");
+  const [girosActivos, setGirosActivos] = useState<string[] | null>(null);
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerNombre, setOwnerNombre] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
+
+  // Solo se ofrecen los giros que atiende la plataforma.
+  useEffect(() => {
+    api<{ verticales: string[] }>("/public/verticales", { auth: false })
+      .then((r) => {
+        setGirosActivos(r.verticales);
+        setVertical((actual) =>
+          r.verticales.includes(actual) ? actual : (r.verticales[0] ?? actual),
+        );
+      })
+      .catch(() => setGirosActivos(null));
+  }, []);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -490,12 +512,11 @@ function CrearClienteModal({
             className="gx-input"
             required
           >
-            <option value="retail_mayoreo">Tienda / Retail / Mayoreo</option>
-            <option value="abarrotes">Abarrotes</option>
-            <option value="salud_vet">Veterinaria</option>
-            <option value="salud_humana">Salud humana / Consultorio</option>
-            <option value="despacho_contable">Despacho contable</option>
-            <option value="otro">Otro</option>
+            {GIROS.filter((g) => !girosActivos || girosActivos.includes(g.value)).map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
           </select>
         </label>
 

@@ -78,6 +78,13 @@ export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (req, reply) => {
       const body = signupSchema.parse(req.body);
+      if (!app.verticalesActivas.has(body.vertical)) {
+        return reply.code(422).send({
+          statusCode: 422,
+          error: "Unprocessable Entity",
+          message: "Por ahora no se pueden registrar negocios de ese giro",
+        });
+      }
       try {
         const result = await signupPublico(app.masterPrisma, body);
         const accessToken = await reply.jwtSign({
