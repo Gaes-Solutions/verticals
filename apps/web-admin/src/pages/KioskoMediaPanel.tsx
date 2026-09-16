@@ -81,7 +81,8 @@ export function KioskoMediaPanel() {
         "Content-Type": "application/octet-stream",
       },
       body: file,
-      signal: AbortSignal.timeout(100_000),
+      // Un video de 50 MB por datos móviles puede tardar varios minutos.
+      signal: AbortSignal.timeout(25 * 60_000),
     });
     const body = (await response.json()) as { id?: string; message?: string };
     if (!response.ok || !body.id)

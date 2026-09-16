@@ -988,12 +988,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         />
       )}
 
-      {ultimaVenta && (
-        <>
-          <DirectPrint saleId={ultimaVenta.id} />
-          <Recibo session={session} venta={ultimaVenta} />
-        </>
-      )}
+      {ultimaVenta && <Recibo session={session} venta={ultimaVenta} />}
     </div>
   );
 }

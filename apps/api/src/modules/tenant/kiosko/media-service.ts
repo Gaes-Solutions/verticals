@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { chmod, copyFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { constants, createWriteStream } from "node:fs";
+import { chmod, copyFile, mkdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
+import { type Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { TenantPrismaClient } from "@gaespos/db";
 import type { KioskoMediaAsset, KioskoMediaPublication } from "@gaespos/db/tenant-client";
 import { z } from "zod";
@@ -21,11 +23,58 @@ export function mediaFile(key: string) {
     throw new KioskoMediaError("INVALID_KEY", "Clave de archivo inválida");
   return path.join(root, key);
 }
+/** Idempotent: a file that is already gone counts as removed. */
+export async function removeMediaFile(key: string) {
+  await unlink(mediaFile(key)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+}
+
+const UPLOAD_IDLE_MS = 60_000;
+
+/**
+ * Cuenta bytes al vuelo: corta en cuanto se pasa de lo reservado y suelta la carga si el
+ * cliente deja de enviar, para que una conexión lenta no retenga un lugar de carga.
+ */
+function meterUpload(maxBytes: number) {
+  let received = 0;
+  let idle: NodeJS.Timeout | undefined;
+  const meter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > maxBytes)
+        return callback(
+          new KioskoMediaError("SIZE_MISMATCH", "El tamaño no coincide con la reserva"),
+        );
+      arm();
+      callback(null, chunk);
+    },
+    flush(callback) {
+      clearTimeout(idle);
+      callback();
+    },
+  });
+  const arm = () => {
+    clearTimeout(idle);
+    idle = setTimeout(
+      () =>
+        meter.destroy(
+          new KioskoMediaError("UPLOAD_STALLED", "La carga se detuvo; vuelve a intentarla"),
+        ),
+      UPLOAD_IDLE_MS,
+    );
+  };
+  meter.once("close", () => clearTimeout(idle));
+  arm();
+  return meter;
+}
+
 export async function receiveMedia(
   client: TenantPrismaClient,
   scope: MediaScope,
   uploadId: string,
-  bytes: Buffer,
+  body: Readable,
+  contentLength: number,
 ): Promise<KioskoMediaAsset> {
   const session = await client.kioskoMediaUpload.findFirst({
     where: { id: uploadId, tenantId: scope.tenantId, createdBy: scope.userId },
@@ -33,7 +82,7 @@ export async function receiveMedia(
   });
   if (!session) throw new KioskoMediaError("UPLOAD_NOT_FOUND", "Carga no encontrada");
   if (session.asset.status === "ready") return session.asset;
-  if (session.declaredBytes !== bytes.length || bytes.length > MEDIA_LIMITS.videoBytes)
+  if (session.declaredBytes !== contentLength || contentLength > MEDIA_LIMITS.videoBytes)
     throw new KioskoMediaError("SIZE_MISMATCH", "El tamaño no coincide con la reserva");
   const file = mediaFile(session.asset.storageKey);
   const claim = await client.kioskoMediaUpload.updateMany({
@@ -45,9 +94,16 @@ export async function receiveMedia(
   let published: string | null = null;
   try {
     await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-    await writeFile(file, bytes, { flag: "wx", mode: 0o600 });
+    await pipeline(
+      body,
+      meterUpload(session.declaredBytes),
+      createWriteStream(file, { flags: "wx", mode: 0o600 }),
+    );
+    const { size } = await stat(file);
+    if (size !== session.declaredBytes)
+      throw new KioskoMediaError("SIZE_MISMATCH", "El tamaño no coincide con la reserva");
     const mime = z.enum(["image/jpeg", "image/png", "video/mp4"]).parse(session.asset.declaredMime);
-    const metadata = await inspectMedia(file, scope.tenantId, session.assetId, mime, bytes.length);
+    const metadata = await inspectMedia(file, scope.tenantId, session.assetId, mime, size);
     const key = `tenants/${scope.tenantId}/published/${randomUUID()}`;
     published = mediaFile(key);
     await mkdir(path.dirname(published), { recursive: true, mode: 0o700 });
@@ -151,7 +207,8 @@ export async function readPublishedMedia(
 ): Promise<{
   pub: KioskoMediaPublication & { asset: KioskoMediaAsset };
   metadata: VerifiedAsset;
-  bytes: Buffer;
+  file: string;
+  size: number;
 }> {
   const now = new Date();
   const pub = await client.kioskoMediaPublication.findFirst({
@@ -167,5 +224,6 @@ export async function readPublishedMedia(
   if (!pub || pub.asset.status !== "ready")
     throw new KioskoMediaError("MEDIA_NOT_FOUND", "Anuncio no disponible");
   const metadata = validateInspectedAsset(pub.asset.verifiedMetadata, pub.tenantId);
-  return { pub, metadata, bytes: await readFile(mediaFile(pub.asset.storageKey)) };
+  const file = mediaFile(pub.asset.storageKey);
+  return { pub, metadata, file, size: (await stat(file)).size };
 }

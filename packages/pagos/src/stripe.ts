@@ -171,12 +171,13 @@ export class StripeClient implements PaymentProvider {
     );
     if (!refund.id)
       throw new PagoError("Stripe no devolvió referencia del reembolso", "PROVIDER_UNAVAILABLE");
+    // requires_action sigue en curso en Stripe: marcarlo fallido invitaría a reembolsar dos veces.
     const status =
       refund.status === "succeeded"
         ? "procesado"
-        : refund.status === "pending"
-          ? "pendiente"
-          : "fallido";
+        : ["failed", "canceled"].includes(refund.status)
+          ? "fallido"
+          : "pendiente";
     return { reembolsoId: refund.id, status };
   }
 

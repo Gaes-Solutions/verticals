@@ -7,6 +7,10 @@ import {
   approveBankRefund,
   reconcileBankRefund,
 } from "../src/modules/tenant/devoluciones-online/bank-refund.js";
+import {
+  aprobarSolicitud,
+  rechazarSolicitud,
+} from "../src/modules/tenant/devoluciones-online/service.js";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
 
 const slug = "test-bank-refund";
@@ -202,5 +206,51 @@ describe("bank refund lifecycle", () => {
     await db().pedidoEcommerce.update({ where: { id: order.id }, data: { paymentProvider: null } });
     await expect(approve(request.id)).rejects.toThrow("proveedor original");
     expect(refund).not.toHaveBeenCalled();
+  });
+  it("discards a bank attempt rejected before saving so the request can be declined", async () => {
+    const { request } = await fixture();
+    await db().solicitudDevolucion.update({
+      where: { id: request.id },
+      data: { items: [{ varianteId: randomUUID(), cantidad: 1 }] },
+    });
+    await expect(approve(request.id)).rejects.toThrow("ambiguo o ausente");
+    expect(await db().onlineBankRefund.count({ where: { solicitudId: request.id } })).toBe(0);
+    expect(refund).not.toHaveBeenCalled();
+    expect((await rechazarSolicitud(db(), userId, request.id, "No procede")).estado).toBe(
+      "rechazada",
+    );
+  });
+  it("releases a non-bank approval that failed validation", async () => {
+    const { order, request } = await fixture();
+    await expect(
+      aprobarSolicitud(db(), fiscal, userId, request.id, {
+        metodoReembolso: "efectivo",
+        cajaId: randomUUID(),
+      }),
+    ).rejects.toThrow();
+    const released = await db().solicitudDevolucion.findUniqueOrThrow({
+      where: { id: request.id },
+    });
+    expect(released.approvalKey).toBeNull();
+    expect(await db().devolucion.count({ where: { ventaId: order.ventaIdGenerada ?? "" } })).toBe(
+      0,
+    );
+    const approved = await aprobarSolicitud(db(), fiscal, userId, request.id, {
+      metodoReembolso: "saldo_a_favor",
+    });
+    expect(approved.devolucionId).toBeTruthy();
+  });
+  it("rejects a fiscal note on approval instead of locking the request", async () => {
+    const { request } = await fixture();
+    const res = await app.inject({
+      method: "POST",
+      url: `/t/devoluciones-online/${request.id}/aprobar`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { metodoReembolso: "saldo_a_favor", emitirCfdiEgreso: true },
+    });
+    expect(res.statusCode).toBe(422);
+    const stored = await db().solicitudDevolucion.findUniqueOrThrow({ where: { id: request.id } });
+    expect(stored.approvalKey).toBeNull();
+    expect(stored.estado).toBe("solicitada");
   });
 });

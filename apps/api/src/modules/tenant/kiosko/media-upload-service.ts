@@ -104,7 +104,8 @@ export async function reserveMediaUpload(
         requestHash: hash,
         assetId: asset.id,
         declaredBytes: plan.declaredBytes,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+        // Corto a propósito: una reserva abandonada ocupa uno de los dos lugares de carga.
+        expiresAt: new Date(Date.now() + 30 * 60_000),
       },
       include: { asset: true },
     });
@@ -159,7 +160,7 @@ export async function finalizeMediaUpload(
 export async function cleanupExpiredMedia(
   client: TenantPrismaClient,
   scope: MediaScope,
-  storage: StoragePort,
+  storage: Pick<StoragePort, "remove">,
 ) {
   await client.$transaction(async (tx) => {
     await quotaLock(tx, scope);

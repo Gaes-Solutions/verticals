@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import type { Config } from "./config.js";
 import { modulosActivos, verticalesActivas } from "./lib/verticales.js";
 import adminAuditRoutes from "./modules/admin/audit-routes.js";
@@ -137,21 +137,33 @@ export interface BuildAppOptions {
   telemedicineProviderFactory?: TelemedicineProviderFactory;
 }
 
+/** Los enlaces de anuncios del kiosco llevan su firma en la URL; no debe quedar en los registros. */
+function serializeRequest(req: FastifyRequest) {
+  return {
+    method: req.method,
+    url: req.url.replace(/([?&]token=)[^&]*/g, "$1[oculto]"),
+    hostname: req.hostname,
+    remoteAddress: req.ip,
+  };
+}
+
 export async function buildApp(
   config: Config,
   opts: BuildAppOptions = {},
 ): Promise<FastifyInstance> {
+  const serializers = { req: serializeRequest };
   const app = Fastify({
     logger:
       config.NODE_ENV === "development"
         ? {
             level: config.LOG_LEVEL,
+            serializers,
             transport: {
               target: "pino-pretty",
               options: { colorize: true, translateTime: "HH:MM:ss.l" },
             },
           }
-        : { level: config.LOG_LEVEL },
+        : { level: config.LOG_LEVEL, serializers },
     disableRequestLogging: false,
     trustProxy: config.TRUST_PROXY_HOPS,
   });

@@ -5,9 +5,16 @@ import type { PaymentProvider, ReembolsoResult } from "@gaespos/pagos";
 import Decimal from "decimal.js";
 import type { PagoProviderFactory } from "../../../plugins/pagos.js";
 import { type ProcesarDevolucionResult, procesarDevolucion } from "../devoluciones/service.js";
-import { DevolucionOnlineError } from "./service.js";
+import { DevolucionOnlineError, isRejectedRefundInput } from "./service.js";
 
 type Client = TenantPrismaClient;
+type PreparingJob = {
+  id: string;
+  solicitudId: string;
+  usuarioId: string;
+  returnKey: string;
+  request: unknown;
+};
 
 export async function approveBankRefund(
   client: Client,
@@ -53,46 +60,12 @@ export async function approveBankRefund(
     });
   });
   if (job.state === "preparing") {
-    const request = await client.solicitudDevolucion.findUniqueOrThrow({
-      where: { id: solicitudId },
-      include: { pedido: true },
-    });
-    const sale = await client.venta.findUniqueOrThrow({
-      where: { id: request.pedido.ventaIdGenerada ?? "" },
-      include: { lineas: true },
-    });
-    const items = request.items as Array<{ varianteId: string; cantidad: number }>;
-    const lineas = items.map((item) => {
-      const matches = sale.lineas.filter((l) => l.varianteId === item.varianteId);
-      if (matches.length !== 1 || !matches[0])
-        throw new DevolucionOnlineError(
-          422,
-          "Artículo de devolución ambiguo o ausente en la venta",
-        );
-      return {
-        ventaLineaId: matches[0].id,
-        cantidadDevuelta: String(item.cantidad),
-        reponeStock: (job.request as { reponeStock: boolean }).reponeStock,
-      };
-    });
-    const result = await procesarDevolucion(client, fiscal, job.usuarioId, sale.id, {
-      motivo: request.motivo,
-      metodoReembolso: "tarjeta_misma",
-      lineas,
-      idempotencyKey: job.returnKey,
-      notas: `Devolución online ${request.folio}; reembolso bancario pendiente`,
-    });
-    const amountCents = new Decimal(result.totalDevuelto).times(100).toDecimalPlaces(0).toNumber();
-    if (!Number.isSafeInteger(amountCents) || amountCents <= 0)
-      throw new DevolucionOnlineError(422, "Importe de reembolso inválido");
-    await client.onlineBankRefund.updateMany({
-      where: { id: job.id, state: "preparing" },
-      data: {
-        state: "ready",
-        amountCents,
-        returnResult: result as unknown as object,
-      },
-    });
+    try {
+      await prepareReturn(client, fiscal, job);
+    } catch (err) {
+      if (isRejectedRefundInput(err)) await discardUnpreparedJob(client, job);
+      throw err;
+    }
   }
   const ready = await client.onlineBankRefund.findUniqueOrThrow({ where: { id: job.id } });
   const provider = paymentProvider(factory, ready.provider);
@@ -122,6 +95,58 @@ export async function approveBankRefund(
     await settleRefund(client, job.id, receipt);
   }
   return bankRefundStatus(client, solicitudId);
+}
+async function prepareReturn(client: Client, fiscal: FiscalProvider, job: PreparingJob) {
+  const solicitudId = job.solicitudId;
+  const request = await client.solicitudDevolucion.findUniqueOrThrow({
+    where: { id: solicitudId },
+    include: { pedido: true },
+  });
+  const sale = await client.venta.findUniqueOrThrow({
+    where: { id: request.pedido.ventaIdGenerada ?? "" },
+    include: { lineas: true },
+  });
+  const items = request.items as Array<{ varianteId: string; cantidad: number }>;
+  const lineas = items.map((item) => {
+    const matches = sale.lineas.filter((l) => l.varianteId === item.varianteId);
+    if (matches.length !== 1 || !matches[0])
+      throw new DevolucionOnlineError(422, "Artículo de devolución ambiguo o ausente en la venta");
+    return {
+      ventaLineaId: matches[0].id,
+      cantidadDevuelta: String(item.cantidad),
+      reponeStock: (job.request as { reponeStock: boolean }).reponeStock,
+    };
+  });
+  const result = await procesarDevolucion(client, fiscal, job.usuarioId, sale.id, {
+    motivo: request.motivo,
+    metodoReembolso: "tarjeta_misma",
+    lineas,
+    idempotencyKey: job.returnKey,
+    notas: `Devolución online ${request.folio}; reembolso bancario pendiente`,
+  });
+  const amountCents = new Decimal(result.totalDevuelto).times(100).toDecimalPlaces(0).toNumber();
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0)
+    throw new DevolucionOnlineError(422, "Importe de reembolso inválido");
+  await client.onlineBankRefund.updateMany({
+    where: { id: job.id, state: "preparing" },
+    data: {
+      state: "ready",
+      amountCents,
+      returnResult: result as unknown as object,
+    },
+  });
+}
+
+/**
+ * Sin devolución guardada ni dinero enviado, el intento se descarta para que la
+ * solicitud pueda corregirse o rechazarse en vez de quedar "preparando" para siempre.
+ */
+async function discardUnpreparedJob(client: Client, job: PreparingJob) {
+  await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${job.solicitudId}, 7710023))`;
+    if (await tx.devolucionAttempt.findFirst({ where: { key: job.returnKey } })) return;
+    await tx.onlineBankRefund.deleteMany({ where: { id: job.id, state: "preparing" } });
+  });
 }
 function paymentProvider(factory: PagoProviderFactory, provider: string): PaymentProvider {
   if (provider !== "stripe" && provider !== "conekta" && provider !== "mock")

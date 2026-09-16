@@ -3,6 +3,7 @@ import type { FiscalProvider } from "@gaespos/fiscal";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyRequest } from "fastify";
 import {
+  DevolucionError,
   type DevolucionMotivo,
   type DevolucionReembolsoMetodo,
   procesarDevolucion,
@@ -40,6 +41,13 @@ export interface SolicitarDevolucionInput {
 async function nextFolioSolicitud(client: TenantClient): Promise<string> {
   const count = await client.solicitudDevolucion.count();
   return `SD-${String(count + 1).padStart(5, "0")}`;
+}
+
+/** Rechazo definido por datos del negocio (no una caída): reintentar igual volvería a fallar. */
+export function isRejectedRefundInput(err: unknown): boolean {
+  return (
+    (err instanceof DevolucionError || err instanceof DevolucionOnlineError) && err.statusCode < 500
+  );
 }
 
 /** El cliente solicita devolver (parte de) un pedido entregado/recogido. */
@@ -135,7 +143,7 @@ export async function listarSolicitudesAdmin(
 
 /**
  * Aprueba la solicitud: genera la Devolucion real contra la venta ligada al
- * pedido (repone stock + reembolso + CFDI Egreso opcional) reusando el módulo
+ * pedido (repone stock si se recibió + reembolso) reusando el módulo
  * de devoluciones del POS, y marca el pedido como reembolsado.
  */
 export async function aprobarSolicitud(
@@ -145,7 +153,6 @@ export async function aprobarSolicitud(
   solicitudId: string,
   requestedInput: {
     metodoReembolso: DevolucionReembolsoMetodo;
-    emitirCfdiEgreso?: boolean;
     reponeStock?: boolean;
     cajaId?: string;
   },
@@ -182,41 +189,14 @@ export async function aprobarSolicitud(
   const input = solicitud.approvalRequest as typeof requestedInput;
   const usuarioId = solicitud.approvalUserId ?? requestedUserId;
 
-  const ventaId = solicitud.pedido.ventaIdGenerada;
-  if (!ventaId) throw new DevolucionOnlineError(409, "El pedido no tiene venta asociada");
-
-  // Mapear los items solicitados (por varianteId) a las líneas de la venta.
-  const venta = await client.venta.findUnique({
-    where: { id: ventaId },
-    include: { lineas: { select: { id: true, varianteId: true } } },
-  });
-  if (!venta) throw new DevolucionOnlineError(409, "Venta asociada no encontrada");
-
-  const items = (Array.isArray(solicitud.items)
-    ? solicitud.items
-    : []) as unknown as ItemSolicitud[];
-  const lineas = items
-    .map((it) => {
-      const ventaLinea = venta.lineas.find((l) => l.varianteId === it.varianteId);
-      if (!ventaLinea) return null;
-      return { ventaLineaId: ventaLinea.id, cantidadDevuelta: String(it.cantidad) };
-    })
-    .filter((l): l is { ventaLineaId: string; cantidadDevuelta: string } => l !== null);
-
-  if (!lineas.length) {
-    throw new DevolucionOnlineError(422, "No se pudieron mapear los artículos a la venta");
+  let result: Awaited<ReturnType<typeof procesarDevolucion>>;
+  try {
+    result = await devolverVentaDelPedido(client, provider, usuarioId, solicitud, input);
+  } catch (err) {
+    if (isRejectedRefundInput(err) && solicitud.approvalKey)
+      await liberarAprobacion(client, solicitudId, solicitud.approvalKey);
+    throw err;
   }
-
-  const result = await procesarDevolucion(client, provider, usuarioId, ventaId, {
-    ...(solicitud.approvalKey ? { idempotencyKey: solicitud.approvalKey } : {}),
-    motivo: solicitud.motivo,
-    metodoReembolso: input.metodoReembolso,
-    reponeStockDefault: input.reponeStock ?? false,
-    ...(input.cajaId ? { cajaId: input.cajaId } : {}),
-    notas: `Devolución online ${solicitud.pedido.folioPublico}`,
-    lineas,
-    ...(input.emitirCfdiEgreso ? { cfdiEgreso: { formaPago: "03", usoCfdi: "G02" } } : {}),
-  });
 
   const resolved = await client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${solicitudId}, 7710023))`;
@@ -263,6 +243,71 @@ export async function aprobarSolicitud(
     folio: result.folio,
     totalDevuelto: result.totalDevuelto,
   };
+}
+
+/** Genera la devolución contra la venta ligada al pedido, con la clave durable de la aprobación. */
+async function devolverVentaDelPedido(
+  client: TenantClient,
+  provider: FiscalProvider,
+  usuarioId: string,
+  solicitud: {
+    approvalKey: string | null;
+    motivo: DevolucionMotivo;
+    items: unknown;
+    pedido: { ventaIdGenerada: string | null; folioPublico: string };
+  },
+  input: { metodoReembolso: DevolucionReembolsoMetodo; reponeStock?: boolean; cajaId?: string },
+) {
+  const ventaId = solicitud.pedido.ventaIdGenerada;
+  if (!ventaId) throw new DevolucionOnlineError(409, "El pedido no tiene venta asociada");
+
+  // Mapear los items solicitados (por varianteId) a las líneas de la venta.
+  const venta = await client.venta.findUnique({
+    where: { id: ventaId },
+    include: { lineas: { select: { id: true, varianteId: true } } },
+  });
+  if (!venta) throw new DevolucionOnlineError(409, "Venta asociada no encontrada");
+
+  const items = (Array.isArray(solicitud.items)
+    ? solicitud.items
+    : []) as unknown as ItemSolicitud[];
+  const lineas = items
+    .map((it) => {
+      const ventaLinea = venta.lineas.find((l) => l.varianteId === it.varianteId);
+      if (!ventaLinea) return null;
+      return { ventaLineaId: ventaLinea.id, cantidadDevuelta: String(it.cantidad) };
+    })
+    .filter((l): l is { ventaLineaId: string; cantidadDevuelta: string } => l !== null);
+
+  if (!lineas.length) {
+    throw new DevolucionOnlineError(422, "No se pudieron mapear los artículos a la venta");
+  }
+
+  return procesarDevolucion(client, provider, usuarioId, ventaId, {
+    ...(solicitud.approvalKey ? { idempotencyKey: solicitud.approvalKey } : {}),
+    motivo: solicitud.motivo,
+    metodoReembolso: input.metodoReembolso,
+    reponeStockDefault: input.reponeStock ?? false,
+    ...(input.cajaId ? { cajaId: input.cajaId } : {}),
+    notas: `Devolución online ${solicitud.pedido.folioPublico}`,
+    lineas,
+  });
+}
+
+/**
+ * Si la devolución se rechazó sin guardarse (caja cerrada, artículo ausente…), la
+ * solicitud vuelve a pendiente para corregir los datos o rechazarla; si no, quedaría
+ * atada para siempre a una aprobación que nunca puede prosperar.
+ */
+async function liberarAprobacion(client: TenantClient, solicitudId: string, approvalKey: string) {
+  await client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${solicitudId}, 7710023))`;
+    if (await tx.devolucionAttempt.findFirst({ where: { key: approvalKey } })) return;
+    await tx.solicitudDevolucion.updateMany({
+      where: { id: solicitudId, estado: "solicitada", approvalKey },
+      data: { approvalKey: null, approvalUserId: null },
+    });
+  });
 }
 
 export async function rechazarSolicitud(

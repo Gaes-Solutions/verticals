@@ -1,6 +1,6 @@
 mod types;
 mod render;
-use axum::{extract::{DefaultBodyLimit, State}, http::{header, HeaderMap, HeaderValue, Method, StatusCode}, routing::{get, post}, Json, Router};
+use axum::{body::Bytes, extract::{DefaultBodyLimit, State}, http::{header, HeaderMap, HeaderValue, Method, StatusCode}, routing::{get, post}, Json, Router};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
@@ -24,14 +24,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let jobs = PathBuf::from(std::env::var("GAES_PRINT_JOBS")?);
     if !jobs.is_absolute() { return Err("GAES_PRINT_JOBS debe ser una ruta absoluta persistente".into()); }
     tokio::fs::create_dir_all(&jobs).await?;
+    prune_accepted_jobs(&jobs).await;
     let columns = std::env::var("GAES_PRINT_COLUMNS").unwrap_or("32".into()).parse()?;
     if columns != 32 && columns != 48 { return Err("Columnas: 32 o 48".into()); }
     let state = Arc::new(Config { token, destination, jobs, columns, cut: std::env::var("GAES_PRINT_CUT").as_deref() == Ok("1"), lock: Mutex::new(()) });
-    let cors = CorsLayer::new().allow_origin(origin).allow_methods([Method::GET, Method::POST]).allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::HeaderName::from_static("idempotency-key")]);
+    let cors = CorsLayer::new().allow_origin(origin).allow_methods([Method::GET, Method::POST]).allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::HeaderName::from_static("idempotency-key")])
+        // Chrome pide este permiso para que una pagina publica hable con 127.0.0.1 (Private Network Access).
+        .allow_private_network(true);
     let app = Router::new().route("/status", get(status)).route("/print/ticket", post(print_ticket)).layer(DefaultBodyLimit::max(256*1024)).layer(cors).with_state(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:9876").await?;
     eprintln!("GaesSoft Print Bridge 0.2.0 en 127.0.0.1:9876");
     axum::serve(listener, app).await?; Ok(())
+}
+// Solo se borran impresiones confirmadas y viejas; las inciertas se conservan para revisarlas.
+async fn prune_accepted_jobs(dir: &std::path::Path) {
+    let Ok(mut entries) = tokio::fs::read_dir(dir).await else { return };
+    let Some(limit) = std::time::SystemTime::now().checked_sub(Duration::from_secs(30 * 24 * 60 * 60)) else { return };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let old = entry.metadata().await.ok().and_then(|m| m.modified().ok()).is_some_and(|t| t < limit);
+        if !old { continue; }
+        let path = entry.path();
+        if tokio::fs::read_to_string(&path).await.is_ok_and(|c| c.starts_with("accepted:")) { let _ = tokio::fs::remove_file(&path).await; }
+    }
 }
 fn authorized(headers: &HeaderMap, state: &Config) -> bool {
     let expected = format!("Bearer {}", state.token);
@@ -54,8 +68,10 @@ async fn send(config: &Config, bytes: &[u8]) -> std::io::Result<()> {
         }
     }
 }
-async fn print_ticket(State(state): State<Arc<Config>>, headers: HeaderMap, Json(ticket): Json<Ticket>) -> Reply {
+async fn print_ticket(State(state): State<Arc<Config>>, headers: HeaderMap, body: Bytes) -> Reply {
+    // La clave se revisa antes de leer el ticket: sin clave no se procesa nada del cuerpo.
     if !authorized(&headers, &state) { return response(StatusCode::UNAUTHORIZED, "Clave local invalida"); }
+    let ticket: Ticket = match serde_json::from_slice(&body) { Ok(t) => t, Err(_) => return response(StatusCode::UNPROCESSABLE_ENTITY, "Ticket invalido") };
     let key = headers.get("idempotency-key").and_then(|v| v.to_str().ok()).unwrap_or("");
     if key.len() != 36 || !key.chars().all(|c| c.is_ascii_hexdigit() || c == '-') { return response(StatusCode::BAD_REQUEST, "Falta identificador de impresion"); }
     let bytes = match render::render(&ticket, state.columns, state.cut) { Ok(b) => b, Err(e) => return response(StatusCode::UNPROCESSABLE_ENTITY, e) };

@@ -137,6 +137,19 @@ describe("StripeClient", () => {
     expect(form.get("payment_intent")).toBe("pi_123");
     expect(form.get("amount")).toBe("1000");
   });
+
+  it.each([
+    ["requires_action", "pendiente"],
+    ["pending", "pendiente"],
+    ["failed", "fallido"],
+    ["canceled", "fallido"],
+  ])("reembolso %s queda %s", async (stripeStatus, status) => {
+    mockFetch(200, { id: "re_1", status: stripeStatus });
+    expect(await new StripeClient(OPTS).reembolsar("pi_123", 1000)).toEqual({
+      reembolsoId: "re_1",
+      status,
+    });
+  });
 });
 
 describe("refund verification", () => {

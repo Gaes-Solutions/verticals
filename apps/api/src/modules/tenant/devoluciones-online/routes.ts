@@ -44,6 +44,11 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.VENTAS_DEVOLVER);
     const { id } = idParam.parse(req.params);
     const body = aprobarSchema.parse(req.body);
+    // Una aprobación durable no puede timbrar: la nota fiscal se emite aparte al conciliar.
+    if (body.emitirCfdiEgreso)
+      return reply.code(422).send({
+        message: "Emite la nota fiscal después de confirmar el reembolso",
+      });
     if (body.metodoReembolso === "efectivo" && !body.cajaId)
       return reply.code(422).send({ message: "Selecciona la caja que entrega el efectivo" });
     const cfg = await req.tenantPrisma.cfdiConfig.findFirst();
@@ -52,13 +57,6 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
         ? { apiKey: cfg.facturamaApiKey, ambiente: cfg.facturamaAmbiente }
         : { apiKey: "", ambiente: "sandbox" },
     );
-    if (body.emitirCfdiEgreso && !cfg) {
-      return reply.code(409).send({
-        statusCode: 409,
-        error: "Conflict",
-        message: "CFDI Egreso solicitado pero CFDI no configurado en el tenant",
-      });
-    }
     try {
       if (body.metodoReembolso === "transferencia")
         throw new DevolucionOnlineError(
@@ -66,11 +64,6 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
           "La transferencia requiere un comprobante bancario conciliado; no se registra como pagada desde esta pantalla",
         );
       if (body.metodoReembolso === "tarjeta_misma") {
-        if (body.emitirCfdiEgreso)
-          throw new DevolucionOnlineError(
-            422,
-            "Emite la nota fiscal después de confirmar el reembolso bancario",
-          );
         return await approveBankRefund(
           req.tenantPrisma,
           provider,
@@ -89,7 +82,6 @@ const devolucionesOnlineRoutes: FastifyPluginAsync = async (app) => {
         metodoReembolso: body.metodoReembolso,
         reponeStock: body.reponeStock,
         ...(body.cajaId ? { cajaId: body.cajaId } : {}),
-        ...(body.emitirCfdiEgreso !== undefined ? { emitirCfdiEgreso: body.emitirCfdiEgreso } : {}),
       });
     } catch (err) {
       if (err instanceof DevolucionOnlineError) {

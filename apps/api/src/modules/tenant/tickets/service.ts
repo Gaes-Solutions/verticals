@@ -79,6 +79,7 @@ export async function generarTicketVenta(
       sucursal: true,
       caja: { select: { codigo: true } },
       usuario: { select: { nombre: true, apellidos: true } },
+      cliente: { select: { nombre: true, apellidos: true } },
       lineas: { orderBy: { numero: "asc" } },
       pagos: { orderBy: { createdAt: "asc" } },
       cfdis: {
@@ -112,7 +113,10 @@ export async function generarTicketVenta(
       folio: venta.folio,
       fecha: (venta.cobradaAt ?? venta.createdAt).toISOString(),
       cajero: [venta.usuario.nombre, venta.usuario.apellidos].filter(Boolean).join(" "),
-      cliente: venta.clienteId,
+      // En papel va el nombre que reconoce el comprador, nunca el identificador interno.
+      cliente: venta.cliente
+        ? [venta.cliente.nombre, venta.cliente.apellidos].filter(Boolean).join(" ")
+        : null,
       canal: venta.canal,
       moneda: venta.moneda,
     },

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { getTenantClient } from "@gaespos/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -128,5 +129,62 @@ describe("kiosk publication with real isolated decoder", () => {
     expect(
       (await db().kioskoMediaUpload.findUniqueOrThrow({ where: { assetId } })).storageReleasedAt,
     ).not.toBeNull();
+  });
+});
+
+describe("upload admission happens before the body is read", () => {
+  const put = (extra: Record<string, string>, payload: Buffer | Readable) =>
+    app.inject({
+      method: "PUT",
+      url: `/t/kioskos/media/uploads/${randomUUID()}`,
+      headers: { "content-type": "application/octet-stream", ...extra },
+      payload,
+    });
+  it("refuses an upload without a session", async () => {
+    expect((await put({}, Buffer.alloc(1024))).statusCode).toBe(401);
+  });
+  it("refuses a declared size over the limit", async () => {
+    const res = await put(
+      { ...headers(), "content-length": String(60 * 1024 * 1024) },
+      Readable.from([Buffer.alloc(16)]),
+    );
+    expect(res.statusCode).toBe(413);
+  });
+  it("frees the upload slot after each request", async () => {
+    for (let i = 0; i < 4; i++)
+      expect((await put(headers(), Buffer.alloc(32))).json().code).toBe("UPLOAD_NOT_FOUND");
+  });
+  it("skips an ad with broken metadata without emptying the carousel", async () => {
+    const tenantId = (await app.masterPrisma.tenant.findUniqueOrThrow({ where: { slug } })).id;
+    const brokenId = randomUUID();
+    await db().kioskoMediaAsset.create({
+      data: {
+        id: brokenId,
+        tenantId,
+        createdBy: randomUUID(),
+        storageKey: `tenants/${tenantId}/published/${randomUUID()}`,
+        declaredMime: "video/mp4",
+        status: "ready",
+        verifiedMetadata: {},
+      },
+    });
+    const pub = await db().kioskoMediaPublication.create({
+      data: {
+        tenantId,
+        createdBy: randomUUID(),
+        assetId: brokenId,
+        title: "Dañado",
+        branchIds: [branchId],
+        startsAt: new Date(Date.now() - 1000),
+        endsAt: new Date(Date.now() + 60_000),
+        status: "published",
+      },
+    });
+    const idle = await app.inject({
+      url: "/kiosko/idle",
+      headers: { authorization: `Bearer ${deviceToken}` },
+    });
+    expect(idle.statusCode, idle.body).toBe(200);
+    expect(idle.json().slides.some((s: { id: string }) => s.id === pub.id)).toBe(false);
   });
 });

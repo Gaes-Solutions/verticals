@@ -29,9 +29,13 @@ export function DirectPrint({ saleId }: { saleId: string }) {
         body: JSON.stringify(job.ticket),
         signal: AbortSignal.timeout(15_000),
       });
-      const result = (await res.json()) as { state?: string; message?: string };
-      if (!res.ok) throw new Error(result.message ?? "No se confirmó la impresión");
+      // El puente puede rechazar antes de llegar a su lógica (cuerpo muy grande,
+      // JSON inválido) y entonces responde texto, no JSON.
+      const result = (await res.json().catch(() => ({}))) as { state?: string; message?: string };
+      if (!res.ok) throw new Error(result.message ?? "La impresora no aceptó el ticket");
       if (result.state !== "accepted") throw new Error("Respuesta de impresora no válida");
+      // Ya salió: no hace falta guardar el ticket (trae RFC y razón social).
+      sessionStorage.removeItem(jobKey);
       setMessage("Enviado a la impresora. Comprueba que salió el ticket.");
     } catch (e) {
       setMessage(
