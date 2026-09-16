@@ -75,7 +75,9 @@ export interface IniciarCheckoutResult {
   intentId: string;
   intentStatus: PagoIntent["status"];
   montoCentavos: number;
+  paymentProvider?: string;
   clientSecret?: string;
+  stripeAccountId?: string;
   referenciaPago?: string;
   total: string;
 }
@@ -411,6 +413,8 @@ async function crearPedidoConIntent(
     const folioPublico = await nextFolioPublico(tx);
     const created = await tx.pedidoEcommerce.create({
       data: {
+        paymentProvider: provider.codigo,
+        paymentAccountId: input.stripeAccountId ?? null,
         folioPublico,
         carritoOrigenId: carrito.id,
         ...(carrito.clienteId ? { clienteId: carrito.clienteId } : {}),
@@ -482,7 +486,11 @@ async function crearPedidoConIntent(
 
   await client.pedidoEcommerce.update({
     where: { id: pedido.id },
-    data: { paymentIntentId: intent.intentId },
+    data: {
+      paymentIntentId: intent.intentId,
+      paymentProvider: provider.codigo,
+      paymentAccountId: input.stripeAccountId ?? null,
+    },
   });
 
   return {
@@ -491,7 +499,9 @@ async function crearPedidoConIntent(
     intentId: intent.intentId,
     intentStatus: intent.status,
     montoCentavos,
+    paymentProvider: provider.codigo,
     ...(intent.clientSecret ? { clientSecret: intent.clientSecret } : {}),
+    ...(input.stripeAccountId ? { stripeAccountId: input.stripeAccountId } : {}),
     ...(intent.referenciaPago ? { referenciaPago: intent.referenciaPago } : {}),
     total: total.toFixed(2),
   };

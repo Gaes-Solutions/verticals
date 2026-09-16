@@ -4,6 +4,8 @@ import {
   type MetodoReembolso,
   type Solicitud,
   aprobarDevolucion,
+  conciliarDevolucion,
+  listCajasReembolso,
   listDevoluciones,
   rechazarDevolucion,
 } from "@/services/negocio";
@@ -28,7 +30,6 @@ const METODOS: { key: MetodoReembolso; label: string }[] = [
   { key: "tarjeta_misma", label: "Misma tarjeta" },
   { key: "saldo_a_favor", label: "Saldo a favor" },
   { key: "vale", label: "Vale" },
-  { key: "transferencia", label: "Transferencia" },
 ];
 
 function tono(e: string): "ok" | "danger" | "warn" | "neutral" {
@@ -102,10 +103,22 @@ export default function Devoluciones() {
               <Text style={s.motivo} numberOfLines={2}>
                 {item.motivo}
               </Text>
+              {item.bankRefund && (
+                <BankStatus
+                  item={item}
+                  canResolve={canResolve}
+                  reload={() => {
+                    void q.refetch();
+                  }}
+                />
+              )}
               <Text style={s.meta}>
                 {item.items.length} artículo(s) · {fecha(item.createdAt)}
               </Text>
-              {item.estado === "solicitada" && canResolve && !blocked.includes(item.id) ? (
+              {!item.bankRefund &&
+              item.estado === "solicitada" &&
+              canResolve &&
+              !blocked.includes(item.id) ? (
                 <View style={s.acciones}>
                   <View style={{ flex: 1 }}>
                     <Button
@@ -164,12 +177,23 @@ function AccionModal({
   const user = useAuth((state) => state.user);
   const canResolve = !!user && (user.isOwner || user.permissions.includes("ventas.devolver"));
   const [motivo, setMotivo] = useState("");
-  const [metodo, setMetodo] = useState<MetodoReembolso>("efectivo");
+  const [metodo, setMetodo] = useState<MetodoReembolso>("tarjeta_misma");
 
+  const [reponeStock, setReponeStock] = useState(false);
+  const [cajaId, setCajaId] = useState("");
+  const cajas = useQuery({
+    queryKey: ["cajas-reembolso"],
+    queryFn: listCajasReembolso,
+    enabled: metodo === "efectivo",
+    retry: false,
+  });
   const m = useMutation({
     mutationFn: () =>
       accion?.tipo === "aprobar"
-        ? aprobarDevolucion(accion.sol.id, metodo)
+        ? aprobarDevolucion(accion.sol.id, metodo, {
+            reponeStock,
+            ...(metodo === "efectivo" ? { cajaId } : {}),
+          })
         : rechazarDevolucion(accion?.sol.id ?? "", motivo),
     onSuccess: () => {
       setMotivo("");
@@ -192,6 +216,15 @@ function AccionModal({
           </Text>
           {esAprobar ? (
             <>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: reponeStock }}
+                onPress={() => setReponeStock((v) => !v)}
+              >
+                <Text style={s.sheetLabel}>
+                  {reponeStock ? "☑" : "☐"} Producto recibido y apto para volver a vender
+                </Text>
+              </Pressable>
               <Text style={s.sheetLabel}>Método de reembolso</Text>
               <View style={s.metodos}>
                 {METODOS.map((mm) => (
@@ -206,6 +239,20 @@ function AccionModal({
                   </Pressable>
                 ))}
               </View>
+              {metodo === "efectivo" && (
+                <View>
+                  <Text style={s.sheetLabel}>Caja que entrega el efectivo</Text>
+                  {cajas.data?.map((c) => (
+                    <Pressable key={c.id} onPress={() => setCajaId(c.id)} style={s.metodo}>
+                      <Text>
+                        {cajaId === c.id ? "● " : "○ "}
+                        {c.sucursal.nombre} · {c.codigo}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  {cajas.isError && <Text>No se pudieron consultar las cajas.</Text>}
+                </View>
+              )}
             </>
           ) : (
             <>
@@ -306,3 +353,48 @@ const s = StyleSheet.create({
     textAlignVertical: "top",
   },
 });
+
+function BankStatus({
+  item,
+  canResolve,
+  reload,
+}: { item: Solicitud; canResolve: boolean; reload: () => void }) {
+  const [reference, setReference] = useState("");
+  const mutation = useMutation({
+    mutationFn: () => conciliarDevolucion(item.id, reference.trim() || undefined),
+    onSuccess: reload,
+  });
+  const labels: Record<string, string> = {
+    preparing: "Preparando devolución",
+    ready: "Por enviar",
+    sending: "Consultando banco",
+    pending: "Pendiente del banco",
+    uncertain: "Por conciliar",
+    completed: "Reembolso bancario confirmado",
+    failed: "Rechazado por el banco",
+  };
+  return (
+    <View>
+      <Text style={s.meta}>{labels[item.bankRefund?.state ?? ""] ?? "Por revisar"}</Text>
+      {item.bankRefund?.refundId && <Text style={s.meta}>{item.bankRefund.refundId}</Text>}
+      {canResolve && item.bankRefund?.state !== "completed" && (
+        <>
+          <TextInput
+            accessibilityLabel="Referencia bancaria"
+            placeholder="Referencia del proveedor (opcional)"
+            value={reference}
+            onChangeText={setReference}
+            maxLength={150}
+            style={{ minHeight: 44, color: colors.text }}
+          />
+          <Button
+            label="Consultar reembolso"
+            busy={mutation.isPending}
+            onPress={() => mutation.mutate()}
+          />
+          {mutation.isError && <Text>No se confirmó. Consultar no vuelve a enviar dinero.</Text>}
+        </>
+      )}
+    </View>
+  );
+}

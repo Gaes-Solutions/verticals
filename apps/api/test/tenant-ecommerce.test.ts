@@ -895,13 +895,13 @@ describe("devolución desde la tienda (solicitud → aprobación) + mensajería"
     expect(items.some((s) => s.id === solicitudId)).toBe(true);
   });
 
-  it("aprobar repone stock (+1), genera devolución y marca pedido reembolsado", async () => {
+  it("aprobar con recepción explícita repone stock y conserva el pago parcialmente reembolsado", async () => {
     const antes = await stock();
     const res = await app.inject({
       method: "POST",
       url: `/t/devoluciones-online/${solicitudId}/aprobar`,
       headers: auth(ownerToken),
-      payload: { metodoReembolso: "tarjeta_misma" },
+      payload: { metodoReembolso: "tarjeta_misma", reponeStock: true },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().devolucionId).toBeTruthy();
@@ -912,17 +912,18 @@ describe("devolución desde la tienda (solicitud → aprobación) + mensajería"
       url: `/t/pedidos-ecommerce/${pedidoId}`,
       headers: auth(ownerToken),
     });
-    expect(det.json().statusPago).toBe("reembolsado");
+    expect(det.json().statusPago).toBe("pago_confirmado");
   });
 
-  it("aprobar una solicitud ya resuelta → 409", async () => {
+  it("repetir aprobación devuelve el mismo resultado sin reembolsar otra vez", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/t/devoluciones-online/${solicitudId}/aprobar`,
       headers: auth(ownerToken),
       payload: { metodoReembolso: "tarjeta_misma" },
     });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().bankRefund.state).toBe("completed");
   });
 
   it("mensajería: cliente escribe, admin ve y responde, cliente ve el hilo", async () => {

@@ -1,6 +1,7 @@
 import { Copy, Monitor, Plus, Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, puede } from "../lib/api.js";
+import { KioskoMediaPanel } from "./KioskoMediaPanel.js";
 
 interface Sucursal {
   id: string;
@@ -47,6 +48,7 @@ export function KioskosPage() {
       </div>
       <Dispositivos />
       <Configuracion />
+      <KioskoMediaPanel />
     </div>
   );
 }

@@ -30,6 +30,9 @@ export interface CheckoutResult {
   total: string;
   intentStatus: string;
   referenciaPago?: string;
+  paymentProvider?: string;
+  clientSecret?: string;
+  stripeAccountId?: string;
 }
 export function paymentOutcome(
   result: CheckoutResult,

@@ -273,6 +273,7 @@ export type MetodoReembolso =
   | "transferencia";
 
 export interface Solicitud {
+  bankRefund?: { state: string; refundId: string | null; lastError: string | null } | null;
   id: string;
   folio: string;
   motivo: string;
@@ -289,8 +290,15 @@ export const listDevoluciones = (estado?: string) => {
   return api.get<Solicitud[]>(`/t/devoluciones-online${qs}`);
 };
 
-export const aprobarDevolucion = (id: string, metodoReembolso: MetodoReembolso) =>
-  api.post<{ ok: boolean }>(`/t/devoluciones-online/${id}/aprobar`, { metodoReembolso });
+export const aprobarDevolucion = (
+  id: string,
+  metodoReembolso: MetodoReembolso,
+  options: { reponeStock?: boolean; cajaId?: string } = {},
+) =>
+  api.post<{ ok: boolean }>(`/t/devoluciones-online/${id}/aprobar`, {
+    metodoReembolso,
+    ...options,
+  });
 
 export const rechazarDevolucion = (id: string, motivo: string) =>
   api.post<{ ok: boolean }>(`/t/devoluciones-online/${id}/rechazar`, { motivo });
@@ -816,3 +824,9 @@ export const desactivarKiosko = (id: string) => api.del<void>(`/t/kioskos/${id}`
 export const getKioskoConfig = () => api.get<KioskoConfig>("/t/kioskos/config");
 export const saveKioskoConfig = (cfg: KioskoConfig) =>
   api.put<KioskoConfig>("/t/kioskos/config", cfg);
+
+export const conciliarDevolucion = (id: string, reference?: string) =>
+  api.post(`/t/devoluciones-online/${id}/conciliar`, { ...(reference ? { reference } : {}) });
+
+export const listCajasReembolso = () =>
+  api.get<Array<{ id: string; codigo: string; sucursal: { nombre: string } }>>("/t/cajas");

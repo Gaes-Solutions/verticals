@@ -5,6 +5,8 @@ import {
   type PagoIntent,
   type PaymentProvider,
   type ReembolsoResult,
+  type RefundOptions,
+  type VerifiedRefund,
   type WebhookEvento,
 } from "./types.js";
 
@@ -58,15 +60,22 @@ export class StripeClient implements PaymentProvider {
     this.tolerancia = opts.toleranciaWebhookSeg ?? 300;
   }
 
-  private async post<T>(path: string, form: URLSearchParams, stripeAccountId?: string): Promise<T> {
+  private async post<T>(
+    path: string,
+    form: URLSearchParams,
+    stripeAccountId?: string,
+    requestKey?: string,
+  ): Promise<T> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
     };
     // Connect direct charge: el cobro se ejecuta EN la cuenta del comercio.
     if (stripeAccountId) headers["Stripe-Account"] = stripeAccountId;
+    if (requestKey) headers["Idempotency-Key"] = requestKey;
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
+      signal: AbortSignal.timeout(15_000),
       headers,
       body: form.toString(),
     });
@@ -146,10 +155,22 @@ export class StripeClient implements PaymentProvider {
     throw new PagoError(`Evento Stripe no manejado: ${evento.type}`, "INVALID_WEBHOOK");
   }
 
-  async reembolsar(intentId: string, montoCentavos?: number): Promise<ReembolsoResult> {
+  async reembolsar(
+    intentId: string,
+    montoCentavos?: number,
+    options?: RefundOptions,
+  ): Promise<ReembolsoResult> {
     const form = new URLSearchParams({ payment_intent: intentId });
     if (montoCentavos !== undefined) form.set("amount", String(montoCentavos));
-    const refund = await this.post<{ id: string; status: string }>("/v1/refunds", form);
+    if (options) form.set("metadata[gaes_refund_key]", options.requestKey);
+    const refund = await this.post<{ id: string; status: string }>(
+      "/v1/refunds",
+      form,
+      options?.stripeAccountId,
+      options?.requestKey,
+    );
+    if (!refund.id)
+      throw new PagoError("Stripe no devolvió referencia del reembolso", "PROVIDER_UNAVAILABLE");
     const status =
       refund.status === "succeeded"
         ? "procesado"
@@ -157,5 +178,53 @@ export class StripeClient implements PaymentProvider {
           ? "pendiente"
           : "fallido";
     return { reembolsoId: refund.id, status };
+  }
+
+  async consultarReembolso(
+    intentId: string,
+    refundId: string | null,
+    options: RefundOptions,
+  ): Promise<VerifiedRefund | null> {
+    const query = new URLSearchParams({ payment_intent: intentId, limit: "100" });
+    const path = refundId ? `/v1/refunds/${encodeURIComponent(refundId)}` : `/v1/refunds?${query}`;
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        ...(options.stripeAccountId ? { "Stripe-Account": options.stripeAccountId } : {}),
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new PagoError("No se pudo consultar el reembolso", "PROVIDER_UNAVAILABLE");
+    type Receipt = {
+      id: string;
+      payment_intent: string;
+      amount: number;
+      status: string;
+      metadata?: Record<string, string>;
+    };
+    const body = (await res.json()) as Receipt & { data?: Receipt[] };
+    const matches = refundId
+      ? [body]
+      : (body.data ?? []).filter((r) => r.metadata?.gaes_refund_key === options.requestKey);
+    if (matches.length !== 1) return null;
+    const receipt = matches[0];
+    if (
+      !receipt ||
+      receipt.payment_intent !== intentId ||
+      !Number.isSafeInteger(receipt.amount) ||
+      receipt.amount <= 0
+    )
+      throw new PagoError("Referencia de reembolso no corresponde al pago", "INVALID_INPUT");
+    return {
+      reembolsoId: receipt.id,
+      intentId,
+      amountCents: receipt.amount,
+      status:
+        receipt.status === "succeeded"
+          ? "procesado"
+          : ["failed", "canceled"].includes(receipt.status)
+            ? "fallido"
+            : "pendiente",
+    };
   }
 }

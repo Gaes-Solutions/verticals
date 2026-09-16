@@ -320,14 +320,13 @@ describe("checkout móvil autenticado sin proveedores reales", () => {
     ).toBe(422);
     expect(calls).toBe(before);
   });
-  it("rechaza claves inventadas, tarjeta, proveedor y correo suministrados", async () => {
+  it("rechaza claves inventadas, proveedor y correo suministrados", async () => {
     const input = await prepared();
     const before = calls;
     expect((await post("/checkout", { ...input, idempotencyKey: randomUUID() })).statusCode).toBe(
       409,
     );
     for (const extra of [
-      { metodoPago: "tarjeta" },
       { proveedorPago: "mock" },
       { emailComprador: "spoof@example.test" },
       { clienteId: "forged" },

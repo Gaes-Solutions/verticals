@@ -3756,6 +3756,8 @@ model CarritoEcommerce {
 }
 
 model PedidoEcommerce {
+  paymentProvider String? @map("payment_provider")
+  paymentAccountId String? @map("payment_account_id")
   postPagoEffects PedidoPostPagoEffect[]
   snapshotComercial Json? @map("snapshot_comercial")
   id               String                     @id @default(cuid())
@@ -3889,6 +3891,10 @@ enum SolicitudDevolucionEstado {
 /// aprobación, estilo Mercado Libre). Al aprobarse genera una Devolucion real
 /// contra la venta ligada al pedido (repone stock + reembolso + CFDI Egreso).
 model SolicitudDevolucion {
+  approvalKey String? @unique @map("approval_key")
+  approvalRequest Json? @map("approval_request")
+  approvalUserId String? @map("approval_user_id")
+  bankRefund OnlineBankRefund?
   id                String                    @id @default(cuid())
   folio             String                    @unique
   pedidoEcommerceId String                    @map("pedido_ecommerce_id")
@@ -4892,6 +4898,7 @@ model VentaAttempt {
 }
 
 model KioskoMediaAsset {
+  publications KioskoMediaPublication[]
   id String @id
   tenantId String @map("tenant_id")
   createdBy String @map("created_by")
@@ -4938,4 +4945,46 @@ model DevolucionAttempt {
 
   @@unique([usuarioId, key])
   @@map("devolucion_attempts")
+}
+
+
+model OnlineBankRefund {
+  id String @id @default(uuid())
+  solicitudId String @unique @map("solicitud_id")
+  usuarioId String @map("usuario_id")
+  state String @default("preparing")
+  provider String
+  intentId String @map("intent_id")
+  accountId String? @map("account_id")
+  request Json
+  returnKey String @unique @default(uuid()) @map("return_key")
+  returnResult Json? @map("return_result")
+  amountCents Int? @map("amount_cents")
+  refundId String? @map("refund_id")
+  submittedAt DateTime? @map("submitted_at")
+  lastError String? @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  solicitud SolicitudDevolucion @relation(fields: [solicitudId], references: [id], onDelete: Restrict)
+  @@index([state])
+  @@unique([provider, intentId, refundId])
+  @@map("online_bank_refunds")
+}
+
+model KioskoMediaPublication {
+  id String @id @default(uuid())
+  assetId String @map("asset_id")
+  tenantId String @map("tenant_id")
+  createdBy String @map("created_by")
+  title String
+  branchIds String[] @map("branch_ids")
+  startsAt DateTime @map("starts_at")
+  endsAt DateTime @map("ends_at")
+  priority Int @default(0)
+  imageDurationMs Int @default(6000) @map("image_duration_ms")
+  status String @default("published")
+  createdAt DateTime @default(now()) @map("created_at")
+  asset KioskoMediaAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  @@index([tenantId, status, endsAt])
+  @@map("kiosko_media_publications")
 }

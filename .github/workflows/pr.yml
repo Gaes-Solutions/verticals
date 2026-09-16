@@ -90,6 +90,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Install isolated media decoder
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg bubblewrap util-linux
+
       - name: Test
         run: pnpm test
 

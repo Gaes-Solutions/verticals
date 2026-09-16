@@ -31,7 +31,8 @@ const inputSchema = z
   .object({
     carritoId: id,
     idempotencyKey: z.string().uuid(),
-    metodoPago: z.enum(["oxxo", "spei"]),
+    metodoPago: z.enum(["oxxo", "spei", "tarjeta"]),
+    cardTokenId: z.string().min(5).max(200).optional(),
     metodoEnvio: z.enum(["paqueteria", "click_collect", "envio_local"]),
     tarifaEnvioId: id.optional(),
     sucursalPickupId: id.optional(),

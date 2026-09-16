@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import { z } from "zod";
 
-/** Preparatory contracts only: no current route accepts or publishes uploaded media. */
+/** Shared limits for reservation, isolated inspection and kiosk publication. */
 export const MEDIA_LIMITS = Object.freeze({
   imageBytes: 8 * 1024 * 1024,
   videoBytes: 50 * 1024 * 1024,

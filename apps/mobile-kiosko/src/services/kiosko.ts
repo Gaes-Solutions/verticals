@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { ApiError } from "@gaespos/api-client";
+import { API_URL } from "../config";
 
 export interface KioskoConfig {
   reposoSegundos: number;
@@ -29,6 +30,10 @@ export interface IdleSlide {
   titulo: string;
   imagen: string | null;
   texto?: string;
+  id?: string;
+  video?: string;
+  durationMs?: number;
+  expiresAt?: string;
 }
 
 async function requestKiosk<T>(path: string, token?: string): Promise<T> {
@@ -98,6 +103,23 @@ export const getIdle = async () => {
     )
   )
     throw new Error("Anuncios inválidos");
+  for (const slide of result.slides) {
+    if (
+      slide.tipo === "video" &&
+      (typeof slide.video !== "string" ||
+        !slide.video.startsWith("/kiosko/media/") ||
+        !Number.isFinite(slide.durationMs) ||
+        slide.durationMs! <= 0 ||
+        slide.durationMs! > 60_000)
+    )
+      throw new Error("Video inválido");
+    if (slide.expiresAt !== undefined && !Number.isFinite(Date.parse(slide.expiresAt)))
+      throw new Error("Vigencia inválida");
+    if (slide.video?.startsWith("/kiosko/media/"))
+      slide.video = `${API_URL.replace(/\/$/, "")}${slide.video}`;
+    if (slide.imagen?.startsWith("/kiosko/media/"))
+      slide.imagen = `${API_URL.replace(/\/$/, "")}${slide.imagen}`;
+  }
   return result;
 };
 export const validateKioskoToken = (token: string) => requestConfig(token);

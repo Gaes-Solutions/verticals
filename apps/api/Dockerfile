@@ -44,7 +44,7 @@ FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl tini \
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl tini ffmpeg bubblewrap util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1001 nodejs \
     && useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home gaespos \

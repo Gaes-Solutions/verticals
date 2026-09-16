@@ -18,7 +18,8 @@ export interface DeliveryOptions {
 export interface CheckoutInput {
   carritoId: string;
   idempotencyKey: string;
-  metodoPago: "oxxo" | "spei";
+  metodoPago: "oxxo" | "spei" | "tarjeta";
+  cardTokenId?: string;
   metodoEnvio: "paqueteria" | "click_collect";
   tarifaEnvioId?: string;
   sucursalPickupId?: string;
@@ -43,10 +44,12 @@ export const deliveryOptions = (carritoId: string, cp: string, estado: string) =
   );
 export const paymentConfig = () =>
   bounded((signal) =>
-    api.get<{ proveedor: string | null; metodos: string[]; tarjetaRequiereToken: boolean }>(
-      `${prefix}/pago-config`,
-      { signal },
-    ),
+    api.get<{
+      proveedor: string | null;
+      metodos: string[];
+      tarjetaRequiereToken: boolean;
+      publicKey: string | null;
+    }>(`${prefix}/pago-config`, { signal }),
   );
 export const prepareCheckout = (carritoId: string) =>
   bounded((signal) =>

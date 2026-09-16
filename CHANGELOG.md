@@ -1,5 +1,12 @@
 # CHANGELOG — GaesSoft POS
 
+## 2026-09-15 — Reembolsos, tarjeta móvil, anuncios e impresión
+
+Reembolsos duraderos, tarjeta móvil, publicación de video inspeccionado e impresión
+ESC/POS implementados y probados. El POS offline, instaladores y validación real
+de proveedores/hardware siguen pendientes. Ver [entrega y límites](docs/entrega-pendientes-tienda-2026-09-15.md).
+
+
 ## 2026-09-14 — Correcciones de sincronización e importación
 
 - Vendedor: conservar pedidos ante errores de red, servidor y sesión; evitar sobrescribir pedidos agregados durante una subida y compartir sincronizaciones concurrentes de la misma instancia.

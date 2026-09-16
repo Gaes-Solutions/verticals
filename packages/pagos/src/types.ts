@@ -45,12 +45,30 @@ export interface ReembolsoResult {
   status: "procesado" | "pendiente" | "fallido";
 }
 
+export interface RefundOptions {
+  requestKey: string;
+  stripeAccountId?: string;
+}
+export interface VerifiedRefund extends ReembolsoResult {
+  intentId: string;
+  amountCents: number;
+}
+
 export interface PaymentProvider {
   readonly codigo: PagoProveedor;
   crearIntent(input: CrearIntentInput): Promise<PagoIntent>;
   /** Verifica firma del webhook y normaliza el evento. Lanza si la firma es inválida. */
   parseWebhook(payload: string, signature: string): WebhookEvento;
-  reembolsar(intentId: string, montoCentavos?: number): Promise<ReembolsoResult>;
+  reembolsar(
+    intentId: string,
+    montoCentavos?: number,
+    options?: RefundOptions,
+  ): Promise<ReembolsoResult>;
+  consultarReembolso?(
+    intentId: string,
+    refundId: string | null,
+    options: RefundOptions,
+  ): Promise<VerifiedRefund | null>;
 }
 
 export class PagoError extends Error {

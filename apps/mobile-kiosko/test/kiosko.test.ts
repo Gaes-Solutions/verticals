@@ -1,6 +1,7 @@
 import { ApiError } from "@gaespos/api-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 const { get } = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("../src/config", () => ({ API_URL: "https://test.angaes.com/api" }));
 vi.mock("@/lib/api", () => ({ api: { get } }));
 import { getIdle, getPrecio, validateKioskoToken } from "../src/services/kiosko";
 

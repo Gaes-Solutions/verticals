@@ -5,6 +5,8 @@ import {
   type PagoIntent,
   type PaymentProvider,
   type ReembolsoResult,
+  type RefundOptions,
+  type VerifiedRefund,
   type WebhookEvento,
 } from "./types.js";
 
@@ -99,15 +101,16 @@ export class ConektaClient implements PaymentProvider {
     return { type: chargeType };
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(path: string, body: unknown, method = "POST"): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
-      method: "POST",
+      method,
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Basic ${Buffer.from(`${this.apiKey}:`).toString("base64")}`,
         Accept: "application/vnd.conekta-v2.1.0+json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
@@ -176,7 +179,12 @@ export class ConektaClient implements PaymentProvider {
     throw new PagoError(`Evento Conekta no manejado: ${evento.type}`, "INVALID_WEBHOOK");
   }
 
-  async reembolsar(intentId: string, montoCentavos?: number): Promise<ReembolsoResult> {
+  async reembolsar(
+    intentId: string,
+    montoCentavos?: number,
+    options?: RefundOptions,
+  ): Promise<ReembolsoResult> {
+    const before = options ? await this.refundsForOrder(intentId) : [];
     const refund = await this.post<{ id: string; payment_status?: string }>(
       `/orders/${intentId}/refunds`,
       {
@@ -184,9 +192,50 @@ export class ConektaClient implements PaymentProvider {
         ...(montoCentavos !== undefined ? { amount: montoCentavos } : {}),
       },
     );
+    if (options) {
+      const after = await this.refundsForOrder(intentId);
+      const fresh = after.filter(
+        (r) =>
+          !before.some((old) => old.reembolsoId === r.reembolsoId) &&
+          r.amountCents === montoCentavos,
+      );
+      if (fresh.length !== 1 || !fresh[0])
+        throw new PagoError(
+          "Reembolso enviado: requiere conciliación por referencia",
+          "PROVIDER_UNAVAILABLE",
+        );
+      return fresh[0];
+    }
     return {
       reembolsoId: refund.id,
       status: refund.payment_status === "refunded" ? "procesado" : "pendiente",
     };
+  }
+
+  private async refundsForOrder(intentId: string): Promise<VerifiedRefund[]> {
+    const order = await this.post<{
+      id: string;
+      charges?: {
+        data: Array<{ refunds?: { data: Array<{ id: string; amount: number; object: string }> } }>;
+      };
+    }>(`/orders/${encodeURIComponent(intentId)}`, undefined, "GET");
+    if (order.id !== intentId) throw new PagoError("Orden de reembolso inválida", "INVALID_INPUT");
+    return (order.charges?.data ?? [])
+      .flatMap((c) => c.refunds?.data ?? [])
+      .filter((r) => r.object === "refund" && Number.isSafeInteger(r.amount) && r.amount < 0)
+      .map((r) => ({
+        reembolsoId: r.id,
+        intentId,
+        amountCents: -r.amount,
+        status: "procesado" as const,
+      }));
+  }
+  async consultarReembolso(
+    intentId: string,
+    refundId: string | null,
+    _options: RefundOptions,
+  ): Promise<VerifiedRefund | null> {
+    if (!refundId) return null;
+    return (await this.refundsForOrder(intentId)).find((r) => r.reembolsoId === refundId) ?? null;
   }
 }

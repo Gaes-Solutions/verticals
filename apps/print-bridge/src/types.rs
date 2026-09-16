@@ -8,6 +8,7 @@ pub enum Ticket {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TicketVenta {
     pub generado_at: String,
     pub emisor: Emisor,
@@ -20,6 +21,7 @@ pub struct TicketVenta {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TicketCorte {
     pub generado_at: String,
     pub emisor: EmisorCorte,
@@ -33,6 +35,7 @@ pub struct TicketCorte {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Emisor {
     pub rfc: Option<String>,
     pub razon_social: Option<String>,
@@ -41,12 +44,14 @@ pub struct Emisor {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EmisorCorte {
     pub sucursal: SucursalInfo,
     pub caja: CajaInfo,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SucursalInfo {
     pub codigo: String,
     pub nombre: String,
@@ -54,12 +59,15 @@ pub struct SucursalInfo {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CajaInfo {
     pub codigo: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VentaInfo {
+    pub estado: String,
     pub folio: String,
     pub fecha: String,
     pub cajero: String,
@@ -68,6 +76,7 @@ pub struct VentaInfo {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Linea {
     pub numero: u32,
     pub sku: String,
@@ -78,6 +87,7 @@ pub struct Linea {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Pago {
     pub metodo: String,
     pub monto: String,
@@ -85,16 +95,19 @@ pub struct Pago {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Totales {
     pub subtotal: String,
     pub descuento_total: String,
     pub iva_total: String,
+    pub ieps_total: String,
     pub total: String,
     pub total_cobrado: String,
     pub cambio_dado: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CfdiInfo {
     pub folio_fiscal: String,
     pub fecha_timbrado: String,
@@ -103,12 +116,14 @@ pub struct CfdiInfo {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Autofactura {
     pub url_portal: String,
     pub expira_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CorteInfo {
     pub tipo: String,
     pub numero: u32,
@@ -116,6 +131,7 @@ pub struct CorteInfo {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VentasResumen {
     pub count: u32,
     pub canceladas: u32,
@@ -123,6 +139,7 @@ pub struct VentasResumen {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DesgloseMov {
     pub entradas: String,
     pub salidas: String,
@@ -130,6 +147,7 @@ pub struct DesgloseMov {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Efectivo {
     pub esperado: String,
     pub contado: String,
