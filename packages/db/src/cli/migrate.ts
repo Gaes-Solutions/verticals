@@ -5,7 +5,13 @@ import { onboardTenant } from "../onboard-tenant.js";
 import { seedAllTenantDefaults, seedTenantDefaults } from "../seed-tenant.js";
 import { makeMigration } from "./make-migration.js";
 import { migrateMaster } from "./master.js";
-import { createTenant, listTenants, migrateAllTenants, migrateTenant } from "./tenant.js";
+import {
+  createTenant,
+  deleteEmptyTenant,
+  listTenants,
+  migrateAllTenants,
+  migrateTenant,
+} from "./tenant.js";
 
 const program = new Command();
 
@@ -122,6 +128,18 @@ tenant
       const r = await sembrarDominios();
       console.info(`[dominios] ${r.registrados} tiendas con dirección registrada`);
       for (const o of r.omitidos) console.info(`[dominios] omitida: ${o}`);
+    } finally {
+      await masterPrisma.$disconnect();
+    }
+  });
+
+tenant
+  .command("delete <slug>")
+  .description("Borra un tenant VACÍO (sin usuarios, productos ni ventas). Sin --confirmar simula")
+  .option("--confirmar", "Borra de verdad")
+  .action(async (slug: string, opts: { confirmar?: boolean }) => {
+    try {
+      await deleteEmptyTenant(slug, opts.confirmar === true);
     } finally {
       await masterPrisma.$disconnect();
     }

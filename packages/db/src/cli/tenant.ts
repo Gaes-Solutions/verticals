@@ -140,3 +140,81 @@ export async function listTenants(): Promise<void> {
     );
   }
 }
+
+/** Datos del negocio: si hay cualquiera, el tenant no está vacío y no se borra. */
+const TABLAS_DE_NEGOCIO = ["usuarios", "productos", "ventas"] as const;
+
+/**
+ * Tablas de master que se revisan antes de borrar. Las primeras no tienen llave foránea
+ * (el borrado las dejaría huérfanas); facturas y métodos de pago sí caen en cascada, pero
+ * son historial de cobro y no se tiran sin que alguien lo decida.
+ */
+const REFERENCIAS_EN_MASTER = [
+  ["referrals", "tenant_id"],
+  ["commissions", "tenant_id"],
+  ["patient_consents", "tenant_id"],
+  ["patient_records", "tenant_id"],
+  ["patient_audit_log", "tenant_id"],
+  ["public_professional_locations", "tenant_id"],
+  ["public_bookings", "tenant_id"],
+  ["invoices", "tenant_id"],
+  ["payment_methods", "tenant_id"],
+  ["webauthn_credentials", "tenant_slug"],
+  ["tienda_dominios", "tenant_slug"],
+] as const;
+
+/**
+ * Borra un tenant vacío (un alta que quedó a medias): su registro en master, lo que cuelga
+ * de él en cascada y su esquema, en una sola transacción. Sin `confirmar` solo simula.
+ */
+export async function deleteEmptyTenant(slug: string, confirmar: boolean): Promise<void> {
+  validateSlug(slug);
+  const schemaName = tenantSchemaName(slug);
+  await withPgClient(requireEnv("DATABASE_URL_MASTER"), async (client) => {
+    const contar = async (sql: string, params: unknown[] = []) =>
+      (await client.query<{ n: number }>(sql, params)).rows[0]?.n ?? 0;
+    const encontrado = await client.query<{ id: string; name: string; status: string }>(
+      "SELECT id, name, status FROM tenants WHERE slug = $1",
+      [slug],
+    );
+    const tenant = encontrado.rows[0];
+    if (!tenant) throw new Error(`No existe el tenant "${slug}"`);
+
+    const bloqueos: string[] = [];
+    for (const tabla of TABLAS_DE_NEGOCIO) {
+      const existe = await client.query<{ t: string | null }>("SELECT to_regclass($1) AS t", [
+        `"${schemaName}"."${tabla}"`,
+      ]);
+      if (!existe.rows[0]?.t) continue;
+      const n = await contar(`SELECT count(*)::int AS n FROM "${schemaName}"."${tabla}"`);
+      if (n > 0) bloqueos.push(`${tabla}: ${n}`);
+    }
+    for (const [tabla, columna] of REFERENCIAS_EN_MASTER) {
+      const valor = columna === "tenant_slug" ? slug : tenant.id;
+      const n = await contar(`SELECT count(*)::int AS n FROM "${tabla}" WHERE "${columna}" = $1`, [
+        valor,
+      ]);
+      if (n > 0) bloqueos.push(`${tabla}: ${n}`);
+    }
+    if (bloqueos.length)
+      throw new Error(`"${slug}" tiene datos y no se borra:\n  ${bloqueos.join("\n  ")}`);
+
+    console.info(
+      `[tenant delete] "${slug}" (${tenant.name}, status=${tenant.status}) está vacío: se borra su registro y el esquema "${schemaName}".`,
+    );
+    if (!confirmar) {
+      console.info("[tenant delete] Simulación: no se borró nada. Repite con --confirmar.");
+      return;
+    }
+    await client.query("BEGIN");
+    try {
+      await client.query("DELETE FROM tenants WHERE id = $1", [tenant.id]);
+      await client.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    }
+    console.info(`[tenant delete] "${slug}" borrado.`);
+  });
+}
