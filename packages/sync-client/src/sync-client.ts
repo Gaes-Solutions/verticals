@@ -36,6 +36,7 @@ export class SyncClient {
   private listeners: Map<SyncEventName, Listener[]> = new Map();
   private timers: ReturnType<typeof setInterval>[] = [];
   private isSyncing = false;
+  private isPulling = false;
 
   constructor(opts: SyncClientOptions) {
     this.storage = opts.storage;
@@ -108,15 +109,14 @@ export class SyncClient {
    */
   async tickPush(): Promise<number> {
     if (!this.online || this.isSyncing) return 0;
-    const pending = await this.storage.getPending(this.pushBatchSize);
-    if (pending.length === 0) return 0;
-
     this.isSyncing = true;
     try {
+      const pending = await this.storage.getPending(this.pushBatchSize);
+      if (pending.length === 0) return 0;
       const ops = pending.map((e) => e.operation);
-      await this.storage.markSyncing(ops.map((o) => o.idempotencyKey));
       let pushResult: Awaited<ReturnType<SyncApiClient["push"]>>;
       try {
+        await this.storage.markSyncing(ops.map((o) => o.idempotencyKey));
         pushResult = await this.api.push(ops, this.deviceId);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -133,13 +133,40 @@ export class SyncClient {
       }
 
       let conflicts = 0;
-      for (const result of pushResult.results) {
-        await this.storage.applyResult(result);
-        if (result.status === "conflict") conflicts += 1;
+      let processed = 0;
+      let applied = 0;
+      for (const entry of pending) {
+        const op = entry.operation;
+        const matches = (Array.isArray(pushResult?.results) ? pushResult.results : []).filter(
+          (result) => result?.idempotencyKey === op.idempotencyKey,
+        );
+        const result = matches[0];
+        try {
+          if (
+            matches.length !== 1 ||
+            !result ||
+            result.entityType !== op.entityType ||
+            result.entityIdLocal !== op.entityIdLocal ||
+            !["applied", "deduped", "conflict", "failed"].includes(result.status)
+          ) {
+            throw new Error("Respuesta de sincronización incompleta o incompatible");
+          }
+          await this.storage.applyResult(result);
+          processed += 1;
+          if (result.status === "applied") applied += 1;
+          if (result.status === "conflict") conflicts += 1;
+        } catch (error) {
+          await this.storage.scheduleRetry(
+            op.idempotencyKey,
+            new Date(Date.now() + this.computeBackoffMs(entry.attempts + 1)),
+            error instanceof Error ? error.message : String(error),
+          );
+          this.emit("error", error);
+        }
       }
       if (conflicts > 0) this.emit("conflict", conflicts);
-      this.emit("synced", { phase: "push", applied: pushResult.applied, conflicts });
-      return pushResult.results.length;
+      this.emit("synced", { phase: "push", applied, processed, conflicts });
+      return processed;
     } finally {
       this.isSyncing = false;
     }
@@ -150,32 +177,37 @@ export class SyncClient {
    * (catálogos productos/precios/clientes/promos).
    */
   async tickPull(): Promise<number> {
-    if (!this.online) return 0;
-    const since = await this.storage.getLastSyncAt();
-    let pullResult: Awaited<ReturnType<SyncApiClient["pull"]>>;
+    if (!this.online || this.isPulling) return 0;
+    this.isPulling = true;
     try {
-      pullResult = await this.api.pull(since);
-    } catch (err) {
-      this.emit("error", err);
-      return 0;
-    }
-    let totalRows = 0;
-    for (const diff of pullResult.diffs) {
-      if (diff.upserts.length > 0) {
-        await this.storage.putPullUpserts(diff.entityType, diff.upserts);
-        totalRows += diff.upserts.length;
+      const since = await this.storage.getLastSyncAt();
+      let pullResult: Awaited<ReturnType<SyncApiClient["pull"]>>;
+      try {
+        pullResult = await this.api.pull(since);
+      } catch (err) {
+        this.emit("error", err);
+        return 0;
       }
-      if (diff.tombstones.length > 0) {
-        await this.storage.putPullTombstones(
-          diff.entityType,
-          diff.tombstones.map((t) => t.entityId),
-        );
-        totalRows += diff.tombstones.length;
+      let totalRows = 0;
+      for (const diff of pullResult.diffs) {
+        if (diff.upserts.length > 0) {
+          await this.storage.putPullUpserts(diff.entityType, diff.upserts);
+          totalRows += diff.upserts.length;
+        }
+        if (diff.tombstones.length > 0) {
+          await this.storage.putPullTombstones(
+            diff.entityType,
+            diff.tombstones.map((t) => t.entityId),
+          );
+          totalRows += diff.tombstones.length;
+        }
       }
+      await this.storage.setLastSyncAt(pullResult.serverTime);
+      this.emit("synced", { phase: "pull", rows: totalRows });
+      return totalRows;
+    } finally {
+      this.isPulling = false;
     }
-    await this.storage.setLastSyncAt(pullResult.serverTime);
-    this.emit("synced", { phase: "pull", rows: totalRows });
-    return totalRows;
   }
 
   /** Hace push + pull inmediatos (ej: botón "Sincronizar ahora" en la UI). */
@@ -192,7 +224,7 @@ export class SyncClient {
   async getState(): Promise<SyncClientState> {
     return {
       online: this.online,
-      syncing: this.isSyncing,
+      syncing: this.isSyncing || this.isPulling,
       lastSyncAt: await this.storage.getLastSyncAt(),
       stats: await this.storage.getStats(),
     };
@@ -200,9 +232,25 @@ export class SyncClient {
 
   /** Inicia los workers con setInterval. En tests usa los `tick*()` directo. */
   start(): void {
-    this.timers.push(setInterval(() => void this.tickNetwork(), this.pingIntervalMs));
-    this.timers.push(setInterval(() => void this.tickPush(), this.pushIntervalMs));
-    this.timers.push(setInterval(() => void this.tickPull(), this.pullIntervalMs));
+    if (this.timers.length > 0) return;
+    this.timers.push(
+      setInterval(
+        () => void this.tickNetwork().catch((error) => this.emit("error", error)),
+        this.pingIntervalMs,
+      ),
+    );
+    this.timers.push(
+      setInterval(
+        () => void this.tickPush().catch((error) => this.emit("error", error)),
+        this.pushIntervalMs,
+      ),
+    );
+    this.timers.push(
+      setInterval(
+        () => void this.tickPull().catch((error) => this.emit("error", error)),
+        this.pullIntervalMs,
+      ),
+    );
   }
 
   stop(): void {

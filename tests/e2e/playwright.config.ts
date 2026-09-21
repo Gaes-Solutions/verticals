@@ -35,6 +35,11 @@ export default defineConfig({
       testMatch: /panel\.e2e\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: ADMIN },
     },
+    {
+      name: "catalog",
+      testMatch: /catalog\.e2e\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: POS },
+    },
     { name: "pos", testMatch: /pos\.e2e\.ts/, use: { ...devices["Desktop Chrome"], baseURL: POS } },
   ],
   webServer: [

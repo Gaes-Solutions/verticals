@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "../App.js";
-import { api, setPermisos } from "../lib/api.js";
+import { ApiError, api, setPermisos } from "../lib/api.js";
+import {
+  type LocalCatalogAccess,
+  clearCatalogResume,
+  restoreCatalogSession,
+} from "../lib/local-catalog.js";
 import {
   type CashierIdentity,
   openRegister,
@@ -14,7 +19,12 @@ import type { Caja, Sucursal } from "../lib/types.js";
 export function RegisterSetup({
   onReady,
   onLogout,
-}: { onReady: (session: Session) => void; onLogout: () => void }) {
+  onOffline,
+}: {
+  onReady: (session: Session) => void;
+  onLogout: () => void;
+  onOffline?: (access: LocalCatalogAccess) => void;
+}) {
   const openingInFlight = useRef(false);
   const [identity, setIdentity] = useState<CashierIdentity | null>(null);
   const [branches, setBranches] = useState<Sucursal[]>([]);
@@ -59,7 +69,7 @@ export function RegisterSetup({
         if (saved) {
           try {
             const session = await resolverSession(user.nombre, saved);
-            if (active) onReady(session);
+            if (active) onReady({ ...session, identity: user });
           } catch (failure) {
             if (active)
               setError(
@@ -68,6 +78,15 @@ export function RegisterSetup({
           }
         }
       } catch (failure) {
+        if (failure instanceof ApiError && [401, 403].includes(failure.status))
+          clearCatalogResume();
+        if (failure instanceof TypeError && active && onOffline) {
+          const access = await restoreCatalogSession();
+          if (active && access) {
+            onOffline(access);
+            return;
+          }
+        }
         if (active)
           setError(
             failure instanceof Error ? failure.message : "No se pudo cargar la configuración.",
@@ -79,7 +98,7 @@ export function RegisterSetup({
     return () => {
       active = false;
     };
-  }, [version, onReady]);
+  }, [version, onReady, onOffline]);
 
   async function chooseBranch(id: string) {
     setBranchId(id);
@@ -139,7 +158,7 @@ export function RegisterSetup({
       const selection = { sucursalId: branchId, cajaId: registerId };
       const session = await resolverSession(identity.nombre, selection);
       saveSelection(identity, selection);
-      onReady(session);
+      onReady({ ...session, identity });
     } catch (failure) {
       setOpening("unknown");
       setError(failure instanceof Error ? failure.message : "No se pudo verificar la caja.");

@@ -18,6 +18,7 @@ export interface CashPayload {
   descuentoGlobalPct?: string;
   descuentoGlobalMotivo?: string;
   expectedTotal: string;
+  expectedAperturaId: string;
 }
 export interface CashAttempt {
   key: string;
@@ -38,6 +39,8 @@ export function readCashAttempt(scope: CashScope): CashAttempt | null {
     !/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(record.key) ||
     record.payload?.cajaId !== scope.cajaId ||
     record.payload.sucursalId !== scope.sucursalId ||
+    typeof record.payload.expectedAperturaId !== "string" ||
+    !record.payload.expectedAperturaId.trim() ||
     !record.payload.pagos?.length ||
     record.payload.pagos.some((p) => p.metodo !== "efectivo")
   )

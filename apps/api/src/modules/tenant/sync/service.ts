@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { TenantPrismaClient } from "@gaespos/db";
 import { PERMISSIONS, type PermissionPrincipal, hasPermission } from "@gaespos/permissions";
 import {
@@ -9,8 +10,16 @@ import {
   decideUpdate,
 } from "@gaespos/sync";
 import { clienteCreateSchema, clienteUpdateSchema } from "../clientes/schemas.js";
-import { ventaCreateSchema } from "../ventas/schemas.js";
-import { VentaError, crearVenta } from "../ventas/service.js";
+import {
+  VentaError,
+  type VentaPreparada,
+  persistirVentaPreparada,
+  prepararVenta,
+} from "../ventas/service.js";
+import { CatalogError, catalogClientSelect } from "./catalog.js";
+import { syncVentaSchema } from "./schemas.js";
+
+type SyncTx = Parameters<Parameters<TenantPrismaClient["$transaction"]>[0]>[0];
 
 /** Campos del Cliente que el sync compara para detectar conflictos field-level. */
 const CLIENTE_SYNC_FIELDS = [
@@ -50,13 +59,17 @@ function pick(obj: Record<string, unknown>, fields: readonly string[]): Record<s
 }
 
 async function storeProcessed(
-  prisma: TenantPrismaClient,
+  prisma: SyncTx,
   op: SyncOperation,
   result: SyncOpResult,
+  userId: string,
+  requestHash: string,
   deviceId?: string,
 ): Promise<void> {
   await prisma.syncProcessedOp.create({
     data: {
+      usuarioId: userId,
+      requestHash,
       idempotencyKey: op.idempotencyKey,
       entityType: op.entityType,
       entityIdLocal: op.entityIdLocal,
@@ -68,70 +81,8 @@ async function storeProcessed(
   });
 }
 
-async function aplicarVenta(
-  prisma: TenantPrismaClient,
-  principal: PermissionPrincipal,
-  userId: string,
-  op: SyncOperation,
-): Promise<SyncOpResult> {
-  // Misma autorización que la ruta directa POST /ventas: sync.usar no basta para
-  // crear ventas; se exige ventas.crear (defensa en profundidad, RBAC en la capa
-  // de acceso, no dentro de crearVenta).
-  if (!hasPermission(principal, PERMISSIONS.VENTAS_CREAR)) {
-    return {
-      idempotencyKey: op.idempotencyKey,
-      entityType: op.entityType,
-      entityIdLocal: op.entityIdLocal,
-      entityIdRemoto: null,
-      status: "failed",
-      error: `Permiso requerido: ${PERMISSIONS.VENTAS_CREAR}`,
-    };
-  }
-
-  // El payload llega como JSON arbitrario; se valida con el mismo esquema que la
-  // ruta directa POST /ventas antes de tocar el motor de ventas.
-  const parsed = ventaCreateSchema.safeParse(op.payload);
-  if (!parsed.success) {
-    return {
-      idempotencyKey: op.idempotencyKey,
-      entityType: op.entityType,
-      entityIdLocal: op.entityIdLocal,
-      entityIdRemoto: null,
-      status: "failed",
-      error: parsed.error.issues[0]?.message ?? "payload de venta inválido",
-    };
-  }
-
-  const permiteDescuentoAlto = hasPermission(principal, PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO);
-
-  // Ventas son inmutables: la idempotencia (dedup arriba) es la única garantía.
-  try {
-    const venta = await crearVenta(prisma, userId, parsed.data, { permiteDescuentoAlto });
-    return {
-      idempotencyKey: op.idempotencyKey,
-      entityType: op.entityType,
-      entityIdLocal: op.entityIdLocal,
-      entityIdRemoto: venta.ventaId,
-      status: "applied",
-      serverUpdatedAt: new Date().toISOString(),
-    };
-  } catch (err) {
-    if (err instanceof VentaError) {
-      return {
-        idempotencyKey: op.idempotencyKey,
-        entityType: op.entityType,
-        entityIdLocal: op.entityIdLocal,
-        entityIdRemoto: null,
-        status: "failed",
-        error: err.message,
-      };
-    }
-    throw err;
-  }
-}
-
 async function aplicarCliente(
-  prisma: TenantPrismaClient,
+  prisma: SyncTx,
   principal: PermissionPrincipal,
   op: SyncOperation,
 ): Promise<SyncOpResult> {
@@ -257,6 +208,51 @@ async function aplicarCliente(
   };
 }
 
+function canonical(value: unknown): string {
+  if (value === undefined) return "null";
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((k) => record[k] !== undefined)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonical(record[k])}`)
+    .join(",")}}`;
+}
+function failure(op: SyncOperation, error: string): SyncOpResult {
+  return {
+    idempotencyKey: op.idempotencyKey,
+    entityType: op.entityType,
+    entityIdLocal: op.entityIdLocal,
+    entityIdRemoto: null,
+    status: "failed",
+    error,
+  };
+}
+function operationPermission(op: SyncOperation) {
+  if (op.entityType === "venta" && op.operation === "create") return PERMISSIONS.VENTAS_CREAR;
+  if (op.entityType === "cliente" && op.operation === "create") return PERMISSIONS.CLIENTES_CREAR;
+  if (op.entityType === "cliente" && op.operation === "update")
+    return PERMISSIONS.CLIENTES_ACTUALIZAR;
+  return null;
+}
+async function replay(
+  prisma: Pick<TenantPrismaClient, "syncProcessedOp">,
+  op: SyncOperation,
+  userId: string,
+  hash: string,
+): Promise<SyncOpResult | null> {
+  const previous = await prisma.syncProcessedOp.findUnique({
+    where: { idempotencyKey: op.idempotencyKey },
+  });
+  if (!previous) return null;
+  if (previous.usuarioId !== userId || previous.requestHash !== hash)
+    return failure(op, "La clave pertenece a otra operación o usuario; requiere revisión");
+  const stored = previous.resultSnapshot as unknown as SyncOpResult;
+  if (!stored || !["applied", "conflict"].includes(previous.status))
+    return failure(op, "Resultado previo incompleto; requiere revisión");
+  return { ...stored, status: previous.status === "conflict" ? "conflict" : "deduped" };
+}
 export async function procesarPush(
   prisma: TenantPrismaClient,
   principal: PermissionPrincipal,
@@ -265,48 +261,91 @@ export async function procesarPush(
   deviceId?: string,
 ): Promise<SyncPushResult> {
   const results: SyncOpResult[] = [];
-
   for (const op of ops) {
-    // Idempotencia: misma key ⇒ resultado almacenado, no re-aplicar.
-    const previo = await prisma.syncProcessedOp.findUnique({
-      where: { idempotencyKey: op.idempotencyKey },
-    });
-    if (previo) {
-      const stored = (previo.resultSnapshot as SyncOpResult | null) ?? {
-        idempotencyKey: op.idempotencyKey,
-        entityType: previo.entityType,
-        entityIdLocal: previo.entityIdLocal,
-        entityIdRemoto: previo.entityIdRemoto,
-        status: "applied",
-      };
-      results.push({ ...stored, status: previo.status === "conflict" ? "conflict" : "deduped" });
+    const permission = operationPermission(op);
+    if (!permission || !hasPermission(principal, permission)) {
+      results.push(
+        failure(op, permission ? `Permiso requerido: ${permission}` : "Operación no sincronizable"),
+      );
       continue;
     }
-
-    let result: SyncOpResult;
+    const hash = createHash("sha256").update(canonical(op)).digest("hex");
+    const previous = await replay(prisma, op, userId, hash);
+    if (previous) {
+      results.push(previous);
+      continue;
+    }
+    let prepared: VentaPreparada | undefined;
     if (op.entityType === "venta") {
-      result = await aplicarVenta(prisma, principal, userId, op);
-    } else if (op.entityType === "cliente") {
-      result = await aplicarCliente(prisma, principal, op);
-    } else {
-      result = {
-        idempotencyKey: op.idempotencyKey,
-        entityType: op.entityType,
-        entityIdLocal: op.entityIdLocal,
-        entityIdRemoto: null,
-        status: "failed",
-        error: `entityType no sincronizable: ${op.entityType}`,
-      };
+      const parsed = syncVentaSchema.safeParse(op.payload);
+      if (!parsed.success) {
+        results.push(
+          failure(
+            op,
+            "La venta requiere caja, total original y apertura de origen válidos; revisa la operación",
+          ),
+        );
+        continue;
+      }
+      if (parsed.data.idempotencyKey && parsed.data.idempotencyKey !== op.idempotencyKey) {
+        results.push(failure(op, "Las claves de venta y sincronización no coinciden"));
+        continue;
+      }
+      try {
+        prepared = await prepararVenta(
+          prisma,
+          userId,
+          { ...parsed.data, idempotencyKey: op.idempotencyKey },
+          {
+            permiteDescuentoAlto: hasPermission(
+              principal,
+              PERMISSIONS.VENTAS_APLICAR_DESCUENTO_ALTO,
+            ),
+          },
+        );
+        if (prepared.sucursal.aperturaId !== parsed.data.expectedAperturaId)
+          throw new VentaError(
+            409,
+            "La apertura de caja cambió; la venta original requiere revisión",
+          );
+      } catch (error) {
+        if (!(error instanceof VentaError)) throw error;
+        results.push((await replay(prisma, op, userId, hash)) ?? failure(op, error.message));
+        continue;
+      }
     }
-
-    // Persistimos el resultado salvo fallos transitorios (failed sin guardar
-    // permite reintento con la misma key).
-    if (result.status !== "failed") {
-      await storeProcessed(prisma, op, result, deviceId);
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${op.idempotencyKey}, 7710030))`;
+          const existing = await replay(tx, op, userId, hash);
+          if (existing) return existing;
+          let result: SyncOpResult;
+          if (prepared) {
+            const sale = await persistirVentaPreparada(tx, prepared);
+            result = {
+              idempotencyKey: op.idempotencyKey,
+              entityType: op.entityType,
+              entityIdLocal: op.entityIdLocal,
+              entityIdRemoto: sale.ventaId,
+              status: "applied",
+              serverUpdatedAt: new Date().toISOString(),
+            };
+          } else {
+            result = await aplicarCliente(tx, principal, op);
+          }
+          if (result.status !== "failed")
+            await storeProcessed(tx, op, result, userId, hash, deviceId);
+          return result;
+        },
+        { timeout: 15000 },
+      );
+      results.push(result);
+    } catch (error) {
+      if (!(error instanceof VentaError)) throw error;
+      results.push(failure(op, error.message));
     }
-    results.push(result);
   }
-
   return {
     serverTime: new Date().toISOString(),
     results,
@@ -329,7 +368,7 @@ const PULL_ENTITIES: PullEntityConfig[] = [
       prisma.producto.findMany({
         where: since ? { updatedAt: { gt: since } } : {},
         orderBy: { updatedAt: "asc" },
-        take: 500,
+        take: 501,
       }) as Promise<Record<string, unknown>[]>,
   },
   {
@@ -338,16 +377,17 @@ const PULL_ENTITIES: PullEntityConfig[] = [
       prisma.productoVariante.findMany({
         where: since ? { updatedAt: { gt: since } } : {},
         orderBy: { updatedAt: "asc" },
-        take: 500,
+        take: 501,
       }) as Promise<Record<string, unknown>[]>,
   },
   {
     entityType: "cliente",
     fetch: (prisma, since) =>
       prisma.cliente.findMany({
+        select: catalogClientSelect,
         where: since ? { updatedAt: { gt: since } } : {},
         orderBy: { updatedAt: "asc" },
-        take: 500,
+        take: 501,
       }) as Promise<Record<string, unknown>[]>,
   },
   {
@@ -356,7 +396,7 @@ const PULL_ENTITIES: PullEntityConfig[] = [
       prisma.promocion.findMany({
         where: since ? { updatedAt: { gt: since } } : {},
         orderBy: { updatedAt: "asc" },
-        take: 500,
+        take: 501,
       }) as Promise<Record<string, unknown>[]>,
   },
 ];
@@ -370,6 +410,8 @@ export async function pull(
 
   for (const cfg of PULL_ENTITIES) {
     const upserts = await cfg.fetch(prisma, since);
+    if (upserts.length > 500)
+      throw new CatalogError(409, "El catálogo requiere descarga completa: usa /sync/catalog");
     const tombstoneRows = await prisma.syncTombstone.findMany({
       where: { entityType: cfg.entityType, ...(since ? { deletedAt: { gt: since } } : {}) },
       orderBy: { deletedAt: "asc" },

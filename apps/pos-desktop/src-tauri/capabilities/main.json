@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-local-storage",
+  "description": "Almacenamiento local del POS; sin acceso desde páginas remotas.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["core:default", "sql:default", "sql:allow-execute"]
+}

@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { ventaCreateSchema } from "../ventas/schemas.js";
+
+export const syncVentaSchema = ventaCreateSchema.extend({
+  cajaId: z.string().min(1),
+  expectedTotal: ventaCreateSchema.shape.expectedTotal.unwrap(),
+  expectedAperturaId: z.string().min(1).max(100),
+});
 
 export const syncOperationSchema = z.object({
   idempotencyKey: z.string().uuid(),

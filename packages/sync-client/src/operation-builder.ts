@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { SyncOperation } from "@gaespos/sync";
 
 /**
@@ -15,7 +14,7 @@ export interface BuildVentaOpInput {
 
 export function buildVentaOp(input: BuildVentaOpInput): SyncOperation {
   return {
-    idempotencyKey: randomUUID(),
+    idempotencyKey: globalThis.crypto.randomUUID(),
     entityType: "venta",
     entityIdLocal: input.entityIdLocal,
     operation: "create",
@@ -31,7 +30,7 @@ export interface BuildClienteCreateInput {
 
 export function buildClienteCreateOp(input: BuildClienteCreateInput): SyncOperation {
   return {
-    idempotencyKey: randomUUID(),
+    idempotencyKey: globalThis.crypto.randomUUID(),
     entityType: "cliente",
     entityIdLocal: input.entityIdLocal,
     operation: "create",
@@ -50,7 +49,7 @@ export interface BuildClienteUpdateInput {
 
 export function buildClienteUpdateOp(input: BuildClienteUpdateInput): SyncOperation {
   return {
-    idempotencyKey: randomUUID(),
+    idempotencyKey: globalThis.crypto.randomUUID(),
     entityType: "cliente",
     entityIdLocal: input.entityIdLocal,
     entityIdRemoto: input.entityIdRemoto,

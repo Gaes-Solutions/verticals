@@ -1,5 +1,21 @@
 # Hito 5 — Multi-plataforma + offline
 
+## Revisión vigente — 17-sep-2026
+
+- [x] Venta y acuse atómicos; concurrencia, fallo al guardar acuse y cuenta ajena probados.
+- [x] Adaptador SQLite durable por cuenta/caja con recuperación de envíos interrumpidos.
+- [x] Registrar migraciones nativas y permisos locales; añadir instancia única.
+- [x] Conectar identidad en línea, descarga completa del catálogo base y aviso local al escritorio (18 API, 34 sync, 150 POS, 8 navegador).
+- [x] Consulta local y recuperación de pantalla con sesión aún vigente; POS163, sync34, navegador8 y QA responsive aprobados. [Evidencia](../avance-consulta-offline-2026-09-17.md).
+- [x] Sync exige total y apertura originales; cambios quedan para revisión. API24/sync35. [Contrato y límites](../avance-reconciliacion-offline-2026-09-18.md).
+- [ ] Autenticación autónoma de turno, cálculo final local y cobro offline integral.
+- [ ] Reconciliar importes cobrados y aperturas/cortes, sin pérdida de pendientes.
+- [ ] Instalar, actualizar y validar en equipos reales con periféricos.
+
+El alcance histórico marcado debajo no certifica POS offline completo. Véase
+[continuación con evidencia](../avance-offline-tienda-2026-09-17.md).
+
+
 > **Estado:** 🚧 EN CURSO · Núcleo motor de sync (5.a/5.b/5.c) ✅ · **Fase packaging** (5.2.a–d) ✅ cerebro cliente + scaffolds · build nativo firmado pendiente (entorno con Rust/certs)
 > **Análisis:** [Análisis 8 Offline-first y sync](../analisis/08-offline-sync.md) · [Análisis 9 Arquitectura](../analisis/09-arquitectura.md)
 

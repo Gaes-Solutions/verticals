@@ -325,3 +325,85 @@ describe("backoff", () => {
 beforeEach(() => {
   // nada por test
 });
+
+describe("recuperación de la cola", () => {
+  it("serializa ciclos aunque la lectura local sea asíncrona", async () => {
+    const { client, api } = mkClient();
+    await client.enqueue(
+      buildClienteCreateOp({ entityIdLocal: "local", payload: { nombre: "Ana" } }),
+    );
+    await Promise.all([client.tickPush(), client.tickPush()]);
+    expect(api.pushCalls).toHaveLength(1);
+  });
+
+  it("reintenta operaciones omitidas por el servidor", async () => {
+    const { client, api, storage } = mkClient();
+    await client.enqueue(
+      buildClienteCreateOp({ entityIdLocal: "local", payload: { nombre: "Ana" } }),
+    );
+    api.pushQueue.push({
+      serverTime: new Date().toISOString(),
+      results: [],
+      applied: 0,
+      failed: 0,
+      conflicts: 0,
+      deduped: 0,
+    });
+    expect(await client.tickPush()).toBe(0);
+    expect(await storage.getStats()).toMatchObject({ syncing: 0, pending: 1 });
+  });
+
+  it("no confirma una respuesta que pertenece a otra entidad", async () => {
+    const { client, api, storage } = mkClient();
+    const op = buildClienteCreateOp({ entityIdLocal: "local", payload: { nombre: "Ana" } });
+    await client.enqueue(op);
+    api.pushQueue.push({
+      serverTime: new Date().toISOString(),
+      results: [
+        {
+          idempotencyKey: op.idempotencyKey,
+          entityType: "cliente",
+          entityIdLocal: "otra",
+          entityIdRemoto: "remote",
+          status: "applied",
+        },
+      ],
+      applied: 1,
+      failed: 0,
+      conflicts: 0,
+      deduped: 0,
+    });
+    expect(await client.tickPush()).toBe(0);
+    expect(await storage.getStats()).toMatchObject({ synced: 0, pending: 1 });
+  });
+});
+
+describe("persistencia ante errores de lectura/escritura", () => {
+  it("devuelve al estado pendiente las filas marcadas antes de un fallo local", async () => {
+    const { client, storage } = mkClient();
+    const op = buildClienteCreateOp({ entityIdLocal: "local", payload: { nombre: "Ana" } });
+    await client.enqueue(op);
+    const original = storage.markSyncing.bind(storage);
+    storage.markSyncing = async (keys) => {
+      await original(keys);
+      throw new Error("disco ocupado");
+    };
+    expect(await client.tickPush()).toBe(0);
+    expect(await storage.getStats()).toMatchObject({ syncing: 0, pending: 1 });
+  });
+
+  it("no avanza el cursor si falla escribir el catálogo", async () => {
+    const { client, storage, api } = mkClient();
+    await storage.setLastSyncAt("2026-09-01T00:00:00.000Z");
+    api.pullQueue.push({
+      serverTime: "2026-09-17T00:00:00.000Z",
+      since: "2026-09-01T00:00:00.000Z",
+      diffs: [{ entityType: "producto", upserts: [{ id: "p" }], tombstones: [] }],
+    });
+    storage.putPullUpserts = async () => {
+      throw new Error("disco lleno");
+    };
+    await expect(client.tickPull()).rejects.toThrow("disco lleno");
+    expect(await storage.getLastSyncAt()).toBe("2026-09-01T00:00:00.000Z");
+  });
+});

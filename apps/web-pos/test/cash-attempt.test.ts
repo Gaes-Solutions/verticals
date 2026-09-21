@@ -19,6 +19,7 @@ const payload: CashPayload = {
   lineas: [{ varianteId: "v1", cantidad: "1" }],
   pagos: [{ metodo: "efectivo", monto: "100.00" }],
   expectedTotal: "100.00",
+  expectedAperturaId: "opening-1",
 };
 const key = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ready = {
@@ -123,6 +124,13 @@ describe("durable cash sale", () => {
     saved();
     for (const change of [{ tenantSlug: "b" }, { userId: "u2" }, { cajaId: "c2" }])
       expect(readCashAttempt({ ...scope, ...change })).toBeNull();
+  });
+  it("rejects a persisted attempt without its originating opening", () => {
+    values.set(
+      cashStorageKey(scope),
+      JSON.stringify({ key, payload: { ...payload, expectedAperturaId: undefined } }),
+    );
+    expect(() => readCashAttempt(scope)).toThrow("no es válido");
   });
   it("fails closed without Web Locks and when another tab owns the lock", async () => {
     vi.stubGlobal("navigator", {});

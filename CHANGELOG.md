@@ -1,5 +1,25 @@
 # CHANGELOG — GaesSoft POS
 
+## 2026-09-18 — Total y apertura originales en sincronización
+
+Las ventas pendientes deben incluir `expectedTotal`, `expectedAperturaId` y caja. Se rechazan cambios de total o apertura; el reintento conserva la operación original y recupera acuses previos sin recalcular. API24 y sync35 aprobados. [Contrato, compatibilidad y límites](docs/avance-reconciliacion-offline-2026-09-18.md).
+
+
+## 2026-09-17 — Consulta offline y recuperación de pantalla
+
+Búsqueda sobre el catálogo guardado ante pérdida de red, selección exacta de variante y recuperación en modo consulta con la misma sesión vigente. Revocación local al salir/denegar acceso y lectura fijada a una versión completa. [Pruebas y pendientes](docs/avance-consulta-offline-2026-09-17.md).
+
+
+## 2026-09-17 — Catálogo local de escritorio
+
+Descarga paginada de versiones fijas, publicación atómica en SQLite, identidad/token separados por sesión y aviso de preparación/actualización integrado al POS nativo. Se excluyen credenciales del catálogo y se comprueban permisos por lectura. Ver [pruebas, migraciones y límites](docs/avance-catalogo-local-2026-09-17.md).
+
+
+## 2026-09-17 — Persistencia y recuperación de sincronización
+
+Venta y acuse transaccionales, defensa ante reintentos concurrentes y claves reutilizadas. Adaptador SQLite con separación por cuenta/caja y recuperación tras reinicio; motor protegido ante respuestas parciales. Migraciones y capabilities Tauri registradas. [Pruebas y límites](docs/avance-offline-tienda-2026-09-17.md).
+
+
 ## 2026-09-15 — Reembolsos, tarjeta móvil, anuncios e impresión
 
 Reembolsos duraderos, tarjeta móvil, publicación de video inspeccionado e impresión

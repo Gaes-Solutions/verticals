@@ -103,6 +103,11 @@ async function main(): Promise<void> {
   const cajas = await call<Array<{ id: string }>>("GET", "/t/cajas", { token });
   const cajaId = cajas.body[0]?.id ?? "";
   await call("POST", `/t/cajas/${cajaId}/aperturar`, { token, body: { montoInicial: "100" } });
+  const opening = await call<{ id: string }>("GET", `/t/cajas/${cajaId}/apertura-actual`, {
+    token,
+  });
+  const expectedAperturaId = opening.body.id;
+  if (!expectedAperturaId) throw new Error("No se confirmó la apertura para la demo");
   const cat = await call<{ id: string }>("POST", "/t/categorias", {
     token,
     body: { nombre: "General", codigo: "GEN" },
@@ -136,6 +141,8 @@ async function main(): Promise<void> {
       payload: {
         sucursalId,
         cajaId,
+        expectedAperturaId,
+        expectedTotal: "200",
         lineas: [{ varianteId, cantidad: "2" }],
         pagos: [{ metodo: "efectivo", monto: "232" }],
       },
@@ -148,6 +155,8 @@ async function main(): Promise<void> {
       payload: {
         sucursalId,
         cajaId,
+        expectedAperturaId,
+        expectedTotal: "100",
         lineas: [{ varianteId, cantidad: "1" }],
         pagos: [{ metodo: "efectivo", monto: "116" }],
       },

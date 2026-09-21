@@ -12,15 +12,8 @@ import {
   recoverCashAttempt,
   startCashAttempt,
 } from "../lib/cash-attempt.js";
-import { LatestSearch, findBarcode } from "../lib/product-search.js";
-import type {
-  Cliente,
-  Producto,
-  ProductoList,
-  TicketLinea,
-  VentaDetalle,
-  VentaResponse,
-} from "../lib/types.js";
+import { LatestSearch, findBarcode, searchProducts } from "../lib/product-search.js";
+import type { Cliente, Producto, TicketLinea, VentaDetalle, VentaResponse } from "../lib/types.js";
 import { ApartadosModal } from "./ApartadosModal.js";
 import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
@@ -51,6 +44,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [buscando, setBuscando] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchVersion, setSearchVersion] = useState(0);
+  const [localSearch, setLocalSearch] = useState(false);
   const [searched, setSearched] = useState(false);
   const latestSearch = useRef(new LatestSearch());
   const searchKind = useRef<"text" | "barcode">("text");
@@ -72,6 +66,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [cashLoading, setCashLoading] = useState(true);
   const [cashResult, setCashResult] = useState<CashResult | null>(null);
   const [cashError, setCashError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   const [quotedTotal, setQuotedTotal] = useState<number | null>(null);
   useEffect(() => {
     let active = true;
@@ -106,7 +101,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           cajaId: session.caja.id,
           sucursalId: session.sucursal.id,
         };
+        const opening = await api<{ id: string }>(
+          `/t/cajas/${encodeURIComponent(scope.cajaId)}/apertura-actual`,
+        );
+        if (!opening.id) throw new Error("La apertura de caja no tiene identificador válido.");
         if (active) {
+          setOpeningId(opening.id);
           setCashScope(scope);
           sync(scope);
         }
@@ -175,13 +175,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       searchKind.current = "text";
       setBuscando(true);
       try {
-        const response = await api<ProductoList>(
-          `/t/productos?q=${encodeURIComponent(query.trim())}&pageSize=12&isActive=true`,
-          { signal: current.signal },
-        );
-        if (!Array.isArray(response?.items))
-          throw new Error("El servidor devolvió resultados no válidos.");
+        let fromLocal = false;
+        const response = await searchProducts(query, current.signal, session, () => {
+          fromLocal = true;
+        });
         if (current.current()) {
+          setLocalSearch(fromLocal);
           setResultados(response.items);
           setSearched(true);
         }
@@ -198,7 +197,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       clearTimeout(timer);
       current.cancel();
     };
-  }, [query, searchVersion]);
+  }, [query, searchVersion, session]);
 
   function agregarProducto(p: Producto) {
     const variante = p.variantes[0];
@@ -249,8 +248,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     setBuscando(true);
     setSearched(false);
     try {
-      const product = await findBarcode(code, current.signal);
+      let fromLocal = false;
+      const product = await findBarcode(code, current.signal, session, () => {
+        fromLocal = true;
+      });
       if (!current.current()) return;
+      setLocalSearch(fromLocal);
       if (product) agregarProducto(product);
       else setSearchVersion((version) => version + 1);
     } catch (error) {
@@ -329,6 +332,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       const amount = Number(quote.total);
       if (!Number.isFinite(amount) || amount <= 0)
         throw new Error("El total del servidor no es válido.");
+      setLocalSearch(false);
       setQuotedTotal(amount);
       setCobrando(true);
     } catch (error) {
@@ -343,7 +347,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     saleBusy.current = true;
     setProcesando(true);
     setAviso(null);
-    const cashOnly =
+      const cashOnly =
       pago.pagos.length > 0 && pago.pagos.every((item) => item.metodo === "efectivo");
     try {
       if (cashScope && readCashAttempt(cashScope)) {
@@ -352,10 +356,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       }
       if (cashOnly) {
         if (!cashScope) throw new Error("No se pudo verificar la identidad de caja.");
+        if (!openingId) throw new Error("No se pudo verificar la apertura actual de caja.");
         const payload: CashPayload = {
           ...saleBase(),
           cajaId: cashScope.cajaId,
           expectedTotal: quotedTotal.toFixed(2),
+          expectedAperturaId: openingId,
           pagos: pago.pagos.map((item) => ({ metodo: "efectivo", monto: item.monto.toFixed(2) })),
         };
         setCashResult(await startCashAttempt(cashScope, payload));
@@ -691,6 +697,15 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         </div>
       </header>
 
+      {localSearch && (
+        <p
+          className="border-b border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
+          aria-live="polite"
+        >
+          Resultados del catálogo guardado. Los precios finales y el cobro se verifican al
+          reconectar.
+        </p>
+      )}
       <div className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Izquierda: búsqueda + resultados */}
         <div className="flex min-h-[40vh] w-full flex-col border-b border-slate-200 p-4 md:min-h-0 md:w-1/2 md:border-b-0 md:border-r">

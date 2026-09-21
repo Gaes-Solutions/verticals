@@ -6,7 +6,7 @@
 
 import { resolveApiBase } from "./api-base.js";
 
-const BASE = resolveApiBase(import.meta.env.VITE_POS_API_BASE, import.meta.env.DEV);
+export const API_BASE = resolveApiBase(import.meta.env.VITE_POS_API_BASE, import.meta.env.DEV);
 
 export class ApiError extends Error {
   constructor(
@@ -72,7 +72,7 @@ export async function api<T = unknown>(
     if (t) headers.Authorization = `Bearer ${t}`;
   }
   const requestToken = headers.Authorization;
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers,
     ...(opts.signal ? { signal: opts.signal } : {}),

@@ -1,6 +1,8 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { SyncOperation } from "@gaespos/sync";
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import { createCatalogSnapshot, readCatalogPage } from "./catalog.js";
 import { syncPullQuerySchema, syncPushSchema } from "./schemas.js";
 import { procesarPush, pull } from "./service.js";
 
@@ -30,8 +32,45 @@ const syncRoutes: FastifyPluginAsync = async (app) => {
   // SQLite local del dispositivo. Sin `since` ⇒ snapshot completo (primer login).
   app.get("/pull", async (req) => {
     req.requirePerm(PERMISSIONS.SYNC_USAR);
+    req.requirePerm(PERMISSIONS.PRODUCTOS_LEER);
+    req.requirePerm(PERMISSIONS.CLIENTES_LEER);
+    req.requirePerm(PERMISSIONS.PRECIOS_LEER);
     const q = syncPullQuerySchema.parse(req.query);
     return pull(req.tenantPrisma, q.since ?? null);
+  });
+
+  app.post(
+    "/catalog",
+    {
+      config: {
+        rateLimit: {
+          max: 12,
+          timeWindow: "1 minute",
+          keyGenerator: (req) => req.principal?.userId ?? req.ip,
+        },
+      },
+    },
+    async (req) => {
+      req.requirePerm(PERMISSIONS.SYNC_USAR);
+      req.requirePerm(PERMISSIONS.PRODUCTOS_LEER);
+      req.requirePerm(PERMISSIONS.PRECIOS_LEER);
+      return createCatalogSnapshot(req.tenantPrisma, req.principal, req.principal.userId);
+    },
+  );
+  app.get("/catalog/:id/:page", async (req) => {
+    req.requirePerm(PERMISSIONS.SYNC_USAR);
+    req.requirePerm(PERMISSIONS.PRODUCTOS_LEER);
+    req.requirePerm(PERMISSIONS.PRECIOS_LEER);
+    const params = z
+      .object({ id: z.string().uuid(), page: z.coerce.number().int().min(0).max(100000) })
+      .parse(req.params);
+    return readCatalogPage(
+      req.tenantPrisma,
+      req.principal,
+      req.principal.userId,
+      params.id,
+      params.page,
+    );
   });
 
   // Ping barato para el NetworkMonitor del cliente: confirma red + sesión viva

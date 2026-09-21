@@ -1,5 +1,22 @@
 # GaesSoft POS de escritorio — estado de empaquetado
 
+## Avance del 17-sep-2026
+
+Migraciones SQLite registradas, permisos SQL limitados a la ventana local,
+instancia única, adaptador persistente por negocio/cajero/caja y apertura WAL
+implementados. `Cargo.lock` queda versionado; las dependencias fijadas requieren
+Rust 1.88 o posterior. El adaptador prepara el catálogo al entrar a caja, permite buscar sin red y recupera una pantalla de consulta tras reinicio con la misma sesión vigente. [Pruebas de consulta](../../docs/avance-consulta-offline-2026-09-17.md). El
+cobro y el inicio autónomos sin red aún están pendientes: no interpretar el shell
+como POS offline terminado. [Detalle de integración](../../docs/avance-catalogo-local-2026-09-17.md).
+
+`cargo check --locked --offline -j 2` y formato Rust aprobados en Linux aislado
+(Debian 12, WebKitGTK 4.1, Rust 1.98.1). No equivale a instalador ni a ejecución
+de la ventana. Bibliotecas del entorno en `scripts/Dockerfile.linux-check`.
+
+Ver [pruebas y pendientes actuales](../../docs/avance-offline-tienda-2026-09-17.md).
+Las observaciones de la revisión anterior que siguen debajo son históricas.
+
+
 El proyecto contiene un shell Tauri 2 que carga la compilación de `apps/web-pos`.
 **No hay un instalador certificado ni operación offline persistente terminada.**
 La presencia del plugin SQL y de un archivo de migración no demuestra que SQLite

@@ -71,3 +71,17 @@ export interface SyncPullResult {
   since: string | null;
   diffs: SyncPullDiff[];
 }
+
+export interface CatalogManifest {
+  id: string;
+  userId: string;
+  serverTime: string;
+  expiresAt: string;
+  pageCount: number;
+}
+export interface CatalogPage {
+  snapshotId: string;
+  pageIndex: number;
+  entityType: string;
+  rows: Record<string, unknown>[];
+}

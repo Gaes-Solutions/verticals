@@ -1,5 +1,25 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Reconciliación offline — 18-sep-2026
+
+La sincronización exige total original y apertura de origen. Rechaza cambios de importe o de turno sin crear venta; conserva la operación local para revisión y los acuses de ventas ya aplicadas. API24, sync35 y POS164 aprobados; tipos API/POS correctos. Comprobante completo, cálculo local y cobro offline aún pendientes. [Evidencia y cambio de contrato](docs/avance-reconciliacion-offline-2026-09-18.md).
+
+
+## Consulta sin conexión — continuación del 17-sep-2026
+
+Búsqueda local por nombre/SKU/código exacto y recuperación de pantalla de consulta tras reinicio implementadas en escritorio. Acceso ligado al token vigente y a caja/versión; reconexión vuelve a verificar apertura. POS163, sync34 y navegador8 aprobados; build y revisión visual 360/768/1440 correctos. Cobro e inicio autónomos offline siguen pendientes. [Evidencia y límites](docs/avance-consulta-offline-2026-09-17.md).
+
+
+## Catálogo local conectado — continuación del 17-sep-2026
+
+La app de escritorio ya prepara SQLite al entrar a caja y descarga una versión completa y paginada del catálogo base, con publicación atómica y cancelación al cambiar cuenta. Corregida la exportación de campos de contraseña en el pull anterior. Pruebas: API18, sync34, POS150, navegador8; tipos/build web y comprobación nativa Linux aprobados. El inicio y cobro autónomos sin conexión aún no están habilitados. [Evidencia y siguientes pendientes](docs/avance-catalogo-local-2026-09-17.md).
+
+
+## Continuación offline de tienda — 17-sep-2026
+
+Sincronización de ventas atómica, claves ligadas a usuario/contenido y almacenamiento SQLite por negocio/cajero/caja implementados. Pruebas: API15, sync30, POS141+4, empaquetado18; comprobación nativa Tauri en Linux y puente ESC/POS (2 unitarias + integración TCP) aprobados. El cobro offline aún no está conectado a la pantalla; catálogo, sesión local y reconciliación comercial siguen pendientes. [Detalle verificable y próximos pasos](docs/avance-offline-tienda-2026-09-17.md).
+
+
 ## Entrega parcial de pendientes tienda — 15-sep-2026
 
 Reembolsos duraderos, tarjeta móvil, publicación de video inspeccionado e impresión

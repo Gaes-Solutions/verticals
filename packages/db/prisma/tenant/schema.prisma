@@ -4615,6 +4615,8 @@ model LoyaltyMovimiento {
  * Misma idempotency_key ⇒ se retorna el resultado almacenado (no se re-aplica).
  */
 model SyncProcessedOp {
+  usuarioId String? @map("usuario_id")
+  requestHash String? @map("request_hash")
   id             String   @id @default(cuid())
   idempotencyKey String   @unique @map("idempotency_key")
   entityType     String   @map("entity_type")
@@ -4987,4 +4989,25 @@ model KioskoMediaPublication {
   asset KioskoMediaAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   @@index([tenantId, status, endsAt])
   @@map("kiosko_media_publications")
+}
+
+model SyncCatalogSnapshot {
+  id String @id
+  usuarioId String @unique @map("usuario_id")
+  permissionsHash String @map("permissions_hash")
+  serverTime DateTime @default(now()) @map("server_time")
+  expiresAt DateTime @map("expires_at")
+  pageCount Int @map("page_count")
+  pages SyncCatalogPage[]
+  @@index([expiresAt])
+  @@map("sync_catalog_snapshots")
+}
+
+model SyncCatalogPage {
+  snapshotId String @map("snapshot_id")
+  pageIndex Int @map("page_index")
+  payload Json
+  snapshot SyncCatalogSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  @@id([snapshotId, pageIndex])
+  @@map("sync_catalog_pages")
 }
