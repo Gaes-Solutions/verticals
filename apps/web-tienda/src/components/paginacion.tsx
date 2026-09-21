@@ -36,7 +36,7 @@ export function Paginacion({
   return (
     <nav className="mt-8 flex flex-wrap items-center justify-center gap-2">
       {page > 1 && (
-        <Link href={href(page - 1)} className={`${btn} border-gray-200 hover:border-marca`}>
+        <Link href={href(page - 1)} className={`${btn} border-slate-200 hover:border-marca`}>
           ← Anterior
         </Link>
       )}
@@ -44,17 +44,18 @@ export function Paginacion({
         <Link
           key={p}
           href={href(p)}
+          aria-current={p === page ? "page" : undefined}
           className={`${btn} ${
             p === page
               ? "border-marca bg-marca font-semibold text-white"
-              : "border-gray-200 text-gray-700 hover:border-marca"
+              : "border-slate-200 text-slate-700 hover:border-marca"
           }`}
         >
           {p}
         </Link>
       ))}
       {page < totalPaginas && (
-        <Link href={href(page + 1)} className={`${btn} border-gray-200 hover:border-marca`}>
+        <Link href={href(page + 1)} className={`${btn} border-slate-200 hover:border-marca`}>
           Siguiente →
         </Link>
       )}

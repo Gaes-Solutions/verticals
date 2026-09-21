@@ -31,12 +31,12 @@ export function HeaderAcciones() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar productos…"
-          className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pr-10 pl-4 text-sm outline-none focus:border-marca focus:bg-white"
+          className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pr-10 pl-4 text-sm outline-none focus:border-marca focus:bg-white"
         />
         <button
           type="submit"
           aria-label="Buscar"
-          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-marca text-white"
+          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-10 w-10 items-center justify-center rounded-full bg-marca text-white"
         >
           <Search size={16} strokeWidth={2.5} />
         </button>
@@ -44,7 +44,7 @@ export function HeaderAcciones() {
 
       <Link
         href="/cuenta"
-        className="hidden items-center gap-1.5 text-gray-600 text-sm hover:text-marca sm:flex"
+        className="flex items-center gap-1.5 text-slate-600 text-sm hover:text-marca"
       >
         <User size={20} strokeWidth={1.75} />
         <span className="hidden md:inline">Mi cuenta</span>
@@ -53,7 +53,7 @@ export function HeaderAcciones() {
       <Link
         href="/carrito"
         aria-label="Carrito"
-        className="relative flex items-center gap-1.5 text-gray-600 hover:text-marca"
+        className="relative flex items-center gap-1.5 text-slate-600 hover:text-marca"
       >
         <ShoppingCart size={22} strokeWidth={1.75} />
         {count > 0 && (

@@ -10,6 +10,7 @@ import {
   submitAttempt,
 } from "@/lib/checkout-attempt";
 import { CreditCard, ImageOff, Store, Truck } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -239,8 +240,12 @@ export default function CheckoutPage() {
       setError("Selecciona una opción de entrega disponible antes de pagar.");
       return false;
     }
-    if (!email.trim() || !nombre.trim()) {
-      setError("Completa tu correo y nombre");
+    if (!nombre.trim()) {
+      setError("Completa tu nombre");
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Ingresa un correo válido para recibir tu confirmación.");
       return false;
     }
     if (modoEntrega === "pickup" && !sucursalId) {
@@ -372,19 +377,26 @@ export default function CheckoutPage() {
   }
 
   if (items.length === 0) {
-    return <p className="text-center text-gray-500">Tu carrito está vacío.</p>;
+    return (
+      <div className="text-center">
+        <h1 className="font-bold text-2xl">Tu carrito está vacío</h1>
+        <Link href="/" className="mt-4 inline-block text-marca">
+          Ver catálogo
+        </Link>
+      </div>
+    );
   }
 
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="mb-6 text-2xl font-bold">Finalizar compra</h1>
 
-      <div className="mb-4 rounded-lg border bg-white p-4">
+      <div className="gx-card mb-4 !p-4">
         <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
         <div className="space-y-2">
           {items.map((i) => (
             <div key={i.varianteId} className="flex items-center gap-3 text-sm">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-gray-100 text-lg">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-lg">
                 {i.imagenUrl ? (
                   <img
                     src={i.imagenUrl}
@@ -392,12 +404,12 @@ export default function CheckoutPage() {
                     className="h-full w-full rounded object-cover"
                   />
                 ) : (
-                  <ImageOff size={20} strokeWidth={1.5} className="text-gray-300" />
+                  <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
                 )}
               </div>
               <div className="flex-1">
                 <p className="font-medium">{i.titulo}</p>
-                <p className="text-gray-500">
+                <p className="text-slate-500">
                   {i.cantidad} × ${Number(i.precio).toFixed(2)}
                 </p>
               </div>
@@ -412,7 +424,7 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      <div className="space-y-4 rounded-lg border bg-white p-6">
+      <div className="gx-card space-y-4">
         <Campo label="Email" value={email} onChange={setEmail} type="email" required />
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
 
@@ -456,15 +468,13 @@ export default function CheckoutPage() {
           <>
             {direcciones.length > 0 && (
               <label className="block">
-                <span className="mb-1 block font-medium text-gray-700 text-sm">
-                  Dirección guardada
-                </span>
+                <span className="gx-label">Dirección guardada</span>
                 <select
                   onChange={(e) => {
                     const d = direcciones.find((x) => x.id === e.target.value);
                     if (d) usarDireccion(d);
                   }}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  className="gx-input"
                 >
                   {direcciones.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -474,17 +484,17 @@ export default function CheckoutPage() {
                 </select>
               </label>
             )}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2">
                 <Campo label="Calle" value={calle} onChange={setCalle} required />
               </div>
               <Campo label="Número" value={numero} onChange={setNumero} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Colonia" value={colonia} onChange={setColonia} />
               <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Estado" value={estado} onChange={setEstado} required />
               <Campo label="Código postal" value={cp} onChange={setCp} required />
             </div>
@@ -497,7 +507,7 @@ export default function CheckoutPage() {
               onRetry={() => setReintentoEntrega((n) => n + 1)}
               direccionLista={cp.length === 5 && estado.trim().length >= 3}
             />
-            <label className="flex items-center gap-2 text-gray-600 text-sm">
+            <label className="flex items-center gap-2 text-slate-600 text-sm">
               <input
                 type="checkbox"
                 checked={guardarDir}
@@ -520,10 +530,10 @@ export default function CheckoutPage() {
                   onChange={() => setSucursalId(p.sucursalId)}
                 />
                 <span className="flex-1 font-medium">{p.nombre}</span>
-                <span className="text-gray-500">
+                <span className="text-slate-500">
                   listo en ~{p.tiempoPreparacionPromedioMin} min
                 </span>
-                <span className="font-semibold text-green-600">Gratis</span>
+                <span className="font-semibold text-ok">Gratis</span>
               </label>
             ))}
           </div>
@@ -531,7 +541,7 @@ export default function CheckoutPage() {
 
         {config?.cuponEnCheckout && (
           <div>
-            <span className="mb-1 block font-medium text-sm">¿Tienes un cupón?</span>
+            <span className="gx-label">¿Tienes un cupón?</span>
             <div className="flex gap-2">
               <input
                 value={cupon}
@@ -540,18 +550,14 @@ export default function CheckoutPage() {
                   setCuponInfo(null);
                 }}
                 placeholder="CODIGO"
-                className="flex-1 rounded border px-3 py-2 uppercase"
+                className="gx-input flex-1 uppercase"
               />
-              <button
-                type="button"
-                onClick={aplicarCupon}
-                className="rounded-lg border border-marca px-4 py-2 font-medium text-marca text-sm hover:bg-marca/5"
-              >
+              <button type="button" onClick={aplicarCupon} className="gx-btn-secondary">
                 Aplicar
               </button>
             </div>
             {cuponInfo && (
-              <p className={`mt-1 text-sm ${cuponOk ? "text-emerald-600" : "text-red-600"}`}>
+              <p className={`mt-1 text-sm ${cuponOk ? "text-ok" : "text-danger"}`}>
                 {cuponOk ? "✓ " : "✕ "}
                 {cuponInfo.mensaje}
               </p>
@@ -560,17 +566,17 @@ export default function CheckoutPage() {
         )}
 
         <div className="border-t pt-4">
-          <div className="mb-1 flex justify-between text-gray-600 text-sm">
+          <div className="mb-1 flex justify-between text-slate-600 text-sm">
             <span>Subtotal</span>
             <span>${subtotal.toFixed(2)}</span>
           </div>
           {descuentoCupon > 0 && (
-            <div className="mb-1 flex justify-between text-emerald-600 text-sm">
+            <div className="mb-1 flex justify-between text-ok text-sm">
               <span>Descuento ({cupon})</span>
               <span>−${descuentoCupon.toFixed(2)}</span>
             </div>
           )}
-          <div className="mb-2 flex justify-between text-gray-600 text-sm">
+          <div className="mb-2 flex justify-between text-slate-600 text-sm">
             <span>Envío</span>
             <span>
               {!entregaLista
@@ -584,7 +590,11 @@ export default function CheckoutPage() {
             <span>{entregaLista ? "Total a pagar" : "Subtotal con descuentos"}</span>
             <span className="text-marca">${total.toFixed(2)}</span>
           </div>
-          {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="mb-3 rounded bg-danger-light p-2 text-sm text-danger">
+              {error}
+            </p>
+          )}
 
           {!entregaLista && (
             <output className="mb-3 block text-sm text-slate-600">
@@ -638,7 +648,7 @@ export default function CheckoutPage() {
                     <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
                       <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
                     </p>
-                    <div className="space-y-1 text-gray-600 text-sm">
+                    <div className="space-y-1 text-slate-600 text-sm">
                       {[...msiOfrecibles]
                         .sort((a, b) => a - b)
                         .map((m) => (
@@ -654,11 +664,11 @@ export default function CheckoutPage() {
                   type="button"
                   onClick={() => procesarPedido()}
                   disabled={procesando}
-                  className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
+                  className="gx-btn-primary w-full py-3"
                 >
                   {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
                 </button>
-                <p className="mt-2 text-center text-gray-400 text-xs">
+                <p className="mt-2 text-center text-slate-400 text-xs">
                   Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar
                   de verdad con MSI.
                 </p>
@@ -666,7 +676,7 @@ export default function CheckoutPage() {
             ) : (
               <p
                 role="alert"
-                className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+                className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
               >
                 El pago en línea no está disponible en este momento. Tu carrito se conserva para que
                 puedas intentarlo más tarde.
@@ -697,10 +707,10 @@ function OpcionesEnvio({
   onRetry: () => void;
 }) {
   if (!direccionLista) {
-    return <p className="text-xs text-gray-400">Completa estado y CP para cotizar el envío.</p>;
+    return <p className="text-xs text-slate-400">Completa estado y CP para cotizar el envío.</p>;
   }
   if (cotizando) {
-    return <p className="text-xs text-gray-400">Cotizando envío…</p>;
+    return <p className="text-xs text-slate-400">Cotizando envío…</p>;
   }
   if (error) {
     return (
@@ -714,7 +724,7 @@ function OpcionesEnvio({
   }
   if (opciones.length === 0) {
     return (
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-slate-500">
         No hay opciones de envío disponibles para esta dirección. Verifica el código postal y
         estado, elige recoger en tienda o contacta al negocio antes de pagar.
       </p>
@@ -735,9 +745,9 @@ function OpcionesEnvio({
           />
           <span className="flex-1 font-medium">{o.nombrePublico}</span>
           {o.diasEntregaEstimados && (
-            <span className="text-gray-500">{o.diasEntregaEstimados} días</span>
+            <span className="text-slate-500">{o.diasEntregaEstimados} días</span>
           )}
-          <span className={o.gratis ? "font-semibold text-green-600" : "font-semibold"}>
+          <span className={o.gratis ? "font-semibold text-ok" : "font-semibold"}>
             {o.gratis ? "Gratis" : `$${Number(o.costo).toFixed(2)}`}
           </span>
         </label>
@@ -759,9 +769,7 @@ function BotonEntrega({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 font-medium text-sm ${
-        activo ? "border-marca bg-marca/5 text-marca" : "border-gray-200 text-gray-600"
-      }`}
+      className={activo ? "gx-btn-primary flex-1" : "gx-btn-secondary flex-1"}
     >
       {label}
     </button>
@@ -783,13 +791,13 @@ function Campo({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium">{label}</span>
+      <span className="gx-label">{label}</span>
       <input
         type={type}
         value={value}
         required={required}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded border px-3 py-2"
+        className="gx-input"
       />
     </label>
   );

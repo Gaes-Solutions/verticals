@@ -11,7 +11,7 @@ const MAX_FOTOS = 3;
 export function ResenasCuenta({ inicial }: { inicial: CompraResenable[] }) {
   const pendientes = inicial.filter((i) => !i.yaResenado);
   if (pendientes.length === 0) {
-    return <p className="text-sm text-gray-500">No tienes compras pendientes de reseñar.</p>;
+    return <p className="text-sm text-slate-500">No tienes compras pendientes de reseñar.</p>;
   }
   return (
     <div className="space-y-3">
@@ -74,7 +74,7 @@ function FormResena({ item }: { item: CompraResenable }) {
 
   if (estado === "enviada") {
     return (
-      <div className="rounded-lg border bg-green-50 p-4 text-sm text-green-700">
+      <div className="gx-card !p-4 text-sm text-ok">
         ¡Gracias por reseñar <strong>{item.tituloPublico}</strong>!
         {comentario.trim() && " Tu comentario se publicará tras revisión."}
       </div>
@@ -82,12 +82,12 @@ function FormResena({ item }: { item: CompraResenable }) {
   }
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="gx-card !p-4">
       <div className="mb-2 flex items-center justify-between">
         <Link href={`/producto/${item.slugSeo}`} className="text-sm font-medium hover:text-marca">
           {item.tituloPublico}
         </Link>
-        <span className="text-xs text-gray-400">{item.folioPublico}</span>
+        <span className="text-xs text-slate-400">{item.folioPublico}</span>
       </div>
       <div className="mb-2 flex gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
@@ -96,7 +96,7 @@ function FormResena({ item }: { item: CompraResenable }) {
             type="button"
             onClick={() => setRating(n)}
             aria-label={`${n} estrellas`}
-            className={`text-2xl ${n <= rating ? "text-amber-500" : "text-gray-300"} hover:text-amber-400`}
+            className={`text-2xl ${n <= rating ? "text-warn" : "text-slate-300"} hover:text-warn`}
           >
             ★
           </button>
@@ -107,7 +107,7 @@ function FormResena({ item }: { item: CompraResenable }) {
         onChange={(e) => setComentario(e.target.value)}
         placeholder="Cuéntanos tu experiencia (opcional)"
         rows={2}
-        className="mb-2 w-full rounded border px-3 py-2 text-sm"
+        className="gx-input mb-2"
       />
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {fotos.map((src, i) => (
@@ -116,7 +116,7 @@ function FormResena({ item }: { item: CompraResenable }) {
             <button
               type="button"
               onClick={() => setFotos((prev) => prev.filter((_, j) => j !== i))}
-              className="-right-1.5 -top-1.5 absolute flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white text-xs"
+              className="-right-2 -top-2 absolute flex h-7 w-7 items-center justify-center rounded-full bg-slate-700 text-white text-xs"
               aria-label="Quitar foto"
             >
               ✕
@@ -124,7 +124,7 @@ function FormResena({ item }: { item: CompraResenable }) {
           </div>
         ))}
         {fotos.length < MAX_FOTOS && (
-          <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded border border-gray-300 border-dashed text-gray-400 text-xl hover:border-marca hover:text-marca">
+          <label className="flex h-14 w-14 cursor-pointer items-center justify-center rounded border border-slate-300 border-dashed text-slate-400 text-xl hover:border-marca hover:text-marca">
             +
             <input
               type="file"
@@ -136,12 +136,12 @@ function FormResena({ item }: { item: CompraResenable }) {
           </label>
         )}
       </div>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
       <button
         type="button"
         onClick={enviar}
         disabled={estado === "enviando"}
-        className="rounded bg-marca px-4 py-1.5 text-sm font-medium text-white hover:bg-marca-dark disabled:opacity-50"
+        className="gx-btn-primary"
       >
         {estado === "enviando" ? "Enviando…" : "Enviar reseña"}
       </button>

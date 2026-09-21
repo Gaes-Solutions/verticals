@@ -18,7 +18,7 @@ export function GaleriaProducto({
   if (fotos.length === 0) {
     return (
       <div className="flex aspect-square items-center justify-center rounded-lg border bg-white">
-        <ImageOff size={56} strokeWidth={1.5} className="text-gray-300" />
+        <ImageOff size={56} strokeWidth={1.5} className="text-slate-300" />
       </div>
     );
   }
@@ -55,13 +55,20 @@ export function GaleriaProducto({
       )}
 
       {lightbox && (
-        <button
-          type="button"
-          onClick={() => setLightbox(false)}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4"
-        >
-          <img src={principal} alt={alt} className="max-h-[90vh] max-w-full rounded-lg" />
-        </button>
+        // biome-ignore lint/a11y/useKeyWithClickEvents: backdrop del lightbox — el cierre con teclado lo da el botón "Cerrar" debajo (patrón overlay + control explícito)
+        <div className="gx-modal-overlay cursor-zoom-out" onClick={() => setLightbox(false)}>
+          <div className="gx-modal-panel !max-w-3xl bg-transparent p-2 text-center shadow-none">
+            <img src={principal} alt={alt} className="mx-auto max-h-[80vh] max-w-full rounded-lg" />
+            <button
+              type="button"
+              onClick={() => setLightbox(false)}
+              onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
+              className="gx-btn-secondary mt-3"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

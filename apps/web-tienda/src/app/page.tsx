@@ -31,7 +31,7 @@ function Seccion({
   return (
     <section className="mb-10">
       <div className="mb-4 flex items-end justify-between">
-        <h2 className="flex items-center gap-2 font-bold text-gray-900 text-xl">
+        <h2 className="flex items-center gap-2 font-bold text-slate-900 text-xl">
           {icono}
           {titulo}
         </h2>
@@ -48,7 +48,7 @@ function Seccion({
 
 function Hero({ nombre, lema }: { nombre: string; lema: string | null }) {
   return (
-    <section className="mb-10 overflow-hidden rounded-3xl bg-gradient-to-br from-marca via-teal-600 to-teal-800 px-6 py-12 text-white sm:px-12 sm:py-16">
+    <section className="mb-10 overflow-hidden rounded-3xl bg-gradient-to-br from-marca via-brand-dark to-brand-dark px-6 py-12 text-white sm:px-12 sm:py-16">
       <p className="font-medium text-sm text-white/80">Bienvenido a {nombre}</p>
       <h1 className="mt-2 max-w-2xl font-bold text-3xl leading-tight sm:text-5xl">
         {lema ?? "Todo lo que buscas, al mejor precio."}
@@ -125,7 +125,7 @@ export default async function CatalogoPage({
       return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
     }
     return (
-      <div className="rounded border border-red-200 bg-red-50 p-6 text-red-700">
+      <div className="rounded border border-danger/40 bg-danger-light p-6 text-danger">
         <h1 className="font-bold">No se pudo cargar el catálogo</h1>
         <p className="mt-2 text-sm">{err instanceof Error ? err.message : "Error desconocido"}</p>
       </div>
@@ -141,7 +141,7 @@ export default async function CatalogoPage({
         <>
           <Hero nombre={cfg?.nombre ?? "Tienda"} lema={cfg?.lema ?? null} />
           <Seccion
-            icono={<Flame size={22} className="text-red-500" />}
+            icono={<Flame size={22} className="text-danger" />}
             titulo="Ofertas del día"
             items={ofertas}
             verMas="/?soloOfertas=true"
@@ -161,18 +161,18 @@ export default async function CatalogoPage({
         </>
       )}
 
-      <nav className="mb-2 text-gray-400 text-xs">
+      <nav className="mb-2 text-slate-400 text-xs">
         <Link href="/" className="hover:text-marca">
           Inicio
         </Link>
         <span className="mx-1.5">›</span>
-        <span className="text-gray-600">{titulo}</span>
+        <span className="text-slate-600">{titulo}</span>
       </nav>
-      <h1 className="mb-4 font-bold text-2xl text-gray-900">{titulo}</h1>
+      <h1 className="mb-4 font-bold text-2xl text-slate-900">{titulo}</h1>
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-60 shrink-0 lg:block">
-          <div className="sticky top-32 rounded-2xl border border-gray-100 bg-white p-4">
+          <div className="gx-card sticky top-32 !p-4">
             <PanelFiltros categorias={categorias} />
           </div>
         </aside>
@@ -180,10 +180,10 @@ export default async function CatalogoPage({
         <div className="min-w-0 flex-1">
           <BarraFiltros categorias={categorias} total={data.total} />
           {data.items.length === 0 ? (
-            <div className="rounded-2xl border border-gray-100 bg-white py-16 text-center">
-              <PackageSearch size={48} strokeWidth={1.5} className="mx-auto text-gray-300" />
-              <p className="mt-3 font-medium text-gray-700">No encontramos productos</p>
-              <p className="mt-1 text-gray-400 text-sm">Prueba con otros filtros o términos.</p>
+            <div className="gx-card py-16 text-center">
+              <PackageSearch size={48} strokeWidth={1.5} className="mx-auto text-slate-300" />
+              <p className="mt-3 font-medium text-slate-700">No encontramos productos</p>
+              <p className="mt-1 text-slate-400 text-sm">Prueba con otros filtros o términos.</p>
             </div>
           ) : (
             <>

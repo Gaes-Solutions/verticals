@@ -48,22 +48,40 @@ export function PagoTarjetaConekta({
   const [tokenizando, setTokenizando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sdkListo, setSdkListo] = useState(false);
+  const [sdkError, setSdkError] = useState(false);
+  const [sdkIntento, setSdkIntento] = useState(0);
 
   useEffect(() => {
     if (window.Conekta) {
       window.Conekta.setPublicKey(publicKey);
       setSdkListo(true);
+      setSdkError(false);
       return;
     }
+    let cancelado = false;
     const s = document.createElement("script");
     s.src = SDK_URL;
     s.async = true;
     s.onload = () => {
+      if (cancelado) return;
       window.Conekta?.setPublicKey(publicKey);
       setSdkListo(true);
+      setSdkError(false);
+    };
+    s.onerror = () => {
+      if (cancelado) return;
+      setSdkError(true);
     };
     document.body.appendChild(s);
-  }, [publicKey]);
+    return () => {
+      cancelado = true;
+    };
+  }, [publicKey, sdkIntento]);
+
+  function formatearExp(v: string): string {
+    const digitos = v.replace(/\D/g, "").slice(0, 4);
+    return digitos.length > 2 ? `${digitos.slice(0, 2)}/${digitos.slice(2)}` : digitos;
+  }
 
   function tokenizar(e: FormEvent) {
     e.preventDefault();
@@ -99,56 +117,64 @@ export function PagoTarjetaConekta({
   return (
     <form onSubmit={tokenizar} className="space-y-3">
       <label className="block">
-        <span className="mb-1 block font-medium text-sm">Número de tarjeta</span>
+        <span className="gx-label">Número de tarjeta</span>
         <input
           inputMode="numeric"
+          autoComplete="cc-number"
+          maxLength={19}
           value={numero}
           onChange={(e) => setNumero(e.target.value)}
           placeholder="4242 4242 4242 4242"
           required
-          className="w-full rounded border px-3 py-2"
+          className="gx-input"
         />
       </label>
       <label className="block">
-        <span className="mb-1 block font-medium text-sm">Nombre en la tarjeta</span>
+        <span className="gx-label">Nombre en la tarjeta</span>
         <input
+          autoComplete="cc-name"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           required
-          className="w-full rounded border px-3 py-2"
+          className="gx-input"
         />
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="mb-1 block font-medium text-sm">Vence (MM/AA)</span>
+          <span className="gx-label">Vence (MM/AA)</span>
           <input
+            inputMode="numeric"
+            autoComplete="cc-exp"
+            maxLength={5}
             value={exp}
-            onChange={(e) => setExp(e.target.value)}
+            onChange={(e) => setExp(formatearExp(e.target.value))}
             placeholder="12/28"
             required
-            className="w-full rounded border px-3 py-2"
+            className="gx-input"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block font-medium text-sm">CVC</span>
+          <span className="gx-label">CVC</span>
           <input
             inputMode="numeric"
+            autoComplete="cc-csc"
+            maxLength={4}
             value={cvc}
-            onChange={(e) => setCvc(e.target.value)}
+            onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
             placeholder="123"
             required
-            className="w-full rounded border px-3 py-2"
+            className="gx-input"
           />
         </label>
       </div>
 
       {msiMeses.length > 0 && (
         <label className="block">
-          <span className="mb-1 block font-medium text-sm">Meses sin intereses</span>
+          <span className="gx-label">Meses sin intereses</span>
           <select
             value={meses}
             onChange={(e) => setMeses(Number(e.target.value))}
-            className="w-full rounded border px-3 py-2"
+            className="gx-input"
           >
             <option value={0}>Un solo pago de ${montoTotal.toFixed(2)}</option>
             {[...msiMeses]
@@ -162,15 +188,34 @@ export function PagoTarjetaConekta({
         </label>
       )}
 
-      {error && <p className="rounded bg-red-50 p-2 text-red-600 text-sm">{error}</p>}
-      <button
-        type="submit"
-        disabled={cargando || !sdkListo}
-        className="w-full rounded bg-marca py-3 font-medium text-white hover:bg-marca-dark disabled:opacity-50"
-      >
-        {cargando ? "Procesando pago…" : `Pagar $${montoTotal.toFixed(2)}`}
-      </button>
-      <p className="flex items-center justify-center gap-1.5 text-center text-gray-400 text-xs">
+      {error && <p className="rounded bg-danger-light p-2 text-danger text-sm">{error}</p>}
+      {sdkError ? (
+        <div className="space-y-2">
+          <p role="alert" className="rounded bg-danger-light p-2 text-danger text-sm">
+            No se pudo cargar el pago seguro. Verifica tu conexión e inténtalo de nuevo.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSdkIntento((n) => n + 1)}
+            className="gx-btn-secondary w-full"
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="submit"
+          disabled={cargando || !sdkListo}
+          className="gx-btn-primary w-full py-3"
+        >
+          {cargando
+            ? "Procesando pago…"
+            : !sdkListo
+              ? "Cargando pago seguro…"
+              : `Pagar $${montoTotal.toFixed(2)}`}
+        </button>
+      )}
+      <p className="flex items-center justify-center gap-1.5 text-center text-slate-400 text-xs">
         <Lock size={12} strokeWidth={2} /> Pago seguro con Conekta · tus datos de tarjeta no pasan
         por la tienda
       </p>

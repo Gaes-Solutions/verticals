@@ -73,15 +73,27 @@ export async function getClienteToken(): Promise<string | null> {
   }
 }
 
+/** Error de un endpoint del cliente-portal; conserva el status para decidir
+ *  si redirigir a login (401), mostrar 404 o un estado de error reintentable. */
+export class ClienteApiError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    path: string,
+  ) {
+    super(`API ${path} → ${statusCode}`);
+    this.name = "ClienteApiError";
+  }
+}
+
 /** Llama un endpoint del cliente-portal con el token del comprador. */
 export async function clienteApi<T = unknown>(path: string): Promise<T> {
   const token = await getClienteToken();
-  if (!token) throw new Error("Sin sesión de cliente");
+  if (!token) throw new ClienteApiError(401, path);
   const res = await fetch(`${API_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  if (!res.ok) throw new ClienteApiError(res.status, path);
   return (await res.json()) as T;
 }
 

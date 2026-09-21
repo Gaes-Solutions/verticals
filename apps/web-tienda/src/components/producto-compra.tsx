@@ -2,6 +2,7 @@
 
 import { agregar } from "@/lib/carrito-store";
 import { Check, Truck } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AvisoStock } from "./aviso-stock";
@@ -97,34 +98,28 @@ export function ProductoCompra({
     <div className="mt-4">
       <div className="flex flex-wrap items-baseline gap-2">
         {oferta && (
-          <span className="text-gray-400 text-lg line-through">${precioLista.toFixed(2)}</span>
+          <span className="text-slate-400 text-lg line-through">${precioLista.toFixed(2)}</span>
         )}
         <p className="font-bold text-3xl text-marca">${precioNum.toFixed(2)}</p>
         {oferta && oferta.descuentoPct > 0 && (
-          <span className="rounded bg-red-600 px-2 py-0.5 font-bold text-sm text-white">
+          <span className="rounded bg-danger px-2 py-0.5 font-bold text-sm text-white">
             -{oferta.descuentoPct}%
           </span>
         )}
       </div>
       <div className="mt-1 flex flex-wrap gap-2 text-sm">
         {envioGratis && (
-          <span className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+          <span className="gx-badge-ok flex items-center gap-1">
             <Truck size={14} strokeWidth={2} /> Envío gratis
           </span>
         )}
         {stockBajo && stockPublico != null && (
-          <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
-            ¡Últimas {stockPublico} piezas!
-          </span>
+          <span className="gx-badge-warn">¡Últimas {stockPublico} piezas!</span>
         )}
-        {sinStock && (
-          <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-500">
-            Sin stock
-          </span>
-        )}
+        {sinStock && <span className="gx-badge-danger">Sin stock</span>}
       </div>
       {mostrarMsi && (
-        <p className="mt-1 text-gray-600 text-sm">
+        <p className="mt-1 text-slate-600 text-sm">
           o hasta <span className="font-semibold text-marca">{mejorPlazo} meses sin intereses</span>{" "}
           de ${(precioNum / mejorPlazo).toFixed(2)}
         </p>
@@ -132,7 +127,7 @@ export function ProductoCompra({
 
       {variantes.length > 1 && (
         <div className="mt-4">
-          <p className="mb-1 font-medium text-gray-700 text-sm">Elige una opción:</p>
+          <p className="mb-1 font-medium text-slate-700 text-sm">Elige una opción:</p>
           <div className="flex flex-wrap gap-2">
             {variantes.map((v, i) => (
               <button
@@ -142,7 +137,7 @@ export function ProductoCompra({
                 className={`rounded-lg border px-3 py-1.5 text-sm ${
                   i === sel
                     ? "border-marca bg-marca/10 font-medium text-marca"
-                    : "border-gray-300 text-gray-700 hover:border-marca"
+                    : "border-slate-300 text-slate-700 hover:border-marca"
                 }`}
               >
                 {etiquetaVariante(v, i)}
@@ -158,13 +153,14 @@ export function ProductoCompra({
           min={1}
           value={cantidad}
           onChange={(e) => setCantidad(Math.max(1, Number(e.target.value)))}
-          className="w-20 rounded-lg border px-3 py-2"
+          aria-label="Cantidad"
+          className="gx-input w-20"
         />
         <button
           type="button"
           onClick={onAgregar}
           disabled={sinStock}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-marca px-6 py-2 font-medium text-marca transition hover:bg-marca/5 disabled:cursor-not-allowed disabled:opacity-40"
+          className="gx-btn-secondary disabled:cursor-not-allowed disabled:opacity-40"
         >
           {agregado && <Check size={16} strokeWidth={2.5} />}
           {agregado ? "Agregado" : "Agregar al carrito"}
@@ -174,10 +170,23 @@ export function ProductoCompra({
             type="button"
             onClick={onComprarAhora}
             disabled={sinStock}
-            className="rounded-lg bg-marca px-6 py-2 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="gx-btn-primary disabled:cursor-not-allowed disabled:opacity-40"
           >
             Comprar ahora
           </button>
+        )}
+      </div>
+
+      <div aria-live="polite">
+        {agregado && (
+          <p className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+            <span className="inline-flex items-center gap-1 font-medium text-ok">
+              <Check size={16} strokeWidth={2.5} /> Agregado al carrito
+            </span>
+            <Link href="/carrito" className="font-medium text-marca hover:underline">
+              Ver carrito
+            </Link>
+          </p>
         )}
       </div>
 

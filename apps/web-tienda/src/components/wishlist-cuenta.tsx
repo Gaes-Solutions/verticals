@@ -38,15 +38,15 @@ export function WishlistCuenta({ inicial }: { inicial: WishlistItem[] }) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-gray-500">Tu lista de deseos está vacía.</p>;
+    return <p className="text-sm text-slate-500">Tu lista de deseos está vacía.</p>;
   }
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
       {items.map((i) => (
-        <div key={i.itemId} className="rounded-lg border bg-white p-3">
+        <div key={i.itemId} className="gx-card !p-3">
           <Link href={`/producto/${i.slugSeo}`}>
-            <div className="mb-2 flex aspect-square items-center justify-center rounded bg-gray-100 text-3xl">
+            <div className="mb-2 flex aspect-square items-center justify-center rounded bg-slate-100 text-3xl">
               {i.foto ? (
                 <img
                   src={i.foto}
@@ -64,16 +64,12 @@ export function WishlistCuenta({ inicial }: { inicial: WishlistItem[] }) {
             <button
               type="button"
               onClick={() => quitar(i.itemId)}
-              className="text-gray-400 text-xs hover:text-red-500"
+              className="gx-btn-ghost !px-2 text-danger"
             >
               Quitar
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => alCarrito(i)}
-            className="mt-2 w-full rounded-lg bg-marca py-1.5 font-semibold text-sm text-white hover:opacity-90"
-          >
+          <button type="button" onClick={() => alCarrito(i)} className="gx-btn-primary mt-2 w-full">
             {agregado === i.itemId ? "✓ Agregado" : "Agregar al carrito"}
           </button>
         </div>

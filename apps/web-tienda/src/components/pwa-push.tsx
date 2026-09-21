@@ -111,34 +111,24 @@ export function PwaPush() {
   if (estado === "cargando" || estado === "no-disponible") return null;
 
   return (
-    <div className="rounded-lg border bg-white p-4 text-sm">
+    <div className="gx-card !p-4 text-sm">
       <p className="font-medium">Notificaciones de tus pedidos</p>
       {estado === "bloqueada" ? (
-        <p className="mt-1 text-gray-500">
+        <p className="mt-1 text-slate-500">
           Las notificaciones están bloqueadas en tu navegador. Actívalas desde la configuración del
           sitio.
         </p>
       ) : estado === "activa" ? (
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <span className="text-gray-500">Activadas ✓ Te avisaremos cuando tu pedido avance.</span>
-          <button
-            type="button"
-            onClick={desactivar}
-            disabled={busy}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-          >
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-slate-500">Activadas ✓ Te avisaremos cuando tu pedido avance.</span>
+          <button type="button" onClick={desactivar} disabled={busy} className="gx-btn-secondary">
             Desactivar
           </button>
         </div>
       ) : (
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <span className="text-gray-500">Recibe avisos de pago, envío y entrega.</span>
-          <button
-            type="button"
-            onClick={activar}
-            disabled={busy}
-            className="rounded-lg bg-marca px-4 py-1.5 font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-slate-500">Recibe avisos de pago, envío y entrega.</span>
+          <button type="button" onClick={activar} disabled={busy} className="gx-btn-primary">
             {busy ? "Activando…" : "Activar"}
           </button>
         </div>

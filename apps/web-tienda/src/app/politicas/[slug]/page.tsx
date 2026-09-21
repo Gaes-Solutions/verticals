@@ -43,15 +43,15 @@ export default async function PoliticaPage({ params }: { params: Promise<{ slug:
         ← Volver a la tienda
       </Link>
       <h1 className="mt-3 mb-6 font-bold text-2xl">{titulo}</h1>
-      <article className="rounded-xl border bg-white p-6">
+      <article className="gx-card">
         {html ? (
           <div
-            className="prose prose-sm max-w-none text-gray-700"
+            className="prose prose-sm max-w-none text-slate-700"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: política HTML capturada por el dueño del tenant
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (
-          <p className="whitespace-pre-line text-gray-700 leading-relaxed">
+          <p className="whitespace-pre-line text-slate-700 leading-relaxed">
             {texto ?? "Esta información estará disponible próximamente."}
           </p>
         )}

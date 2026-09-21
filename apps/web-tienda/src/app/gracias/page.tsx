@@ -2,7 +2,7 @@
 
 import { Check } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 interface Pedido {
@@ -14,9 +14,15 @@ interface Pedido {
 
 function GraciasInner() {
   const sp = useSearchParams();
+  const router = useRouter();
   const folio = sp.get("folio") ?? "";
   const email = sp.get("email") ?? "";
   const [pedido, setPedido] = useState<Pedido | null>(null);
+
+  // Sin folio no hay nada que confirmar: mejor el catálogo o el rastreo manual.
+  useEffect(() => {
+    if (!folio) router.replace("/");
+  }, [folio, router]);
 
   useEffect(() => {
     if (!folio || !email) return;
@@ -26,13 +32,15 @@ function GraciasInner() {
       .catch(() => {});
   }, [folio, email]);
 
+  if (!folio) return null;
+
   return (
     <div className="mx-auto max-w-lg text-center">
-      <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+      <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-ok-light text-ok">
         <Check size={40} strokeWidth={3} />
       </div>
       <h1 className="font-bold text-3xl">¡Gracias por tu compra!</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-slate-600">
         Tu pedido <strong>{folio}</strong> fue confirmado.
         {email && (
           <>
@@ -42,23 +50,19 @@ function GraciasInner() {
         )}
       </p>
 
-      <div className="mt-6 rounded-xl border bg-white p-5 text-left">
+      <div className="gx-card mt-6 text-left">
         <div className="flex items-center justify-between">
           <span className="font-bold">{folio}</span>
-          {pedido && (
-            <span className="rounded-full bg-marca/10 px-3 py-1 font-medium text-marca text-sm">
-              Confirmado
-            </span>
-          )}
+          {pedido && <span className="gx-badge-ok">Confirmado</span>}
         </div>
         {pedido ? (
-          <p className="mt-2 text-gray-600 text-sm">
+          <p className="mt-2 text-slate-600 text-sm">
             Total pagado: ${Number(pedido.total).toFixed(2)}
           </p>
         ) : (
-          <p className="mt-2 text-gray-400 text-sm">Cargando resumen…</p>
+          <p className="mt-2 text-slate-400 text-sm">Cargando resumen…</p>
         )}
-        <p className="mt-3 text-gray-500 text-sm">
+        <p className="mt-3 text-slate-500 text-sm">
           Te avisaremos cuando preparemos y enviemos tu pedido. Puedes seguir su estado en cualquier
           momento.
         </p>
@@ -67,20 +71,14 @@ function GraciasInner() {
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Link
           href={`/seguimiento?folio=${folio}&email=${encodeURIComponent(email)}`}
-          className="rounded-lg bg-marca px-5 py-2.5 font-semibold text-white hover:opacity-90"
+          className="gx-btn-primary"
         >
           Rastrear mi pedido
         </Link>
-        <Link
-          href="/cuenta"
-          className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 hover:bg-gray-50"
-        >
+        <Link href="/cuenta" className="gx-btn-secondary">
           Mi cuenta
         </Link>
-        <Link
-          href="/"
-          className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 hover:bg-gray-50"
-        >
+        <Link href="/" className="gx-btn-secondary">
           Seguir comprando
         </Link>
       </div>

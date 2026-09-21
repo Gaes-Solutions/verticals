@@ -1,9 +1,15 @@
 import { CancelarPedido } from "@/components/cancelar-pedido";
 import { ChatPedidoCliente } from "@/components/chat-pedido-cliente";
+import { EstadoError } from "@/components/estado-error";
 import { FacturaPedido } from "@/components/factura-pedido";
 import { SolicitarDevolucion } from "@/components/solicitar-devolucion";
 import { getTiendaConfig } from "@/lib/api";
-import { type PedidoDetalleCliente, clienteApi, getClienteToken } from "@/lib/cliente";
+import {
+  ClienteApiError,
+  type PedidoDetalleCliente,
+  clienteApi,
+  getClienteToken,
+} from "@/lib/cliente";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -28,8 +34,17 @@ export default async function PedidoDetallePage({
     pedido = await clienteApi<PedidoDetalleCliente>(
       `/cliente-portal/pedidos/${encodeURIComponent(folio)}`,
     );
-  } catch {
-    notFound();
+  } catch (err) {
+    if (err instanceof ClienteApiError) {
+      if (err.statusCode === 401) redirect("/cuenta/login");
+      if (err.statusCode === 404) notFound();
+    }
+    return (
+      <EstadoError
+        titulo="No se pudo cargar tu pedido"
+        descripcion="Tuvimos un problema al consultar esta información. Inténtalo de nuevo en un momento."
+      />
+    );
   }
 
   const solicitudes = await clienteApi<SolicitudDevolucion[]>("/cliente-portal/devoluciones").catch(
@@ -59,23 +74,19 @@ export default async function PedidoDetallePage({
       <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="font-bold text-2xl">Pedido {pedido.folioPublico}</h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-slate-500 text-sm">
             {pedido.metodoEnvio === "click_collect" ? "Recoger en tienda" : "Envío a domicilio"} ·{" "}
             {fecha(pedido.createdAt)}
           </p>
         </div>
-        <span
-          className={`rounded-full px-3 py-1 font-medium text-sm ${
-            pedido.cancelado ? "bg-red-100 text-red-700" : "bg-marca/10 text-marca"
-          }`}
-        >
+        <span className={pedido.cancelado ? "gx-badge-danger" : "gx-badge-info"}>
           {pedido.statusLabel}
         </span>
       </div>
 
       {/* Timeline tipo Mercado Libre */}
       {pedido.cancelado ? (
-        <div className="mb-8 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 text-sm">
+        <div className="mb-8 rounded-lg border border-danger/40 bg-danger-light p-4 text-danger text-sm">
           Este pedido fue cancelado.
           {pedido.canceladoMotivo ? ` Motivo: ${pedido.canceladoMotivo}` : ""}
         </div>
@@ -90,23 +101,23 @@ export default async function PedidoDetallePage({
                     className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs ${
                       h.completado
                         ? "border-marca bg-marca text-white"
-                        : "border-gray-300 bg-white text-gray-300"
+                        : "border-slate-300 bg-white text-slate-300"
                     }`}
                   >
                     {h.completado ? "✓" : i + 1}
                   </span>
                   {!ultimo && (
                     <span
-                      className={`w-0.5 flex-1 ${h.completado ? "bg-marca" : "bg-gray-200"}`}
+                      className={`w-0.5 flex-1 ${h.completado ? "bg-marca" : "bg-slate-200"}`}
                       style={{ minHeight: "1.75rem" }}
                     />
                   )}
                 </div>
                 <div className={`pb-6 ${h.actual ? "font-semibold" : ""}`}>
-                  <p className={h.completado ? "text-gray-800" : "text-gray-400"}>{h.label}</p>
-                  {h.fecha && <p className="text-gray-400 text-xs">{fecha(h.fecha)}</p>}
+                  <p className={h.completado ? "text-slate-800" : "text-slate-400"}>{h.label}</p>
+                  {h.fecha && <p className="text-slate-400 text-xs">{fecha(h.fecha)}</p>}
                   {h.actual && pedido.guiaTracking && (
-                    <p className="mt-1 text-gray-500 text-xs">
+                    <p className="mt-1 text-slate-500 text-xs">
                       Guía {pedido.paqueteria}:{" "}
                       <span className="font-mono">{pedido.guiaTracking}</span>
                     </p>
@@ -120,7 +131,7 @@ export default async function PedidoDetallePage({
 
       {/* Productos */}
       <h2 className="mb-2 font-bold text-lg">Productos</h2>
-      <div className="mb-6 overflow-hidden rounded-lg border bg-white">
+      <div className="gx-card !p-0 mb-6 overflow-hidden">
         {pedido.items.map((it, idx) => (
           <div
             key={`${idx}-${it.nombre}`}
@@ -132,7 +143,7 @@ export default async function PedidoDetallePage({
             <span className="font-medium">${Number(it.subtotal).toFixed(2)}</span>
           </div>
         ))}
-        <div className="flex items-center justify-between px-4 py-2 text-gray-500 text-sm">
+        <div className="flex items-center justify-between px-4 py-2 text-slate-500 text-sm">
           <span>Envío</span>
           <span>${Number(pedido.costoEnvio).toFixed(2)}</span>
         </div>
@@ -145,7 +156,7 @@ export default async function PedidoDetallePage({
       {pedido.direccionEnvio && (
         <>
           <h2 className="mb-2 font-bold text-lg">Envío</h2>
-          <p className="mb-6 text-gray-600 text-sm">
+          <p className="mb-6 text-slate-600 text-sm">
             📍 {pedido.direccionEnvio.calle}, {pedido.direccionEnvio.ciudad},{" "}
             {pedido.direccionEnvio.estado} CP {pedido.direccionEnvio.cp}
           </p>

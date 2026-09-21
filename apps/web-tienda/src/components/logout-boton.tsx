@@ -10,7 +10,7 @@ export function LogoutBoton() {
     router.refresh();
   }
   return (
-    <button type="button" onClick={salir} className="text-sm text-gray-500 hover:text-marca">
+    <button type="button" onClick={salir} className="gx-btn-ghost">
       Cerrar sesión
     </button>
   );

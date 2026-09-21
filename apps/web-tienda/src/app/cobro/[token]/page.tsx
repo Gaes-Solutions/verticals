@@ -1,5 +1,6 @@
+import { EstadoError } from "@/components/estado-error";
 import { PagarCobro } from "@/components/pagar-cobro";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 
 interface CobroPublico {
   token: string;
@@ -12,12 +13,27 @@ interface CobroPublico {
 export default async function CobroPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   let cobro: CobroPublico | null = null;
+  let errorServidor = false;
   try {
     cobro = await api<CobroPublico>(`/cobros/publico/${encodeURIComponent(token)}`, {
       revalidate: 0,
     });
-  } catch {
-    cobro = null;
+  } catch (err) {
+    // 404 real → link inexistente; 5xx → estado de error reintentable (no confundir).
+    if (err instanceof ApiError && err.statusCode === 404) {
+      cobro = null;
+    } else {
+      errorServidor = true;
+    }
+  }
+
+  if (errorServidor) {
+    return (
+      <EstadoError
+        titulo="No se pudo cargar el link de pago"
+        descripcion="Tuvimos un problema al consultar este cobro. Inténtalo de nuevo en un momento."
+      />
+    );
   }
 
   if (!cobro) {

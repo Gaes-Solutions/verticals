@@ -53,74 +53,74 @@ export function PerfilCuenta({ me }: { me: Me }) {
     }
   }
 
-  const input = "w-full rounded-lg border px-3 py-2 text-sm";
-
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <form onSubmit={guardarPerfil} className="rounded-lg border bg-white p-4">
+      <form onSubmit={guardarPerfil} className="gx-card !p-4">
         <h3 className="mb-3 font-medium">Mis datos</h3>
         <div className="space-y-2">
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre"
-            required
-            className={input}
-          />
-          <input
-            value={apellidos}
-            onChange={(e) => setApellidos(e.target.value)}
-            placeholder="Apellidos"
-            className={input}
-          />
-          <input
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            placeholder="Teléfono"
-            className={input}
-          />
-          <p className="text-gray-400 text-xs">Correo: {me.email}</p>
+          <label className="block">
+            <span className="gx-label">Nombre</span>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+              className="gx-input"
+            />
+          </label>
+          <label className="block">
+            <span className="gx-label">Apellidos</span>
+            <input
+              value={apellidos}
+              onChange={(e) => setApellidos(e.target.value)}
+              className="gx-input"
+            />
+          </label>
+          <label className="block">
+            <span className="gx-label">Teléfono</span>
+            <input
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              className="gx-input"
+            />
+          </label>
+          <p className="text-slate-400 text-xs">Correo: {me.email}</p>
         </div>
-        <button
-          type="submit"
-          className="mt-3 rounded-lg bg-marca px-4 py-2 font-semibold text-sm text-white hover:opacity-90"
-        >
+        <button type="submit" className="gx-btn-primary mt-3">
           Guardar
         </button>
-        {perfilMsg && <p className="mt-2 text-gray-500 text-sm">{perfilMsg}</p>}
+        {perfilMsg && <p className="mt-2 text-slate-500 text-sm">{perfilMsg}</p>}
       </form>
 
-      <form onSubmit={cambiarPassword} className="rounded-lg border bg-white p-4">
+      <form onSubmit={cambiarPassword} className="gx-card !p-4">
         <h3 className="mb-3 font-medium">Cambiar contraseña</h3>
         <div className="space-y-2">
-          <input
-            type="password"
-            value={actual}
-            onChange={(e) => setActual(e.target.value)}
-            placeholder="Contraseña actual"
-            required
-            className={input}
-          />
-          <input
-            type="password"
-            value={nueva}
-            onChange={(e) => setNueva(e.target.value)}
-            placeholder="Nueva (mín. 8)"
-            required
-            minLength={8}
-            className={input}
-          />
+          <label className="block">
+            <span className="gx-label">Contraseña actual</span>
+            <input
+              type="password"
+              value={actual}
+              onChange={(e) => setActual(e.target.value)}
+              required
+              className="gx-input"
+            />
+          </label>
+          <label className="block">
+            <span className="gx-label">Nueva (mín. 8)</span>
+            <input
+              type="password"
+              value={nueva}
+              onChange={(e) => setNueva(e.target.value)}
+              required
+              minLength={8}
+              className="gx-input"
+            />
+          </label>
         </div>
-        <button
-          type="submit"
-          className="mt-3 rounded-lg border border-marca px-4 py-2 font-semibold text-marca text-sm hover:bg-marca/5"
-        >
+        <button type="submit" className="gx-btn-secondary mt-3">
           Actualizar
         </button>
         {pwMsg && (
-          <p className={`mt-2 text-sm ${pwMsg.ok ? "text-emerald-600" : "text-red-600"}`}>
-            {pwMsg.texto}
-          </p>
+          <p className={`mt-2 text-sm ${pwMsg.ok ? "text-ok" : "text-danger"}`}>{pwMsg.texto}</p>
         )}
       </form>
     </div>

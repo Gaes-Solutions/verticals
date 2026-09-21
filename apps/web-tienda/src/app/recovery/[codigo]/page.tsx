@@ -41,12 +41,12 @@ export default function RecoveryPage() {
   if (estado === "no_disponible") {
     return (
       <div className="text-center">
-        <p className="text-gray-500">Este carrito ya no está disponible.</p>
+        <p className="text-slate-500">Este carrito ya no está disponible.</p>
         <Link href="/" className="mt-4 inline-block text-marca">
           ← Ir al catálogo
         </Link>
       </div>
     );
   }
-  return <p className="text-center text-gray-500">Recuperando tu carrito…</p>;
+  return <p className="text-center text-slate-500">Recuperando tu carrito…</p>;
 }

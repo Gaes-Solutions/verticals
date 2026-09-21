@@ -53,8 +53,8 @@ export default function CarritoPage() {
 
       <div className="space-y-3">
         {items.map((i) => (
-          <div key={i.varianteId} className="flex gap-3 rounded-lg border bg-white p-3 sm:p-4">
-            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-gray-100">
+          <div key={i.varianteId} className="flex gap-3 gx-card !p-3 sm:!p-4">
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-slate-100">
               {i.imagenUrl ? (
                 <img
                   src={i.imagenUrl}
@@ -62,7 +62,7 @@ export default function CarritoPage() {
                   className="h-full w-full rounded object-cover"
                 />
               ) : (
-                <ImageOff size={24} strokeWidth={1.5} className="text-gray-300" />
+                <ImageOff size={24} strokeWidth={1.5} className="text-slate-300" />
               )}
             </div>
             <div className="flex flex-1 flex-col justify-between">
@@ -83,7 +83,7 @@ export default function CarritoPage() {
                   <button
                     type="button"
                     onClick={() => actualizarCantidad(i.varianteId, i.cantidad - 1)}
-                    className="flex h-8 w-8 items-center justify-center rounded border text-lg hover:bg-gray-50"
+                    className="flex h-10 w-10 items-center justify-center rounded border text-lg hover:bg-slate-50"
                     aria-label="Disminuir"
                   >
                     −
@@ -92,19 +92,19 @@ export default function CarritoPage() {
                   <button
                     type="button"
                     onClick={() => actualizarCantidad(i.varianteId, i.cantidad + 1)}
-                    className="flex h-8 w-8 items-center justify-center rounded border text-lg hover:bg-gray-50"
+                    className="flex h-10 w-10 items-center justify-center rounded border text-lg hover:bg-slate-50"
                     aria-label="Aumentar"
                   >
                     +
                   </button>
-                  <span className="ml-1 text-gray-400 text-xs">
+                  <span className="ml-1 text-slate-400 text-xs">
                     ${Number(i.precio).toFixed(2)} c/u
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => quitar(i.varianteId)}
-                  className="text-red-500 text-sm hover:underline"
+                  className="gx-btn-ghost !px-2 text-danger"
                 >
                   Quitar
                 </button>
@@ -117,16 +117,10 @@ export default function CarritoPage() {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <span className="font-bold text-lg">Total: ${total.toFixed(2)}</span>
         <div className="flex gap-3">
-          <Link
-            href="/"
-            className="rounded-lg border border-gray-300 px-4 py-3 text-gray-700 hover:bg-gray-50"
-          >
+          <Link href="/" className="gx-btn-secondary">
             Seguir comprando
           </Link>
-          <Link
-            href="/checkout"
-            className="rounded-lg bg-marca px-6 py-3 font-medium text-white hover:opacity-90"
-          >
+          <Link href="/checkout" className="gx-btn-primary px-6">
             Proceder al pago →
           </Link>
         </div>

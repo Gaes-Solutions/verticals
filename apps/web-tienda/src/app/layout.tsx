@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0d9488",
+  themeColor: "#0f766e",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +38,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="es-MX">
-      <body className="bg-gray-50 text-gray-900">
+      <body className="bg-slate-50 text-slate-900">
         <div className="bg-marca text-white text-xs">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-1 px-4 py-2">
             <span className="flex items-center gap-1.5">
@@ -67,11 +67,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <HeaderAcciones />
           </div>
           {navCategorias.length > 0 && (
-            <nav className="border-gray-100 border-t bg-white">
+            <nav className="border-slate-100 border-t bg-white">
               <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <Link
                   href="/?soloOfertas=true"
-                  className="flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-3 py-1 font-semibold text-red-600 hover:bg-red-100"
+                  className="flex shrink-0 items-center gap-1 rounded-full bg-danger-light px-3 py-1 font-semibold text-danger hover:bg-danger-light/70"
                 >
                   <Flame size={14} strokeWidth={2.25} /> Ofertas
                 </Link>
@@ -79,7 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link
                     key={c.id}
                     href={`/?cat=${c.id}`}
-                    className="shrink-0 rounded-full px-3 py-1 text-gray-600 hover:bg-gray-100"
+                    className="shrink-0 rounded-full px-3 py-1 text-slate-600 hover:bg-slate-100"
                   >
                     {c.nombre}
                   </Link>

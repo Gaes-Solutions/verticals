@@ -28,7 +28,7 @@ export function GuardarWishlist({ productoPublicadoId }: { productoPublicadoId: 
       type="button"
       onClick={guardar}
       disabled={estado === "guardando" || estado === "guardado"}
-      className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 text-sm hover:border-marca hover:text-marca disabled:opacity-60"
+      className="gx-btn-secondary"
     >
       <Heart
         size={16}

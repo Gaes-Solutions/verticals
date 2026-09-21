@@ -31,9 +31,9 @@ export function VistosRecientes({ excluir }: { excluir?: string }) {
           <Link
             key={v.slugSeo}
             href={`/producto/${v.slugSeo}`}
-            className="group rounded-xl border border-gray-100 bg-white p-2 transition hover:shadow-md"
+            className="group rounded-xl border border-slate-100 bg-white p-2 transition hover:shadow-md"
           >
-            <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-gray-50 to-gray-100">
+            <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-slate-50 to-slate-100">
               {v.imagen ? (
                 <img
                   src={v.imagen}
@@ -41,10 +41,10 @@ export function VistosRecientes({ excluir }: { excluir?: string }) {
                   className="h-full w-full object-cover transition group-hover:scale-105"
                 />
               ) : (
-                <ImageOff size={28} strokeWidth={1.5} className="text-gray-300" />
+                <ImageOff size={28} strokeWidth={1.5} className="text-slate-300" />
               )}
             </div>
-            <p className="mt-1.5 line-clamp-2 text-gray-700 text-xs group-hover:text-marca">
+            <p className="mt-1.5 line-clamp-2 text-slate-700 text-xs group-hover:text-marca">
               {v.titulo}
             </p>
             <p className="font-bold text-marca text-sm">${Number(v.precio).toFixed(2)}</p>

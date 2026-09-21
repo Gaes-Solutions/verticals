@@ -15,13 +15,13 @@ export function FooterTienda({ nombre }: { nombre: string }) {
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 md:grid-cols-4">
         <div>
           <p className="font-bold text-marca">{nombre}</p>
-          <p className="mt-2 text-gray-500 text-sm">
+          <p className="mt-2 text-slate-500 text-sm">
             Tu tienda en línea con compra protegida y envíos a todo México.
           </p>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-gray-800 text-sm">Comprar</p>
-          <ul className="space-y-1.5 text-gray-500 text-sm">
+          <p className="mb-2 font-semibold text-slate-800 text-sm">Comprar</p>
+          <ul className="space-y-1.5 text-slate-500 text-sm">
             <li>
               <Link href="/" className="hover:text-marca">
                 Catálogo
@@ -45,8 +45,8 @@ export function FooterTienda({ nombre }: { nombre: string }) {
           </ul>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-gray-800 text-sm">Ayuda</p>
-          <ul className="space-y-1.5 text-gray-500 text-sm">
+          <p className="mb-2 font-semibold text-slate-800 text-sm">Ayuda</p>
+          <ul className="space-y-1.5 text-slate-500 text-sm">
             {POLITICAS.map((p) => (
               <li key={p.slug}>
                 <Link href={`/politicas/${p.slug}`} className="hover:text-marca">
@@ -57,24 +57,24 @@ export function FooterTienda({ nombre }: { nombre: string }) {
           </ul>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-gray-800 text-sm">Pago seguro</p>
-          <div className="flex flex-wrap items-center gap-2 text-gray-500">
-            <span title="Tarjetas" className="rounded-md border border-gray-200 p-1.5">
+          <p className="mb-2 font-semibold text-slate-800 text-sm">Pago seguro</p>
+          <div className="flex flex-wrap items-center gap-2 text-slate-500">
+            <span title="Tarjetas" className="rounded-md border border-slate-200 p-1.5">
               <CreditCard size={18} strokeWidth={1.75} />
             </span>
-            <span title="OXXO" className="rounded-md border border-gray-200 p-1.5">
+            <span title="OXXO" className="rounded-md border border-slate-200 p-1.5">
               <Store size={18} strokeWidth={1.75} />
             </span>
-            <span title="Transferencia" className="rounded-md border border-gray-200 p-1.5">
+            <span title="Transferencia" className="rounded-md border border-slate-200 p-1.5">
               <Banknote size={18} strokeWidth={1.75} />
             </span>
           </div>
-          <p className="mt-3 flex items-center gap-1.5 text-gray-400 text-xs">
+          <p className="mt-3 flex items-center gap-1.5 text-slate-400 text-xs">
             <Lock size={13} strokeWidth={2} /> Tus datos viajan cifrados.
           </p>
         </div>
       </div>
-      <div className="border-t py-4 text-center text-gray-400 text-xs">
+      <div className="border-t py-4 text-center text-slate-400 text-xs">
         © {nombre} · Powered by GaesSoft POS
       </div>
     </footer>

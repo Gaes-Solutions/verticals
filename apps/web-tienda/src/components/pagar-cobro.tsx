@@ -10,11 +10,15 @@ interface Props {
   status: string;
 }
 
+const TERMINALES = ["pagado", "cancelado", "expirado"];
+
 export function PagarCobro({ token, concepto, monto, status }: Props) {
   const [estado, setEstado] = useState(status);
   const [cargando, setCargando] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const permiteDemo = process.env.NODE_ENV !== "production";
   const montoFmt = `$${Number(monto).toFixed(2)}`;
 
   async function pagar() {
@@ -28,7 +32,10 @@ export function PagarCobro({ token, concepto, monto, status }: Props) {
       });
       const data = (await res.json()) as { status?: string; error?: string };
       if (!res.ok || data.error) throw new Error(data.error ?? "No se pudo procesar el pago");
-      setEstado(data.status === "pagado" ? "pagado" : (data.status ?? "pendiente"));
+      const nuevo = data.status === "pagado" ? "pagado" : (data.status ?? "pendiente");
+      setEstado(nuevo);
+      // Estado no terminal: el pago se está verificando, no se puede reintentar a ciegas.
+      if (!TERMINALES.includes(nuevo)) setVerificando(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
@@ -39,7 +46,7 @@ export function PagarCobro({ token, concepto, monto, status }: Props) {
   if (estado === "pagado") {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-ok-light text-ok">
           <Check size={36} />
         </div>
         <h1 className="font-bold text-2xl text-slate-800">¡Pago recibido!</h1>
@@ -61,23 +68,39 @@ export function PagarCobro({ token, concepto, monto, status }: Props) {
 
   return (
     <div className="mx-auto max-w-md py-10">
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="gx-card">
         <p className="text-slate-500 text-sm">Pago solicitado</p>
         <p className="mb-1 font-medium text-slate-800">{concepto}</p>
         <p className="mb-6 font-bold text-4xl text-marca">{montoFmt}</p>
-        {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
-        <button
-          type="button"
-          onClick={pagar}
-          disabled={cargando}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-marca py-3 font-semibold text-white hover:opacity-90 disabled:opacity-50"
-        >
-          <Lock size={16} />
-          {cargando ? "Procesando…" : `Pagar ${montoFmt} (demo)`}
-        </button>
-        <p className="mt-3 text-center text-slate-400 text-xs">
-          Pago simulado (proveedor mock). Configura Conekta para cobro real.
-        </p>
+        {error && <p className="mb-3 text-danger text-sm">{error}</p>}
+        {permiteDemo ? (
+          <>
+            <button
+              type="button"
+              onClick={pagar}
+              disabled={cargando || verificando}
+              className="gx-btn-primary w-full py-3"
+            >
+              <Lock size={16} />
+              {cargando
+                ? "Procesando…"
+                : verificando
+                  ? "Verificando pago…"
+                  : `Pagar ${montoFmt} (demo)`}
+            </button>
+            <p className="mt-3 text-center text-slate-400 text-xs">
+              Pago simulado (proveedor mock). Configura Conekta para cobro real.
+            </p>
+          </>
+        ) : (
+          <p
+            role="alert"
+            className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
+          >
+            El pago en línea no está disponible en este momento. Contacta al negocio para
+            habilitarlo o paga directamente en tienda.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -43,35 +43,35 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
   }
 
   return (
-    <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <p className="mb-2 flex items-center gap-1.5 font-medium text-gray-700 text-sm">
+    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p className="mb-2 flex items-center gap-1.5 font-medium text-slate-700 text-sm">
         <Truck size={16} strokeWidth={2} /> ¿Cuándo llega?
       </p>
-      <form onSubmit={cotizar} className="flex flex-wrap gap-2">
-        <input
-          value={cp}
-          onChange={(e) => setCp(e.target.value.replace(/\D/g, "").slice(0, 5))}
-          inputMode="numeric"
-          placeholder="Tu código postal"
-          className="w-36 rounded border px-3 py-2 text-sm"
-        />
-        <input
-          value={estado}
-          onChange={(e) => setEstado(e.target.value)}
-          placeholder="Estado"
-          className="w-32 rounded border px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          disabled={cargando}
-          className="rounded bg-marca px-4 py-2 font-medium text-sm text-white hover:opacity-90 disabled:opacity-50"
-        >
+      <form onSubmit={cotizar} className="flex flex-wrap items-end gap-2">
+        <label className="block">
+          <span className="gx-label">Código postal</span>
+          <input
+            value={cp}
+            onChange={(e) => setCp(e.target.value.replace(/\D/g, "").slice(0, 5))}
+            inputMode="numeric"
+            className="gx-input w-36"
+          />
+        </label>
+        <label className="block">
+          <span className="gx-label">Estado</span>
+          <input
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            className="gx-input w-32"
+          />
+        </label>
+        <button type="submit" disabled={cargando} className="gx-btn-primary">
           {cargando ? "…" : "Calcular"}
         </button>
       </form>
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mt-2 text-danger text-sm">{error}</p>}
       {opciones && opciones.length === 0 && (
-        <p className="mt-2 text-gray-500 text-sm">
+        <p className="mt-2 text-slate-500 text-sm">
           No tenemos cobertura a esa zona por ahora. Verifica el CP y estado.
         </p>
       )}
@@ -79,11 +79,11 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
         <ul className="mt-3 space-y-1.5">
           {opciones.map((o) => (
             <li key={o.nombrePublico} className="flex items-center justify-between text-sm">
-              <span className="text-gray-700">
+              <span className="text-slate-700">
                 {o.nombrePublico}
                 {o.diasEntregaEstimados ? ` · ${o.diasEntregaEstimados} días` : ""}
               </span>
-              <span className={o.gratis ? "font-semibold text-emerald-600" : "font-medium"}>
+              <span className={o.gratis ? "font-semibold text-ok" : "font-medium"}>
                 {o.gratis ? "Gratis" : `$${Number(o.costo).toFixed(2)}`}
               </span>
             </li>

@@ -1,4 +1,5 @@
 import { CalculadoraEnvio } from "@/components/calculadora-envio";
+import { EstadoError } from "@/components/estado-error";
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { PreguntasProducto } from "@/components/preguntas-producto";
@@ -7,9 +8,10 @@ import { ProductoCompra } from "@/components/producto-compra";
 import { ResenasResumen } from "@/components/resenas-resumen";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { RegistrarVisto, VistosRecientes } from "@/components/vistos-recientes";
-import { type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
+import { ApiError, type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 interface ProductoDetalle {
   id: string;
@@ -86,8 +88,9 @@ export async function generateMetadata({
         ...(prod.fotosArray[0] ? { images: [{ url: prod.fotosArray[0] }] } : {}),
       },
     };
-  } catch {
-    return { title: "Producto no encontrado" };
+  } catch (err) {
+    const noEncontrado = err instanceof ApiError && err.statusCode === 404;
+    return { title: noEncontrado ? "Producto no encontrado" : "Error al cargar el producto" };
   }
 }
 
@@ -166,14 +169,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
   let prod: ProductoDetalle;
   try {
     prod = await api<ProductoDetalle>(`/tienda/catalogo/${slug}`);
-  } catch {
+  } catch (err) {
+    // 404 real → página de no encontrado; cualquier otro error → estado reintentable.
+    if (err instanceof ApiError && err.statusCode === 404) notFound();
     return (
-      <div className="text-center">
-        <p className="text-gray-500">Producto no encontrado.</p>
-        <Link href="/" className="mt-4 inline-block text-marca">
-          ← Volver al catálogo
-        </Link>
-      </div>
+      <EstadoError
+        titulo="No se pudo cargar el producto"
+        descripcion="Tuvimos un problema al cargar esta información. Inténtalo de nuevo en un momento."
+      />
     );
   }
   const ratings = prod.resenas.map((r) => r.rating);
@@ -194,39 +197,39 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         }}
       />
 
-      <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-gray-500 text-sm">
+      <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-slate-500 text-sm">
         <Link href="/" className="hover:text-marca">
           Inicio
         </Link>
         {prod.categoriaPublica && (
           <>
-            <span className="text-gray-300">›</span>
+            <span className="text-slate-300">›</span>
             <Link href={`/?cat=${prod.categoriaPublica.slugSeo}`} className="hover:text-marca">
               {prod.categoriaPublica.nombre}
             </Link>
           </>
         )}
-        <span className="text-gray-300">›</span>
-        <span className="text-gray-700">{prod.tituloPublico}</span>
+        <span className="text-slate-300">›</span>
+        <span className="text-slate-700">{prod.tituloPublico}</span>
       </nav>
 
       <div className="grid gap-8 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-4">
+        <div className="gx-card p-4">
           <GaleriaProducto
             fotos={prod.fotosArray}
             alt={prod.tituloPublico}
             zoom={config.galeriaZoom}
           />
         </div>
-        <div className="rounded-xl border bg-white p-5 sm:p-6">
+        <div className="gx-card p-5 sm:p-6">
           <h1 className="font-bold text-2xl">{prod.tituloPublico}</h1>
           {config.mostrarRatingProducto && ratings.length > 0 && (
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className="text-amber-500">
+              <span className="text-warn">
                 {"★".repeat(Math.round(ratingProm))}
                 {"☆".repeat(5 - Math.round(ratingProm))}
               </span>
-              <span className="text-gray-500">
+              <span className="text-slate-500">
                 {ratingProm.toFixed(1)} · {ratings.length} reseña{ratings.length === 1 ? "" : "s"}
               </span>
             </div>
@@ -258,7 +261,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           </div>
           <CalculadoraEnvio subtotal={precioActual} />
           {prod.descripcionMd && (
-            <p className="mt-6 whitespace-pre-line text-gray-600 leading-relaxed">
+            <p className="mt-6 whitespace-pre-line text-slate-600 leading-relaxed">
               {prod.descripcionMd}
             </p>
           )}
@@ -271,13 +274,13 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           <ResenasResumen ratings={ratings} />
           <div className="space-y-4">
             {prod.resenas.map((r) => (
-              <div key={r.id} className="rounded border bg-white p-4">
-                <div className="text-amber-500">
+              <div key={r.id} className="gx-card p-4">
+                <div className="text-warn">
                   {"★".repeat(r.rating)}
                   {"☆".repeat(5 - r.rating)}
                 </div>
                 {r.titulo && <p className="mt-1 font-medium">{r.titulo}</p>}
-                {r.comentario && <p className="mt-1 text-gray-600 text-sm">{r.comentario}</p>}
+                {r.comentario && <p className="mt-1 text-slate-600 text-sm">{r.comentario}</p>}
                 {r.imagenesArray && r.imagenesArray.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {r.imagenesArray.map((src) => (

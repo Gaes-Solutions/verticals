@@ -47,7 +47,7 @@ export function SolicitarDevolucion({
 
   if (solicitudExistente) {
     return (
-      <div className="rounded-lg border bg-white p-4 text-sm">
+      <div className="gx-card !p-4 text-sm">
         <span className="font-medium">Devolución:</span>{" "}
         {ESTADO_LABEL[solicitudExistente.estado] ?? solicitudExistente.estado}
         {solicitudExistente.rechazoMotivo ? ` — ${solicitudExistente.rechazoMotivo}` : ""}
@@ -95,42 +95,40 @@ export function SolicitarDevolucion({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 text-sm hover:border-marca hover:text-marca"
-      >
+      <button type="button" onClick={() => setAbierto(true)} className="gx-btn-secondary">
         ↩️ Solicitar devolución
       </button>
 
       {abierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
             <div className="mb-3 flex items-start justify-between">
               <h2 className="font-bold text-lg">Solicitar devolución</h2>
               <button
                 type="button"
                 onClick={() => setAbierto(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="gx-btn-ghost !px-2"
               >
                 ✕
               </button>
             </div>
 
-            <p className="mb-1 font-medium text-gray-700 text-sm">Motivo</p>
-            <select
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {MOTIVOS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <label className="mb-4 block">
+              <span className="gx-label">Motivo</span>
+              <select
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                className="gx-input"
+              >
+                {MOTIVOS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            <p className="mb-2 font-medium text-gray-700 text-sm">¿Qué artículos devuelves?</p>
+            <p className="mb-2 font-medium text-slate-700 text-sm">¿Qué artículos devuelves?</p>
             <div className="mb-4 space-y-2">
               {items.map((it) => (
                 <div
@@ -149,9 +147,9 @@ export function SolicitarDevolucion({
                         [it.varianteId]: Math.max(0, Math.min(it.cantidad, Number(e.target.value))),
                       }))
                     }
-                    className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-center"
+                    className="gx-input w-16 !px-2 text-center"
                   />
-                  <span className="text-gray-400">/ {it.cantidad}</span>
+                  <span className="text-slate-400">/ {it.cantidad}</span>
                 </div>
               ))}
             </div>
@@ -161,15 +159,15 @@ export function SolicitarDevolucion({
               onChange={(e) => setDescripcion(e.target.value)}
               placeholder="Cuéntanos qué pasó (opcional)"
               rows={3}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="gx-input mb-4"
             />
 
-            {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-3 text-danger text-sm">{error}</p>}
             <button
               type="button"
               onClick={enviar}
               disabled={enviando}
-              className="w-full rounded-lg bg-marca py-2.5 font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="gx-btn-primary w-full"
             >
               {enviando ? "Enviando…" : "Enviar solicitud"}
             </button>

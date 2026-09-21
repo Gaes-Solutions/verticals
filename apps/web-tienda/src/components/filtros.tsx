@@ -31,8 +31,8 @@ function useParams() {
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="border-gray-100 border-b py-4 first:pt-0">
-      <h3 className="mb-2.5 font-semibold text-gray-800 text-sm">{titulo}</h3>
+    <div className="border-slate-100 border-b py-4 first:pt-0">
+      <h3 className="mb-2.5 font-semibold text-slate-800 text-sm">{titulo}</h3>
       {children}
     </div>
   );
@@ -66,7 +66,7 @@ export function PanelFiltros({
             <button
               type="button"
               onClick={() => nav({ cat: null })}
-              className={`block w-full rounded px-2 py-1.5 text-left transition ${!cat ? "bg-marca/10 font-semibold text-marca" : "text-gray-600 hover:bg-gray-50"}`}
+              className={`block w-full rounded px-2 py-1.5 text-left transition ${!cat ? "bg-marca/10 font-semibold text-marca" : "text-slate-600 hover:bg-slate-50"}`}
             >
               Todas
             </button>
@@ -76,7 +76,7 @@ export function PanelFiltros({
               <button
                 type="button"
                 onClick={() => nav({ cat: c.id })}
-                className={`block w-full truncate rounded px-2 py-1.5 text-left transition ${cat === c.id ? "bg-marca/10 font-semibold text-marca" : "text-gray-600 hover:bg-gray-50"}`}
+                className={`block w-full truncate rounded px-2 py-1.5 text-left transition ${cat === c.id ? "bg-marca/10 font-semibold text-marca" : "text-slate-600 hover:bg-slate-50"}`}
               >
                 {c.nombre}
               </button>
@@ -93,21 +93,21 @@ export function PanelFiltros({
             value={min}
             onChange={(e) => setMin(e.target.value)}
             placeholder="Mín"
-            className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 outline-none focus:border-marca"
+            className="gx-input"
           />
-          <span className="text-gray-300">–</span>
+          <span className="text-slate-300">–</span>
           <input
             type="number"
             inputMode="numeric"
             value={max}
             onChange={(e) => setMax(e.target.value)}
             placeholder="Máx"
-            className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 outline-none focus:border-marca"
+            className="gx-input"
           />
           <button
             type="button"
             onClick={() => nav({ precioMin: min || null, precioMax: max || null })}
-            className="shrink-0 rounded-lg bg-marca px-3 py-1.5 font-semibold text-white"
+            className="gx-btn-primary shrink-0"
           >
             OK
           </button>
@@ -115,7 +115,7 @@ export function PanelFiltros({
       </Seccion>
 
       <Seccion titulo="Ofertas y disponibilidad">
-        <label className="flex cursor-pointer items-center gap-2 py-1 text-gray-700">
+        <label className="flex cursor-pointer items-center gap-2 py-1 text-slate-700">
           <input
             type="checkbox"
             checked={soloOfertas}
@@ -124,7 +124,7 @@ export function PanelFiltros({
           />
           Solo ofertas
         </label>
-        <label className="flex cursor-pointer items-center gap-2 py-1 text-gray-700">
+        <label className="flex cursor-pointer items-center gap-2 py-1 text-slate-700">
           <input
             type="checkbox"
             checked={soloDisponibles}
@@ -147,7 +147,7 @@ export function PanelFiltros({
             q: null,
           })
         }
-        className="mt-4 w-full rounded-lg border border-gray-200 py-2 font-medium text-gray-500 hover:bg-gray-50"
+        className="gx-btn-secondary mt-4 w-full"
       >
         Limpiar filtros
       </button>
@@ -185,11 +185,7 @@ export function BarraFiltros({
   return (
     <>
       <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 font-medium text-gray-700 text-sm lg:hidden"
-        >
+        <button type="button" onClick={() => setOpen(true)} className="gx-btn-secondary lg:hidden">
           <SlidersHorizontal size={16} strokeWidth={2} /> Filtros
           {chips.length > 0 && (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-marca px-1 text-[11px] text-white">
@@ -198,18 +194,18 @@ export function BarraFiltros({
           )}
         </button>
 
-        <span className="hidden text-gray-500 text-sm sm:inline">
+        <span className="hidden text-slate-500 text-sm sm:inline">
           {total.toLocaleString("es-MX")} resultados
         </span>
 
         <label className="ml-auto flex items-center gap-2 text-sm">
-          <span className="hidden text-gray-500 sm:inline">Ordenar</span>
+          <span className="hidden text-slate-500 sm:inline">Ordenar</span>
           <select
             value={params.get("orden") ?? "relevancia"}
             onChange={(e) =>
               setParam({ orden: e.target.value === "relevancia" ? null : e.target.value })
             }
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 outline-none focus:border-marca"
+            className="gx-input !w-auto"
           >
             {ORDENES.map((o) => (
               <option key={o.value} value={o.value}>
@@ -236,20 +232,15 @@ export function BarraFiltros({
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            aria-label="Cerrar"
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-black/40"
-          />
-          <div className="absolute right-0 bottom-0 left-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-5">
+        <div className="gx-modal-overlay lg:hidden">
+          <div className="gx-modal-panel">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-bold text-gray-800 text-lg">Filtros</h2>
+              <h2 className="font-bold text-lg text-slate-800">Filtros</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-2xl text-gray-400 leading-none"
+                className="gx-btn-ghost !px-2"
+                aria-label="Cerrar filtros"
               >
                 ×
               </button>
@@ -258,7 +249,7 @@ export function BarraFiltros({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="mt-4 w-full rounded-lg bg-marca py-3 font-semibold text-white"
+              className="gx-btn-primary mt-4 w-full"
             >
               Ver {total.toLocaleString("es-MX")} resultados
             </button>

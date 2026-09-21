@@ -39,19 +39,15 @@ export function CancelarPedido({ folio }: { folio: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className="rounded-lg border border-red-300 px-4 py-2 font-medium text-red-600 text-sm hover:bg-red-50"
-      >
+      <button type="button" onClick={() => setAbierto(true)} className="gx-btn-danger">
         Cancelar compra
       </button>
 
       {abierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
             <h2 className="mb-1 font-bold text-lg">Cancelar compra</h2>
-            <p className="mb-4 text-gray-500 text-sm">
+            <p className="mb-4 text-slate-500 text-sm">
               Si ya pagaste, te reembolsaremos. Solo se puede cancelar antes de que se envíe.
             </p>
             <textarea
@@ -59,22 +55,18 @@ export function CancelarPedido({ folio }: { folio: string }) {
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="¿Por qué cancelas?"
               rows={3}
-              className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="gx-input mb-4"
             />
-            {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-3 text-danger text-sm">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAbierto(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-600 text-sm"
-              >
+              <button type="button" onClick={() => setAbierto(false)} className="gx-btn-secondary">
                 No, conservar
               </button>
               <button
                 type="button"
                 onClick={cancelar}
                 disabled={enviando}
-                className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                className="gx-btn-danger"
               >
                 {enviando ? "Cancelando…" : "Sí, cancelar"}
               </button>

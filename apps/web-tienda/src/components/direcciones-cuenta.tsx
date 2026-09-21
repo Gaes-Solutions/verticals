@@ -33,6 +33,7 @@ export function DireccionesCuenta() {
   const [form, setForm] = useState({ ...VACIA });
   const [editId, setEditId] = useState<string | null>(null);
   const [abierto, setAbierto] = useState(false);
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
@@ -81,6 +82,7 @@ export function DireccionesCuenta() {
 
   async function borrar(id: string) {
     await fetch(`/api/cuenta/direcciones/${id}`, { method: "DELETE" });
+    setConfirmandoId(null);
     cargar();
   }
 
@@ -95,37 +97,43 @@ export function DireccionesCuenta() {
             setForm({ ...VACIA });
             setAbierto(true);
           }}
-          className="rounded-lg bg-marca px-3 py-1.5 font-semibold text-sm text-white hover:opacity-90"
+          className="gx-btn-primary"
         >
           + Agregar
         </button>
       </div>
 
       {dirs.length === 0 ? (
-        <p className="text-gray-500 text-sm">Aún no guardas direcciones.</p>
+        <p className="text-slate-500 text-sm">Aún no guardas direcciones.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {dirs.map((d) => (
-            <div key={d.id} className="rounded-lg border bg-white p-4 text-sm">
+            <div key={d.id} className="gx-card !p-4 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{d.etiqueta}</span>
-                {d.isDefaultEnvio && (
-                  <span className="rounded bg-marca/10 px-2 py-0.5 text-marca text-xs">
-                    Predeterminada
-                  </span>
-                )}
+                {d.isDefaultEnvio && <span className="gx-badge-info">Predeterminada</span>}
               </div>
-              <p className="mt-1 text-gray-600">
+              <p className="mt-1 text-slate-600">
                 {d.calle} {d.numeroExterior}, {d.colonia}, {d.municipio}, {d.estado} CP{" "}
                 {d.codigoPostal}
               </p>
-              <div className="mt-2 flex gap-3 text-xs">
-                <button type="button" onClick={() => editar(d)} className="text-marca">
+              <div className="mt-3 flex gap-2">
+                <button type="button" onClick={() => editar(d)} className="gx-btn-ghost">
                   Editar
                 </button>
-                <button type="button" onClick={() => borrar(d.id)} className="text-red-600">
-                  Eliminar
-                </button>
+                {confirmandoId === d.id ? (
+                  <button type="button" onClick={() => borrar(d.id)} className="gx-btn-danger">
+                    ¿Seguro? Sí, eliminar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoId(d.id)}
+                    className="gx-btn-danger"
+                  >
+                    Eliminar
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -133,14 +141,15 @@ export function DireccionesCuenta() {
       )}
 
       {abierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={guardar}
-            className="max-h-[90vh] w-full max-w-md space-y-3 overflow-y-auto rounded-xl bg-white p-6"
-          >
+        <div className="gx-modal-overlay">
+          <form onSubmit={guardar} className="gx-modal-panel space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-lg">{editId ? "Editar" : "Nueva"} dirección</h3>
-              <button type="button" onClick={() => setAbierto(false)} className="text-gray-400">
+              <button
+                type="button"
+                onClick={() => setAbierto(false)}
+                className="gx-btn-ghost !px-2"
+              >
                 ✕
               </button>
             </div>
@@ -157,12 +166,12 @@ export function DireccionesCuenta() {
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="block">
-                <span className="mb-1 block font-medium text-sm">{label}</span>
+                <span className="gx-label">{label}</span>
                 <input
                   value={form[key] as string}
                   onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                   required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
-                  className="w-full rounded border px-3 py-2 text-sm"
+                  className="gx-input"
                 />
               </label>
             ))}
@@ -174,11 +183,8 @@ export function DireccionesCuenta() {
               />
               Usar como predeterminada
             </label>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-marca py-2.5 font-semibold text-white hover:opacity-90"
-            >
+            {error && <p className="text-danger text-sm">{error}</p>}
+            <button type="submit" className="gx-btn-primary w-full">
               Guardar
             </button>
           </form>
