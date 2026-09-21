@@ -9,18 +9,6 @@ const TITULOS: Record<string, string> = {
   terminos: "Términos y condiciones",
 };
 
-/** Texto por defecto cuando el tenant no ha capturado su política. */
-const DEFAULTS: Record<string, string> = {
-  envios:
-    "Realizamos envíos a todo México. El costo y tiempo de entrega se calculan en el checkout según tu código postal. Recibirás la guía de rastreo cuando tu pedido se despache.",
-  devoluciones:
-    "Puedes solicitar un cambio o devolución dentro de los días posteriores a la entrega desde tu cuenta. Los productos deben estar en su estado original.",
-  privacidad:
-    "Tus datos personales se usan únicamente para procesar tus pedidos y se tratan conforme a la Ley Federal de Protección de Datos Personales (LFPDPPP). No los compartimos con terceros con fines comerciales.",
-  terminos:
-    "Al comprar en esta tienda aceptas nuestros términos de uso. Los precios y la disponibilidad pueden cambiar sin previo aviso.",
-};
-
 export async function generateMetadata({
   params,
 }: {
@@ -34,8 +22,9 @@ export default async function PoliticaPage({ params }: { params: Promise<{ slug:
   const { slug } = await params;
   const titulo = TITULOS[slug] ?? "Información";
   const config = await getTiendaConfig().catch(() => null);
-  const html = config?.politicasHtml?.[slug];
-  const texto = DEFAULTS[slug];
+  // El servidor ya manda el texto del dueño o, si no lo capturó, el texto base.
+  const texto = config?.politicasHtml?.[slug] ?? "";
+  const esHtml = /<[a-z][\s\S]*>/i.test(texto);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -44,15 +33,15 @@ export default async function PoliticaPage({ params }: { params: Promise<{ slug:
       </Link>
       <h1 className="mt-3 mb-6 font-bold text-2xl">{titulo}</h1>
       <article className="gx-card">
-        {html ? (
+        {texto && esHtml ? (
           <div
             className="prose prose-sm max-w-none text-slate-700"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: política HTML capturada por el dueño del tenant
-            dangerouslySetInnerHTML={{ __html: html }}
+            dangerouslySetInnerHTML={{ __html: texto }}
           />
         ) : (
           <p className="whitespace-pre-line text-slate-700 leading-relaxed">
-            {texto ?? "Esta información estará disponible próximamente."}
+            {texto || "Esta información estará disponible próximamente."}
           </p>
         )}
       </article>

@@ -125,6 +125,65 @@ describe("publicación del catálogo por lotes", () => {
     expect(conStock.every((p) => p.tituloPublico === "Globo metálico")).toBe(true);
   });
 
+  it("entrega un texto base de políticas con los datos del negocio y lo publica en la tienda", async () => {
+    await db().cfdiConfig.create({
+      data: {
+        rfcEmisor: "XAXX010101000",
+        razonSocialEmisor: "Globos de Fiesta SA de CV",
+        regimenFiscalSat: "601",
+        codigoPostalEmisor: "58000",
+        lugarExpedicion: "58000",
+        facturamaApiKey: "test",
+        correoEmisor: "hola@globosdefiesta.mx",
+      },
+    });
+
+    const creada = await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(),
+      payload: { activa: false, subdominio: "globos-de-fiesta", nombre: "Globos de Fiesta" },
+    });
+    expect([200, 201]).toContain(creada.statusCode);
+
+    const config = await app.inject({ url: "/t/ecommerce/config", headers: auth() });
+    expect(config.statusCode, config.body).toBe(200);
+    const sugeridas = config.json().politicasSugeridas as Record<string, string>;
+    expect(Object.keys(sugeridas).sort()).toEqual([
+      "devoluciones",
+      "envios",
+      "privacidad",
+      "terminos",
+    ]);
+    expect(sugeridas.privacidad).toContain("Globos de Fiesta SA de CV");
+    expect(sugeridas.privacidad).toContain("hola@globosdefiesta.mx");
+    expect(sugeridas.privacidad).toContain("ARCO");
+
+    const publica = await app.inject({ url: "/t/tienda/config-publica", headers: auth() });
+    expect(publica.statusCode, publica.body).toBe(200);
+    const enTienda = publica.json().politicasHtml as Record<string, string>;
+    expect(enTienda.privacidad).toBe(sugeridas.privacidad);
+    expect(enTienda.terminos).toContain("PROFECO");
+  });
+
+  it("lo que escribe el dueño gana sobre el texto base", async () => {
+    await app.inject({
+      method: "PUT",
+      url: "/t/ecommerce/config",
+      headers: auth(),
+      payload: {
+        activa: false,
+        subdominio: "globos-de-fiesta",
+        nombre: "Globos de Fiesta",
+        politicasHtml: { privacidad: "Mi propio aviso de privacidad." },
+      },
+    });
+    const publica = await app.inject({ url: "/t/tienda/config-publica", headers: auth() });
+    const enTienda = publica.json().politicasHtml as Record<string, string>;
+    expect(enTienda.privacidad).toBe("Mi propio aviso de privacidad.");
+    expect(enTienda.envios).toContain("República Mexicana");
+  });
+
   it("avisa cuántos faltan cuando el lote se queda corto", async () => {
     await lote({ publicar: false, limite: 500 });
     expect((await lote({ limite: 2 })).json()).toEqual({ procesados: 2, restantes: 1 });

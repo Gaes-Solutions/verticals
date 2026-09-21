@@ -3,6 +3,11 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { evaluarCupon } from "../checkout/cupon-service.js";
 import { estadoTienda } from "../ecommerce-config/estado-tienda.js";
+import {
+  datosDelNegocio,
+  politicasParaPublicar,
+  politicasSugeridas,
+} from "../ecommerce-config/politicas.js";
 import { crearAvisoStock } from "../stock-alerts/service.js";
 import {
   enriquecerDetalle,
@@ -92,7 +97,10 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
         ? Number(tarifaGratis.montoMinimoEnvioGratis).toFixed(2)
         : null,
-      politicasHtml: c.politicasHtml ?? {},
+      politicasHtml: politicasParaPublicar(
+        c.politicasHtml,
+        politicasSugeridas(await datosDelNegocio(req.tenantPrisma)),
+      ),
     };
   });
 

@@ -18,6 +18,7 @@ import {
   publicarProductoSchema,
 } from "./schemas.js";
 
+import { datosDelNegocio, politicasSugeridas } from "./politicas.js";
 import { publicarLote } from "./publicacion-lote.js";
 
 const SINGLETON_ID = "tienda";
@@ -111,8 +112,13 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_CONFIGURAR);
     const config = await req.tenantPrisma.configTiendaEcommerce.findFirst();
     if (!config) return config;
-    // El panel necesita la dirección final para armar el QR del mostrador.
-    return { ...config, urlPublica: urlPublicaTienda(config) };
+    // El panel necesita la dirección final para armar el QR del mostrador, y el
+    // texto base de cada política para que el dueño no empiece de cero.
+    return {
+      ...config,
+      urlPublica: urlPublicaTienda(config),
+      politicasSugeridas: politicasSugeridas(await datosDelNegocio(req.tenantPrisma)),
+    };
   });
 
   // Lo que el panel necesita antes de guardar, aun sin tienda configurada: la
