@@ -55,9 +55,19 @@ export function EstadoCuentaPage() {
         <>
           {data.credito ? (
             <div className="mb-6 grid gap-4 sm:grid-cols-3">
-              <Caja titulo="Línea autorizada" valor={`$${Number(data.credito.lineaAutorizada).toFixed(2)}`} />
-              <Caja titulo="Saldo por pagar" valor={`$${Number(data.credito.saldoCxcAbiertas).toFixed(2)}`} />
-              <Caja titulo="Disponible" valor={`$${Number(data.credito.disponible).toFixed(2)}`} destacado />
+              <Caja
+                titulo="Línea autorizada"
+                valor={`$${Number(data.credito.lineaAutorizada).toFixed(2)}`}
+              />
+              <Caja
+                titulo="Saldo por pagar"
+                valor={`$${Number(data.credito.saldoCxcAbiertas).toFixed(2)}`}
+              />
+              <Caja
+                titulo="Disponible"
+                valor={`$${Number(data.credito.disponible).toFixed(2)}`}
+                destacado
+              />
             </div>
           ) : (
             <p className="gx-card mb-6 text-sm text-slate-500">

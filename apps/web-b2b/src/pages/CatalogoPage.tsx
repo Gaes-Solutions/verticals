@@ -28,9 +28,7 @@ export function CatalogoPage({ onAgregado }: { onAgregado: () => void }) {
       if (acumular) setCargandoMas(true);
       else setLoading(true);
       setError(null);
-      api<CatalogoResp>(
-        `/b2b-portal/catalogo?q=${encodeURIComponent(q)}&page=${nuevaPage}`,
-      )
+      api<CatalogoResp>(`/b2b-portal/catalogo?q=${encodeURIComponent(q)}&page=${nuevaPage}`)
         .then((r) => {
           setItems((prev) => (acumular ? [...prev, ...r.items] : r.items));
           setPage(r.page);

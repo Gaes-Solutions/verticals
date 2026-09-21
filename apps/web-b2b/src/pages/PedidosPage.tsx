@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Modal, ModalClose } from "../components/Modal.js";
 import { EstadoError } from "../components/Estados.js";
+import { Modal, ModalClose } from "../components/Modal.js";
 import { Skeleton } from "../components/Skeleton.js";
 import { api } from "../lib/api.js";
 import type { PedidoRow } from "../lib/types.js";
@@ -157,7 +157,9 @@ export function PedidosPage() {
             <div>
               <h2 className="text-lg font-bold text-slate-800">{detalle.folio}</h2>
               {detalle.cotizacion && (
-                <p className="text-xs text-slate-500">desde cotización {detalle.cotizacion.folio}</p>
+                <p className="text-xs text-slate-500">
+                  desde cotización {detalle.cotizacion.folio}
+                </p>
               )}
             </div>
             <ModalClose onClose={() => setDetalle(null)} />

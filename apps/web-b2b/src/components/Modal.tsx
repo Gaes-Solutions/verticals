@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 const openModals: Array<() => void> = [];
 
@@ -22,6 +22,7 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
   }, [onClose]);
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: gx-modal-overlay es el patrón del design system (overlay div fijo + panel); <dialog> rompería las clases gx-* compartidas entre las 4 apps
     <div className="gx-modal-overlay" role="dialog" aria-modal="true">
       <div className="gx-modal-panel">{children}</div>
     </div>

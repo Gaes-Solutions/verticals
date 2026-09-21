@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { EstadoError } from "../components/Estados.js";
 import { Modal, ModalClose } from "../components/Modal.js";
 import { SignaturePad } from "../components/SignaturePad.js";
-import { EstadoError } from "../components/Estados.js";
 import { Skeleton } from "../components/Skeleton.js";
 import { ApiError, api } from "../lib/api.js";
 import { PERMISOS } from "../lib/permisos.js";
@@ -149,9 +149,7 @@ export function CotizacionesPage({ puedeHacer }: { puedeHacer: (permiso: string)
                       {ESTADO[c.estado] ?? c.estado}
                     </span>
                   </td>
-                  <td className="gx-td text-right font-semibold">
-                    ${Number(c.total).toFixed(2)}
-                  </td>
+                  <td className="gx-td text-right font-semibold">${Number(c.total).toFixed(2)}</td>
                   <td className="gx-td text-right">
                     <button type="button" onClick={() => verDetalle(c.id)} className="gx-btn-ghost">
                       Ver
@@ -198,8 +196,7 @@ export function CotizacionesPage({ puedeHacer }: { puedeHacer: (permiso: string)
             <span>${Number(detalle.total).toFixed(2)}</span>
           </div>
           {detalle.estado === "enviada" &&
-            (puedeHacer(PERMISOS.firmarCotizacion) ||
-              puedeHacer(PERMISOS.rechazarCotizacion)) && (
+            (puedeHacer(PERMISOS.firmarCotizacion) || puedeHacer(PERMISOS.rechazarCotizacion)) && (
               <div className="mt-4 flex gap-2">
                 {puedeHacer(PERMISOS.firmarCotizacion) && (
                   <button

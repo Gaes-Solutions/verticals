@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { type ChangeEvent, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 import { type LineaCarrito, leer, onCambio, quitar, setCantidad, vaciar } from "../lib/carrito.js";
 import { PERMISOS } from "../lib/permisos.js";
@@ -111,7 +111,11 @@ export function CarritoPage({
                   ${(Number(i.precio) * i.cantidad).toFixed(2)}
                 </td>
                 <td className="gx-td text-right">
-                  <button type="button" onClick={() => quitar(i.varianteId)} className="gx-btn-ghost">
+                  <button
+                    type="button"
+                    onClick={() => quitar(i.varianteId)}
+                    className="gx-btn-ghost"
+                  >
                     Quitar
                   </button>
                 </td>
@@ -138,13 +142,13 @@ export function CarritoPage({
           </select>
         </label>
         <label className="block">
-          <span className="gx-label">
-            Orden de compra{requiereOc ? " (requerida)" : ""}
-          </span>
+          <span className="gx-label">Orden de compra{requiereOc ? " (requerida)" : ""}</span>
           <input
             value={oc}
             onChange={(e) => setOc(e.target.value)}
-            placeholder={requiereOc ? "Tu empresa la requiere" : "OC-12345 (si tu empresa la requiere)"}
+            placeholder={
+              requiereOc ? "Tu empresa la requiere" : "OC-12345 (si tu empresa la requiere)"
+            }
             required={requiereOc}
             aria-required={requiereOc}
             className="gx-input"
@@ -152,11 +156,7 @@ export function CarritoPage({
         </label>
         <label className="block sm:col-span-2">
           <span className="gx-label">Notas</span>
-          <input
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            className="gx-input"
-          />
+          <input value={notas} onChange={(e) => setNotas(e.target.value)} className="gx-input" />
         </label>
       </div>
 

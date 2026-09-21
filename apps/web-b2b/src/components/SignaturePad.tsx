@@ -97,7 +97,12 @@ export function SignaturePad({
         <span className="text-xs text-slate-500">Firma con el dedo o el mouse</span>
       </div>
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={onCancel} disabled={procesando} className="gx-btn-ghost flex-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={procesando}
+          className="gx-btn-ghost flex-1"
+        >
           Cancelar
         </button>
         <button
