@@ -26,6 +26,8 @@ module.exports = {
         danger: { DEFAULT: "#dc2626", light: "#fee2e2" },
         warn: { DEFAULT: "#d97706", light: "#fef3c7" },
         info: { DEFAULT: "#2563eb", light: "#dbeafe" },
+        // badge de oferta estilo marketplace (ámbar)
+        offer: { DEFAULT: "#fbbf24", dark: "#78350f" },
       },
       borderRadius: {
         lg: "0.5rem",

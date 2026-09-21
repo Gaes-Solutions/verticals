@@ -1,6 +1,7 @@
 import { BarraFiltros, PanelFiltros } from "@/components/filtros";
 import { Paginacion } from "@/components/paginacion";
 import { ProductoGrid } from "@/components/producto-card";
+import { RepetirDespensa } from "@/components/repetir-despensa";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { ApiError, type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
 import { Flame, PackageSearch, Sparkles, TrendingUp } from "lucide-react";
@@ -21,11 +22,13 @@ function Seccion({
   titulo,
   items,
   verMas,
+  msi,
 }: {
   icono: ReactNode;
   titulo: string;
   items: CatalogoResponse["items"];
   verMas?: string;
+  msi?: { habilitado: boolean; meses: number[]; montoMinimo: string };
 }) {
   if (items.length === 0) return null;
   return (
@@ -41,7 +44,7 @@ function Seccion({
           </Link>
         )}
       </div>
-      <ProductoGrid items={items} />
+      <ProductoGrid items={items} {...(msi ? { msi } : {})} />
     </section>
   );
 }
@@ -134,29 +137,38 @@ export default async function CatalogoPage({
 
   const catActiva = categorias.find((c) => c.id === cat);
   const titulo = q ? `Resultados para "${q}"` : (catActiva?.nombre ?? "Todo el catálogo");
+  const msiCfg = {
+    habilitado: tienda.msiHabilitado,
+    meses: tienda.msiMeses,
+    montoMinimo: tienda.msiMontoMinimo,
+  };
 
   return (
     <div>
       {!filtrando && (
         <>
           <Hero nombre={cfg?.nombre ?? "Tienda"} lema={cfg?.lema ?? null} />
+          <RepetirDespensa />
           <Seccion
             icono={<Flame size={22} className="text-danger" />}
             titulo="Ofertas del día"
             items={ofertas}
             verMas="/?soloOfertas=true"
+            msi={msiCfg}
           />
           <Seccion
             icono={<Sparkles size={22} className="text-marca" />}
             titulo="Recién llegados"
             items={novedades}
             verMas="/?orden=novedad"
+            msi={msiCfg}
           />
           <Seccion
             icono={<TrendingUp size={22} className="text-marca" />}
             titulo="Más vendidos"
             items={populares}
             verMas="/?orden=populares"
+            msi={msiCfg}
           />
         </>
       )}
@@ -187,7 +199,7 @@ export default async function CatalogoPage({
             </div>
           ) : (
             <>
-              <ProductoGrid items={data.items} />
+              <ProductoGrid items={data.items} msi={msiCfg} />
               <Paginacion page={data.page} pageSize={data.pageSize} total={data.total} sp={sp} />
             </>
           )}

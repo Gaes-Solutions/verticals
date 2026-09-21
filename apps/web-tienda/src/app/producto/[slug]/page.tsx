@@ -308,7 +308,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">
             También te puede interesar
           </h2>
-          <ProductoGrid items={prod.relacionados} />
+          <ProductoGrid
+            items={prod.relacionados}
+            msi={{
+              habilitado: config.msiHabilitado,
+              meses: config.msiMeses,
+              montoMinimo: config.msiMontoMinimo,
+            }}
+          />
         </section>
       )}
 

@@ -32,12 +32,15 @@ export function PagoTarjetaConekta({
   montoTotal,
   msiMeses,
   procesando,
+  formId,
   onPagar,
 }: {
   publicKey: string;
   montoTotal: number;
   msiMeses: number[];
   procesando: boolean;
+  /** id del <form> para que un CTA externo (barra sticky) lo dispare. */
+  formId?: string;
   onPagar: (cardTokenId: string, meses: number | null) => void;
 }) {
   const [numero, setNumero] = useState("");
@@ -115,7 +118,7 @@ export function PagoTarjetaConekta({
   const cargando = tokenizando || procesando;
 
   return (
-    <form onSubmit={tokenizar} className="space-y-3">
+    <form onSubmit={tokenizar} id={formId} className="space-y-3">
       <label className="block">
         <span className="gx-label">Número de tarjeta</span>
         <input

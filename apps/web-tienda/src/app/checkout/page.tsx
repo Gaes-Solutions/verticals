@@ -9,10 +9,10 @@ import {
   prepareAttempt,
   submitAttempt,
 } from "@/lib/checkout-attempt";
-import { CreditCard, ImageOff, Store, Truck } from "lucide-react";
+import { CreditCard, ImageOff, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 interface OpcionEnvio {
   tarifaId: string;
@@ -48,6 +48,8 @@ interface DireccionGuardada {
   isDefaultEnvio: boolean;
 }
 
+const FORM_PAGO_ID = "form-pago-tarjeta";
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
@@ -67,6 +69,8 @@ export default function CheckoutPage() {
     envioGratis: boolean;
   } | null>(null);
   const [direcciones, setDirecciones] = useState<DireccionGuardada[]>([]);
+  const [direccionId, setDireccionId] = useState("");
+  const [modoDir, setModoDir] = useState<"guardada" | "nueva">("nueva");
   const [guardarDir, setGuardarDir] = useState(false);
   const [config, setConfig] = useState<TiendaConfig | null>(null);
   const [modoEntrega, setModoEntrega] = useState<"envio" | "pickup">("envio");
@@ -97,14 +101,18 @@ export default function CheckoutPage() {
       setEmail((prev) => prev || (me.email ?? ""));
       setNombre((prev) => prev || me.nombre);
     });
-    // direcciones guardadas (checkout rápido)
+    // direcciones guardadas (checkout rápido): la predeterminada queda pre-seleccionada
     fetch("/api/cuenta/direcciones").then(async (res) => {
       if (!res.ok) return;
       const dirs = (await res.json()) as DireccionGuardada[];
       if (!Array.isArray(dirs) || dirs.length === 0) return;
       setDirecciones(dirs);
       const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
-      if (def) usarDireccion(def);
+      if (def) {
+        setDireccionId(def.id);
+        setModoDir("guardada");
+        usarDireccion(def);
+      }
     });
   }, []);
 
@@ -387,305 +395,473 @@ export default function CheckoutPage() {
     );
   }
 
+  const pagoDeshabilitado = !entregaLista || !attempt || attempt.submitted || procesando;
+  const maxMsi = msiOfrecibles.length > 0 ? Math.max(...msiOfrecibles) : 0;
+
   return (
-    <div className="mx-auto max-w-lg">
-      <h1 className="mb-6 text-2xl font-bold">Finalizar compra</h1>
+    <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
+      <h1 className="mb-6 font-bold text-2xl">Finalizar compra</h1>
 
-      <div className="gx-card mb-4 !p-4">
-        <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
-        <div className="space-y-2">
-          {items.map((i) => (
-            <div key={i.varianteId} className="flex items-center gap-3 text-sm">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-lg">
-                {i.imagenUrl ? (
-                  <img
-                    src={i.imagenUrl}
-                    alt={i.titulo}
-                    className="h-full w-full rounded object-cover"
-                  />
-                ) : (
-                  <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
-                )}
-              </div>
-              <div className="flex-1">
-                <p className="font-medium">{i.titulo}</p>
-                <p className="text-slate-500">
-                  {i.cantidad} × ${Number(i.precio).toFixed(2)}
-                </p>
-              </div>
-              <span className="font-semibold">${(Number(i.precio) * i.cantidad).toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-        {config?.envioGratisDesde && (
-          <div className="mt-3">
-            <BarraEnvioGratis subtotal={subtotal} umbral={Number(config.envioGratisDesde)} />
-          </div>
-        )}
-      </div>
-
-      <div className="gx-card space-y-4">
-        <Campo label="Email" value={email} onChange={setEmail} type="email" required />
-        <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
-
-        <div className="flex gap-2">
-          <BotonEntrega
-            activo={modoEntrega === "envio"}
-            onClick={() => setModoEntrega("envio")}
-            label={
-              <>
-                <Truck size={16} strokeWidth={2} /> Envío a domicilio
-              </>
-            }
-          />
-          {pickups.length > 0 && (
-            <BotonEntrega
-              activo={modoEntrega === "pickup"}
-              onClick={() => setModoEntrega("pickup")}
-              label={
-                <>
-                  <Store size={16} strokeWidth={2} /> Recoger en tienda
-                </>
-              }
-            />
-          )}
-        </div>
-
-        {errorPickup && (
-          <div role="alert" className="space-y-2 text-danger text-sm">
-            <p>{errorPickup}</p>
-            <button
-              type="button"
-              className="gx-btn-secondary"
-              onClick={() => setReintentoEntrega((n) => n + 1)}
-            >
-              Reintentar entrega
-            </button>
-          </div>
-        )}
-
-        {modoEntrega === "envio" ? (
-          <>
-            {direcciones.length > 0 && (
-              <label className="block">
-                <span className="gx-label">Dirección guardada</span>
-                <select
-                  onChange={(e) => {
-                    const d = direcciones.find((x) => x.id === e.target.value);
-                    if (d) usarDireccion(d);
-                  }}
-                  className="gx-input"
-                >
-                  {direcciones.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.etiqueta} — {d.calle} {d.numeroExterior}, {d.municipio}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <Campo label="Calle" value={calle} onChange={setCalle} required />
-              </div>
-              <Campo label="Número" value={numero} onChange={setNumero} />
-            </div>
+      <div className="lg:grid lg:grid-cols-[1fr_340px] lg:items-start lg:gap-6">
+        <div className="min-w-0">
+          {/* ① Entrega */}
+          <SeccionCheckout paso={1} titulo="¿A dónde lo llevas?">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Colonia" value={colonia} onChange={setColonia} />
-              <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
+              <Campo label="Email" value={email} onChange={setEmail} type="email" required />
+              <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Estado" value={estado} onChange={setEstado} required />
-              <Campo label="Código postal" value={cp} onChange={setCp} required />
-            </div>
-            <OpcionesEnvio
-              opciones={opcionesEnvio}
-              tarifaId={tarifaId}
-              onSelect={setTarifaId}
-              cotizando={cotizando}
-              error={errorEnvio}
-              onRetry={() => setReintentoEntrega((n) => n + 1)}
-              direccionLista={cp.length === 5 && estado.trim().length >= 3}
-            />
-            <label className="flex items-center gap-2 text-slate-600 text-sm">
-              <input
-                type="checkbox"
-                checked={guardarDir}
-                onChange={(e) => setGuardarDir(e.target.checked)}
+
+            <div className="mt-4 flex gap-2">
+              <BotonEntrega
+                activo={modoEntrega === "envio"}
+                onClick={() => setModoEntrega("envio")}
+                label={
+                  <>
+                    <Truck size={16} strokeWidth={2} /> Envío a domicilio
+                  </>
+                }
               />
-              Guardar esta dirección para próximas compras
-            </label>
-          </>
-        ) : (
-          <div className="space-y-2">
-            {pickups.map((p) => (
-              <label
-                key={p.sucursalId}
-                className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
-              >
-                <input
-                  type="radio"
-                  name="pickup"
-                  checked={sucursalId === p.sucursalId}
-                  onChange={() => setSucursalId(p.sucursalId)}
+              {pickups.length > 0 && (
+                <BotonEntrega
+                  activo={modoEntrega === "pickup"}
+                  onClick={() => setModoEntrega("pickup")}
+                  label={
+                    <>
+                      <Store size={16} strokeWidth={2} /> Recoger en tienda
+                    </>
+                  }
                 />
-                <span className="flex-1 font-medium">{p.nombre}</span>
-                <span className="text-slate-500">
-                  listo en ~{p.tiempoPreparacionPromedioMin} min
-                </span>
-                <span className="font-semibold text-ok">Gratis</span>
-              </label>
-            ))}
-          </div>
-        )}
+              )}
+            </div>
 
-        {config?.cuponEnCheckout && (
-          <div>
-            <span className="gx-label">¿Tienes un cupón?</span>
-            <div className="flex gap-2">
-              <input
-                value={cupon}
-                onChange={(e) => {
-                  setCupon(e.target.value.toUpperCase());
-                  setCuponInfo(null);
-                }}
-                placeholder="CODIGO"
-                className="gx-input flex-1 uppercase"
-              />
-              <button type="button" onClick={aplicarCupon} className="gx-btn-secondary">
-                Aplicar
-              </button>
-            </div>
-            {cuponInfo && (
-              <p className={`mt-1 text-sm ${cuponOk ? "text-ok" : "text-danger"}`}>
-                {cuponOk ? "✓ " : "✕ "}
-                {cuponInfo.mensaje}
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="border-t pt-4">
-          <div className="mb-1 flex justify-between text-slate-600 text-sm">
-            <span>Subtotal</span>
-            <span>${subtotal.toFixed(2)}</span>
-          </div>
-          {descuentoCupon > 0 && (
-            <div className="mb-1 flex justify-between text-ok text-sm">
-              <span>Descuento ({cupon})</span>
-              <span>−${descuentoCupon.toFixed(2)}</span>
-            </div>
-          )}
-          <div className="mb-2 flex justify-between text-slate-600 text-sm">
-            <span>Envío</span>
-            <span>
-              {!entregaLista
-                ? "Por confirmar"
-                : costoEnvio === 0
-                  ? "Gratis"
-                  : `$${costoEnvio.toFixed(2)}`}
-            </span>
-          </div>
-          <div className="mb-4 flex justify-between text-lg font-bold">
-            <span>{entregaLista ? "Total a pagar" : "Subtotal con descuentos"}</span>
-            <span className="text-marca">${total.toFixed(2)}</span>
-          </div>
-          {error && (
-            <p role="alert" className="mb-3 rounded bg-danger-light p-2 text-sm text-danger">
-              {error}
-            </p>
-          )}
-
-          {!entregaLista && (
-            <output className="mb-3 block text-sm text-slate-600">
-              Confirma una opción de entrega para habilitar el pago.
-            </output>
-          )}
-          {!attempt && (
-            <div className="mb-3 space-y-2 text-sm text-slate-600">
-              <p>Preparando sesión segura de compra…</p>
-              <button
-                type="button"
-                className="gx-btn-secondary"
-                onClick={() => setSessionRetry((n) => n + 1)}
-              >
-                Reintentar sesión
-              </button>
-            </div>
-          )}
-          {attempt?.submitted && (
-            <div className="mb-3 space-y-2 text-sm text-slate-600">
-              <p>
-                Hay un intento de compra por verificar. El carrito se conserva hasta confirmar el
-                pago.
-              </p>
-              <button
-                type="button"
-                className="gx-btn-secondary"
-                disabled={procesando}
-                onClick={consultarPedido}
-              >
-                {procesando ? "Consultando…" : "Consultar estado del pago"}
-              </button>
-            </div>
-          )}
-          <fieldset
-            disabled={!entregaLista || !attempt || attempt.submitted || procesando}
-            className="min-w-0"
-          >
-            {conektaKey ? (
-              <PagoTarjetaConekta
-                publicKey={conektaKey}
-                montoTotal={total}
-                msiMeses={msiOfrecibles}
-                procesando={procesando}
-                onPagar={(token, meses) => procesarPedido(token, meses)}
-              />
-            ) : permiteDemo ? (
-              <>
-                {msiOfrecibles.length > 0 && (
-                  <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                    <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
-                      <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
-                    </p>
-                    <div className="space-y-1 text-slate-600 text-sm">
-                      {[...msiOfrecibles]
-                        .sort((a, b) => a - b)
-                        .map((m) => (
-                          <div key={m} className="flex justify-between">
-                            <span>{m} pagos de</span>
-                            <span className="font-semibold">${(total / m).toFixed(2)}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
+            {errorPickup && (
+              <div role="alert" className="mt-3 space-y-2 text-danger text-sm">
+                <p>{errorPickup}</p>
                 <button
                   type="button"
-                  onClick={() => procesarPedido()}
-                  disabled={procesando}
-                  className="gx-btn-primary w-full py-3"
+                  className="gx-btn-secondary"
+                  onClick={() => setReintentoEntrega((n) => n + 1)}
                 >
-                  {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+                  Reintentar entrega
                 </button>
-                <p className="mt-2 text-center text-slate-400 text-xs">
-                  Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar
-                  de verdad con MSI.
-                </p>
-              </>
+              </div>
+            )}
+
+            {modoEntrega === "envio" ? (
+              <div className="mt-4 space-y-3">
+                {direcciones.length > 0 && (
+                  <div className="space-y-2" role="radiogroup" aria-label="Dirección de envío">
+                    {direcciones.map((d) => {
+                      const seleccionada = modoDir === "guardada" && direccionId === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta
+                          role="radio"
+                          aria-checked={seleccionada}
+                          onClick={() => {
+                            setModoDir("guardada");
+                            setDireccionId(d.id);
+                            usarDireccion(d);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                            seleccionada
+                              ? "border-marca bg-marca/5 ring-1 ring-marca"
+                              : "border-slate-300 hover:border-marca"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                              seleccionada ? "border-marca" : "border-slate-300"
+                            }`}
+                          >
+                            {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium">
+                              {d.etiqueta}
+                              {d.isDefaultEnvio && (
+                                <span className="ml-1 font-normal text-marca text-xs">
+                                  · predeterminada
+                                </span>
+                              )}
+                            </span>
+                            <span className="block truncate text-slate-500 text-xs">
+                              {d.calle} {d.numeroExterior}
+                              {d.colonia ? `, ${d.colonia}` : ""} {d.municipio} · CP{" "}
+                              {d.codigoPostal}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del button de direccion guardada
+                      role="radio"
+                      aria-checked={modoDir === "nueva"}
+                      onClick={() => {
+                        setModoDir("nueva");
+                        setDireccionId("");
+                        setCalle("");
+                        setNumero("");
+                        setColonia("");
+                        setCiudad("");
+                        setEstado("");
+                        setCp("");
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                        modoDir === "nueva"
+                          ? "border-marca bg-marca/5 ring-1 ring-marca"
+                          : "border-slate-300 hover:border-marca"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                          modoDir === "nueva" ? "border-marca" : "border-slate-300"
+                        }`}
+                      >
+                        {modoDir === "nueva" && <span className="h-2 w-2 rounded-full bg-marca" />}
+                      </span>
+                      <span className="flex items-center gap-1 font-medium">
+                        <Plus size={14} strokeWidth={2.5} /> Nueva dirección
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {modoDir === "nueva" && (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="sm:col-span-2">
+                        <Campo label="Calle" value={calle} onChange={setCalle} required />
+                      </div>
+                      <Campo label="Número" value={numero} onChange={setNumero} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Campo label="Colonia" value={colonia} onChange={setColonia} />
+                      <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Campo label="Estado" value={estado} onChange={setEstado} required />
+                      <Campo label="Código postal" value={cp} onChange={setCp} required />
+                    </div>
+                    <label className="flex items-center gap-2 text-slate-600 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={guardarDir}
+                        onChange={(e) => setGuardarDir(e.target.checked)}
+                      />
+                      Guardar esta dirección para próximas compras
+                    </label>
+                  </>
+                )}
+
+                <OpcionesEnvio
+                  opciones={opcionesEnvio}
+                  tarifaId={tarifaId}
+                  onSelect={setTarifaId}
+                  cotizando={cotizando}
+                  error={errorEnvio}
+                  onRetry={() => setReintentoEntrega((n) => n + 1)}
+                  direccionLista={cp.length === 5 && estado.trim().length >= 3}
+                />
+              </div>
             ) : (
-              <p
-                role="alert"
-                className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
-              >
-                El pago en línea no está disponible en este momento. Tu carrito se conserva para que
-                puedas intentarlo más tarde.
+              <div className="mt-4 space-y-2">
+                {pickups.map((p) => (
+                  <label
+                    key={p.sucursalId}
+                    className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
+                  >
+                    <input
+                      type="radio"
+                      name="pickup"
+                      checked={sucursalId === p.sucursalId}
+                      onChange={() => setSucursalId(p.sucursalId)}
+                    />
+                    <span className="flex-1 font-medium">{p.nombre}</span>
+                    <span className="text-slate-500">
+                      listo en ~{p.tiempoPreparacionPromedioMin} min
+                    </span>
+                    <span className="font-semibold text-ok">Gratis</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </SeccionCheckout>
+
+          {/* ② Pago */}
+          <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
+            <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+              <p className="flex items-center gap-2 font-medium text-sm">
+                <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
+              </p>
+              <p className="mt-0.5 text-slate-500 text-xs">
+                Visa · Mastercard · AMEX
+                {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
+              </p>
+            </div>
+
+            {!attempt && (
+              <div className="mt-3 space-y-2 text-sm text-slate-600">
+                <p>Preparando sesión segura de compra…</p>
+                <button
+                  type="button"
+                  className="gx-btn-secondary"
+                  onClick={() => setSessionRetry((n) => n + 1)}
+                >
+                  Reintentar sesión
+                </button>
+              </div>
+            )}
+            {attempt?.submitted && (
+              <div className="mt-3 space-y-2 text-sm text-slate-600">
+                <p>
+                  Hay un intento de compra por verificar. El carrito se conserva hasta confirmar el
+                  pago.
+                </p>
+                <button
+                  type="button"
+                  className="gx-btn-secondary"
+                  disabled={procesando}
+                  onClick={consultarPedido}
+                >
+                  {procesando ? "Consultando…" : "Consultar estado del pago"}
+                </button>
+              </div>
+            )}
+            <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
+              {conektaKey ? (
+                <PagoTarjetaConekta
+                  publicKey={conektaKey}
+                  montoTotal={total}
+                  msiMeses={msiOfrecibles}
+                  procesando={procesando}
+                  formId={FORM_PAGO_ID}
+                  onPagar={(token, meses) => procesarPedido(token, meses)}
+                />
+              ) : permiteDemo ? (
+                <>
+                  {msiOfrecibles.length > 0 && (
+                    <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+                      <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
+                        <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
+                      </p>
+                      <div className="space-y-1 text-slate-600 text-sm">
+                        {[...msiOfrecibles]
+                          .sort((a, b) => a - b)
+                          .map((m) => (
+                            <div key={m} className="flex justify-between">
+                              <span>{m} pagos de</span>
+                              <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => procesarPedido()}
+                    disabled={procesando}
+                    className="gx-btn-primary w-full !py-3"
+                  >
+                    {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+                  </button>
+                  <p className="mt-2 text-center text-slate-400 text-xs">
+                    Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar
+                    de verdad con MSI.
+                  </p>
+                </>
+              ) : (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
+                >
+                  El pago en línea no está disponible en este momento. Tu carrito se conserva para
+                  que puedas intentarlo más tarde.
+                </p>
+              )}
+            </fieldset>
+          </SeccionCheckout>
+        </div>
+
+        {/* ③ Resumen */}
+        <aside className="mt-4 lg:sticky lg:top-32 lg:mt-0">
+          <div className="gx-card !p-4">
+            <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {items.map((i) => (
+                <div key={i.varianteId} className="flex items-center gap-3 text-sm">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-lg">
+                    {i.imagenUrl ? (
+                      <img
+                        src={i.imagenUrl}
+                        alt={i.titulo}
+                        className="h-full w-full rounded object-cover"
+                      />
+                    ) : (
+                      <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{i.titulo}</p>
+                    <p className="text-slate-500">
+                      {i.cantidad} × ${Number(i.precio).toFixed(2)}
+                    </p>
+                  </div>
+                  <span className="whitespace-nowrap font-semibold">
+                    ${(Number(i.precio) * i.cantidad).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {config?.envioGratisDesde && (
+              <div className="mt-3">
+                <BarraEnvioGratis subtotal={subtotal} umbral={Number(config.envioGratisDesde)} />
+              </div>
+            )}
+
+            {config?.cuponEnCheckout && (
+              <div className="mt-3">
+                <span className="gx-label">¿Tienes un cupón?</span>
+                <div className="flex gap-2">
+                  <input
+                    value={cupon}
+                    onChange={(e) => {
+                      setCupon(e.target.value.toUpperCase());
+                      setCuponInfo(null);
+                    }}
+                    placeholder="CODIGO"
+                    className="gx-input flex-1 uppercase"
+                  />
+                  <button type="button" onClick={aplicarCupon} className="gx-btn-secondary">
+                    Aplicar
+                  </button>
+                </div>
+                {cuponInfo && (
+                  <p className={`mt-1 text-sm ${cuponOk ? "text-ok" : "text-danger"}`}>
+                    {cuponOk ? "✓ " : "✕ "}
+                    {cuponInfo.mensaje}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 border-t pt-3">
+              <div className="mb-1 flex justify-between text-slate-600 text-sm">
+                <span>Subtotal</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              {descuentoCupon > 0 && (
+                <div className="mb-1 flex justify-between text-ok text-sm">
+                  <span>Descuento ({cupon})</span>
+                  <span>−${descuentoCupon.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="mb-2 flex justify-between text-slate-600 text-sm">
+                <span>Envío</span>
+                <span>
+                  {!entregaLista
+                    ? "Por confirmar"
+                    : costoEnvio === 0
+                      ? "Gratis"
+                      : `$${costoEnvio.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="flex justify-between font-bold text-lg">
+                <span>{entregaLista ? "Total con envío" : "Subtotal con descuentos"}</span>
+                <span className="text-marca">${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {!entregaLista && (
+              <output className="mt-2 block text-sm text-slate-600">
+                Confirma una opción de entrega para habilitar el pago.
+              </output>
+            )}
+            {error && (
+              <p role="alert" className="mt-2 rounded bg-danger-light p-2 text-sm text-danger">
+                {error}
               </p>
             )}
-          </fieldset>
+          </div>
+        </aside>
+      </div>
+
+      {/* Total negro siempre visible */}
+      <div className="fixed inset-x-0 bottom-0 z-40 bg-slate-800 text-white shadow-[0_-4px_12px_rgb(0_0_0/0.25)]">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-white/70 text-xs">
+              {entregaLista ? "Total con envío" : "Subtotal (envío por confirmar)"}
+            </p>
+            <p className="font-bold text-xl leading-tight">${total.toFixed(2)}</p>
+          </div>
+          {attempt?.submitted ? (
+            <button
+              type="button"
+              onClick={consultarPedido}
+              disabled={procesando}
+              className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85"
+            >
+              {procesando ? "Consultando…" : "Consultar pago"}
+            </button>
+          ) : conektaKey ? (
+            <button
+              type="submit"
+              form={FORM_PAGO_ID}
+              disabled={pagoDeshabilitado}
+              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {procesando ? "Procesando…" : "Pagar"}
+            </button>
+          ) : permiteDemo ? (
+            <button
+              type="button"
+              onClick={() => procesarPedido()}
+              disabled={pagoDeshabilitado}
+              className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)} (demo)`}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="El pago en línea no está disponible en este momento"
+              className="gx-btn bg-ok !py-3 !px-8 text-base text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Pagar
+            </button>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function SeccionCheckout({
+  paso,
+  titulo,
+  children,
+}: {
+  paso: number;
+  titulo: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="gx-card mb-4 !p-4 sm:!p-5">
+      <h2 className="mb-4 flex items-center gap-2.5 font-bold text-lg text-slate-900">
+        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-marca text-sm text-white font-bold">
+          {paso}
+        </span>
+        {titulo}
+      </h2>
+      {children}
+    </section>
   );
 }
 
@@ -763,7 +939,7 @@ function BotonEntrega({
 }: {
   activo: boolean;
   onClick: () => void;
-  label: React.ReactNode;
+  label: ReactNode;
 }) {
   return (
     <button

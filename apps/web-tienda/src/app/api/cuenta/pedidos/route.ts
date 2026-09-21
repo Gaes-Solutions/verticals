@@ -1,0 +1,15 @@
+import { getClienteToken } from "@/lib/cliente";
+import { NextResponse } from "next/server";
+
+const API_URL = process.env.API_URL ?? "http://localhost:3000";
+
+/** GET lista de pedidos del cliente (para "Repetir tu despensa"). Sin sesión → []. */
+export async function GET() {
+  const token = await getClienteToken();
+  if (!token) return NextResponse.json([], { status: 200 });
+  const res = await fetch(`${API_URL}/cliente-portal/pedidos`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return NextResponse.json(await res.json().catch(() => []), { status: res.status });
+}
