@@ -12,6 +12,7 @@ import {
   armarReporte,
   filasParaImportar,
   indicesActivos,
+  unirResumenes,
 } from "../lib/importacion.js";
 
 interface Columna {
@@ -184,6 +185,10 @@ function limpiarValor(campo: string, valor: unknown): string {
   return texto;
 }
 
+// Un catálogo completo tarda minutos y el proxy corta la espera al minuto: se sube
+// por tandas para que cada petición sea corta y el usuario vea el avance.
+const TAMANO_TANDA = 250;
+
 interface ResumenResp {
   total: number;
   creados?: number;
@@ -200,6 +205,7 @@ export function ImportadorPage() {
   const [nombreArchivo, setNombreArchivo] = useState("");
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [resumen, setResumen] = useState<ResumenResp | null>(null);
   const [config, setConfig] = useState<ImportConfig | null>(null);
   const [configurando, setConfigurando] = useState(false);
@@ -374,35 +380,87 @@ export function ImportadorPage() {
   }
 
   async function importarRevisado() {
-    if (!borrador) return;
+    if (!borrador || enviando) return;
     const { filas: aSubir, indices } = filasParaImportar(borrador, destinos);
     setEnviando(true);
     setErrorArchivo(null);
+    setProgreso({ hechas: 0, total: aSubir.length });
+    const partes: Array<{ desde: number; resumen: ResumenImportacion }> = [];
     try {
-      const r = await api<ResumenImportacion>("/t/productos/bulk", { body: { filas: aSubir } });
-      setReporte(armarReporte(borrador, indices, r));
+      for (let desde = 0; desde < aSubir.length; desde += TAMANO_TANDA) {
+        const tanda = aSubir.slice(desde, desde + TAMANO_TANDA);
+        const r = await api<ResumenImportacion>("/t/productos/bulk", { body: { filas: tanda } });
+        partes.push({ desde, resumen: r });
+        setProgreso({ hechas: desde + tanda.length, total: aSubir.length });
+      }
+      setReporte(armarReporte(borrador, indices, unirResumenes(partes)));
     } catch (err) {
-      if (err instanceof ApiError && err.status === 422) {
+      // Lo ya subido se conserva: el reporte dice qué entró y qué falta.
+      const subidas = partes.reduce((n, p) => n + p.resumen.total, 0);
+      if (subidas > 0) setReporte(armarReporte(borrador, indices, unirResumenes(partes)));
+      if (err instanceof ApiError && err.status === 422 && subidas === 0) {
         setErrorArchivo(err.message);
         await revisar(borrador);
       } else {
-        setErrorArchivo(err instanceof ApiError ? err.message : "Error al importar");
+        const base = err instanceof ApiError ? err.message : "Error al importar";
+        setErrorArchivo(
+          subidas > 0
+            ? `${base}. Se subieron ${subidas} de ${aSubir.length}; vuelve a subir el mismo archivo: lo que ya está se actualiza, no se duplica.`
+            : base,
+        );
       }
     } finally {
       setEnviando(false);
+      setProgreso(null);
     }
   }
 
   async function importar() {
+    if (enviando) return;
     setEnviando(true);
     setResumen(null);
+    setProgreso({ hechas: 0, total: filas.length });
+    const partes: ResumenResp[] = [];
     try {
-      const r = await api<ResumenResp>(tipo.endpoint, { body: { filas } });
-      setResumen(r);
+      for (let desde = 0; desde < filas.length; desde += TAMANO_TANDA) {
+        const tanda = filas.slice(desde, desde + TAMANO_TANDA);
+        const r = await api<ResumenResp>(tipo.endpoint, { body: { filas: tanda } });
+        partes.push({ ...r, filas: r.filas.map((f) => ({ ...f, fila: f.fila + desde })) });
+        setProgreso({ hechas: desde + tanda.length, total: filas.length });
+      }
+      setResumen(
+        partes.reduce(
+          (acc, r) => ({
+            total: acc.total + r.total,
+            creados: (acc.creados ?? 0) + (r.creados ?? 0),
+            actualizados: (acc.actualizados ?? 0) + (r.actualizados ?? 0),
+            ajustados: (acc.ajustados ?? 0) + (r.ajustados ?? 0),
+            sinCambio: (acc.sinCambio ?? 0) + (r.sinCambio ?? 0),
+            errores: acc.errores + r.errores,
+            filas: [...acc.filas, ...r.filas],
+          }),
+          {
+            total: 0,
+            creados: 0,
+            actualizados: 0,
+            ajustados: 0,
+            sinCambio: 0,
+            errores: 0,
+            filas: [],
+          },
+        ),
+      );
     } catch (err) {
-      setErrorArchivo(err instanceof ApiError ? err.message : "Error al importar");
+      const subidas = partes.reduce((n, r) => n + r.total, 0);
+      const base = err instanceof ApiError ? err.message : "Error al importar";
+      setErrorArchivo(
+        subidas > 0
+          ? `${base}. Se subieron ${subidas} de ${filas.length}; vuelve a subir el archivo.`
+          : base,
+      );
     } finally {
       setEnviando(false);
+      setProgreso(null);
     }
   }
 
@@ -508,6 +566,7 @@ export function ImportadorPage() {
           desactualizada={desactualizada}
           revisando={revisando}
           enviando={enviando}
+          progreso={progreso}
           confirmados={confirmados}
           destinos={destinos}
           conCodigoBarras={columnas.some((c) => c.campo === "codigoBarras")}
@@ -545,7 +604,11 @@ export function ImportadorPage() {
               disabled={enviando || filasInvalidas.length > 0}
               className="gx-btn-primary"
             >
-              {enviando ? "Importando…" : `Importar ${filas.length} fila(s)`}
+              {enviando
+                ? progreso
+                  ? `Subiendo ${progreso.hechas.toLocaleString("es-MX")} de ${progreso.total.toLocaleString("es-MX")}…`
+                  : "Importando…"
+                : `Importar ${filas.length} fila(s)`}
             </button>
           </div>
           <div className="gx-table-wrap">

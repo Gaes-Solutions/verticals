@@ -22,6 +22,11 @@ server {
   # API → backend (strip del prefijo /api vía rewrite; proxy_pass con variable
   # obliga a re-resolver el DNS respetando `valid=`)
   location /api/ {
+    # Una carga masiva grande tarda minutos: con el minuto por omisión nginx cortaba
+    # la espera y el panel se quedaba colgado aunque el API terminara bien.
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+    client_max_body_size 20m;
     resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
     set $api_upstream ${API_UPSTREAM};
     rewrite ^/api/(.*)$ /$1 break;

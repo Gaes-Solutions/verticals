@@ -74,6 +74,7 @@ interface Props {
   desactualizada: boolean;
   revisando: boolean;
   enviando: boolean;
+  progreso: { hechas: number; total: number } | null;
   confirmados: Set<string>;
   destinos: Record<string, string>;
   conCodigoBarras: boolean;
@@ -279,7 +280,9 @@ export function RevisionImportacion(props: Props) {
             onClick={props.onImportar}
           >
             {props.enviando
-              ? "Importando…"
+              ? props.progreso
+                ? `Subiendo ${props.progreso.hechas.toLocaleString("es-MX")} de ${props.progreso.total.toLocaleString("es-MX")}…`
+                : "Importando…"
               : `Importar ${plural(porSubir, "producto", "productos")}`}
           </button>
         </div>

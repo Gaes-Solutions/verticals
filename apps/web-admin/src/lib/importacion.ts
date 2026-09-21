@@ -178,6 +178,25 @@ export function filasParaImportar(
 }
 
 /** Qué pasó con cada fila del Excel: lo que se subió y lo que no, con su motivo. */
+/**
+ * El archivo se sube en tandas y cada una numera sus filas desde 1; al unirlas se
+ * recorre esa numeración para que el reporte siga apuntando a la fila real del Excel.
+ */
+export function unirResumenes(
+  partes: Array<{ desde: number; resumen: ResumenImportacion }>,
+): ResumenImportacion {
+  return partes.reduce<ResumenImportacion>(
+    (acc, { desde, resumen }) => ({
+      total: acc.total + resumen.total,
+      creados: acc.creados + resumen.creados,
+      actualizados: acc.actualizados + resumen.actualizados,
+      errores: acc.errores + resumen.errores,
+      filas: [...acc.filas, ...resumen.filas.map((f) => ({ ...f, fila: f.fila + desde }))],
+    }),
+    { total: 0, creados: 0, actualizados: 0, errores: 0, filas: [] },
+  );
+}
+
 export function armarReporte(
   borrador: BorradorImportacion,
   indicesEnviados: number[],
