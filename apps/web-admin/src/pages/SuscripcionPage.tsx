@@ -1,3 +1,4 @@
+import { CreditCard, Landmark } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AgregarTarjeta } from "../components/AgregarTarjeta.js";
 import { ConectarStripe } from "../components/ConectarStripe.js";
@@ -64,15 +65,15 @@ function fecha(v: string | null | undefined): string {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  trialing: "bg-sky-100 text-sky-700",
-  active: "bg-emerald-100 text-emerald-700",
-  past_due: "bg-amber-100 text-amber-700",
-  suspended: "bg-red-100 text-red-600",
+  trialing: "bg-info-light text-info",
+  active: "bg-ok-light text-ok",
+  past_due: "bg-warn-light text-warn",
+  suspended: "bg-danger-light text-danger",
   canceled: "bg-slate-100 text-slate-500",
-  paid: "bg-emerald-100 text-emerald-700",
-  open: "bg-amber-100 text-amber-700",
+  paid: "bg-ok-light text-ok",
+  open: "bg-warn-light text-warn",
   void: "bg-slate-100 text-slate-500",
-  uncollectible: "bg-red-100 text-red-600",
+  uncollectible: "bg-danger-light text-danger",
 };
 
 function CambiarPlanModal({
@@ -110,8 +111,8 @@ function CambiarPlanModal({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-1 font-bold text-lg text-slate-800">Cambiar de plan</h2>
         <p className="mb-4 text-slate-500 text-sm">
           El cambio a un plan superior aplica de inmediato con cargo prorrateado.
@@ -137,7 +138,7 @@ function CambiarPlanModal({
             </label>
           ))}
         </div>
-        {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+        {error && <p className="mb-3 text-danger text-sm">{error}</p>}
         <div className="flex gap-2">
           <button type="button" onClick={onCerrar} className="gx-btn-secondary flex-1">
             Cancelar
@@ -255,7 +256,7 @@ export function SuscripcionPage() {
               type="button"
               data-tour="tarjeta-agregar"
               onClick={() => setAgregandoTarjeta(true)}
-              className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-sm text-white hover:bg-brand-dark"
+              className="gx-btn-primary"
             >
               {ctx.paymentMethods.length === 0 ? "+ Agregar tarjeta" : "Cambiar tarjeta"}
             </button>
@@ -269,8 +270,9 @@ export function SuscripcionPage() {
           <ul className="divide-y divide-slate-100 text-sm">
             {ctx.paymentMethods.map((pm) => (
               <li key={pm.id} className="flex items-center justify-between py-2">
-                <span className="text-slate-700">
-                  {pm.type === "card" ? "💳" : "🏦"} {pm.brand ?? pm.type}
+                <span className="flex items-center gap-1.5 text-slate-700">
+                  {pm.type === "card" ? <CreditCard size={16} /> : <Landmark size={16} />}{" "}
+                  {pm.brand ?? pm.type}
                   {pm.last4 ? ` •••• ${pm.last4}` : ""}
                 </span>
                 {pm.isDefault && (
@@ -307,23 +309,23 @@ export function SuscripcionPage() {
         {invoices.length === 0 ? (
           <p className="text-slate-400 text-sm">Aún no hay facturas.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="gx-table-wrap">
+            <table className="gx-table">
               <thead>
-                <tr className="border-slate-100 border-b text-slate-500">
-                  <th className="py-2 pr-4">Folio</th>
-                  <th className="py-2 pr-4">Fecha</th>
-                  <th className="py-2 pr-4">Total</th>
-                  <th className="py-2">Estado</th>
+                <tr>
+                  <th className="gx-th">Folio</th>
+                  <th className="gx-th">Fecha</th>
+                  <th className="gx-th">Total</th>
+                  <th className="gx-th">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-slate-50 border-b">
-                    <td className="py-2 pr-4 font-mono text-slate-600">{inv.folio}</td>
-                    <td className="py-2 pr-4 text-slate-500">{fecha(inv.createdAt)}</td>
-                    <td className="py-2 pr-4 font-medium text-slate-800">{money(inv.total)}</td>
-                    <td className="py-2">
+                  <tr key={inv.id}>
+                    <td className="gx-td font-mono text-slate-600">{inv.folio}</td>
+                    <td className="gx-td text-slate-500">{fecha(inv.createdAt)}</td>
+                    <td className="gx-td font-medium">{money(inv.total)}</td>
+                    <td className="gx-td">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[inv.status] ?? ""}`}
                       >
@@ -344,7 +346,7 @@ export function SuscripcionPage() {
           onCerrar={() => setCambiando(false)}
           onCambiado={() => {
             setCambiando(false);
-            setMsg("✅ Plan actualizado.");
+            setMsg("Plan actualizado.");
             cargar();
           }}
         />

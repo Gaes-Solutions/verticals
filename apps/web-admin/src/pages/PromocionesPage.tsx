@@ -43,32 +43,41 @@ function resumenPromo(p: PromoItem): string {
 export function PromocionesPage() {
   const [items, setItems] = useState<PromoItem[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const [aArchivar, setAArchivar] = useState<string | null>(null);
   const gestiona = puede("promociones.gestionar");
 
   const cargar = useCallback(() => {
     setCargando(true);
+    setError(null);
     api<PromoItem[]>("/t/promociones")
-      .then(setItems)
-      .catch(() => setItems([]))
+      .then((r) => {
+        setItems(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar las promociones"))
       .finally(() => setCargando(false));
   }, []);
   useEffect(() => cargar(), [cargar]);
 
   async function cambiarEstado(id: string, accion: "activar" | "pausar" | "archivar") {
-    await api(`/t/promociones/${id}/${accion}`, { method: "POST" }).catch(() => undefined);
-    cargar();
+    try {
+      await api(`/t/promociones/${id}/${accion}`, { method: "POST" });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo actualizar la promoción");
+    }
   }
 
   function archivar(id: string) {
-    if (confirm("¿Archivar esta promoción? Dejará de correr y se quitará de la lista.")) {
-      void cambiarEstado(id, "archivar");
-    }
+    setAArchivar(null);
+    void cambiarEstado(id, "archivar");
   }
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-bold text-2xl text-slate-800">Promociones</h1>
           <p className="text-slate-500 text-sm">
@@ -86,6 +95,15 @@ export function PromocionesPage() {
           </button>
         )}
       </div>
+
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="gx-table-wrap">
         <table className="gx-table">
@@ -106,7 +124,7 @@ export function PromocionesPage() {
                   Cargando…
                 </td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : !error && items.length === 0 ? (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={6}>
                   Aún no hay promociones. Crea la primera con “+ Nueva promoción”.
@@ -135,7 +153,7 @@ export function PromocionesPage() {
                           <button
                             type="button"
                             onClick={() => cambiarEstado(p.id, "pausar")}
-                            className="text-amber-600 hover:underline"
+                            className="text-warn hover:underline"
                           >
                             Pausar
                           </button>
@@ -153,8 +171,8 @@ export function PromocionesPage() {
                         )}
                         <button
                           type="button"
-                          onClick={() => archivar(p.id)}
-                          className="text-slate-400 hover:text-danger hover:underline"
+                          onClick={() => setAArchivar(p.id)}
+                          className="gx-btn-danger"
                         >
                           Archivar
                         </button>
@@ -176,6 +194,25 @@ export function PromocionesPage() {
             cargar();
           }}
         />
+      )}
+
+      {aArchivar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Archivar promoción</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Archivar esta promoción? Dejará de correr y se quitará de la lista.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setAArchivar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => archivar(aArchivar)} className="gx-btn-danger">
+                Sí, archivar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

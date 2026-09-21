@@ -26,13 +26,20 @@ interface ConectarResult {
 
 export function DominioB2bPage() {
   const [config, setConfig] = useState<Config | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [host, setHost] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [result, setResult] = useState<ConectarResult | null>(null);
+  const [aQuitar, setAQuitar] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
-    setConfig(await api<Config>("/t/b2b-dominio"));
+    setLoadError(null);
+    try {
+      setConfig(await api<Config>("/t/b2b-dominio"));
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Error al cargar la configuración del dominio");
+    }
   }, []);
 
   useEffect(() => {
@@ -70,11 +77,28 @@ export function DominioB2bPage() {
   }
 
   async function quitar(h: string) {
-    await api(`/t/b2b-dominio/${encodeURIComponent(h)}`, { method: "DELETE" }).catch(
-      () => undefined,
+    setAQuitar(null);
+    try {
+      await api(`/t/b2b-dominio/${encodeURIComponent(h)}`, { method: "DELETE" });
+      if (result?.host === h) setResult(null);
+      void cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo quitar el dominio");
+    }
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <h1 className="mb-1 text-2xl font-bold text-slate-800">Portal mayorista con tu dominio</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </div>
     );
-    if (result?.host === h) setResult(null);
-    void cargar();
   }
 
   if (!config) {
@@ -102,14 +126,12 @@ export function DominioB2bPage() {
                 key={d.host}
                 className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono text-sm text-slate-700">{d.host}</span>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        d.verificado
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
+                        d.verificado ? "bg-ok-light text-ok" : "bg-warn-light text-warn"
                       }`}
                     >
                       {d.verificado ? "Activo" : "Pendiente"}
@@ -125,8 +147,8 @@ export function DominioB2bPage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => quitar(d.host)}
-                      className="text-sm text-slate-400 hover:text-red-500"
+                      onClick={() => setAQuitar(d.host)}
+                      className="gx-btn-danger"
                     >
                       Quitar
                     </button>
@@ -155,19 +177,19 @@ export function DominioB2bPage() {
             onChange={(e) => setHost(e.target.value)}
             placeholder="pedidos.tu-negocio.com"
             autoCapitalize="none"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-brand focus:outline-none"
+            className="gx-input flex-1 font-mono"
           />
           <button
             type="button"
             data-tour="b2bdom-conectar"
             onClick={conectar}
             disabled={guardando || host.trim().length < 4}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             {guardando ? "Conectando…" : "Conectar"}
           </button>
         </div>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
 
       {result ? (
@@ -183,7 +205,7 @@ export function DominioB2bPage() {
               : "Los cambios pueden tardar unos minutos en propagarse."}
           </p>
           {result.aviso && (
-            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <p className="mb-3 rounded-lg bg-warn-light px-3 py-2 text-sm text-warn">
               {result.aviso}
             </p>
           )}
@@ -201,27 +223,46 @@ export function DominioB2bPage() {
           </p>
         </div>
       )}
+      {aQuitar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Quitar dominio</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Quitar <span className="font-mono">{aQuitar}</span>? Tu portal dejará de responder en
+              ese dominio.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setAQuitar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => quitar(aQuitar)} className="gx-btn-danger">
+                Sí, quitar dominio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function DnsTable({ records }: { records: DnsRecord[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-      <table className="w-full min-w-[420px] text-sm">
-        <thead className="bg-slate-100 text-left text-slate-500">
+    <div className="gx-table-wrap">
+      <table className="gx-table min-w-[420px]">
+        <thead>
           <tr>
-            <th className="px-3 py-2">Tipo</th>
-            <th className="px-3 py-2">Nombre / Host</th>
-            <th className="px-3 py-2">Apunta a</th>
+            <th className="gx-th">Tipo</th>
+            <th className="gx-th">Nombre / Host</th>
+            <th className="gx-th">Apunta a</th>
           </tr>
         </thead>
         <tbody>
           {records.map((r) => (
-            <tr key={`${r.tipo}-${r.nombre}-${r.valor}`} className="border-t border-slate-100">
-              <td className="px-3 py-2 font-mono">{r.tipo}</td>
-              <td className="px-3 py-2 font-mono break-all">{r.nombre}</td>
-              <td className="px-3 py-2 font-mono break-all">{r.valor}</td>
+            <tr key={`${r.tipo}-${r.nombre}-${r.valor}`}>
+              <td className="gx-td font-mono">{r.tipo}</td>
+              <td className="gx-td font-mono break-all">{r.nombre}</td>
+              <td className="gx-td font-mono break-all">{r.valor}</td>
             </tr>
           ))}
         </tbody>

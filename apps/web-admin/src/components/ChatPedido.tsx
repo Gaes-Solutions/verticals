@@ -73,7 +73,7 @@ export function ChatPedido({ pedidoId }: { pedidoId: string }) {
           <button
             type="submit"
             disabled={enviando || !texto.trim()}
-            className="rounded-lg bg-brand px-3 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             Enviar
           </button>

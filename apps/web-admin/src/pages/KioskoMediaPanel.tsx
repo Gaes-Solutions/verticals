@@ -98,7 +98,7 @@ export function KioskoMediaPanel() {
         JPG/PNG hasta 8 MB. El archivo se inspecciona antes de publicarlo.
       </p>
       {error && (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-danger">
           {error}
         </p>
       )}

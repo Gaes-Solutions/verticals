@@ -1,6 +1,6 @@
 import { Lock, LockOpen, Stethoscope } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { BackupCodes } from "../components/BackupCodes.js";
 import { MisPasskeys } from "../components/MisPasskeys.js";
 import {
@@ -47,13 +47,25 @@ function Mi2fa() {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<"regenerar" | "desactivar" | null>(null);
+  const [modalInput, setModalInput] = useState("");
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     mfaEstado()
-      .then(setEstado)
-      .catch(() => setEstado(null));
+      .then((e) => {
+        setEstado(e);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar el estado 2FA"));
   }, []);
   useEffect(() => cargar(), [cargar]);
+
+  function abrirModal(tipo: "regenerar" | "desactivar") {
+    setModalInput("");
+    setModalError(null);
+    setModal(tipo);
+  }
 
   async function iniciarEnroll() {
     setError(null);
@@ -64,7 +76,7 @@ function Mi2fa() {
       setOtpauthUrl(s.otpauthUrl);
       setFase("enroll");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : "No se pudo iniciar la activación");
     } finally {
       setBusy(false);
     }
@@ -86,27 +98,26 @@ function Mi2fa() {
     }
   }
 
-  async function regenerar() {
-    const c = window.prompt("Para regenerar tus códigos, escribe el código actual de tu app 2FA:");
-    if (!c) return;
+  async function confirmarModal(e: FormEvent) {
+    e.preventDefault();
+    setModalError(null);
+    setBusy(true);
     try {
-      const { backupCodes: bc } = await mfaRegenerate(c);
-      setBackupCodes(bc);
-      setFase("codes");
-    } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "No se pudo regenerar");
-    }
-  }
-
-  async function desactivar() {
-    const p = window.prompt("Para desactivar tu 2FA, escribe tu contraseña:");
-    if (!p) return;
-    try {
-      await mfaDisable(p);
-      setFase("idle");
-      cargar();
-    } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "No se pudo desactivar");
+      if (modal === "regenerar") {
+        const { backupCodes: bc } = await mfaRegenerate(modalInput.trim());
+        setBackupCodes(bc);
+        setFase("codes");
+      } else if (modal === "desactivar") {
+        await mfaDisable(modalInput);
+        setFase("idle");
+        cargar();
+      }
+      setModal(null);
+      setModalInput("");
+    } catch (err) {
+      setModalError(err instanceof ApiError ? err.message : "No se pudo completar la acción");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -114,11 +125,7 @@ function Mi2fa() {
     return (
       <section className="rounded-xl border bg-white p-6">
         <BackupCodes codes={backupCodes} />
-        <button
-          type="button"
-          onClick={() => setFase("idle")}
-          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark"
-        >
+        <button type="button" onClick={() => setFase("idle")} className="gx-btn-primary mt-4">
           Listo
         </button>
       </section>
@@ -143,22 +150,18 @@ function Mi2fa() {
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
           placeholder="123456"
-          className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-center font-mono text-lg tracking-widest focus:border-brand focus:outline-none"
+          className="gx-input mb-3 text-center font-mono text-lg tracking-widest"
         />
-        {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+        {error && <p className="mb-3 text-danger text-sm">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setFase("idle")}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-          >
+          <button type="button" onClick={() => setFase("idle")} className="gx-btn-secondary">
             Cancelar
           </button>
           <button
             type="button"
             onClick={confirmar}
             disabled={busy || code.length < 6}
-            className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             {busy ? "Activando…" : "Activar"}
           </button>
@@ -173,22 +176,24 @@ function Mi2fa() {
         <div>
           <h2 className="font-bold text-lg text-slate-800">Mi verificación en dos pasos</h2>
           <p className="text-slate-500 text-sm">
-            {estado?.enabled
-              ? `Activa · ${estado.backupCodesRestantes} códigos de respaldo disponibles`
-              : "Desactivada"}
+            {estado === null
+              ? (error ?? "Cargando…")
+              : estado.enabled
+                ? `Activa · ${estado.backupCodesRestantes} códigos de respaldo disponibles`
+                : "Desactivada"}
             {estado?.requerido && (
-              <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-amber-700 text-xs">
+              <span className="ml-2 rounded bg-warn-light px-2 py-0.5 text-warn text-xs">
                 Requerida por tu negocio
               </span>
             )}
           </p>
         </div>
-        <span className={estado?.enabled ? "text-marca" : "text-slate-300"}>
+        <span className={estado?.enabled ? "text-brand" : "text-slate-300"}>
           {estado?.enabled ? <Lock size={28} /> : <LockOpen size={28} />}
         </span>
       </div>
 
-      {error && <p className="mt-3 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mt-3 text-danger text-sm">{error}</p>}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {!estado?.enabled && (
@@ -196,7 +201,7 @@ function Mi2fa() {
             type="button"
             onClick={iniciarEnroll}
             disabled={busy}
-            className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             Activar 2FA
           </button>
@@ -205,23 +210,66 @@ function Mi2fa() {
           <>
             <button
               type="button"
-              onClick={regenerar}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
+              onClick={() => abrirModal("regenerar")}
+              className="gx-btn-secondary"
             >
               Regenerar códigos de respaldo
             </button>
             <button
               type="button"
-              onClick={desactivar}
+              onClick={() => abrirModal("desactivar")}
               disabled={estado.requerido}
               title={estado.requerido ? "Tu negocio exige 2FA para tu rol" : undefined}
-              className="rounded-lg border border-red-200 px-4 py-2 text-red-600 text-sm hover:bg-red-50 disabled:opacity-40"
+              className="gx-btn-danger disabled:opacity-40"
             >
               Desactivar
             </button>
           </>
         )}
       </div>
+
+      {modal && (
+        <div className="gx-modal-overlay">
+          <form onSubmit={confirmarModal} className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">
+              {modal === "regenerar" ? "Regenerar códigos de respaldo" : "Desactivar 2FA"}
+            </h2>
+            <p className="mb-3 text-slate-500 text-sm">
+              {modal === "regenerar"
+                ? "Escribe el código actual de tu app de autenticación para confirmar."
+                : "Escribe tu contraseña para confirmar. Tu cuenta quedará sin 2FA."}
+            </p>
+            <label className="mb-3 block">
+              <span className="gx-label">
+                {modal === "regenerar" ? "Código de 6 dígitos" : "Contraseña"}
+              </span>
+              <input
+                type={modal === "desactivar" ? "password" : "text"}
+                inputMode={modal === "regenerar" ? "numeric" : undefined}
+                value={modalInput}
+                onChange={(e) => setModalInput(e.target.value)}
+                className="gx-input"
+                required
+                // biome-ignore lint/a11y/noAutofocus: foco intencional en el primer campo del modal de 2FA
+                autoFocus
+              />
+            </label>
+            {modalError && <p className="mb-3 text-danger text-sm">{modalError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setModal(null)} className="gx-btn-secondary">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={busy || !modalInput.trim()}
+                className={modal === "desactivar" ? "gx-btn-danger" : "gx-btn-primary"}
+              >
+                {busy ? "Confirmando…" : "Confirmar"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }
@@ -235,13 +283,26 @@ function PoliticaEquipo() {
   useEffect(() => {
     getPolitica2fa()
       .then(setPol)
-      .catch(() => setPol(null));
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar la política 2FA"));
     api<Rol[]>("/t/roles")
       .then(setRoles)
       .catch(() => setRoles([]));
   }, []);
 
-  if (!pol) return null;
+  if (error) {
+    return (
+      <section className="rounded-xl border bg-white p-6">
+        <p className="text-danger text-sm">{error}</p>
+      </section>
+    );
+  }
+  if (!pol) {
+    return (
+      <section className="rounded-xl border bg-white p-6">
+        <p className="text-slate-400 text-sm">Cargando…</p>
+      </section>
+    );
+  }
 
   function toggleRol(codigo: string) {
     setPol((p) => {
@@ -280,7 +341,7 @@ function PoliticaEquipo() {
       </p>
 
       {pol.forzadoPorVertical && (
-        <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-amber-50 p-3 text-amber-700 text-sm">
+        <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-warn-light p-3 text-warn text-sm">
           <Stethoscope size={16} className="mt-0.5 shrink-0" />
           <span>
             Por ser un negocio de salud, el 2FA es <strong>obligatorio para todos</strong> por
@@ -302,7 +363,7 @@ function PoliticaEquipo() {
       {!pol.require2faTodos && (
         <div className="mb-4">
           <p className="mb-2 font-medium text-slate-700 text-sm">O solo a estos roles:</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {roles.map((r) => (
               <label
                 key={r.id}
@@ -321,12 +382,8 @@ function PoliticaEquipo() {
         </div>
       )}
 
-      {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
-      <button
-        type="button"
-        onClick={guardar}
-        className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark"
-      >
+      {error && <p className="mb-3 text-danger text-sm">{error}</p>}
+      <button type="button" onClick={guardar} className="gx-btn-primary">
         {guardado ? "Guardado" : "Guardar política"}
       </button>
     </section>

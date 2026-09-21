@@ -15,21 +15,28 @@ interface Resena {
 }
 
 const ESTADO_BADGE: Record<string, string> = {
-  pendiente: "bg-amber-100 text-amber-700",
-  aprobada: "bg-emerald-100 text-emerald-700",
-  rechazada: "bg-red-100 text-red-700",
+  pendiente: "gx-badge-warn",
+  aprobada: "gx-badge-ok",
+  rechazada: "gx-badge-danger",
 };
 
 export function ResenasPage() {
   const [resenas, setResenas] = useState<Resena[]>([]);
   const [filtro, setFiltro] = useState("pendiente");
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     const qs = filtro ? `?estado=${filtro}` : "";
     api<Resena[]>(`/t/resenas${qs}`)
-      .then(setResenas)
-      .catch(() => setResenas([]));
+      .then((r) => {
+        setResenas(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar las reseñas"))
+      .finally(() => setCargando(false));
   }, [filtro]);
 
   useEffect(() => cargar(), [cargar]);
@@ -40,13 +47,13 @@ export function ResenasPage() {
       await api(`/t/resenas/${id}/moderar`, { body: { estado } });
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error al moderar");
+      setError(err instanceof ApiError ? err.message : "No se pudo moderar la reseña");
     }
   }
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Reseñas</h1>
         <select
           data-tour="res-filtro"
@@ -61,15 +68,29 @@ export function ResenasPage() {
         </select>
       </div>
 
-      {resenas.map((r) => (
-        <ResenaCard key={r.id} resena={r} onModerar={moderar} onChanged={cargar} />
-      ))}
-      {resenas.length === 0 && (
+      {cargando && (
+        <p className="rounded-xl bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
+          Cargando…
+        </p>
+      )}
+      {error && !cargando && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+      {!cargando &&
+        !error &&
+        resenas.map((r) => (
+          <ResenaCard key={r.id} resena={r} onModerar={moderar} onChanged={cargar} />
+        ))}
+      {!cargando && !error && resenas.length === 0 && (
         <p className="rounded-xl bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
           Sin reseñas {filtro ? `en estado "${filtro}"` : ""}.
         </p>
       )}
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </div>
   );
 }
@@ -85,14 +106,18 @@ function ResenaCard({
 }) {
   const [respuesta, setRespuesta] = useState("");
   const [respondiendo, setRespondiendo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function responder() {
     if (!respuesta.trim()) return;
+    setError(null);
     setRespondiendo(true);
     try {
       await api(`/t/resenas/${resena.id}/responder`, { body: { respuesta: respuesta.trim() } });
       setRespuesta("");
       onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo publicar la respuesta");
     } finally {
       setRespondiendo(false);
     }
@@ -102,7 +127,7 @@ function ResenaCard({
     <div className="mb-3 rounded-xl bg-white p-4 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-amber-500">
+          <span className="text-warn">
             {"★".repeat(resena.rating)}
             {"☆".repeat(5 - resena.rating)}
           </span>
@@ -110,9 +135,7 @@ function ResenaCard({
             {resena.productoPublicado.tituloPublico}
           </span>
         </div>
-        <span className={`rounded-full px-2 py-0.5 text-xs ${ESTADO_BADGE[resena.estado]}`}>
-          {resena.estado}
-        </span>
+        <span className={ESTADO_BADGE[resena.estado]}>{resena.estado}</span>
       </div>
       <p className="mb-1 text-xs text-slate-400">
         {resena.cliente?.nombre ?? "Cliente"} · {resena.pedido.folioPublico} ·{" "}
@@ -122,18 +145,18 @@ function ResenaCard({
       {resena.comentario && <p className="mb-2 text-sm text-slate-600">{resena.comentario}</p>}
 
       {resena.estado === "pendiente" && (
-        <div className="mb-2 flex gap-2">
+        <div className="mb-2 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => onModerar(resena.id, "aprobada")}
-            className="rounded-lg bg-emerald-600 px-3 py-1 text-sm font-semibold text-white hover:bg-emerald-700"
+            className="gx-btn-primary"
           >
             Aprobar
           </button>
           <button
             type="button"
             onClick={() => onModerar(resena.id, "rechazada")}
-            className="rounded-lg border border-red-300 px-3 py-1 text-sm font-semibold text-red-600 hover:bg-red-50"
+            className="gx-btn-danger"
           >
             Rechazar
           </button>
@@ -146,24 +169,25 @@ function ResenaCard({
         </p>
       ) : (
         resena.estado === "aprobada" && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               value={respuesta}
               onChange={(e) => setRespuesta(e.target.value)}
               placeholder="Responder al cliente…"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="gx-input min-w-52 flex-1"
             />
             <button
               type="button"
               onClick={responder}
               disabled={respondiendo}
-              className="rounded-lg border border-brand px-3 py-1.5 text-sm font-semibold text-brand hover:bg-teal-50 disabled:opacity-50"
+              className="gx-btn-secondary disabled:opacity-50"
             >
               Responder
             </button>
           </div>
         )
       )}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }

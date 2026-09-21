@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { AlertTriangle, PackageX, Star } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 
 interface Insights {
@@ -29,14 +30,20 @@ export function InventarioInsightsPage() {
   const [dias, setDias] = useState(30);
   const [data, setData] = useState<Insights | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     setCargando(true);
+    setError(null);
     api<Insights>(`/t/inventario-insights?dias=${dias}`)
-      .then(setData)
-      .catch(() => setData(null))
+      .then((r) => {
+        setData(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar el análisis"))
       .finally(() => setCargando(false));
   }, [dias]);
+  useEffect(() => cargar(), [cargar]);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -63,22 +70,34 @@ export function InventarioInsightsPage() {
 
       {cargando && <p className="text-slate-400">Analizando…</p>}
 
-      {data && !cargando && (
+      {error && !cargando && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {data && !cargando && !error && (
         <div className="space-y-6">
           <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-1 font-bold text-slate-800">🔴 Reordena pronto</h2>
+            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-800">
+              <AlertTriangle size={18} className="text-danger" />
+              Reordena pronto
+            </h2>
             <p className="mb-3 text-slate-500 text-sm">
               Se van a agotar según su ritmo de venta. Sugerencia para 30 días de inventario.
             </p>
             {data.porAgotarse.length === 0 ? (
-              <p className="text-slate-400 text-sm">Nada urgente por reordenar. 👍</p>
+              <p className="text-slate-400 text-sm">Nada urgente por reordenar.</p>
             ) : (
               <Tabla
                 cols={["Producto", "Stock", "Se agota en", "Reordenar"]}
                 rows={data.porAgotarse.map((r) => [
                   <Prod key="p" nombre={r.nombre} sku={r.sku} />,
                   String(r.stock),
-                  <span key="d" className="font-semibold text-red-600">
+                  <span key="d" className="font-semibold text-danger">
                     {r.diasParaAgotarse} días
                   </span>,
                   <span key="r" className="font-bold text-brand">
@@ -90,19 +109,22 @@ export function InventarioInsightsPage() {
           </section>
 
           <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-1 font-bold text-slate-800">🟡 Estancados (ponlos en oferta)</h2>
+            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-800">
+              <PackageX size={18} className="text-warn" />
+              Estancados (ponlos en oferta)
+            </h2>
             <p className="mb-3 text-slate-500 text-sm">
               Con stock pero sin ventas en el periodo. Dinero detenido.
             </p>
             {data.estancados.length === 0 ? (
-              <p className="text-slate-400 text-sm">Sin productos estancados. 👍</p>
+              <p className="text-slate-400 text-sm">Sin productos estancados.</p>
             ) : (
               <Tabla
                 cols={["Producto", "Stock", "Valor detenido"]}
                 rows={data.estancados.map((r) => [
                   <Prod key="p" nombre={r.nombre} sku={r.sku} />,
                   String(r.stock),
-                  <span key="v" className="font-semibold text-amber-600">
+                  <span key="v" className="font-semibold text-warn">
                     {money(r.valorInmovilizado)}
                   </span>,
                 ])}
@@ -111,7 +133,10 @@ export function InventarioInsightsPage() {
           </section>
 
           <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-1 font-bold text-slate-800">🟢 Tus estrellas (más margen)</h2>
+            <h2 className="mb-1 flex items-center gap-2 font-bold text-slate-800">
+              <Star size={18} className="text-ok" />
+              Tus estrellas (más margen)
+            </h2>
             <p className="mb-3 text-slate-500 text-sm">Lo que más te deja: empújalos.</p>
             {data.topVendidos.length === 0 ? (
               <p className="text-slate-400 text-sm">Sin ventas en el periodo.</p>
@@ -145,12 +170,12 @@ function Prod({ nombre, sku }: { nombre: string; sku: string }) {
 
 function Tabla({ cols, rows }: { cols: string[]; rows: React.ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-slate-500">
+    <div className="gx-table-wrap">
+      <table className="gx-table">
+        <thead>
           <tr>
             {cols.map((c) => (
-              <th key={c} className="pb-2 font-medium">
+              <th key={c} className="gx-th">
                 {c}
               </th>
             ))}
@@ -159,10 +184,10 @@ function Tabla({ cols, rows }: { cols: string[]; rows: React.ReactNode[][] }) {
         <tbody>
           {rows.map((r, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: filas de reporte sin id estable
-            <tr key={i} className="border-slate-100 border-t">
+            <tr key={i}>
               {r.map((cell, j) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: celdas posicionales
-                <td key={j} className="py-2 pr-4 align-top">
+                <td key={j} className="gx-td align-top">
                   {cell}
                 </td>
               ))}

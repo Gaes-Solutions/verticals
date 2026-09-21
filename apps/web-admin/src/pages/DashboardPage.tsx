@@ -1,5 +1,5 @@
 import { ThumbsUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import type { InventarioItem, Paged, VentaListItem } from "../lib/types.js";
 
@@ -13,30 +13,46 @@ export function DashboardPage() {
   const [data, setData] = useState<Resumen | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const inicioHoy = new Date();
-        inicioHoy.setHours(0, 0, 0, 0);
-        const [ventas, inv] = await Promise.all([
-          api<Paged<VentaListItem>>(
-            `/t/ventas?estado=cobrada&desde=${inicioHoy.toISOString()}&pageSize=200`,
-          ),
-          api<Paged<InventarioItem>>("/t/inventario?stockBajoMinimo=true&pageSize=50"),
-        ]);
-        const ventasHoyTotal = ventas.items.reduce((s, v) => s + Number.parseFloat(v.total), 0);
-        setData({
-          ventasHoyTotal,
-          ventasHoyCount: ventas.items.length,
-          bajoStock: inv.items,
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al cargar el resumen");
-      }
-    })();
+  const cargar = useCallback(async () => {
+    setError(null);
+    try {
+      const inicioHoy = new Date();
+      inicioHoy.setHours(0, 0, 0, 0);
+      const [ventas, inv] = await Promise.all([
+        api<Paged<VentaListItem>>(
+          `/t/ventas?estado=cobrada&desde=${inicioHoy.toISOString()}&pageSize=200`,
+        ),
+        api<Paged<InventarioItem>>("/t/inventario?stockBajoMinimo=true&pageSize=50"),
+      ]);
+      const ventasHoyTotal = ventas.items.reduce((s, v) => s + Number.parseFloat(v.total), 0);
+      setData({
+        ventasHoyTotal,
+        ventasHoyCount: ventas.items.length,
+        bajoStock: inv.items,
+      });
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar el resumen");
+    }
   }, []);
 
-  if (error) return <p className="text-red-600">{error}</p>;
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  if (error) {
+    return (
+      <div>
+        <h1 className="mb-6 text-2xl font-bold text-slate-800">Resumen</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!data) return <p className="text-slate-400">Cargando…</p>;
 
   return (
@@ -53,7 +69,7 @@ export function DashboardPage() {
         <Card
           titulo="Productos bajo stock"
           valor={String(data.bajoStock.length)}
-          color={data.bajoStock.length > 0 ? "text-red-600" : "text-emerald-600"}
+          color={data.bajoStock.length > 0 ? "text-danger" : "text-ok"}
         />
       </div>
 
@@ -63,27 +79,23 @@ export function DashboardPage() {
           <ThumbsUp size={15} /> Todo el inventario está por encima del mínimo.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+        <div className="gx-table-wrap">
+          <table className="gx-table">
+            <thead>
               <tr>
-                <th className="px-4 py-2">Producto</th>
-                <th className="px-4 py-2">Sucursal</th>
-                <th className="px-4 py-2 text-right">Stock</th>
-                <th className="px-4 py-2 text-right">Mínimo</th>
+                <th className="gx-th">Producto</th>
+                <th className="gx-th">Sucursal</th>
+                <th className="gx-th text-right">Stock</th>
+                <th className="gx-th text-right">Mínimo</th>
               </tr>
             </thead>
             <tbody>
               {data.bajoStock.map((i) => (
-                <tr key={i.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2 font-medium text-slate-800">
-                    {i.variante.producto.nombre}
-                  </td>
-                  <td className="px-4 py-2 text-slate-500">{i.sucursal.codigo}</td>
-                  <td className="px-4 py-2 text-right font-semibold text-red-600">
-                    {i.stockActual}
-                  </td>
-                  <td className="px-4 py-2 text-right text-slate-500">{i.stockMinimo}</td>
+                <tr key={i.id}>
+                  <td className="gx-td font-medium">{i.variante.producto.nombre}</td>
+                  <td className="gx-td text-slate-500">{i.sucursal.codigo}</td>
+                  <td className="gx-td text-right font-semibold text-danger">{i.stockActual}</td>
+                  <td className="gx-td text-right text-slate-500">{i.stockMinimo}</td>
                 </tr>
               ))}
             </tbody>

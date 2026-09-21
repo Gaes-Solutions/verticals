@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 
 interface CfdiConfig {
@@ -18,6 +18,8 @@ interface CfdiConfig {
 
 export function CfdiPage() {
   const [cfg, setCfg] = useState<CfdiConfig>({ facturamaAmbiente: "sandbox" });
+  const [cargando, setCargando] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [configurado, setConfigurado] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -25,17 +27,27 @@ export function CfdiPage() {
   const [guardando, setGuardando] = useState(false);
   const puedeConfigurar = puede("cfdi.configurar");
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setCargando(true);
+    setLoadError(null);
     api<CfdiConfig>("/t/cfdis/config")
       .then((c) => {
         setCfg(c);
         setConfigurado(Boolean(c.facturamaApiKeyConfigured));
+        setLoadError(null);
       })
-      .catch(() => {
-        // 404 = aún sin configurar
-        setCfg({ facturamaAmbiente: "sandbox", serieDefault: "A", autofacturaActiva: true });
-      });
+      .catch((e) => {
+        // 404 = aún sin configurar; cualquier otra cosa es un error real.
+        if (e instanceof ApiError && e.status === 404) {
+          setCfg({ facturamaAmbiente: "sandbox", serieDefault: "A", autofacturaActiva: true });
+          setLoadError(null);
+        } else {
+          setLoadError(e instanceof Error ? e.message : "Error al cargar la configuración");
+        }
+      })
+      .finally(() => setCargando(false));
   }, []);
+  useEffect(() => cargar(), [cargar]);
 
   async function guardar() {
     setError(null);
@@ -72,15 +84,37 @@ export function CfdiPage() {
   function campo(label: string, key: keyof CfdiConfig, placeholder = "") {
     return (
       <label className="mb-3 block">
-        <span className="mb-1 block font-medium text-slate-700 text-sm">{label}</span>
+        <span className="gx-label">{label}</span>
         <input
           value={(cfg[key] as string | undefined) ?? ""}
           onChange={(e) => setCfg({ ...cfg, [key]: e.target.value })}
           placeholder={placeholder}
           disabled={!puedeConfigurar}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          className="gx-input disabled:bg-slate-50 disabled:text-slate-500"
         />
       </label>
+    );
+  }
+
+  if (cargando) {
+    return (
+      <div className="max-w-2xl">
+        <h1 className="mb-2 font-bold text-2xl text-slate-800">Facturación (CFDI)</h1>
+        <p className="text-slate-400 text-sm">Cargando…</p>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="max-w-2xl">
+        <h1 className="mb-2 font-bold text-2xl text-slate-800">Facturación (CFDI)</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -94,7 +128,7 @@ export function CfdiPage() {
       </p>
 
       {!puedeConfigurar && (
-        <p className="mb-4 rounded-lg bg-amber-50 p-3 text-amber-700 text-sm">
+        <p className="mb-4 rounded-lg bg-warn-light p-3 text-warn text-sm">
           No tienes permiso para configurar facturación.
         </p>
       )}
@@ -105,11 +139,11 @@ export function CfdiPage() {
         </h2>
         {campo("RFC del emisor", "rfcEmisor", "XAXX010101000")}
         {campo("Razón social", "razonSocialEmisor")}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {campo("Régimen fiscal SAT (3 díg.)", "regimenFiscalSat", "601")}
           {campo("Serie", "serieDefault", "A")}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {campo("CP del emisor", "codigoPostalEmisor", "44100")}
           {campo("Lugar de expedición (CP)", "lugarExpedicion", "44100")}
         </div>
@@ -123,7 +157,7 @@ export function CfdiPage() {
         </p>
 
         <label className="mb-3 block">
-          <span className="mb-1 block font-medium text-slate-700 text-sm">Ambiente</span>
+          <span className="gx-label">Ambiente</span>
           <select
             data-tour="cfdi-ambiente"
             value={cfg.facturamaAmbiente ?? "sandbox"}
@@ -131,7 +165,7 @@ export function CfdiPage() {
               setCfg({ ...cfg, facturamaAmbiente: e.target.value as "sandbox" | "prod" })
             }
             disabled={!puedeConfigurar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-64"
+            className="gx-input sm:w-64"
           >
             <option value="sandbox">Sandbox (pruebas)</option>
             <option value="prod">Producción (timbres reales)</option>
@@ -139,9 +173,9 @@ export function CfdiPage() {
         </label>
 
         <label className="mb-3 block">
-          <span className="mb-1 block font-medium text-slate-700 text-sm">
+          <span className="gx-label">
             API key de Facturama{" "}
-            {configurado && <span className="text-emerald-600 text-xs">· configurada </span>}
+            {configurado && <span className="text-ok text-xs">· configurada </span>}
           </span>
           <input
             data-tour="cfdi-apikey"
@@ -152,7 +186,7 @@ export function CfdiPage() {
               configurado ? "•••••••• (déjala vacía para conservarla)" : "Pega tu API key"
             }
             disabled={!puedeConfigurar}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input"
           />
         </label>
 
@@ -173,13 +207,13 @@ export function CfdiPage() {
           data-tour="cfdi-guardar"
           onClick={guardar}
           disabled={guardando}
-          className="rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar facturación"}
         </button>
       )}
-      {msg && <p className="mt-4 text-emerald-600 text-sm">{msg}</p>}
-      {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
+      {msg && <p className="mt-4 text-ok text-sm">{msg}</p>}
+      {error && <p className="mt-4 text-danger text-sm">{error}</p>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 
 const COND_LABEL: Record<string, string> = {
   contado: "Contado",
@@ -37,14 +37,26 @@ interface ListaPrecio {
 export function ClientesB2bPage() {
   const [items, setItems] = useState<ClienteB2b[]>([]);
   const [q, setQ] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
   const [listas, setListas] = useState<ListaPrecio[]>([]);
+  const puedeCrear = puede("clientes.crear");
 
   const cargar = useCallback(async () => {
-    const res = await api<Paged>(
-      `/t/clientes-b2b?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ""}`,
-    );
-    setItems(res.items);
+    setCargando(true);
+    setError(null);
+    try {
+      const res = await api<Paged>(
+        `/t/clientes-b2b?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+      );
+      setItems(res.items);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar los clientes");
+    } finally {
+      setCargando(false);
+    }
   }, [q]);
 
   useEffect(() => {
@@ -60,56 +72,75 @@ export function ClientesB2bPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Clientes de mayoreo</h1>
-        <button
-          type="button"
-          data-tour="cli-nuevo"
-          onClick={() => setModal(true)}
-          className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
-        >
-          + Nuevo cliente
-        </button>
+        {puedeCrear && (
+          <button
+            type="button"
+            data-tour="cli-nuevo"
+            onClick={() => setModal(true)}
+            className="gx-btn-primary"
+          >
+            + Nuevo cliente
+          </button>
+        )}
       </div>
 
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Buscar por razón social o RFC…"
-        className="mb-4 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+        className="gx-input mb-4 max-w-md"
       />
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <div className="gx-table-wrap">
+        <table className="gx-table">
+          <thead>
             <tr>
-              <th className="px-4 py-2">Cliente</th>
-              <th className="px-4 py-2">RFC</th>
-              <th className="px-4 py-2">Pago</th>
-              <th className="px-4 py-2">Lista de precios</th>
+              <th className="gx-th">Cliente</th>
+              <th className="gx-th">RFC</th>
+              <th className="gx-th">Pago</th>
+              <th className="gx-th">Lista de precios</th>
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && (
+            {cargando && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-slate-400" colSpan={4}>
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!cargando && !error && items.length === 0 && (
+              <tr>
+                <td className="gx-td text-center text-slate-400" colSpan={4}>
                   Sin clientes de mayoreo. Da de alta el primero.
                 </td>
               </tr>
             )}
-            {items.map((c) => (
-              <tr key={c.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-medium text-slate-800">{c.razonSocial}</td>
-                <td className="px-4 py-2 font-mono text-xs text-slate-600">{c.rfc}</td>
-                <td className="px-4 py-2 text-slate-700">
-                  {COND_LABEL[c.condicionesPago] ?? c.condicionesPago}
-                  {c.condicionesPago !== "contado" && c.diasCreditoDefault > 0 && (
-                    <span className="text-slate-400"> · {c.diasCreditoDefault} días</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-slate-600">{c.listaPrecioPrincipalCodigo ?? "—"}</td>
-              </tr>
-            ))}
+            {!cargando &&
+              items.map((c) => (
+                <tr key={c.id}>
+                  <td className="gx-td font-medium">{c.razonSocial}</td>
+                  <td className="gx-td font-mono text-xs text-slate-600">{c.rfc}</td>
+                  <td className="gx-td text-slate-700">
+                    {COND_LABEL[c.condicionesPago] ?? c.condicionesPago}
+                    {c.condicionesPago !== "contado" && c.diasCreditoDefault > 0 && (
+                      <span className="text-slate-400"> · {c.diasCreditoDefault} días</span>
+                    )}
+                  </td>
+                  <td className="gx-td text-slate-600">{c.listaPrecioPrincipalCodigo ?? "—"}</td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -173,8 +204,8 @@ function NuevoClienteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-4 text-lg font-bold text-slate-800">Nuevo cliente de mayoreo</h2>
         <div className="space-y-3">
           <Campo label="Razón social">
@@ -182,23 +213,23 @@ function NuevoClienteModal({
               data-tour="cli-f-razon"
               value={razonSocial}
               onChange={(e) => setRazonSocial(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo label="RFC">
               <input
                 data-tour="cli-f-rfc"
                 value={rfc}
                 onChange={(e) => setRfc(e.target.value.toUpperCase())}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Campo>
             <Campo label="Régimen fiscal (SAT)">
               <select
                 value={regimenFiscalSat}
                 onChange={(e) => setRegimen(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-brand focus:outline-none"
+                className="gx-input"
               >
                 {REGIMENES.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -208,29 +239,29 @@ function NuevoClienteModal({
               </select>
             </Campo>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo label="Correo">
               <input
                 type="email"
                 value={emailPrincipal}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Campo>
             <Campo label="Teléfono">
               <input
                 value={telefonoPrincipal}
                 onChange={(e) => setTel(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Campo>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo label="Condición de pago">
               <select
                 value={condicionesPago}
                 onChange={(e) => setCond(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               >
                 <option value="contado">Contado</option>
                 <option value="credito">Crédito</option>
@@ -243,7 +274,7 @@ function NuevoClienteModal({
                 value={diasCreditoDefault}
                 onChange={(e) => setDias(e.target.value)}
                 disabled={condicionesPago === "contado"}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none disabled:bg-slate-100"
+                className="gx-input disabled:bg-slate-100"
               />
             </Campo>
           </div>
@@ -251,7 +282,7 @@ function NuevoClienteModal({
             <select
               value={listaPrecioPrincipalCodigo}
               onChange={(e) => setLista(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             >
               <option value="">Precio normal (sin lista)</option>
               {listas.map((l) => (
@@ -261,14 +292,10 @@ function NuevoClienteModal({
               ))}
             </select>
           </Campo>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
             Cancelar
           </button>
           <button
@@ -276,7 +303,7 @@ function NuevoClienteModal({
             data-tour="cli-f-crear"
             onClick={crear}
             disabled={guardando || !razonSocial || rfc.length < 12}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Creando…" : "Crear cliente"}
           </button>

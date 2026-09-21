@@ -47,7 +47,7 @@ export function ContabilidadPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Contabilidad</h1>
       </div>
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setTab("cfdis")}
@@ -81,9 +81,13 @@ function CfdisTab() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    setError(null);
     try {
       const res = await api<{ items: CfdiRecibido[] }>("/t/cfdis-recibidos?pageSize=100");
       setItems(res.items);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar los CFDIs recibidos");
     } finally {
       setCargando(false);
     }
@@ -133,10 +137,7 @@ function CfdisTab() {
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {puede("cfdis_recibidos.upload") && (
-          <label
-            data-tour="cont-subir"
-            className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
-          >
+          <label data-tour="cont-subir" className="gx-btn-primary cursor-pointer">
             {ocupado === "upload" ? "Subiendo…" : "+ Subir XML"}
             <input
               type="file"
@@ -153,85 +154,91 @@ function CfdisTab() {
         <p className="text-sm text-slate-500">CFDIs de proveedores para deducción y DIOT.</p>
       </div>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      <div className="gx-table-wrap">
+        <table className="gx-table min-w-[720px]">
+          <thead>
             <tr>
-              <th className="px-4 py-2">Emisor</th>
-              <th className="px-4 py-2">Fecha</th>
-              <th className="px-4 py-2 text-right">Total</th>
-              <th className="px-4 py-2">Categoría</th>
-              <th className="px-4 py-2" />
+              <th className="gx-th">Emisor</th>
+              <th className="gx-th">Fecha</th>
+              <th className="gx-th text-right">Total</th>
+              <th className="gx-th">Categoría</th>
+              <th className="gx-th" />
             </tr>
           </thead>
           <tbody>
             {cargando && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-slate-400" colSpan={5}>
                   Cargando…
                 </td>
               </tr>
             )}
-            {!cargando && items.length === 0 && (
+            {!cargando && !error && items.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-center text-slate-400" colSpan={5}>
                   Sin CFDIs. Sube el primer XML.
                 </td>
               </tr>
             )}
-            {items.map((c) => (
-              <tr key={c.id} className="border-t border-slate-100">
-                <td className="px-4 py-2">
-                  <p className="font-medium text-slate-800">{c.emisorRazonSocial}</p>
-                  <p className="text-xs text-slate-400">{c.emisorRfc}</p>
-                </td>
-                <td className="px-4 py-2 text-slate-600">
-                  {new Date(c.fechaEmision).toLocaleDateString("es-MX")}
-                </td>
-                <td className="px-4 py-2 text-right text-slate-700">
-                  ${Number.parseFloat(c.total).toFixed(2)}
-                </td>
-                <td className="px-4 py-2">
-                  {c.categorizacion?.categoria ? (
-                    <span className="text-slate-700">
-                      {c.categorizacion.categoria.codigoContable} ·{" "}
-                      {c.categorizacion.categoria.nombre}
-                    </span>
-                  ) : (
-                    <span className="text-amber-600">Sin categorizar</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {puede("cfdis_recibidos.categorizar") && (
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        disabled={ocupado === c.id}
-                        onClick={() => categorizar(c.id)}
-                        className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
-                      >
-                        {ocupado === c.id ? "…" : "Auto (IA)"}
-                      </button>
-                      <select
-                        defaultValue=""
-                        disabled={ocupado === c.id}
-                        onChange={(e) => e.target.value && categorizar(c.id, e.target.value)}
-                        className="rounded border border-slate-300 px-2 py-1 text-xs"
-                      >
-                        <option value="">Categoría…</option>
-                        {categorias.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.codigoContable} · {cat.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {!cargando &&
+              items.map((c) => (
+                <tr key={c.id}>
+                  <td className="gx-td">
+                    <p className="font-medium">{c.emisorRazonSocial}</p>
+                    <p className="text-xs text-slate-400">{c.emisorRfc}</p>
+                  </td>
+                  <td className="gx-td text-slate-600">
+                    {new Date(c.fechaEmision).toLocaleDateString("es-MX")}
+                  </td>
+                  <td className="gx-td text-right">${Number.parseFloat(c.total).toFixed(2)}</td>
+                  <td className="gx-td">
+                    {c.categorizacion?.categoria ? (
+                      <span className="text-slate-700">
+                        {c.categorizacion.categoria.codigoContable} ·{" "}
+                        {c.categorizacion.categoria.nombre}
+                      </span>
+                    ) : (
+                      <span className="text-warn">Sin categorizar</span>
+                    )}
+                  </td>
+                  <td className="gx-td">
+                    {puede("cfdis_recibidos.categorizar") && (
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={ocupado === c.id}
+                          onClick={() => categorizar(c.id)}
+                          className="min-h-10 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
+                        >
+                          {ocupado === c.id ? "…" : "Auto (IA)"}
+                        </button>
+                        <select
+                          defaultValue=""
+                          disabled={ocupado === c.id}
+                          onChange={(e) => e.target.value && categorizar(c.id, e.target.value)}
+                          className="min-h-10 rounded-lg border border-slate-300 px-2 py-2 text-xs"
+                        >
+                          <option value="">Categoría…</option>
+                          {categorias.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.codigoContable} · {cat.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -289,29 +296,25 @@ function DiotTab() {
           <input
             value={periodo}
             onChange={(e) => setPeriodo(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            className="mt-1 block w-32 rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input mt-1 block w-32"
           />
         </label>
         <button
           type="button"
           onClick={generar}
           disabled={cargando || periodo.length !== 6}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary disabled:opacity-50"
         >
           {cargando ? "Generando…" : "Generar"}
         </button>
         {reporte && reporte.lineas.length > 0 && (
-          <button
-            type="button"
-            onClick={descargarTxt}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-          >
+          <button type="button" onClick={descargarTxt} className="gx-btn-secondary">
             Descargar .txt (SAT)
           </button>
         )}
       </div>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
       {reporte && (
         <>
@@ -325,23 +328,23 @@ function DiotTab() {
               <span className="font-semibold text-slate-800">${reporte.totalIvaPagado}</span>
             </span>
           </div>
-          <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
+          <div className="gx-table-wrap">
+            <table className="gx-table min-w-[560px]">
+              <thead>
                 <tr>
-                  <th className="px-4 py-2">RFC</th>
-                  <th className="px-4 py-2">Proveedor</th>
-                  <th className="px-4 py-2 text-right">IVA 16%</th>
-                  <th className="px-4 py-2 text-right">CFDIs</th>
+                  <th className="gx-th">RFC</th>
+                  <th className="gx-th">Proveedor</th>
+                  <th className="gx-th text-right">IVA 16%</th>
+                  <th className="gx-th text-right">CFDIs</th>
                 </tr>
               </thead>
               <tbody>
                 {reporte.lineas.map((l) => (
-                  <tr key={l.rfcTercero} className="border-t border-slate-100">
-                    <td className="px-4 py-2 font-mono text-xs text-slate-700">{l.rfcTercero}</td>
-                    <td className="px-4 py-2 text-slate-700">{l.nombreTercero}</td>
-                    <td className="px-4 py-2 text-right text-slate-700">${l.ivaPagado16}</td>
-                    <td className="px-4 py-2 text-right text-slate-500">{l.cfdiCount}</td>
+                  <tr key={l.rfcTercero}>
+                    <td className="gx-td font-mono text-xs">{l.rfcTercero}</td>
+                    <td className="gx-td">{l.nombreTercero}</td>
+                    <td className="gx-td text-right">${l.ivaPagado16}</td>
+                    <td className="gx-td text-right text-slate-500">{l.cfdiCount}</td>
                   </tr>
                 ))}
               </tbody>

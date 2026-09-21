@@ -199,7 +199,7 @@ export function Login({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
                 required
               />
             </label>
@@ -223,7 +223,7 @@ export function Login({
                 </button>
               </div>
             </label>
-            {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading}
@@ -272,7 +272,7 @@ export function Login({
               ¿No puedes escanear? Clave manual: <span className="font-mono">{secret}</span>
             </p>
             <CodeInput code={code} setCode={setCode} respaldo={false} />
-            {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading}
@@ -291,7 +291,7 @@ export function Login({
                 : "Escribe el código de 6 dígitos de tu app autenticadora."}
             </p>
             <CodeInput code={code} setCode={setCode} respaldo={usarRespaldo} />
-            {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading}

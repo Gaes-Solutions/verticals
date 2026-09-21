@@ -5,6 +5,7 @@ import type { InventarioItem, Paged, Producto, Sucursal } from "../lib/types.js"
 export function InventarioPage() {
   const [items, setItems] = useState<InventarioItem[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [soloBajo, setSoloBajo] = useState(false);
   const [ajuste, setAjuste] = useState<InventarioItem | null>(null);
   const [entrada, setEntrada] = useState(false);
@@ -12,11 +13,15 @@ export function InventarioPage() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    setError(null);
     try {
       const res = await api<Paged<InventarioItem>>(
         `/t/inventario?pageSize=100${soloBajo ? "&stockBajoMinimo=true" : ""}`,
       );
       setItems(res.items);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar el inventario");
     } finally {
       setCargando(false);
     }
@@ -44,7 +49,7 @@ export function InventarioPage() {
               type="button"
               data-tour="inv-nuevo"
               onClick={() => setEntrada(true)}
-              className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
+              className="gx-btn-primary"
             >
               + Entrada de inventario
             </button>
@@ -52,62 +57,68 @@ export function InventarioPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <div className="gx-table-wrap">
+        <table className="gx-table">
+          <thead>
             <tr>
-              <th className="px-4 py-2">Producto</th>
-              <th className="px-4 py-2">SKU</th>
-              <th className="px-4 py-2">Sucursal</th>
-              <th className="px-4 py-2 text-right">Stock</th>
-              <th className="px-4 py-2 text-right">Mínimo</th>
-              <th className="px-4 py-2" />
+              <th className="gx-th">Producto</th>
+              <th className="gx-th">SKU</th>
+              <th className="gx-th">Sucursal</th>
+              <th className="gx-th text-right">Stock</th>
+              <th className="gx-th text-right">Mínimo</th>
+              <th className="gx-th" />
             </tr>
           </thead>
           <tbody>
             {cargando && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-slate-400" colSpan={6}>
                   Cargando…
                 </td>
               </tr>
             )}
-            {!cargando && items.length === 0 && (
+            {!cargando && !error && items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-center text-slate-400" colSpan={6}>
                   Sin registros de inventario.
                 </td>
               </tr>
             )}
-            {items.map((i) => {
-              const bajo = Number(i.stockActual) <= Number(i.stockMinimo);
-              return (
-                <tr key={i.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2 font-medium text-slate-800">
-                    {i.variante.producto.nombre}
-                  </td>
-                  <td className="px-4 py-2 text-slate-500">{i.variante.sku}</td>
-                  <td className="px-4 py-2 text-slate-500">{i.sucursal.codigo}</td>
-                  <td
-                    className={`px-4 py-2 text-right font-semibold ${bajo ? "text-red-600" : "text-slate-800"}`}
-                  >
-                    {i.stockActual}
-                  </td>
-                  <td className="px-4 py-2 text-right text-slate-500">{i.stockMinimo}</td>
-                  <td className="px-4 py-2 text-right">
-                    {puedeAjustar && (
-                      <button
-                        type="button"
-                        onClick={() => setAjuste(i)}
-                        className="text-brand hover:underline"
-                      >
-                        Ajustar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {!cargando &&
+              items.map((i) => {
+                const bajo = Number(i.stockActual) <= Number(i.stockMinimo);
+                return (
+                  <tr key={i.id}>
+                    <td className="gx-td font-medium">{i.variante.producto.nombre}</td>
+                    <td className="gx-td text-slate-500">{i.variante.sku}</td>
+                    <td className="gx-td text-slate-500">{i.sucursal.codigo}</td>
+                    <td className={`gx-td text-right font-semibold ${bajo ? "text-danger" : ""}`}>
+                      {i.stockActual}
+                    </td>
+                    <td className="gx-td text-right text-slate-500">{i.stockMinimo}</td>
+                    <td className="gx-td text-right">
+                      {puedeAjustar && (
+                        <button
+                          type="button"
+                          onClick={() => setAjuste(i)}
+                          className="text-brand hover:underline"
+                        >
+                          Ajustar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
@@ -173,8 +184,8 @@ function AjusteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-sm">
         <h2 className="mb-1 text-lg font-bold text-slate-800">Ajustar inventario</h2>
         <p className="mb-4 text-sm text-slate-500">
           {item.variante.producto.nombre} · stock actual {item.stockActual}
@@ -202,29 +213,25 @@ function AjusteModal({
             value={cantidad}
             onChange={(e) => setCantidad(e.target.value)}
             placeholder="Cantidad"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
           <input
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Motivo (mín. 3 letras)"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
             Cancelar
           </button>
           <button
             type="button"
             onClick={guardar}
             disabled={guardando || !cantidad || motivo.trim().length < 3}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Aplicar"}
           </button>
@@ -289,8 +296,8 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-1 text-lg font-bold text-slate-800">Entrada de inventario</h2>
         <p className="mb-4 text-sm text-slate-500">
           Registra mercancía que entra (compra, reabasto o stock inicial): busca el producto y suma
@@ -304,7 +311,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 placeholder="Buscar producto por nombre o SKU…"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
               <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
                 {resultados.length === 0 && (
@@ -343,7 +350,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             <select
               value={varianteId}
               onChange={(e) => setVarianteId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             >
               {producto.variantes.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -357,7 +364,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             <select
               value={sucursalId}
               onChange={(e) => setSucursalId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             >
               {sucursales.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -373,22 +380,18 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             value={cantidad}
             onChange={(e) => setCantidad(e.target.value)}
             placeholder="Cantidad que entra"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
           <input
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Motivo (mín. 3 letras)"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
             Cancelar
           </button>
           <button
@@ -397,7 +400,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             disabled={
               guardando || !varianteId || !sucursalId || !cantidad || motivo.trim().length < 3
             }
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Dar entrada"}
           </button>

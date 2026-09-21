@@ -75,13 +75,9 @@ export function AgregarTarjeta({
   return (
     <div className="mt-3 rounded-lg border border-slate-200 p-3">
       <div ref={cardRef} className="rounded-lg border border-slate-300 px-3 py-3" />
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mt-2 text-danger text-sm">{error}</p>}
       <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700 text-sm"
-        >
+        <button type="button" onClick={onCancelar} className="gx-btn-secondary flex-1">
           Cancelar
         </button>
         <button

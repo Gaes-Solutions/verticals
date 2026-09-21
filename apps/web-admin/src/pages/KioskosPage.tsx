@@ -75,6 +75,7 @@ function Dispositivos() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [aDesactivar, setADesactivar] = useState<Kiosko | null>(null);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const mounted = useRef(false);
@@ -146,14 +147,15 @@ function Dispositivos() {
     }
   }
 
-  async function desactivar(k: Kiosko) {
+  async function pedirDesactivar(k: Kiosko) {
     if (!editar || loading || loadError || mutation.current) return;
-    if (
-      !window.confirm(
-        `¿Desactivar "${k.nombre}"? Se bloqueará su acceso en la siguiente consulta al servidor.`,
-      )
-    )
-      return;
+    setADesactivar(k);
+  }
+
+  async function confirmarDesactivar() {
+    const k = aDesactivar;
+    setADesactivar(null);
+    if (!k) return;
     mutation.current = true;
     setBusy(true);
     setError(null);
@@ -240,8 +242,32 @@ function Dispositivos() {
         editar={editar}
         busy={busy}
         nombreSucursal={nombreSucursal}
-        onDeactivate={desactivar}
+        onDeactivate={pedirDesactivar}
       />
+
+      {aDesactivar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Desactivar kiosko</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Desactivar “{aDesactivar.nombre}”? Se bloqueará su acceso en la siguiente consulta al
+              servidor.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setADesactivar(null)}
+                className="gx-btn-secondary"
+              >
+                Volver
+              </button>
+              <button type="button" onClick={confirmarDesactivar} className="gx-btn-danger">
+                Sí, desactivar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {alta && (
         <div className="gx-modal-overlay">

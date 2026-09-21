@@ -123,7 +123,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
                 if (!slugTocado) setSlug(slugify(e.target.value));
               }}
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
           <Campo label="Identificador (URL)">
@@ -134,14 +134,14 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
                 setSlug(slugify(e.target.value));
               }}
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
           <Campo label="Giro">
             <select
               value={vertical}
               onChange={(e) => setVertical(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             >
               {VERTICALES.filter((v) => !activas || activas.includes(v.value)).map((v) => (
                 <option key={v.value} value={v.value}>
@@ -155,7 +155,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               <select
                 value={planCode}
                 onChange={(e) => setPlanCode(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               >
                 {planes.map((p) => (
                   <option key={p.id} value={p.code}>
@@ -170,7 +170,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               value={adminName}
               onChange={(e) => setAdminName(e.target.value)}
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
           <Campo label="Correo">
@@ -179,7 +179,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
           <Campo label="Contraseña (mín. 8)">
@@ -189,12 +189,12 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Campo>
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
         <button
           type="submit"

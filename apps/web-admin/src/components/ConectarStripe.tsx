@@ -1,3 +1,4 @@
+import { CheckCircle2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 
@@ -16,14 +17,21 @@ interface ConnectStatus {
 export function ConectarStripe() {
   const [estado, setEstado] = useState<ConnectStatus | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [yendo, setYendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
+    setLoadError(null);
     api<ConnectStatus>("/billing/connect/status")
-      .then(setEstado)
-      .catch(() => setEstado(null))
+      .then((s) => {
+        setEstado(s);
+        setLoadError(null);
+      })
+      .catch((e) =>
+        setLoadError(e instanceof Error ? e.message : "Error al cargar el estado de Stripe"),
+      )
       .finally(() => setCargando(false));
   }, []);
 
@@ -44,6 +52,18 @@ export function ConectarStripe() {
   if (cargando) {
     return <p className="text-slate-400 text-sm">Cargando estado de cobros…</p>;
   }
+  if (loadError) {
+    return (
+      <div className="gx-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const habilitado = estado?.chargesEnabled === true;
   const enProceso = !!estado?.accountId && !habilitado;
@@ -56,14 +76,14 @@ export function ConectarStripe() {
       </p>
 
       {habilitado ? (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700 text-sm">
-          <span>✅</span>
+        <div className="flex items-center gap-2 rounded-lg bg-ok-light px-3 py-2 text-ok text-sm">
+          <CheckCircle2 size={16} className="shrink-0" />
           <span>Conectado. Ya puedes cobrar con tarjeta.</span>
         </div>
       ) : (
         <>
           {enProceso && (
-            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-700 text-sm">
+            <p className="mb-2 rounded-lg bg-warn-light px-3 py-2 text-warn text-sm">
               Tu registro está incompleto. Continúa para poder cobrar.
             </p>
           )}
@@ -71,11 +91,11 @@ export function ConectarStripe() {
             type="button"
             onClick={conectar}
             disabled={yendo}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             {yendo ? "Redirigiendo…" : enProceso ? "Continuar registro" : "Conectar con Stripe"}
           </button>
-          {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+          {error && <p className="mt-2 text-danger text-sm">{error}</p>}
         </>
       )}
     </div>

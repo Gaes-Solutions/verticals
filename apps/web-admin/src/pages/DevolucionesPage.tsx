@@ -32,10 +32,10 @@ const METODOS_REEMBOLSO: Array<{ value: string; label: string }> = [
 ];
 
 function badge(estado: string): string {
-  if (estado === "aprobada") return "bg-emerald-100 text-emerald-700";
-  if (estado === "rechazada") return "bg-red-100 text-red-700";
+  if (estado === "aprobada") return "bg-ok-light text-ok";
+  if (estado === "rechazada") return "bg-danger-light text-danger";
   if (estado === "cancelada") return "bg-slate-100 text-slate-500";
-  return "bg-amber-100 text-amber-700";
+  return "bg-warn-light text-warn";
 }
 
 export function DevolucionesPage() {
@@ -46,7 +46,7 @@ export function DevolucionesPage() {
 
   const puedeLeer = puede("ventas.leer");
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<string[]>([]);
   const generation = useRef(0);
   const puedeResolver = puede("ventas.devolver");
@@ -58,14 +58,15 @@ export function DevolucionesPage() {
       return;
     }
     setLoading(true);
-    setLoadError(false);
+    setLoadError(null);
     setSolicitudes([]);
     try {
       const qs = filtro ? `?estado=${encodeURIComponent(filtro)}` : "";
       const result = await api<Solicitud[]>(`/t/devoluciones-online${qs}`);
       if (current === generation.current) setSolicitudes(result);
-    } catch {
-      if (current === generation.current) setLoadError(true);
+    } catch (e) {
+      if (current === generation.current)
+        setLoadError(e instanceof Error ? e.message : "No se pudieron consultar las devoluciones");
     } finally {
       if (current === generation.current) setLoading(false);
     }
@@ -96,16 +97,19 @@ export function DevolucionesPage() {
       </div>
 
       {loading && <output>Consultando devoluciones…</output>}
-      {loadError && (
-        <div role="alert">
-          <p>No se pudieron consultar las devoluciones.</p>
-          <button type="button" onClick={() => void cargar()}>
+      {loadError && !loading && (
+        <div
+          role="alert"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm"
+        >
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
             Reintentar consulta
           </button>
         </div>
       )}
       {error && (
-        <p role="alert" className="mb-4 text-red-600 text-sm">
+        <p role="alert" className="mb-4 text-danger text-sm">
           {error}
         </p>
       )}
@@ -140,24 +144,24 @@ export function DevolucionesPage() {
             </ul>
             {s.bankRefund && <BankRefundStatus solicitud={s} onReload={cargar} />}
             {s.rechazoMotivo && (
-              <p className="mt-1 text-red-600 text-sm">Rechazo: {s.rechazoMotivo}</p>
+              <p className="mt-1 text-danger text-sm">Rechazo: {s.rechazoMotivo}</p>
             )}
             {!s.bankRefund &&
               s.estado === "solicitada" &&
               puedeResolver &&
               !blocked.includes(s.id) && (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setAccion({ s, tipo: "aprobar" })}
-                    className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-sm text-white hover:bg-brand-dark"
+                    className="gx-btn-primary"
                   >
                     Aprobar
                   </button>
                   <button
                     type="button"
                     onClick={() => setAccion({ s, tipo: "rechazar" })}
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 text-sm hover:bg-slate-50"
+                    className="gx-btn-danger"
                   >
                     Rechazar
                   </button>
@@ -260,8 +264,8 @@ function AccionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-1 font-bold text-lg text-slate-800">
           {tipo === "aprobar" ? "Aprobar devolución" : "Rechazar devolución"}
         </h2>
@@ -285,7 +289,7 @@ function AccionModal({
             <select
               value={metodoReembolso}
               onChange={(e) => setMetodoReembolso(e.target.value)}
-              className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="gx-input mb-4"
             >
               {METODOS_REEMBOLSO.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -318,23 +322,19 @@ function AccionModal({
             onChange={(e) => setMotivo(e.target.value)}
             placeholder="Motivo del rechazo (lo verá el cliente)"
             rows={3}
-            className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="gx-input mb-4"
           />
         )}
-        {err && <p className="mb-3 text-red-600 text-sm">{err}</p>}
+        {err && <p className="mb-3 text-danger text-sm">{err}</p>}
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 text-sm hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
           <button
             type="button"
             onClick={ejecutar}
             disabled={guardando || failed}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+            className={`${tipo === "aprobar" ? "gx-btn-primary" : "gx-btn-danger"} disabled:opacity-50`}
           >
             {guardando ? "Procesando…" : tipo === "aprobar" ? "Aprobar" : "Rechazar"}
           </button>

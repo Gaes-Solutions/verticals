@@ -72,14 +72,19 @@ function nombreCliente(c: CxcItem): string {
 export function CxcPage() {
   const [items, setItems] = useState<CxcItem[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<CxcDetalle | null>(null);
   const [nuevo, setNuevo] = useState(false);
 
   const cargar = useCallback(() => {
     setCargando(true);
+    setError(null);
     api<Paged<CxcItem>>("/t/cxc?pageSize=100")
-      .then((r) => setItems(r.items))
-      .catch(() => setItems([]))
+      .then((r) => {
+        setItems(r.items);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar las cuentas"))
       .finally(() => setCargando(false));
   }, []);
   useEffect(() => cargar(), [cargar]);
@@ -99,7 +104,7 @@ export function CxcPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-bold text-2xl text-slate-800">Cuentas por cobrar</h1>
           <p className="text-slate-500 text-sm">
@@ -119,16 +124,27 @@ export function CxcPage() {
         )}
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Por cobrar</p>
-          <p className="font-bold text-2xl text-slate-800">{money(porCobrar)}</p>
+      {!cargando && !error && (
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Por cobrar</p>
+            <p className="font-bold text-2xl text-slate-800">{money(porCobrar)}</p>
+          </div>
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Vencido</p>
+            <p className="font-bold text-2xl text-danger">{money(vencido)}</p>
+          </div>
         </div>
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Vencido</p>
-          <p className="font-bold text-2xl text-danger">{money(vencido)}</p>
+      )}
+
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
         </div>
-      </div>
+      )}
 
       <div className="gx-table-wrap">
         <table className="gx-table">
@@ -149,7 +165,7 @@ export function CxcPage() {
                   Cargando…
                 </td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : error ? null : items.length === 0 ? (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={6}>
                   Aún no hay cuentas por cobrar.
@@ -258,12 +274,12 @@ function CxcDetalleModal({
             <span>{money(cuenta.montoOriginal)}</span>
           </div>
           {Number(cuenta.interesAcumulado) > 0 && (
-            <div className="flex justify-between text-amber-600">
+            <div className="flex justify-between text-warn">
               <span>Interés moratorio</span>
               <span>{money(cuenta.interesAcumulado)}</span>
             </div>
           )}
-          <div className="flex justify-between text-emerald-600">
+          <div className="flex justify-between text-ok">
             <span>Pagado</span>
             <span>{money(cuenta.montoPagado)}</span>
           </div>
@@ -337,8 +353,8 @@ function CxcDetalleModal({
             )}
 
             {puede("cxc.condonar") && (
-              <div className="rounded-lg border border-red-200 p-3">
-                <p className="mb-2 font-semibold text-red-600 text-sm">Cerrar la cuenta</p>
+              <div className="rounded-lg border border-danger-light p-3">
+                <p className="mb-2 font-semibold text-danger text-sm">Cerrar la cuenta</p>
                 <input
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
@@ -362,7 +378,7 @@ function CxcDetalleModal({
                     onClick={() =>
                       correr(() => api(`/t/cxc/${cuenta.id}/incobrable`, { body: { motivo } }))
                     }
-                    className="flex-1 rounded-lg border border-red-300 py-2 font-semibold text-red-600 text-sm hover:bg-red-50 disabled:opacity-40"
+                    className="gx-btn-danger flex-1"
                   >
                     Incobrable
                   </button>
@@ -461,7 +477,7 @@ function NuevaCxcModal({ onClose, onDone }: { onClose: () => void; onDone: () =>
         <div className="mb-3 block">
           <span className="gx-label">Cliente</span>
           {cliente ? (
-            <div className="flex items-center justify-between rounded-lg border border-brand/40 bg-teal-50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between rounded-lg border border-brand/40 bg-brand-light px-3 py-2 text-sm">
               <span>{`${cliente.nombre} ${cliente.apellidos ?? ""}`.trim()}</span>
               <button
                 type="button"

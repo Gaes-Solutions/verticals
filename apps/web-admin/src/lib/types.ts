@@ -110,6 +110,8 @@ export interface ConfigTienda {
   pushHabilitado?: boolean;
   pushEventos?: Array<"pago_confirmado" | "enviado" | "entregado">;
   politicasHtml?: Record<string, string>;
+  /** Texto base que calcula el servidor con los datos del negocio; el dueño lo edita. */
+  politicasSugeridas?: Record<string, string>;
 }
 
 export interface ResumenVentas {

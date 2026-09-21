@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 
 interface Cobro {
   id: string;
@@ -42,13 +42,23 @@ const STATUS_BADGE: Record<string, string> = {
 
 export function CobrosPage() {
   const [data, setData] = useState<ListaCobros>({ items: [], totalCobrado: 0, pendiente: 0 });
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [aCancelar, setACancelar] = useState<Cobro | null>(null);
+  const puedeCobrar = puede("ventas.crear");
 
   const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     api<ListaCobros>("/t/cobros")
-      .then(setData)
-      .catch(() => setData({ items: [], totalCobrado: 0, pendiente: 0 }));
+      .then((r) => {
+        setData(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar los cobros"))
+      .finally(() => setCargando(false));
   }, []);
   useEffect(() => cargar(), [cargar]);
 
@@ -63,40 +73,57 @@ export function CobrosPage() {
   }
 
   async function cancelar(c: Cobro) {
-    if (!window.confirm(`¿Cancelar el cobro de ${money(c.monto)}?`)) return;
-    await api(`/t/cobros/${c.id}/cancelar`, { method: "POST" }).catch(() => undefined);
-    cargar();
+    setACancelar(null);
+    try {
+      await api(`/t/cobros/${c.id}/cancelar`, { method: "POST" });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo cancelar el cobro");
+    }
   }
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-bold text-2xl text-slate-800">Cobros / Links de pago</h1>
           <p className="text-slate-500 text-sm">
             Cobra a distancia: genera un link y mándalo por WhatsApp.
           </p>
         </div>
-        <button
-          type="button"
-          data-tour="cobro-nuevo"
-          onClick={() => setNuevo(true)}
-          className="gx-btn-primary"
-        >
-          + Nuevo cobro
-        </button>
+        {puedeCobrar && (
+          <button
+            type="button"
+            data-tour="cobro-nuevo"
+            onClick={() => setNuevo(true)}
+            className="gx-btn-primary"
+          >
+            + Nuevo cobro
+          </button>
+        )}
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Cobrado</p>
-          <p className="font-bold text-2xl text-brand">{money(data.totalCobrado)}</p>
+      {!cargando && !error && (
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Cobrado</p>
+            <p className="font-bold text-2xl text-brand">{money(data.totalCobrado)}</p>
+          </div>
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Pendiente</p>
+            <p className="font-bold text-2xl text-slate-800">{money(data.pendiente)}</p>
+          </div>
         </div>
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Pendiente</p>
-          <p className="font-bold text-2xl text-slate-800">{money(data.pendiente)}</p>
+      )}
+
+      {error && !cargando && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
         </div>
-      </div>
+      )}
 
       <div className="gx-table-wrap">
         <table className="gx-table">
@@ -110,13 +137,21 @@ export function CobrosPage() {
             </tr>
           </thead>
           <tbody>
-            {data.items.length === 0 ? (
+            {cargando && (
+              <tr>
+                <td className="gx-td text-slate-400" colSpan={5}>
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!cargando && !error && data.items.length === 0 && (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={5}>
                   Aún no hay cobros. Crea el primero con “+ Nuevo cobro”.
                 </td>
               </tr>
-            ) : (
+            )}
+            {!cargando &&
               data.items.map((c) => (
                 <tr key={c.id}>
                   <td className="gx-td font-medium">{c.concepto}</td>
@@ -139,23 +174,24 @@ export function CobrosPage() {
                           href={urlWhatsapp(c)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold text-green-600 hover:underline"
+                          className="font-semibold text-ok hover:underline"
                         >
                           WhatsApp
                         </a>
-                        <button
-                          type="button"
-                          onClick={() => cancelar(c)}
-                          className="text-red-500 hover:underline"
-                        >
-                          Cancelar
-                        </button>
+                        {puedeCobrar && (
+                          <button
+                            type="button"
+                            onClick={() => setACancelar(c)}
+                            className="gx-btn-danger"
+                          >
+                            Cancelar
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
       </div>
@@ -168,6 +204,26 @@ export function CobrosPage() {
             cargar();
           }}
         />
+      )}
+
+      {aCancelar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Cancelar cobro</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Cancelar el cobro de {money(aCancelar.monto)} ({aCancelar.concepto})? El link dejará
+              de funcionar.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setACancelar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => cancelar(aCancelar)} className="gx-btn-danger">
+                Sí, cancelar cobro
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

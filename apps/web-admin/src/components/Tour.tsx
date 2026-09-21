@@ -125,12 +125,6 @@ export function Tour() {
 
   return (
     <div className="fixed inset-0 z-[60]" aria-label={tour.nombre}>
-      <style>
-        {
-          "@keyframes gaesTourPulse{0%,100%{box-shadow:0 0 0 3px #0f766e,0 0 0 7px rgba(15,118,110,.30)}50%{box-shadow:0 0 0 3px #0f766e,0 0 0 13px rgba(15,118,110,.12)}}"
-        }
-      </style>
-
       {/* Capa oscura que atrapa toques fuera del resaltado */}
       <button
         type="button"
@@ -143,24 +137,22 @@ export function Tour() {
         <>
           {/* Recorte de la zona resaltada (deja ver el elemento real, sin oscurecer) */}
           <div
-            className="pointer-events-none absolute rounded-xl"
+            className="pointer-events-none absolute rounded-xl outline-[9999px] outline-slate-900/60"
             style={{
               top: rect.top - PAD,
               left: rect.left - PAD,
               width: rect.width + PAD * 2,
               height: rect.height + PAD * 2,
-              boxShadow: "0 0 0 9999px rgba(15,23,42,0.60)",
             }}
           />
           {/* Aro que pulsa */}
           <div
-            className="pointer-events-none absolute rounded-xl transition-all"
+            className="pointer-events-none absolute animate-pulse rounded-xl bg-brand/5 ring-2 ring-brand transition-all"
             style={{
               top: rect.top - PAD,
               left: rect.left - PAD,
               width: rect.width + PAD * 2,
               height: rect.height + PAD * 2,
-              animation: "gaesTourPulse 1.4s ease-in-out infinite",
             }}
           />
         </>
@@ -217,18 +209,10 @@ export function Tour() {
 
             {esUltimo ? (
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaso(0)}
-                  className="rounded-lg border border-brand px-4 py-2 font-semibold text-brand text-sm hover:bg-brand/5"
-                >
+                <button type="button" onClick={() => setPaso(0)} className="gx-btn-secondary">
                   ↻ Repetir
                 </button>
-                <button
-                  type="button"
-                  onClick={cerrar}
-                  className="rounded-lg bg-brand px-5 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
-                >
+                <button type="button" onClick={cerrar} className="gx-btn-primary">
                   ¡Entendido!
                 </button>
               </div>
@@ -236,7 +220,7 @@ export function Tour() {
               <button
                 type="button"
                 onClick={() => setPaso((p) => p + 1)}
-                className="rounded-lg bg-brand px-5 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                className="gx-btn-primary"
               >
                 Siguiente →
               </button>

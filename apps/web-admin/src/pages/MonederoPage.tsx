@@ -1,5 +1,6 @@
+import { CheckCircle2 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type { Paged } from "../lib/types.js";
 
 function money(v: string | number): string {
@@ -59,14 +60,23 @@ function GiftCardsTab() {
     emitido: 0,
     vigente: 0,
   });
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [monto, setMonto] = useState("");
   const [creada, setCreada] = useState<GiftCard | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [aCancelar, setACancelar] = useState<GiftCard | null>(null);
+  const puedeGestionar = puede("ventas.crear");
 
   const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     api<typeof data>("/t/monedero/gift-cards")
-      .then(setData)
-      .catch(() => undefined);
+      .then((r) => {
+        setData(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar las tarjetas"))
+      .finally(() => setCargando(false));
   }, []);
   useEffect(() => cargar(), [cargar]);
 
@@ -79,57 +89,75 @@ function GiftCardsTab() {
       setMonto("");
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
+      setError(err instanceof ApiError ? err.message : "No se pudo emitir la tarjeta");
     }
   }
 
   async function cancelar(c: GiftCard) {
-    if (!window.confirm(`¿Cancelar la tarjeta ${c.codigo}?`)) return;
-    await api(`/t/monedero/gift-cards/${c.id}/cancelar`, { method: "POST" }).catch(() => undefined);
-    cargar();
+    setACancelar(null);
+    try {
+      await api(`/t/monedero/gift-cards/${c.id}/cancelar`, { method: "POST" });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo cancelar la tarjeta");
+    }
   }
 
   return (
     <div>
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Emitido total</p>
-          <p className="font-bold text-2xl text-slate-800">{money(data.emitido)}</p>
-        </div>
-        <div className="gx-card">
-          <p className="text-slate-500 text-sm">Saldo vigente</p>
-          <p className="font-bold text-2xl text-brand">{money(data.vigente)}</p>
-        </div>
-      </div>
-
-      <form
-        onSubmit={crear}
-        className="mb-4 flex items-end gap-2 rounded-xl bg-white p-4 shadow-sm"
-      >
-        <label className="flex-1">
-          <span className="gx-label">Emitir tarjeta de regalo (monto MXN)</span>
-          <input
-            type="number"
-            min="1"
-            step="0.01"
-            value={monto}
-            onChange={(e) => setMonto(e.target.value)}
-            className="gx-input"
-            required
-          />
-        </label>
-        <button type="submit" className="gx-btn-primary">
-          Emitir
-        </button>
-      </form>
-
-      {creada && (
-        <div className="mb-4 rounded-lg bg-green-50 p-4 text-green-800">
-          ✅ Tarjeta emitida. Código: <span className="font-mono font-bold">{creada.codigo}</span> ·{" "}
-          {money(creada.saldoActual)}
+      {!cargando && !error && (
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Emitido total</p>
+            <p className="font-bold text-2xl text-slate-800">{money(data.emitido)}</p>
+          </div>
+          <div className="gx-card">
+            <p className="text-slate-500 text-sm">Saldo vigente</p>
+            <p className="font-bold text-2xl text-brand">{money(data.vigente)}</p>
+          </div>
         </div>
       )}
-      {error && <p className="mb-3 text-danger text-sm">{error}</p>}
+
+      {puedeGestionar && (
+        <form
+          onSubmit={crear}
+          className="mb-4 flex flex-wrap items-end gap-2 rounded-xl bg-white p-4 shadow-sm"
+        >
+          <label className="min-w-52 flex-1">
+            <span className="gx-label">Emitir tarjeta de regalo (monto MXN)</span>
+            <input
+              type="number"
+              min="1"
+              step="0.01"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              className="gx-input"
+              required
+            />
+          </label>
+          <button type="submit" className="gx-btn-primary">
+            Emitir
+          </button>
+        </form>
+      )}
+
+      {creada && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-ok-light p-4 text-ok">
+          <CheckCircle2 size={18} className="shrink-0" />
+          <p className="text-sm">
+            Tarjeta emitida. Código: <span className="font-mono font-bold">{creada.codigo}</span> ·{" "}
+            {money(creada.saldoActual)}
+          </p>
+        </div>
+      )}
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="gx-table-wrap">
         <table className="gx-table">
@@ -143,13 +171,21 @@ function GiftCardsTab() {
             </tr>
           </thead>
           <tbody>
-            {data.items.length === 0 ? (
+            {cargando && (
+              <tr>
+                <td className="gx-td text-slate-400" colSpan={5}>
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!cargando && !error && data.items.length === 0 && (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={5}>
                   Aún no hay tarjetas.
                 </td>
               </tr>
-            ) : (
+            )}
+            {!cargando &&
               data.items.map((c) => (
                 <tr key={c.id}>
                   <td className="gx-td font-mono">{c.codigo}</td>
@@ -159,22 +195,41 @@ function GiftCardsTab() {
                     <span className={STATUS_BADGE[c.status] ?? "gx-badge-info"}>{c.status}</span>
                   </td>
                   <td className="gx-td text-right">
-                    {c.status === "activa" && (
+                    {c.status === "activa" && puedeGestionar && (
                       <button
                         type="button"
-                        onClick={() => cancelar(c)}
-                        className="text-red-500 text-sm hover:underline"
+                        onClick={() => setACancelar(c)}
+                        className="gx-btn-danger"
                       >
                         Cancelar
                       </button>
                     )}
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
       </div>
+
+      {aCancelar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Cancelar tarjeta de regalo</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Cancelar la tarjeta {aCancelar.codigo}? Perderá su saldo vigente de{" "}
+              {money(aCancelar.saldoActual)}.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setACancelar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => cancelar(aCancelar)} className="gx-btn-danger">
+                Sí, cancelar tarjeta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -199,6 +254,15 @@ function MonederoTab() {
   const [saldo, setSaldo] = useState("0.00");
   const [movs, setMovs] = useState<Movimiento[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [movModal, setMovModal] = useState<"abono" | "cargo" | null>(null);
+  const [monto, setMonto] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [canjeOpen, setCanjeOpen] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const puedeGestionar = puede("clientes.fiado_gestionar");
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -211,12 +275,14 @@ function MonederoTab() {
   }, [buscar]);
 
   const cargarMonedero = useCallback((id: string) => {
+    setError(null);
     api<{ saldo: string; movimientos: Movimiento[] }>(`/t/monedero/clientes/${id}`)
       .then((r) => {
         setSaldo(r.saldo);
         setMovs(r.movimientos);
+        setError(null);
       })
-      .catch(() => undefined);
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar el monedero"));
   }, []);
 
   function elegir(c: Cliente) {
@@ -225,31 +291,48 @@ function MonederoTab() {
     cargarMonedero(c.id);
   }
 
-  async function movimiento(tipo: "abono" | "cargo") {
-    if (!sel) return;
-    const monto = window.prompt(`${tipo === "abono" ? "Abonar" : "Cobrar del"} monedero — monto:`);
-    if (!monto) return;
-    const motivo = window.prompt("Motivo:") ?? (tipo === "abono" ? "Abono manual" : "Consumo");
+  function abrirMov(tipo: "abono" | "cargo") {
+    setMonto("");
+    setMotivo(tipo === "abono" ? "Abono manual" : "Consumo");
+    setModalError(null);
+    setMovModal(tipo);
+  }
+
+  async function guardarMovimiento(e: FormEvent) {
+    e.preventDefault();
+    if (!sel || !movModal) return;
+    setModalError(null);
+    setGuardando(true);
     try {
-      await api(`/t/monedero/clientes/${sel.id}/movimiento`, { body: { tipo, monto, motivo } });
+      await api(`/t/monedero/clientes/${sel.id}/movimiento`, {
+        body: { tipo: movModal, monto, motivo: motivo.trim() },
+      });
+      setMovModal(null);
       cargarMonedero(sel.id);
-    } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "Error");
+    } catch (err) {
+      setModalError(err instanceof ApiError ? err.message : "No se pudo registrar el movimiento");
+    } finally {
+      setGuardando(false);
     }
   }
 
-  async function canjear() {
+  async function canjear(e: FormEvent) {
+    e.preventDefault();
     if (!sel) return;
-    const codigo = window.prompt("Código de la tarjeta de regalo a canjear:");
-    if (!codigo) return;
+    setModalError(null);
+    setGuardando(true);
     try {
       const r = await api<{ abonado: string }>("/t/monedero/gift-cards/canjear", {
-        body: { codigo, clienteId: sel.id },
+        body: { codigo: codigo.trim(), clienteId: sel.id },
       });
+      setCanjeOpen(false);
+      setCodigo("");
       setMsg(`Se abonaron ${money(r.abonado)} al monedero.`);
       cargarMonedero(sel.id);
-    } catch (e) {
-      window.alert(e instanceof ApiError ? e.message : "Error al canjear");
+    } catch (err) {
+      setModalError(err instanceof ApiError ? err.message : "No se pudo canjear la tarjeta");
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -261,7 +344,7 @@ function MonederoTab() {
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
           placeholder="Buscar cliente por nombre…"
-          className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+          className="gx-input mb-3"
         />
         <div className="max-h-72 space-y-2 overflow-y-auto">
           {clientes.map((c) => (
@@ -287,37 +370,135 @@ function MonederoTab() {
           <>
             <p className="text-slate-500 text-sm">Saldo de {sel.nombre}</p>
             <p className="mb-3 font-bold text-3xl text-brand">{money(saldo)}</p>
-            {msg && <p className="mb-2 text-green-700 text-sm">{msg}</p>}
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button type="button" onClick={() => movimiento("abono")} className="gx-btn-primary">
-                Abonar
-              </button>
-              <button
-                type="button"
-                onClick={() => movimiento("cargo")}
-                className="gx-btn-secondary"
-              >
-                Cobrar
-              </button>
-              <button type="button" onClick={canjear} className="gx-btn-secondary">
-                Canjear gift card
-              </button>
-            </div>
+            {msg && <p className="mb-2 text-ok text-sm">{msg}</p>}
+            {error && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-danger text-sm">
+                <span>{error}</span>
+                <button
+                  type="button"
+                  onClick={() => cargarMonedero(sel.id)}
+                  className="gx-btn-danger"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+            {puedeGestionar && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => abrirMov("abono")} className="gx-btn-primary">
+                  Abonar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => abrirMov("cargo")}
+                  className="gx-btn-secondary"
+                >
+                  Cobrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCanjeOpen(true)}
+                  className="gx-btn-secondary"
+                >
+                  Canjear gift card
+                </button>
+              </div>
+            )}
             <div className="max-h-56 space-y-1 overflow-y-auto text-sm">
               {movs.map((m) => (
                 <div key={m.id} className="flex justify-between border-slate-100 border-b py-1">
                   <span className="text-slate-600">{m.motivo}</span>
-                  <span className={m.tipo === "abono" ? "text-green-600" : "text-red-500"}>
+                  <span className={m.tipo === "abono" ? "text-ok" : "text-danger"}>
                     {m.tipo === "abono" ? "+" : "−"}
                     {money(m.monto)}
                   </span>
                 </div>
               ))}
-              {movs.length === 0 && <p className="text-slate-400">Sin movimientos.</p>}
+              {movs.length === 0 && !error && <p className="text-slate-400">Sin movimientos.</p>}
             </div>
           </>
         )}
       </section>
+
+      {movModal && (
+        <div className="gx-modal-overlay">
+          <form onSubmit={guardarMovimiento} className="gx-modal-panel">
+            <h2 className="mb-4 font-bold text-lg text-slate-800">
+              {movModal === "abono" ? "Abonar al monedero" : "Cobrar del monedero"}
+              {sel ? ` — ${sel.nombre}` : ""}
+            </h2>
+            <label className="mb-3 block">
+              <span className="gx-label">Monto (MXN)</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                className="gx-input"
+                required
+                // biome-ignore lint/a11y/noAutofocus: foco intencional en el primer campo del modal de abono
+                autoFocus
+              />
+            </label>
+            <label className="mb-3 block">
+              <span className="gx-label">Motivo</span>
+              <input
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                className="gx-input"
+                required
+              />
+            </label>
+            {modalError && <p className="mb-3 text-danger text-sm">{modalError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setMovModal(null)} className="gx-btn-secondary">
+                Cancelar
+              </button>
+              <button type="submit" disabled={guardando} className="gx-btn-primary">
+                {guardando ? "Guardando…" : movModal === "abono" ? "Abonar" : "Cobrar"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {canjeOpen && (
+        <div className="gx-modal-overlay">
+          <form onSubmit={canjear} className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Canjear tarjeta de regalo</h2>
+            <p className="mb-3 text-slate-500 text-sm">
+              Escribe el código de la tarjeta; su saldo se abonará al monedero
+              {sel ? ` de ${sel.nombre}` : ""}.
+            </p>
+            <label className="mb-3 block">
+              <span className="gx-label">Código de la tarjeta</span>
+              <input
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                className="gx-input font-mono"
+                placeholder="Ej. GC-XXXX-XXXX"
+                required
+                // biome-ignore lint/a11y/noAutofocus: foco intencional en el primer campo del modal de canje
+                autoFocus
+              />
+            </label>
+            {modalError && <p className="mb-3 text-danger text-sm">{modalError}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCanjeOpen(false)}
+                className="gx-btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button type="submit" disabled={guardando} className="gx-btn-primary">
+                {guardando ? "Canjeando…" : "Canjear"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

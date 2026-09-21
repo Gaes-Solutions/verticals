@@ -579,9 +579,9 @@ export function AyudaPage() {
                   </ol>
 
                   {m.tips?.length ? (
-                    <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2">
+                    <div className="mb-3 rounded-lg bg-warn-light px-3 py-2">
                       {m.tips.map((t) => (
-                        <p key={t} className="text-amber-700 text-sm">
+                        <p key={t} className="text-warn text-sm">
                           💡 {t}
                         </p>
                       ))}
@@ -607,7 +607,7 @@ export function AyudaPage() {
                       <button
                         type="button"
                         onClick={() => lanzarTour(tid)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                        className="gx-btn-primary"
                       >
                         <Sparkles size={15} /> Guíame paso a paso
                       </button>
@@ -615,7 +615,7 @@ export function AyudaPage() {
                     <button
                       type="button"
                       onClick={() => irA(m.seccion)}
-                      className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 text-sm hover:bg-slate-50"
+                      className="gx-btn-secondary"
                     >
                       Ir a la sección →
                     </button>

@@ -1,5 +1,5 @@
 import { Percent } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 
 interface ConfigVentas {
@@ -21,20 +21,26 @@ export function ConfiguracionPage() {
 
 function TopeDescuento() {
   const [cfg, setCfg] = useState<ConfigVentas | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [valor, setValor] = useState("");
   const [guardado, setGuardado] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const editable = puede("configuracion.actualizar");
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     api<ConfigVentas>("/t/config-ventas")
       .then((c) => {
         setCfg(c);
         setValor(String(c.descuentoMaximoPct));
+        setError(null);
       })
-      .catch(() => setCfg(null));
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar la configuración"))
+      .finally(() => setCargando(false));
   }, []);
+  useEffect(() => cargar(), [cargar]);
 
   async function guardar() {
     setError(null);
@@ -55,7 +61,25 @@ function TopeDescuento() {
     }
   }
 
-  if (!cfg) return null;
+  if (cargando) {
+    return (
+      <section className="rounded-xl border bg-white p-6">
+        <p className="text-slate-400 text-sm">Cargando…</p>
+      </section>
+    );
+  }
+  if (!cfg) {
+    return (
+      <section className="rounded-xl border bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-danger text-sm">
+          <span>{error ?? "No se pudo cargar la configuración"}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </section>
+    );
+  }
   const num = Number(valor);
   const valido = Number.isFinite(num) && num >= 0 && num <= 100;
   const sinTope = num >= 100;

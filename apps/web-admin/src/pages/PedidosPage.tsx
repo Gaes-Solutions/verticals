@@ -63,10 +63,10 @@ function estadosSiguientes(p: { statusPedido: string; metodoEnvio: string }): st
 }
 
 function badgeColor(estado: string): string {
-  if (estado === "cancelado") return "bg-red-100 text-red-700";
-  if (["entregado", "recogido"].includes(estado)) return "bg-emerald-100 text-emerald-700";
-  if (["enviado", "en_camino", "listo_pickup"].includes(estado)) return "bg-blue-100 text-blue-700";
-  return "bg-amber-100 text-amber-700";
+  if (estado === "cancelado") return "bg-danger-light text-danger";
+  if (["entregado", "recogido"].includes(estado)) return "bg-ok-light text-ok";
+  if (["enviado", "en_camino", "listo_pickup"].includes(estado)) return "bg-info-light text-info";
+  return "bg-warn-light text-warn";
 }
 
 export function PedidosPage() {
@@ -153,7 +153,7 @@ export function PedidosPage() {
             <button
               type="button"
               onClick={() => setEditorAbierto(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-slate-600 text-sm hover:bg-slate-50"
+              className="gx-btn-secondary"
             >
               <Settings size={16} /> Personalizar estados
             </button>
@@ -189,29 +189,29 @@ export function PedidosPage() {
         <output className="gx-card block text-slate-500">Cargando pedidos…</output>
       ) : null}
       {!listBusy && !listError ? (
-        <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+        <div className="gx-table-wrap">
+          <table className="gx-table min-w-[720px]">
+            <thead>
               <tr>
-                <th className="px-4 py-2">Folio</th>
-                <th className="px-4 py-2">Fecha</th>
-                <th className="px-4 py-2">Comprador</th>
-                <th className="px-4 py-2">Entrega</th>
-                <th className="px-4 py-2">Estado</th>
-                <th className="px-4 py-2">Asignado</th>
-                <th className="px-4 py-2 text-right">Total</th>
-                <th className="px-4 py-2" />
+                <th className="gx-th">Folio</th>
+                <th className="gx-th">Fecha</th>
+                <th className="gx-th">Comprador</th>
+                <th className="gx-th">Entrega</th>
+                <th className="gx-th">Estado</th>
+                <th className="gx-th">Asignado</th>
+                <th className="gx-th text-right">Total</th>
+                <th className="gx-th" />
               </tr>
             </thead>
             <tbody>
               {pedidos.map((p) => (
-                <tr key={p.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2 font-medium">{p.folioPublico}</td>
-                  <td className="px-4 py-2 text-slate-500">
+                <tr key={p.id}>
+                  <td className="gx-td font-medium">{p.folioPublico}</td>
+                  <td className="gx-td text-slate-500">
                     {new Date(p.createdAt).toLocaleDateString("es-MX")}
                   </td>
-                  <td className="px-4 py-2">{p.cliente?.nombre ?? p.emailComprador}</td>
-                  <td className="px-4 py-2">
+                  <td className="gx-td">{p.cliente?.nombre ?? p.emailComprador}</td>
+                  <td className="gx-td">
                     <span className="inline-flex items-center gap-1">
                       {p.metodoEnvio === "click_collect" ? (
                         <>
@@ -224,20 +224,18 @@ export function PedidosPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="gx-td">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${badgeColor(p.statusPedido)}`}
                     >
                       {p.statusLabel ?? etiqueta(p.statusPedido)}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-slate-500">
+                  <td className="gx-td text-slate-500">
                     {p.asignadoA?.nombre ?? <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold">
-                    ${Number(p.total).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="gx-td text-right font-semibold">${Number(p.total).toFixed(2)}</td>
+                  <td className="gx-td text-right">
                     <button
                       type="button"
                       onClick={() => abrir(p.id)}
@@ -250,7 +248,7 @@ export function PedidosPage() {
               ))}
               {pedidos.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                  <td className="gx-td py-8 text-center text-slate-400" colSpan={8}>
                     Sin pedidos {filtro ? `en estado "${etiqueta(filtro)}"` : "todavía"}.
                   </td>
                 </tr>
@@ -260,7 +258,7 @@ export function PedidosPage() {
         </div>
       ) : null}
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
       {detalle && (
         <DetalleModal
@@ -309,8 +307,8 @@ function DetalleModal({
   const esFinal = ["cancelado", "recogido"].includes(pedido.statusPedido);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-800">{pedido.folioPublico}</h2>
@@ -442,7 +440,7 @@ function AsignarSeccion({
           </button>
         )}
       </div>
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mt-2 text-danger text-sm">{error}</p>}
     </div>
   );
 }
@@ -512,7 +510,7 @@ function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: 
                 href={envio.etiquetaUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 rounded-lg border border-brand px-3 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50"
+                className="gx-btn-secondary"
               >
                 <Tag size={15} /> Descargar etiqueta
               </a>
@@ -521,7 +519,7 @@ function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: 
               type="button"
               onClick={cancelar}
               disabled={busy}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-600 text-sm hover:bg-slate-50 disabled:opacity-50"
+              className="gx-btn-secondary disabled:opacity-50"
             >
               Cancelar guía
             </button>
@@ -536,13 +534,13 @@ function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: 
             type="button"
             onClick={generar}
             disabled={busy}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             {busy ? "Generando…" : "Generar guía"}
           </button>
         </div>
       )}
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mt-2 text-danger text-sm">{error}</p>}
     </div>
   );
 }
@@ -587,7 +585,7 @@ function AvanzarSeccion({
   return (
     <div className="rounded-lg border border-slate-200 p-3">
       <h3 className="mb-2 text-sm font-bold text-slate-700">Avanzar pedido</h3>
-      <div className="mb-2 flex gap-2">
+      <div className="mb-2 flex flex-wrap gap-2">
         <select
           value={nuevoEstado}
           onChange={(e) => setNuevoEstado(e.target.value)}
@@ -601,7 +599,7 @@ function AvanzarSeccion({
         </select>
       </div>
       {pideGuia && (
-        <div className="mb-2 flex gap-2">
+        <div className="mb-2 flex flex-wrap gap-2">
           <select
             value={paqueteria}
             onChange={(e) => setPaqueteria(e.target.value)}
@@ -626,15 +624,15 @@ function AvanzarSeccion({
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
           placeholder="Motivo de cancelación"
-          className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="gx-input mb-2"
         />
       )}
-      {error && <p className="mb-2 text-red-600 text-sm">{error}</p>}
+      {error && <p className="mb-2 text-danger text-sm">{error}</p>}
       <button
         type="button"
         onClick={transicionar}
         disabled={guardando}
-        className="w-full rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+        className="gx-btn-primary w-full disabled:opacity-50"
       >
         {guardando ? "Guardando…" : `Marcar como ${etiqueta(nuevoEstado)}`}
       </button>
@@ -671,8 +669,8 @@ function EditorEstadosModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <div className="mb-2 flex items-start justify-between">
           <h2 className="font-bold text-lg text-slate-800">Personalizar estados</h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
@@ -691,25 +689,21 @@ function EditorEstadosModal({
                 value={valores[estado] ?? ""}
                 onChange={(e) => setValores((v) => ({ ...v, [estado]: e.target.value }))}
                 placeholder={config.defaults[estado]}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </label>
           ))}
         </div>
-        {error && <p className="mt-3 text-red-600 text-sm">{error}</p>}
+        {error && <p className="mt-3 text-danger text-sm">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-600 text-sm hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
           <button
             type="button"
             onClick={guardar}
             disabled={guardando}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar"}
           </button>

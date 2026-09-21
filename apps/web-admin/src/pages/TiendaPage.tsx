@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { QrTienda } from "../components/QrTienda.js";
 import { ShippingServicePicker } from "../components/ShippingServicePicker.js";
 import { ApiError, api, puede } from "../lib/api.js";
+import { publicarCatalogoEnLotes } from "../lib/publicar-catalogo.js";
 import type { ConfigTienda, Paged, Producto } from "../lib/types.js";
 
 interface RegistroDns {
@@ -36,6 +37,7 @@ export function TiendaPage() {
   const [buscarPub, setBuscarPub] = useState("");
   const [publicandoTodo, setPublicandoTodo] = useState(false);
   const [avanceLote, setAvanceLote] = useState<number | null>(null);
+  const [confirmarDespublicar, setConfirmarDespublicar] = useState(false);
   const [soloConStock, setSoloConStock] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function TiendaPage() {
   const [subdominioGuardado, setSubdominioGuardado] = useState(false);
   const [subdominioTocado, setSubdominioTocado] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: configRetry es un contador de reintentos — esta en deps para re-disparar el fetch al pulsar Reintentar, no se usa dentro del cuerpo
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -173,32 +176,32 @@ export function TiendaPage() {
     }
   }
 
+  function publicarCatalogo(publicar: boolean) {
+    if (!canPublish || publicandoTodo) return;
+    if (!publicar) {
+      setConfirmarDespublicar(true);
+      return;
+    }
+    void ejecutarPublicarCatalogo(true);
+  }
+
   /**
    * Publicar de uno en uno no sirve con un catálogo entero: se manda por lotes, cada
    * uno corto, y se muestra cuántos llevan para que se vea el avance.
    */
-  async function publicarCatalogo(publicar: boolean) {
-    if (!canPublish || publicandoTodo) return;
-    if (
-      !publicar &&
-      !window.confirm("Se quitarán de la tienda todos los productos publicados. ¿Continuar?")
-    )
-      return;
+  async function ejecutarPublicarCatalogo(publicar: boolean) {
+    setConfirmarDespublicar(false);
     setError(null);
     setMsg(null);
     setPublicandoTodo(true);
     setAvanceLote(0);
     let hechos = 0;
     try {
-      for (;;) {
-        const r = await api<{ procesados: number; restantes: number }>(
-          "/t/ecommerce/productos-publicados/lote",
-          { body: { publicar, ...(publicar && soloConStock ? { soloConStock: true } : {}) } },
-        );
-        hechos += r.procesados;
-        setAvanceLote(hechos);
-        if (r.restantes === 0 || r.procesados === 0) break;
-      }
+      hechos = await publicarCatalogoEnLotes({
+        publicar,
+        soloConStock,
+        onAvance: setAvanceLote,
+      });
       setMsg(
         publicar
           ? `${hechos.toLocaleString("es-MX")} producto(s) publicados en la tienda`
@@ -225,9 +228,9 @@ export function TiendaPage() {
   return (
     <div className="max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">Tienda online</h1>
-      {msg && <output className="mb-4 block text-sm text-emerald-600">{msg}</output>}
+      {msg && <output className="mb-4 block text-sm text-ok">{msg}</output>}
       {error && (
-        <p role="alert" className="mb-4 text-sm text-red-600">
+        <p role="alert" className="mb-4 text-sm text-danger">
           {error}
         </p>
       )}
@@ -260,12 +263,12 @@ export function TiendaPage() {
             Tienda activa (visible al público)
           </label>
           {sinProductos && (
-            <p className="mt-1 text-amber-700 text-xs">
+            <p className="mt-1 text-warn text-xs">
               Publica al menos un producto (más abajo) para poder activarla.
             </p>
           )}
           {encendidaVacia && (
-            <p className="mt-1 text-amber-700 text-xs">
+            <p className="mt-1 text-warn text-xs">
               Tu tienda está encendida, pero no se muestra al público hasta que publiques al menos
               un producto (más abajo).
             </p>
@@ -284,7 +287,7 @@ export function TiendaPage() {
                 ...(sugerir ? { subdominio: sugerirSubdominio(nombre) } : {}),
               });
             }}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
         </label>
         <label className="mb-4 block">
@@ -297,7 +300,7 @@ export function TiendaPage() {
               setConfig({ ...config, subdominio: e.target.value.toLowerCase() });
             }}
             placeholder="mi-tienda"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
           {apexTienda && config.subdominio && (
             <span className="mt-1 block break-all text-slate-600 text-xs">
@@ -323,7 +326,7 @@ export function TiendaPage() {
               setConfig({ ...config, dominioPropio: e.target.value.trim().toLowerCase() || null })
             }
             placeholder="tienda.minegocio.com"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
           <span className="mt-1 block text-slate-400 text-xs">
             Usa tu propio dominio en vez del subdominio. Tras guardar, sigue las instrucciones de
@@ -336,7 +339,7 @@ export function TiendaPage() {
           data-tour="tienda-guardar"
           onClick={guardarConfig}
           disabled={guardando || !configLoaded || !canConfigure}
-          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary mt-4 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar"}
         </button>
@@ -450,7 +453,7 @@ export function TiendaPage() {
           type="button"
           onClick={guardarConfig}
           disabled={guardando || !configLoaded || !canConfigure}
-          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary mt-4 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar funciones"}
         </button>
@@ -471,14 +474,14 @@ export function TiendaPage() {
                 pasarelaPagoProvider: (e.target.value || null) as "conekta" | "stripe" | null,
               })
             }
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+            className="gx-input sm:w-72"
           >
             <option value="">Sin cobro en línea (solo demo / mock)</option>
             <option value="conekta">Conekta (tarjeta, OXXO, SPEI — México)</option>
             <option value="stripe">Stripe (tarjeta internacional)</option>
           </select>
           {!config.pasarelaPagoProvider && (
-            <p className="mt-2 text-amber-600 text-xs">
+            <p className="mt-2 text-warn text-xs">
               Sin procesador, los pagos no se cobran de verdad. Configura las llaves del proveedor
               en el servidor antes de activarlo.
             </p>
@@ -598,7 +601,7 @@ export function TiendaPage() {
           type="button"
           onClick={guardarConfig}
           disabled={guardando || !configLoaded || !canConfigure}
-          className="mt-4 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary mt-4 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar envíos"}
         </button>
@@ -607,7 +610,8 @@ export function TiendaPage() {
       <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Políticas de la tienda</h2>
         <p className="mb-4 text-slate-500 text-sm">
-          Aparecen en el pie de página de tu tienda. Si dejas un campo vacío se usa un texto base.
+          Aparecen en el pie de página de tu tienda. Vienen con un texto base con los datos de tu
+          negocio: revísalo, ajústalo a cómo trabajas y guárdalo.
         </p>
         {(
           [
@@ -627,16 +631,34 @@ export function TiendaPage() {
                   politicasHtml: { ...(config.politicasHtml ?? {}), [key]: e.target.value },
                 })
               }
-              rows={3}
+              rows={config.politicasHtml?.[key] ? 8 : 3}
+              placeholder={config.politicasSugeridas?.[key] ?? ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
+            {config.politicasSugeridas?.[key] && !config.politicasHtml?.[key] && (
+              <button
+                type="button"
+                className="gx-btn-ghost mt-1 text-xs"
+                onClick={() =>
+                  setConfig({
+                    ...config,
+                    politicasHtml: {
+                      ...(config.politicasHtml ?? {}),
+                      [key]: config.politicasSugeridas?.[key] ?? "",
+                    },
+                  })
+                }
+              >
+                Usar este texto y editarlo
+              </button>
+            )}
           </label>
         ))}
         <button
           type="button"
           onClick={guardarConfig}
           disabled={guardando || !configLoaded || !canConfigure}
-          className="mt-2 rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary mt-2 disabled:opacity-50"
         >
           {guardando ? "Guardando…" : "Guardar políticas"}
         </button>
@@ -665,7 +687,7 @@ export function TiendaPage() {
                 type="button"
                 className="gx-btn-primary"
                 disabled={publicandoTodo}
-                onClick={() => void publicarCatalogo(true)}
+                onClick={() => publicarCatalogo(true)}
               >
                 {publicandoTodo && avanceLote !== null
                   ? `Publicando ${avanceLote.toLocaleString("es-MX")}…`
@@ -675,7 +697,7 @@ export function TiendaPage() {
                 type="button"
                 className="gx-btn-ghost"
                 disabled={publicandoTodo || !productosPublicados}
-                onClick={() => void publicarCatalogo(false)}
+                onClick={() => publicarCatalogo(false)}
               >
                 Quitar todos de la tienda
               </button>
@@ -685,13 +707,12 @@ export function TiendaPage() {
               Repetirlo no duplica nada.
             </p>
           </div>
-
           <input
             data-tour="tienda-publicar"
             value={buscarPub}
             onChange={(e) => setBuscarPub(e.target.value)}
             placeholder="Buscar producto por nombre o SKU…"
-            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input mb-3"
           />
           <div className="max-h-72 overflow-y-auto">
             {productos.map((p) => (
@@ -700,11 +721,7 @@ export function TiendaPage() {
                 className="mb-2 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
               >
                 <span className="text-sm font-medium text-slate-800">{p.nombre}</span>
-                <button
-                  type="button"
-                  onClick={() => publicar(p)}
-                  className="rounded-lg border border-brand px-3 py-1 text-sm font-semibold text-brand hover:bg-teal-50"
-                >
+                <button type="button" onClick={() => publicar(p)} className="gx-btn-secondary">
                   Publicar
                 </button>
               </div>
@@ -718,6 +735,33 @@ export function TiendaPage() {
             )}
           </div>
         </section>
+      )}
+
+      {confirmarDespublicar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Quitar todos de la tienda</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              Se quitarán de la tienda todos los productos publicados. ¿Continuar?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarDespublicar(false)}
+                className="gx-btn-secondary"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={() => void ejecutarPublicarCatalogo(false)}
+                className="gx-btn-danger"
+              >
+                Sí, quitar todo
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -794,7 +838,7 @@ function DominioPropio({ refreshKey }: { refreshKey: number }) {
             type="button"
             onClick={verificar}
             disabled={verificando}
-            className="rounded-lg border border-brand px-4 py-1.5 font-semibold text-brand text-sm hover:bg-teal-50 disabled:opacity-50"
+            className="gx-btn-secondary disabled:opacity-50"
           >
             {verificando ? "Verificando…" : "Verificar dominio"}
           </button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import type { ResumenVentas } from "../lib/types.js";
 
@@ -24,8 +24,9 @@ export function ReportesPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     setCargando(true);
+    setError(null);
     api<ResumenVentas>(`/t/reportes/resumen?dias=${dias}`)
       .then((r) => {
         setData(r);
@@ -34,6 +35,8 @@ export function ReportesPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar reportes"))
       .finally(() => setCargando(false));
   }, [dias]);
+
+  useEffect(() => cargar(), [cargar]);
 
   const periodoLabel = PERIODOS.find((p) => p.dias === dias)?.label ?? `${dias} días`;
 
@@ -54,7 +57,7 @@ export function ReportesPage() {
                 key={p.dias}
                 type="button"
                 onClick={() => setDias(p.dias)}
-                className={`rounded-md px-3 py-1.5 font-medium text-sm ${
+                className={`min-h-10 rounded-md px-3 py-1.5 font-medium text-sm ${
                   dias === p.dias ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
@@ -74,12 +77,19 @@ export function ReportesPage() {
         </div>
       </div>
 
-      {error && <p className="text-red-600">{error}</p>}
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
       {cargando && <p className="text-slate-400">Cargando…</p>}
 
-      {data && !cargando && (
+      {data && !cargando && !error && (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
             <Card titulo="Ventas del periodo" valor={money(data.totalPeriodo)} color="text-brand" />
             <Card titulo="Tickets" valor={String(data.numTickets)} color="text-slate-800" />
             <Card
@@ -101,23 +111,21 @@ export function ReportesPage() {
               {data.topProductos.length === 0 ? (
                 <p className="text-sm text-slate-400">Sin ventas en el periodo.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-sm">
-                    <thead className="text-left text-slate-500">
+                <div className="gx-table-wrap">
+                  <table className="gx-table">
+                    <thead>
                       <tr>
-                        <th className="pb-2">Producto</th>
-                        <th className="pb-2 text-right">Unidades</th>
-                        <th className="pb-2 text-right">Monto</th>
+                        <th className="gx-th">Producto</th>
+                        <th className="gx-th text-right">Unidades</th>
+                        <th className="gx-th text-right">Monto</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.topProductos.map((p) => (
-                        <tr key={p.productoId} className="border-t border-slate-100">
-                          <td className="py-2 font-medium text-slate-800">{p.nombre}</td>
-                          <td className="py-2 text-right text-slate-600">{p.cantidad}</td>
-                          <td className="py-2 text-right font-semibold text-slate-800">
-                            {money(p.monto)}
-                          </td>
+                        <tr key={p.productoId}>
+                          <td className="gx-td font-medium">{p.nombre}</td>
+                          <td className="gx-td text-right text-slate-600">{p.cantidad}</td>
+                          <td className="gx-td text-right font-semibold">{money(p.monto)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -158,7 +166,7 @@ export function ReportesPage() {
 
 function Card({ titulo, valor, color }: { titulo: string; valor: string; color: string }) {
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
+    <div className="gx-card p-4">
       <p className="mb-1 text-sm text-slate-500">{titulo}</p>
       <p className={`text-2xl font-bold ${color}`}>{valor}</p>
     </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 
 interface Rol {
@@ -99,17 +99,29 @@ function BotonTab({
 function UsuariosTab() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
   const [rolesDe, setRolesDe] = useState<Usuario | null>(null);
+  const [resetDe, setResetDe] = useState<Usuario | null>(null);
+  const [newPassword, setNuevaPassword] = useState("");
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
-    api<Usuario[]>("/t/usuarios")
-      .then(setUsuarios)
-      .catch(() => setUsuarios([]));
-    api<Rol[]>("/t/roles")
-      .then(setRoles)
-      .catch(() => setRoles([]));
+    setCargando(true);
+    setLoadError(null);
+    Promise.all([api<Usuario[]>("/t/usuarios"), api<Rol[]>("/t/roles")])
+      .then(([u, r]) => {
+        setUsuarios(u);
+        setRoles(r);
+        setLoadError(null);
+      })
+      .catch((e) =>
+        setLoadError(e instanceof Error ? e.message : "Error al cargar usuarios y roles"),
+      )
+      .finally(() => setCargando(false));
   }, []);
   useEffect(() => cargar(), [cargar]);
 
@@ -120,19 +132,26 @@ function UsuariosTab() {
       else await api(`/t/usuarios/${u.id}`, { method: "PATCH", body: { isActive: true } });
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado");
     }
   }
 
-  async function resetPassword(u: Usuario) {
-    const newPassword = window.prompt(`Nueva contraseña para ${u.nombre} (mínimo 8 caracteres):`);
-    if (!newPassword) return;
-    setError(null);
+  async function pedirResetPassword(u: Usuario) {
+    setResetDe(u);
+    setNuevaPassword("");
+    setModalError(null);
+  }
+
+  async function confirmarResetPassword(e: FormEvent) {
+    e.preventDefault();
+    if (!resetDe) return;
+    setModalError(null);
     try {
-      await api(`/t/usuarios/${u.id}/reset-password`, { body: { newPassword } });
-      window.alert("Contraseña actualizada.");
+      await api(`/t/usuarios/${resetDe.id}/reset-password`, { body: { newPassword } });
+      setResetDe(null);
+      setMsg(`Contraseña actualizada para ${resetDe.nombre}.`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
+      setModalError(err instanceof ApiError ? err.message : "No se pudo actualizar la contraseña");
     }
   }
 
@@ -150,6 +169,14 @@ function UsuariosTab() {
           </button>
         </div>
       )}
+      {loadError && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
       <div className="gx-table-wrap">
         <table className="gx-table">
           <thead>
@@ -162,73 +189,120 @@ function UsuariosTab() {
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u) => (
-              <tr key={u.id}>
-                <td className="gx-td font-medium">{u.nombre}</td>
-                <td className="gx-td text-slate-500">{u.email}</td>
-                <td className="gx-td">
-                  <div className="flex flex-wrap gap-1">
-                    {u.roles.map((r) => (
-                      <span key={r.id} className="gx-badge-info">
-                        {r.nombre}
-                      </span>
-                    ))}
-                    {u.roles.length === 0 && (
-                      <span className="text-xs text-slate-400">sin rol</span>
-                    )}
-                  </div>
-                </td>
-                <td className="gx-td">
-                  <span className={u.isActive ? "gx-badge-ok" : "gx-badge-danger"}>
-                    {u.isActive ? "Activo" : "Inactivo"}
-                  </span>
-                </td>
-                <td className="gx-td text-right">
-                  <div className="flex flex-wrap justify-end gap-2 text-xs">
-                    {puede("usuarios.asignar_rol") && (
-                      <button
-                        type="button"
-                        onClick={() => setRolesDe(u)}
-                        className="text-brand hover:underline"
-                      >
-                        Roles
-                      </button>
-                    )}
-                    {puede("usuarios.reset_password") && (
-                      <button
-                        type="button"
-                        onClick={() => resetPassword(u)}
-                        className="text-brand hover:underline"
-                      >
-                        Contraseña
-                      </button>
-                    )}
-                    {puede("usuarios.archivar") && (
-                      <button
-                        type="button"
-                        onClick={() => toggleActivo(u)}
-                        className={
-                          u.isActive ? "text-danger hover:underline" : "text-ok hover:underline"
-                        }
-                      >
-                        {u.isActive ? "Desactivar" : "Activar"}
-                      </button>
-                    )}
-                  </div>
+            {cargando && (
+              <tr>
+                <td className="gx-td text-slate-400" colSpan={5}>
+                  Cargando…
                 </td>
               </tr>
-            ))}
-            {usuarios.length === 0 && (
+            )}
+            {!cargando && !loadError && usuarios.length === 0 && (
               <tr>
-                <td colSpan={5} className="gx-td py-8 text-center text-slate-400">
+                <td className="gx-td py-8 text-center text-slate-400" colSpan={5}>
                   Sin usuarios todavía.
                 </td>
               </tr>
             )}
+            {!cargando &&
+              usuarios.map((u) => (
+                <tr key={u.id}>
+                  <td className="gx-td font-medium">{u.nombre}</td>
+                  <td className="gx-td text-slate-500">{u.email}</td>
+                  <td className="gx-td">
+                    <div className="flex flex-wrap gap-1">
+                      {u.roles.map((r) => (
+                        <span key={r.id} className="gx-badge-info">
+                          {r.nombre}
+                        </span>
+                      ))}
+                      {u.roles.length === 0 && (
+                        <span className="text-xs text-slate-400">sin rol</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="gx-td">
+                    <span className={u.isActive ? "gx-badge-ok" : "gx-badge-danger"}>
+                      {u.isActive ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td className="gx-td text-right">
+                    <div className="flex flex-wrap justify-end gap-2 text-xs">
+                      {puede("usuarios.asignar_rol") && (
+                        <button
+                          type="button"
+                          onClick={() => setRolesDe(u)}
+                          className="text-brand hover:underline"
+                        >
+                          Roles
+                        </button>
+                      )}
+                      {puede("usuarios.reset_password") && (
+                        <button
+                          type="button"
+                          onClick={() => pedirResetPassword(u)}
+                          className="text-brand hover:underline"
+                        >
+                          Contraseña
+                        </button>
+                      )}
+                      {puede("usuarios.archivar") && (
+                        <button
+                          type="button"
+                          onClick={() => toggleActivo(u)}
+                          className={
+                            u.isActive ? "text-danger hover:underline" : "text-ok hover:underline"
+                          }
+                        >
+                          {u.isActive ? "Desactivar" : "Activar"}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      {msg && <p className="mt-3 text-sm text-ok">{msg}</p>}
+
+      {resetDe && (
+        <div className="gx-modal-overlay">
+          <form onSubmit={confirmarResetPassword} className="gx-modal-panel max-w-sm">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Restablecer contraseña</h2>
+            <p className="mb-3 text-slate-500 text-sm">
+              Escribe la nueva contraseña para <strong>{resetDe.nombre}</strong> (mínimo 8
+              caracteres). Compártela por un canal seguro.
+            </p>
+            <label className="mb-3 block">
+              <span className="gx-label">Nueva contraseña</span>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNuevaPassword(e.target.value)}
+                minLength={8}
+                className="gx-input"
+                required
+                // biome-ignore lint/a11y/noAutofocus: foco intencional en el primer campo al abrir el modal de reset de contraseña
+                autoFocus
+              />
+            </label>
+            {modalError && <p className="mb-3 text-danger text-sm">{modalError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setResetDe(null)} className="gx-btn-secondary">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={newPassword.length < 8}
+                className="gx-btn-primary disabled:opacity-50"
+              >
+                Actualizar contraseña
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {creando && (
         <NuevoUsuarioModal
@@ -329,7 +403,7 @@ function NuevoUsuarioModal({
             ))}
           </select>
           {!rolId && (
-            <span className="mt-1 block text-amber-600 text-xs">
+            <span className="mt-1 block text-warn text-xs">
               ⚠ Sin un rol, esta persona podrá iniciar sesión pero no ver ni hacer nada. Puedes
               asignarle uno ahora o después con el botón “Roles”.
             </span>

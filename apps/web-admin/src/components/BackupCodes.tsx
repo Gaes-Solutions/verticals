@@ -35,7 +35,7 @@ export function BackupCodes({ codes }: { codes: string[] }) {
         Guárdalos en un lugar seguro. Cada uno sirve <strong>una sola vez</strong> para entrar si
         pierdes tu teléfono. <strong>No se volverán a mostrar.</strong>
       </p>
-      <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-4 font-mono text-slate-800 text-sm">
+      <div className="mb-3 grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-4 font-mono text-slate-800 text-sm sm:grid-cols-2">
         {codes.map((c) => (
           <span key={c} className="text-center">
             {c}
@@ -43,18 +43,10 @@ export function BackupCodes({ codes }: { codes: string[] }) {
         ))}
       </div>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={copiar}
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
+        <button type="button" onClick={copiar} className="gx-btn-secondary flex-1">
           {copiado ? "Copiado" : "Copiar"}
         </button>
-        <button
-          type="button"
-          onClick={descargar}
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
+        <button type="button" onClick={descargar} className="gx-btn-secondary flex-1">
           Descargar .txt
         </button>
       </div>

@@ -582,7 +582,7 @@ function UserMenu({
               type="button"
               role="menuitem"
               onClick={onLogout}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 text-sm hover:bg-red-50"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-danger text-sm hover:bg-danger-light"
             >
               Salir
             </button>
@@ -849,7 +849,7 @@ function HelpPanel({
                         type="button"
                         key={item.key}
                         onClick={() => onNavigate(item.key)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-600 text-xs hover:bg-slate-50"
+                        className="gx-btn-secondary"
                       >
                         <item.icon size={15} className="shrink-0" />
                         {item.label}
@@ -943,8 +943,8 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <form onSubmit={guardar} className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl">
+    <div className="gx-modal-overlay">
+      <form onSubmit={guardar} className="gx-modal-panel max-w-sm">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-bold text-lg text-slate-800">Cambiar contraseña</h2>
@@ -965,7 +965,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input"
             required
           />
         </label>
@@ -976,7 +976,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             minLength={8}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input"
             required
           />
         </label>
@@ -989,31 +989,23 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             minLength={8}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input"
             required
           />
         </label>
         {error && (
-          <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-red-700 text-sm">{error}</p>
+          <p className="mb-3 rounded-lg bg-danger-light px-3 py-2 text-danger text-sm">{error}</p>
         )}
         {saved && (
-          <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700 text-sm">
+          <p className="mb-3 rounded-lg bg-ok-light px-3 py-2 text-ok text-sm">
             Contraseña actualizada.
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 text-sm hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cerrar
           </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white disabled:opacity-60"
-          >
+          <button type="submit" disabled={busy} className="gx-btn-primary disabled:opacity-60">
             {busy ? "Guardando..." : "Guardar"}
           </button>
         </div>

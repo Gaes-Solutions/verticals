@@ -25,17 +25,20 @@ function varOf(p: Producto): Variante | undefined {
 export function EtiquetasPage() {
   const [buscar, setBuscar] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
+  const [buscando, setBuscando] = useState(true);
   const [items, setItems] = useState<ItemEtiqueta[]>([]);
   const [tamano, setTamano] = useState<Tamano>("chica");
   const [incluirPrecio, setIncluirPrecio] = useState(true);
   const [incluirQr, setIncluirQr] = useState(false);
 
   useEffect(() => {
+    setBuscando(true);
     const t = setTimeout(() => {
       const qs = buscar.trim() ? `&q=${encodeURIComponent(buscar.trim())}` : "";
       api<Paged<Producto>>(`/t/productos?pageSize=30${qs}`)
         .then((r) => setResultados(r.items))
-        .catch(() => setResultados([]));
+        .catch(() => setResultados([]))
+        .finally(() => setBuscando(false));
     }, 250);
     return () => clearTimeout(t);
   }, [buscar]);
@@ -69,7 +72,7 @@ export function EtiquetasPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-bold text-2xl text-slate-800">Etiquetas y códigos</h1>
         <button
           type="button"
@@ -94,28 +97,28 @@ export function EtiquetasPage() {
             value={buscar}
             onChange={(e) => setBuscar(e.target.value)}
             placeholder="Buscar producto por nombre o SKU…"
-            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input mb-3"
           />
           <div className="max-h-72 space-y-2 overflow-y-auto">
-            {resultados.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-slate-800 text-sm">{p.nombre}</p>
-                  <p className="text-slate-400 text-xs">{varOf(p)?.sku ?? "sin SKU"}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => agregar(p)}
-                  className="rounded-lg border border-brand px-3 py-1 font-semibold text-brand text-sm hover:bg-teal-50"
+            {buscando && <p className="text-slate-400 text-sm">Buscando…</p>}
+            {!buscando &&
+              resultados.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
                 >
-                  Agregar
-                </button>
-              </div>
-            ))}
-            {resultados.length === 0 && <p className="text-slate-400 text-sm">Sin resultados.</p>}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-800 text-sm">{p.nombre}</p>
+                    <p className="text-slate-400 text-xs">{varOf(p)?.sku ?? "sin SKU"}</p>
+                  </div>
+                  <button type="button" onClick={() => agregar(p)} className="gx-btn-secondary">
+                    Agregar
+                  </button>
+                </div>
+              ))}
+            {!buscando && resultados.length === 0 && (
+              <p className="text-slate-400 text-sm">Sin resultados.</p>
+            )}
           </div>
         </section>
 
@@ -134,12 +137,12 @@ export function EtiquetasPage() {
                   min={1}
                   value={i.cantidad}
                   onChange={(e) => setCantidad(i.productoId, Number(e.target.value))}
-                  className="w-16 rounded border border-slate-300 px-2 py-1"
+                  className="min-h-10 w-16 rounded border border-slate-300 px-2 py-1"
                 />
                 <button
                   type="button"
                   onClick={() => quitar(i.productoId)}
-                  className="text-red-500 text-xs hover:underline"
+                  className="text-danger text-xs hover:underline"
                 >
                   Quitar
                 </button>
@@ -191,7 +194,6 @@ export function EtiquetasPage() {
         )}
         {etiquetas.map((e, idx) => (
           <div
-            // biome-ignore lint/suspicious/noArrayIndexKey: lista de copias idénticas
             key={`${e.productoId}-${idx}`}
             style={{ width: w }}
             className="flex flex-col items-center rounded border border-slate-300 p-2 text-center"

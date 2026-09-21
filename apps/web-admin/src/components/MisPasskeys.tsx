@@ -103,7 +103,7 @@ export function MisPasskeys() {
               <button
                 type="button"
                 onClick={() => quitar(p.id)}
-                className="text-slate-400 text-sm hover:text-red-500"
+                className="text-slate-400 text-sm hover:text-danger"
               >
                 Quitar
               </button>
@@ -112,15 +112,15 @@ export function MisPasskeys() {
         </ul>
       )}
 
-      {error && <p className="mb-2 text-red-600 text-sm">{error}</p>}
-      {ok && <p className="mb-2 text-emerald-600 text-sm">{ok}</p>}
+      {error && <p className="mb-2 text-danger text-sm">{error}</p>}
+      {ok && <p className="mb-2 text-ok text-sm">{ok}</p>}
 
       <button
         type="button"
         data-tour="huella-activar"
         onClick={activar}
         disabled={busy}
-        className="flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark disabled:opacity-50"
+        className="gx-btn-primary justify-center disabled:opacity-50"
       >
         <Fingerprint size={18} />
         {busy ? "Activando…" : "Activar huella en este dispositivo"}

@@ -31,16 +31,24 @@ const PAQUETERIAS = ["estafeta", "fedex", "paquete_express", "huipix", "propio"]
 export function EnviosPage() {
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [pickups, setPickups] = useState<PickupRow[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
-    api<Zona[]>("/t/envios/zonas")
-      .then(setZonas)
-      .catch(() => setZonas([]));
-    api<PickupRow[]>("/t/envios/pickup")
-      .then(setPickups)
-      .catch(() => setPickups([]));
+    setCargando(true);
+    setLoadError(null);
+    Promise.all([api<Zona[]>("/t/envios/zonas"), api<PickupRow[]>("/t/envios/pickup")])
+      .then(([z, p]) => {
+        setZonas(z);
+        setPickups(p);
+        setLoadError(null);
+      })
+      .catch((e) =>
+        setLoadError(e instanceof Error ? e.message : "Error al cargar la configuración de envíos"),
+      )
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => cargar(), [cargar]);
@@ -53,7 +61,7 @@ export function EnviosPage() {
 
   function fail(err: unknown) {
     setMsg(null);
-    setError(err instanceof ApiError ? err.message : "Error");
+    setError(err instanceof ApiError ? err.message : "No se pudo guardar. Inténtalo de nuevo.");
   }
 
   return (
@@ -62,10 +70,21 @@ export function EnviosPage() {
 
       <NuevaZona onCreated={() => notify("Zona creada")} onError={fail} />
 
-      {zonas.map((z) => (
-        <ZonaCard key={z.id} zona={z} onChanged={() => notify("Guardado")} onError={fail} />
-      ))}
-      {zonas.length === 0 && (
+      {cargando && <p className="mb-6 text-sm text-slate-400">Cargando…</p>}
+      {loadError && !cargando && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+      {!cargando &&
+        !loadError &&
+        zonas.map((z) => (
+          <ZonaCard key={z.id} zona={z} onChanged={() => notify("Guardado")} onError={fail} />
+        ))}
+      {!cargando && !loadError && zonas.length === 0 && (
         <p className="mb-6 text-sm text-slate-400">
           Sin zonas de envío. Crea una zona (deja estados y CPs vacíos para cubrir todo el país) y
           agrégale tarifas.
@@ -77,18 +96,22 @@ export function EnviosPage() {
         <p className="mb-4 text-sm text-slate-500">
           Activa las sucursales donde los clientes pueden recoger sus pedidos online.
         </p>
-        {pickups.map((p) => (
-          <PickupRowItem
-            key={p.sucursal.id}
-            row={p}
-            onChanged={() => notify("Pickup actualizado")}
-            onError={fail}
-          />
-        ))}
+        {pickups.length === 0 && !cargando ? (
+          <p className="text-sm text-slate-400">Sin sucursales configuradas.</p>
+        ) : (
+          pickups.map((p) => (
+            <PickupRowItem
+              key={p.sucursal.id}
+              row={p}
+              onChanged={() => notify("Pickup actualizado")}
+              onError={fail}
+            />
+          ))
+        )}
       </section>
 
-      {msg && <p className="mt-4 text-sm text-emerald-600">{msg}</p>}
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {msg && <p className="mt-4 text-sm text-ok">{msg}</p>}
+      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
     </div>
   );
 }
@@ -138,12 +161,7 @@ function NuevaZona({
           placeholder="Estados separados por coma (vacío = todo MX)"
           className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
-        <button
-          type="button"
-          data-tour="env-zona-crear"
-          onClick={crear}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
-        >
+        <button type="button" data-tour="env-zona-crear" onClick={crear} className="gx-btn-primary">
           Crear zona
         </button>
       </div>
@@ -194,7 +212,7 @@ function ZonaCard({
         <button
           type="button"
           onClick={eliminarZona}
-          className="text-xs text-slate-400 hover:text-red-500"
+          className="text-xs text-slate-400 hover:text-danger"
         >
           Eliminar zona
         </button>
@@ -216,7 +234,7 @@ function ZonaCard({
           <button
             type="button"
             onClick={() => eliminarTarifa(t.id)}
-            className="text-xs text-slate-400 hover:text-red-500"
+            className="text-xs text-slate-400 hover:text-danger"
           >
             Quitar
           </button>
@@ -307,11 +325,7 @@ function NuevaTarifa({
         type="number"
         className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
       />
-      <button
-        type="button"
-        onClick={crear}
-        className="rounded-lg border border-brand px-3 py-1.5 text-sm font-semibold text-brand hover:bg-teal-50"
-      >
+      <button type="button" onClick={crear} className="gx-btn-secondary">
         + Tarifa
       </button>
     </div>
@@ -357,7 +371,7 @@ function PickupRowItem({
           onChange={(e) => setMinutos(e.target.value)}
           onBlur={() => activa && guardar(true)}
           type="number"
-          className="w-16 rounded border border-slate-300 px-1 py-0.5 text-sm"
+          className="min-h-10 w-16 rounded border border-slate-300 px-1 py-0.5 text-sm"
         />
         min
       </label>

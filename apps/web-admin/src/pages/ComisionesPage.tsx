@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puede } from "../lib/api.js";
 import type { Categoria, Paged } from "../lib/types.js";
 
 interface ReglaComision {
@@ -15,23 +15,38 @@ interface ReglaComision {
 
 export function ComisionesPage() {
   const [reglas, setReglas] = useState<ReglaComision[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const puedeGestionar = puede("comisiones.gestionar");
 
-  const cargar = useCallback(async () => {
-    setReglas(await api<ReglaComision[]>("/t/comisiones/reglas"));
+  const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
+    api<ReglaComision[]>("/t/comisiones/reglas")
+      .then((r) => {
+        setReglas(r);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar las reglas"))
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => {
-    void cargar();
+    cargar();
     api<Categoria[] | Paged<Categoria>>("/t/categorias")
       .then((r) => setCategorias(Array.isArray(r) ? r : r.items))
       .catch(() => setCategorias([]));
   }, [cargar]);
 
   async function borrar(id: string) {
-    await api(`/t/comisiones/reglas/${id}`, { method: "DELETE" }).catch(() => undefined);
-    void cargar();
+    try {
+      await api(`/t/comisiones/reglas/${id}`, { method: "DELETE" });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo eliminar la regla");
+    }
   }
 
   function alcance(r: ReglaComision): string {
@@ -42,63 +57,80 @@ export function ComisionesPage() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Comisiones</h1>
-        <button
-          type="button"
-          data-tour="com-nuevo"
-          onClick={() => setModal(true)}
-          className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
-        >
-          + Nueva regla
-        </button>
+        {puedeGestionar && (
+          <button
+            type="button"
+            data-tour="com-nuevo"
+            onClick={() => setModal(true)}
+            className="gx-btn-primary"
+          >
+            + Nueva regla
+          </button>
+        )}
       </div>
       <p className="mb-6 text-sm text-slate-500">
         Define cuánto gana el vendedor por cada venta o cobro. Si hay varias, gana la de mayor
         prioridad (número menor).
       </p>
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <div className="gx-table-wrap">
+        <table className="gx-table">
+          <thead>
             <tr>
-              <th className="px-4 py-2">Regla</th>
-              <th className="px-4 py-2 text-right">%</th>
-              <th className="px-4 py-2">Sobre</th>
-              <th className="px-4 py-2">Aplica a</th>
-              <th className="px-4 py-2" />
+              <th className="gx-th">Regla</th>
+              <th className="gx-th text-right">%</th>
+              <th className="gx-th">Sobre</th>
+              <th className="gx-th">Aplica a</th>
+              <th className="gx-th" />
             </tr>
           </thead>
           <tbody>
-            {reglas.length === 0 && (
+            {cargando && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-slate-400" colSpan={5}>
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!cargando && !error && reglas.length === 0 && (
+              <tr>
+                <td className="gx-td text-center text-slate-400" colSpan={5}>
                   Sin reglas. Crea la primera (ej. "5% sobre ventas").
                 </td>
               </tr>
             )}
-            {reglas.map((r) => (
-              <tr key={r.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-medium text-slate-800">
-                  {r.nombre}
-                  {!r.isActive && <span className="ml-2 text-xs text-slate-400">(inactiva)</span>}
-                </td>
-                <td className="px-4 py-2 text-right font-semibold text-slate-800">{r.pct}%</td>
-                <td className="px-4 py-2 text-slate-600">
-                  {r.base === "cobro" ? "El cobro" : "La venta"}
-                </td>
-                <td className="px-4 py-2 text-slate-600">{alcance(r)}</td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => borrar(r.id)}
-                    className="text-slate-400 hover:text-red-500"
-                  >
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {!cargando &&
+              reglas.map((r) => (
+                <tr key={r.id}>
+                  <td className="gx-td font-medium">
+                    {r.nombre}
+                    {!r.isActive && <span className="ml-2 text-xs text-slate-400">(inactiva)</span>}
+                  </td>
+                  <td className="gx-td text-right font-semibold">{r.pct}%</td>
+                  <td className="gx-td text-slate-600">
+                    {r.base === "cobro" ? "El cobro" : "La venta"}
+                  </td>
+                  <td className="gx-td text-slate-600">{alcance(r)}</td>
+                  <td className="gx-td text-right">
+                    {puedeGestionar && (
+                      <button type="button" onClick={() => borrar(r.id)} className="gx-btn-danger">
+                        Eliminar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -109,7 +141,7 @@ export function ComisionesPage() {
           onClose={() => setModal(false)}
           onCreada={() => {
             setModal(false);
-            void cargar();
+            cargar();
           }}
         />
       )}
@@ -156,8 +188,8 @@ function NuevaReglaModal({
   const pctNum = Number.parseFloat(pct);
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-4 text-lg font-bold text-slate-800">Nueva regla de comisión</h2>
         <div className="space-y-3">
           <label className="block text-sm font-medium text-slate-700">
@@ -167,10 +199,10 @@ function NuevaReglaModal({
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Comisión general"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input mt-1"
             />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700">
               Porcentaje (%)
               <input
@@ -180,7 +212,7 @@ function NuevaReglaModal({
                 value={pct}
                 onChange={(e) => setPct(e.target.value)}
                 placeholder="5"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input mt-1"
               />
             </label>
             <label className="block text-sm font-medium text-slate-700">
@@ -188,7 +220,7 @@ function NuevaReglaModal({
               <select
                 value={base}
                 onChange={(e) => setBase(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input mt-1"
               >
                 <option value="venta">La venta</option>
                 <option value="cobro">El cobro (cuando pagan)</option>
@@ -200,7 +232,7 @@ function NuevaReglaModal({
             <select
               value={categoriaId}
               onChange={(e) => setCategoriaId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input mt-1"
             >
               <option value="">Todas las ventas</option>
               {categorias.map((c) => (
@@ -210,14 +242,10 @@ function NuevaReglaModal({
               ))}
             </select>
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
             Cancelar
           </button>
           <button
@@ -225,7 +253,7 @@ function NuevaReglaModal({
             data-tour="com-f-crear"
             onClick={crear}
             disabled={guardando || !nombre || !(pctNum > 0 && pctNum <= 100)}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Creando…" : "Crear regla"}
           </button>

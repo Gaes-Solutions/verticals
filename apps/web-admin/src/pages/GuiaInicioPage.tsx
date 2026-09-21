@@ -1,5 +1,5 @@
 import { ArrowRight, CheckCircle2, Circle, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, puede } from "../lib/api.js";
 import { lanzarTour } from "../lib/tours.js";
 
@@ -237,15 +237,38 @@ function pasoHecho(paso: Paso, pasos: Record<string, boolean>): boolean {
 
 export function GuiaInicioPage() {
   const [data, setData] = useState<Onboarding | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     api<Onboarding>("/t/onboarding")
-      .then(setData)
-      .catch(() => setData(null));
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar tu avance"))
+      .finally(() => setCargando(false));
   }, []);
+  useEffect(() => cargar(), [cargar]);
 
-  if (!data) {
+  if (cargando) {
     return <p className="text-center text-slate-400">Cargando…</p>;
+  }
+  if (error || !data) {
+    return (
+      <div className="mx-auto max-w-md">
+        <p className="mb-3 text-center text-danger text-sm">
+          {error ?? "No se pudo cargar tu avance"}
+        </p>
+        <div className="text-center">
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const pasos = pasosDe(data.vertical).filter(puedeVerPaso);
@@ -296,7 +319,7 @@ export function GuiaInicioPage() {
                 <button
                   type="button"
                   onClick={() => lanzarTour(siguiente.tourId as string)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                  className="gx-btn-primary"
                 >
                   <Sparkles size={16} />
                   Guíame
@@ -324,20 +347,12 @@ export function GuiaInicioPage() {
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {puede("ecommerce.configurar") && (
-              <button
-                type="button"
-                onClick={() => irA("tienda")}
-                className="rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
-              >
+              <button type="button" onClick={() => irA("tienda")} className="gx-btn-primary">
                 Ir a mi tienda
               </button>
             )}
             {puede("configuracion.actualizar") && (
-              <button
-                type="button"
-                onClick={() => irA("portal-b2b")}
-                className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-600 text-sm hover:bg-slate-50"
-              >
+              <button type="button" onClick={() => irA("portal-b2b")} className="gx-btn-secondary">
                 Portal mayorista
               </button>
             )}
@@ -367,12 +382,12 @@ export function GuiaInicioPage() {
                     <article
                       key={paso.key}
                       className={`rounded-xl border p-4 shadow-sm ${
-                        hecho ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"
+                        hecho ? "border-ok-light bg-ok-light/40" : "border-slate-200 bg-white"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         {hecho ? (
-                          <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-500" size={24} />
+                          <CheckCircle2 className="mt-0.5 shrink-0 text-ok" size={24} />
                         ) : (
                           <Circle className="mt-0.5 shrink-0 text-slate-300" size={24} />
                         )}
@@ -419,7 +434,7 @@ export function GuiaInicioPage() {
                           <button
                             type="button"
                             onClick={() => irA(paso.seccion)}
-                            className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 font-semibold text-sm text-white hover:bg-brand-dark"
+                            className="gx-btn-primary"
                           >
                             Ir a esta pantalla
                             <ArrowRight size={16} />

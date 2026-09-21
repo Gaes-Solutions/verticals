@@ -55,13 +55,23 @@ export function ComprasPage() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [creando, setCreando] = useState(false);
   const [detalle, setDetalle] = useState<OcDetalle | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
+    setCargando(true);
+    setLoadError(null);
     const qs = filtro ? `?estado=${filtro}` : "";
     api<OcRow[]>(`/t/ordenes-compra${qs}`)
-      .then(setOrdenes)
-      .catch(() => setOrdenes([]));
+      .then((r) => {
+        setOrdenes(r);
+        setLoadError(null);
+      })
+      .catch((e) =>
+        setLoadError(e instanceof Error ? e.message : "Error al cargar las órdenes de compra"),
+      )
+      .finally(() => setCargando(false));
   }, [filtro]);
 
   useEffect(() => cargar(), [cargar]);
@@ -76,7 +86,7 @@ export function ComprasPage() {
     try {
       setDetalle(await api<OcDetalle>(`/t/ordenes-compra/${id}`));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
+      setError(err instanceof ApiError ? err.message : "No se pudo abrir la orden");
     }
   }
 
@@ -121,38 +131,54 @@ export function ComprasPage() {
             </tr>
           </thead>
           <tbody>
-            {ordenes.map((o) => (
-              <tr key={o.id}>
-                <td className="gx-td font-medium">{o.folio}</td>
-                <td className="gx-td">{o.proveedorRazonSocial}</td>
-                <td className="gx-td text-slate-500">
-                  {new Date(o.fechaCreacion).toLocaleDateString("es-MX")}
-                </td>
-                <td className="gx-td">
-                  <span className={badge(o.estado)}>{ESTADOS[o.estado] ?? o.estado}</span>
-                </td>
-                <td className="gx-td text-right font-semibold">${Number(o.total).toFixed(2)}</td>
-                <td className="gx-td text-right">
-                  <button
-                    type="button"
-                    onClick={() => abrir(o.id)}
-                    className="font-semibold text-brand hover:underline"
-                  >
-                    Gestionar
-                  </button>
+            {cargando && (
+              <tr>
+                <td className="gx-td text-slate-400" colSpan={6}>
+                  Cargando…
                 </td>
               </tr>
-            ))}
-            {ordenes.length === 0 && (
+            )}
+            {!cargando && !loadError && ordenes.length === 0 && (
               <tr>
-                <td colSpan={6} className="gx-td py-8 text-center text-slate-400">
+                <td className="gx-td py-8 text-center text-slate-400" colSpan={6}>
                   Sin órdenes de compra.
                 </td>
               </tr>
             )}
+            {!cargando &&
+              ordenes.map((o) => (
+                <tr key={o.id}>
+                  <td className="gx-td font-medium">{o.folio}</td>
+                  <td className="gx-td">{o.proveedorRazonSocial}</td>
+                  <td className="gx-td text-slate-500">
+                    {new Date(o.fechaCreacion).toLocaleDateString("es-MX")}
+                  </td>
+                  <td className="gx-td">
+                    <span className={badge(o.estado)}>{ESTADOS[o.estado] ?? o.estado}</span>
+                  </td>
+                  <td className="gx-td text-right font-semibold">${Number(o.total).toFixed(2)}</td>
+                  <td className="gx-td text-right">
+                    <button
+                      type="button"
+                      onClick={() => abrir(o.id)}
+                      className="font-semibold text-brand hover:underline"
+                    >
+                      Gestionar
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
+      {loadError && !cargando && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{loadError}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       {creando && (
@@ -359,14 +385,14 @@ function NuevaOcModal({
                   value={l.cantidad}
                   onChange={(e) => setLinea(idx, "cantidad", e.target.value)}
                   type="number"
-                  className="w-20 rounded border border-slate-300 px-2 py-1"
+                  className="min-h-10 w-20 rounded border border-slate-300 px-2 py-1"
                   placeholder="cant."
                 />
                 <input
                   value={l.precioUnitario}
                   onChange={(e) => setLinea(idx, "precioUnitario", e.target.value)}
                   type="number"
-                  className="w-24 rounded border border-slate-300 px-2 py-1"
+                  className="min-h-10 w-24 rounded border border-slate-300 px-2 py-1"
                   placeholder="costo"
                 />
                 <span className="w-24 text-right font-semibold">
@@ -420,6 +446,8 @@ function DetalleOcModal({
   const [recepcion, setRecepcion] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancelando, setCancelando] = useState(false);
+  const [motivoCancel, setMotivoCancel] = useState("");
 
   const puedeAutorizar = oc.estado === "borrador";
   const puedeRecibir = oc.estado === "enviada" || oc.estado === "recibida_parcial";
@@ -432,7 +460,7 @@ function DetalleOcModal({
       await fn();
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
+      setError(err instanceof ApiError ? err.message : "No se pudo completar la operación");
       setGuardando(false);
     }
   }
@@ -448,10 +476,21 @@ function DetalleOcModal({
     void accion(() => api(`/t/ordenes-compra/${oc.id}/recibir`, { body: { lineas } }));
   }
 
-  function cancelar() {
-    const motivo = window.prompt("Motivo de la cancelación:");
-    if (!motivo) return;
-    void accion(() => api(`/t/ordenes-compra/${oc.id}/cancelar`, { body: { motivo } }));
+  function pedirCancelar() {
+    setMotivoCancel("");
+    setError(null);
+    setCancelando(true);
+  }
+
+  function confirmarCancelar() {
+    if (motivoCancel.trim().length < 3) {
+      setError("Escribe el motivo de la cancelación");
+      return;
+    }
+    setCancelando(false);
+    void accion(() =>
+      api(`/t/ordenes-compra/${oc.id}/cancelar`, { body: { motivo: motivoCancel.trim() } }),
+    );
   }
 
   return (
@@ -499,7 +538,7 @@ function DetalleOcModal({
                               setRecepcion((prev) => ({ ...prev, [l.id]: e.target.value }))
                             }
                             placeholder={`máx ${pendiente}`}
-                            className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                            className="min-h-10 w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                           />
                         ) : (
                           <span className="text-xs text-ok">completa</span>
@@ -525,7 +564,12 @@ function DetalleOcModal({
             Cerrar
           </button>
           {puedeCancelar && (
-            <button type="button" onClick={cancelar} disabled={guardando} className="gx-btn-danger">
+            <button
+              type="button"
+              onClick={pedirCancelar}
+              disabled={guardando}
+              className="gx-btn-danger"
+            >
               Cancelar OC
             </button>
           )}
@@ -548,6 +592,41 @@ function DetalleOcModal({
           )}
         </div>
       </div>
+
+      {cancelando && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel max-w-sm">
+            <h3 className="mb-2 font-bold text-lg text-slate-800">Cancelar orden de compra</h3>
+            <p className="mb-3 text-slate-500 text-sm">
+              {oc.folio} · Total ${Number(oc.total).toFixed(2)}. Esta acción no se puede deshacer.
+            </p>
+            <label className="mb-3 block">
+              <span className="gx-label">Motivo de la cancelación</span>
+              <input
+                value={motivoCancel}
+                onChange={(e) => setMotivoCancel(e.target.value)}
+                className="gx-input"
+                placeholder="Ej. duplicada, proveedor sin stock…"
+                required
+                // biome-ignore lint/a11y/noAutofocus: foco intencional en el primer campo al abrir el modal de cancelacion de OC
+                autoFocus
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCancelando(false)}
+                className="gx-btn-secondary"
+              >
+                Volver
+              </button>
+              <button type="button" onClick={confirmarCancelar} className="gx-btn-danger">
+                Sí, cancelar OC
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

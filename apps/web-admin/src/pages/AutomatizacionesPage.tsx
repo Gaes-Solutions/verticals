@@ -24,13 +24,24 @@ export function AutomatizacionesPage() {
   const [eventos, setEventos] = useState<EventoFlow[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
   const [campanas, setCampanas] = useState<Campana[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [aEliminar, setAEliminar] = useState<Flow | null>(null);
 
   const cargar = useCallback(() => {
+    setCargando(true);
+    setError(null);
     api<Flow[]>("/t/campanas/flows")
-      .then(setFlows)
-      .catch(() => setFlows([]));
+      .then((r) => {
+        setFlows(r);
+        setError(null);
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Error al cargar las automatizaciones"),
+      )
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => {
@@ -46,16 +57,24 @@ export function AutomatizacionesPage() {
   const labelEvento = (ev: string) => eventos.find((e) => e.evento === ev)?.label ?? ev;
 
   async function toggle(f: Flow) {
-    await api(`/t/campanas/flows/${f.id}`, {
-      method: "PATCH",
-      body: { isActive: !f.isActive },
-    }).catch(() => undefined);
-    cargar();
+    try {
+      await api(`/t/campanas/flows/${f.id}`, {
+        method: "PATCH",
+        body: { isActive: !f.isActive },
+      });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo actualizar la automatización");
+    }
   }
   async function eliminar(f: Flow) {
-    if (!window.confirm("¿Eliminar esta automatización?")) return;
-    await api(`/t/campanas/flows/${f.id}`, { method: "DELETE" }).catch(() => undefined);
-    cargar();
+    setAEliminar(null);
+    try {
+      await api(`/t/campanas/flows/${f.id}`, { method: "DELETE" });
+      cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo eliminar la automatización");
+    }
   }
   async function ejecutar() {
     setMsg(null);
@@ -63,15 +82,15 @@ export function AutomatizacionesPage() {
       const r = await api<{ encolados: number }>("/t/campanas/flows/run", { method: "POST" });
       setMsg(`Listo: ${r.encolados} envío(s) encolado(s).`);
     } catch (e) {
-      setMsg(e instanceof ApiError ? e.message : "Error");
+      setMsg(e instanceof ApiError ? e.message : "No se pudo ejecutar");
     }
   }
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-bold text-2xl text-slate-800">Automatizaciones</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button type="button" onClick={ejecutar} className="gx-btn-secondary">
             Ejecutar ahora
           </button>
@@ -89,7 +108,15 @@ export function AutomatizacionesPage() {
         Manda mensajes solos: bienvenida, cumpleaños, recuperación y recompra. Se disparan al
         ejecutar (o por cron).
       </p>
-      {msg && <p className="mb-3 rounded-lg bg-green-50 p-2 text-green-700 text-sm">{msg}</p>}
+      {msg && <p className="mb-3 rounded-lg bg-ok-light p-2 text-ok text-sm">{msg}</p>}
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={cargar} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="gx-table-wrap">
         <table className="gx-table">
@@ -103,13 +130,21 @@ export function AutomatizacionesPage() {
             </tr>
           </thead>
           <tbody>
-            {flows.length === 0 ? (
+            {cargando && (
+              <tr>
+                <td className="gx-td text-slate-400" colSpan={5}>
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!cargando && !error && flows.length === 0 && (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={5}>
                   Sin automatizaciones. Crea la primera.
                 </td>
               </tr>
-            ) : (
+            )}
+            {!cargando &&
               flows.map((f) => (
                 <tr key={f.id} className={f.isActive ? "" : "opacity-50"}>
                   <td className="gx-td font-medium">
@@ -128,17 +163,12 @@ export function AutomatizacionesPage() {
                     </button>
                   </td>
                   <td className="gx-td text-right">
-                    <button
-                      type="button"
-                      onClick={() => eliminar(f)}
-                      className="text-red-500 text-sm hover:underline"
-                    >
+                    <button type="button" onClick={() => setAEliminar(f)} className="gx-btn-danger">
                       Eliminar
                     </button>
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
           </tbody>
         </table>
       </div>
@@ -153,6 +183,25 @@ export function AutomatizacionesPage() {
             cargar();
           }}
         />
+      )}
+
+      {aEliminar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Eliminar automatización</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Eliminar la automatización “{labelEvento(aEliminar.evento)}”? Dejará de enviarse.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setAEliminar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => eliminar(aEliminar)} className="gx-btn-danger">
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -193,7 +242,7 @@ function NuevoFlowModal({
       <form onSubmit={guardar} className="gx-modal-panel">
         <h2 className="mb-4 font-bold text-lg text-slate-800">Nueva automatización</h2>
         {campanas.length === 0 && (
-          <p className="mb-3 rounded-lg bg-amber-50 p-2 text-amber-700 text-sm">
+          <p className="mb-3 rounded-lg bg-warn-light p-2 text-warn text-sm">
             Primero crea una campaña (con su mensaje) en Marketing/Campañas.
           </p>
         )}

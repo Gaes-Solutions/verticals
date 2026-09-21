@@ -41,18 +41,24 @@ export function ProductosPage() {
   const [items, setItems] = useState<Producto[]>([]);
   const [query, setQuery] = useState("");
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<Producto | "nuevo" | null>(null);
+  const [aArchivar, setAArchivar] = useState<Producto | null>(null);
   const puedeCrear = puede("productos.crear");
   const puedeEditar = puede("productos.actualizar");
   const puedeArchivar = puede("productos.archivar");
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    setError(null);
     try {
       const res = await api<Paged<Producto>>(
         `/t/productos?pageSize=50${query ? `&q=${encodeURIComponent(query)}` : ""}`,
       );
       setItems(res.items);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar los productos");
     } finally {
       setCargando(false);
     }
@@ -63,22 +69,26 @@ export function ProductosPage() {
     return () => clearTimeout(t);
   }, [cargar]);
 
-  async function archivar(id: string) {
-    if (!confirm("¿Archivar este producto?")) return;
-    await api(`/t/productos/${id}`, { method: "DELETE" });
-    void cargar();
+  async function archivar(p: Producto) {
+    setAArchivar(null);
+    try {
+      await api(`/t/productos/${p.id}`, { method: "DELETE" });
+      void cargar();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo archivar el producto");
+    }
   }
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Productos</h1>
         {puedeCrear && (
           <button
             type="button"
             data-tour="prod-nuevo"
             onClick={() => setModal("nuevo")}
-            className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark"
+            className="gx-btn-primary"
           >
             + Nuevo producto
           </button>
@@ -89,66 +99,76 @@ export function ProductosPage() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Buscar por nombre o SKU…"
-        className="mb-4 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+        className="gx-input mb-4 max-w-md"
       />
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+      {error && !cargando && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => void cargar()} className="gx-btn-danger">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <div className="gx-table-wrap">
+        <table className="gx-table">
+          <thead>
             <tr>
-              <th className="px-4 py-2">Producto</th>
-              <th className="px-4 py-2">SKU</th>
-              <th className="px-4 py-2 text-right">Precio</th>
-              <th className="px-4 py-2" />
+              <th className="gx-th">Producto</th>
+              <th className="gx-th">SKU</th>
+              <th className="gx-th text-right">Precio</th>
+              <th className="gx-th" />
             </tr>
           </thead>
           <tbody>
             {cargando && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-slate-400" colSpan={4}>
                   Cargando…
                 </td>
               </tr>
             )}
-            {!cargando && items.length === 0 && (
+            {!cargando && !error && items.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                <td className="gx-td text-center text-slate-400" colSpan={4}>
                   Sin productos. Crea el primero.
                 </td>
               </tr>
             )}
-            {items.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-medium text-slate-800">{p.nombre}</td>
-                <td className="px-4 py-2 text-slate-500">{p.skuPadre}</td>
-                <td className="px-4 py-2 text-right text-slate-700">
-                  {p.variantes[0]
-                    ? `$${Number.parseFloat(p.variantes[0].precioBase).toFixed(2)}`
-                    : "—"}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {puedeEditar && (
-                    <button
-                      type="button"
-                      onClick={() => setModal(p)}
-                      className="mr-3 text-brand hover:underline"
-                    >
-                      Editar
-                    </button>
-                  )}
-                  {puedeArchivar && (
-                    <button
-                      type="button"
-                      onClick={() => archivar(p.id)}
-                      className="text-slate-400 hover:text-red-500"
-                    >
-                      Archivar
-                    </button>
-                  )}
-                  {!puedeEditar && !puedeArchivar && <span className="text-slate-300">—</span>}
-                </td>
-              </tr>
-            ))}
+            {!cargando &&
+              items.map((p) => (
+                <tr key={p.id}>
+                  <td className="gx-td font-medium">{p.nombre}</td>
+                  <td className="gx-td text-slate-500">{p.skuPadre}</td>
+                  <td className="gx-td text-right text-slate-700">
+                    {p.variantes[0]
+                      ? `$${Number.parseFloat(p.variantes[0].precioBase).toFixed(2)}`
+                      : "—"}
+                  </td>
+                  <td className="gx-td text-right">
+                    {puedeEditar && (
+                      <button
+                        type="button"
+                        onClick={() => setModal(p)}
+                        className="mr-3 text-brand hover:underline"
+                      >
+                        Editar
+                      </button>
+                    )}
+                    {puedeArchivar && (
+                      <button
+                        type="button"
+                        onClick={() => setAArchivar(p)}
+                        className="gx-btn-danger"
+                      >
+                        Archivar
+                      </button>
+                    )}
+                    {!puedeEditar && !puedeArchivar && <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -162,6 +182,26 @@ export function ProductosPage() {
             void cargar();
           }}
         />
+      )}
+
+      {aArchivar && (
+        <div className="gx-modal-overlay">
+          <div className="gx-modal-panel">
+            <h2 className="mb-2 font-bold text-lg text-slate-800">Archivar producto</h2>
+            <p className="mb-4 text-slate-500 text-sm">
+              ¿Archivar “{aArchivar.nombre}”? Desaparecerá del catálogo y de la venta, pero se
+              conserva su historial.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setAArchivar(null)} className="gx-btn-secondary">
+                Volver
+              </button>
+              <button type="button" onClick={() => archivar(aArchivar)} className="gx-btn-danger">
+                Sí, archivar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -264,8 +304,8 @@ function ProductoModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <h2 className="mb-4 text-lg font-bold text-slate-800">
           {editando ? "Editar producto" : "Nuevo producto"}
         </h2>
@@ -275,7 +315,7 @@ function ProductoModal({
               data-tour="prod-f-nombre"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </Field>
           {editaPrecio && (
@@ -286,7 +326,7 @@ function ProductoModal({
                 data-tour="prod-f-precio"
                 value={precioBase}
                 onChange={(e) => setPrecioBase(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Field>
           )}
@@ -297,7 +337,7 @@ function ProductoModal({
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Ej. 7501234567890 — para escanear en caja"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Field>
           )}
@@ -310,7 +350,7 @@ function ProductoModal({
                 value={stockInicial}
                 onChange={(e) => setStockInicial(e.target.value)}
                 placeholder="Cuántas piezas tienes hoy. Puedes dejarlo vacío."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Field>
           )}
@@ -318,7 +358,7 @@ function ProductoModal({
             <select
               value={categoriaId ?? ""}
               onChange={(e) => setCategoriaId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             >
               <option value="">Sin categoría</option>
               {categorias.map((c) => (
@@ -341,7 +381,7 @@ function ProductoModal({
                   value={claveSat}
                   onChange={(e) => setClaveSat(e.target.value)}
                   placeholder="Ej. 50192700"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                  className="gx-input"
                 />
                 <datalist id="claves-prodserv-sat">
                   {CLAVES_PRODSERV.map((c) => (
@@ -357,7 +397,7 @@ function ProductoModal({
                   value={claveUnidadSat}
                   onChange={(e) => setClaveUnidadSat(e.target.value)}
                   placeholder="H87"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                  className="gx-input"
                 />
                 <datalist id="claves-unidad-sat">
                   {CLAVES_UNIDAD.map((c) => (
@@ -397,7 +437,7 @@ function ProductoModal({
                 value={tasaIeps ?? ""}
                 onChange={(e) => setTasaIeps(e.target.value)}
                 placeholder="Ej. 8, 26.5, 160"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                className="gx-input"
               />
             </Field>
           )}
@@ -409,14 +449,10 @@ function ProductoModal({
             />
             Se vende por peso (balanza)
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
-          >
+          <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
             Cancelar
           </button>
           <button
@@ -424,7 +460,7 @@ function ProductoModal({
             data-tour="prod-f-guardar"
             onClick={guardar}
             disabled={guardando || !nombre || (editaPrecio && (!sku || !precioBase))}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar"}
           </button>
