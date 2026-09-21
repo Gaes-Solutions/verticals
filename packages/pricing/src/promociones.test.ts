@@ -1,9 +1,6 @@
-import type { TicketCalculado } from "@gaespos/pricing";
 import { describe, expect, it } from "vitest";
-import {
-  type PromoEvaluable,
-  aplicarPromocionesATicket,
-} from "../src/modules/tenant/promociones/service.js";
+import { type PromoEvaluable, aplicarPromocionesATicket } from "./promociones.js";
+import type { TicketCalculado } from "./types.js";
 
 function promo(overrides: Partial<PromoEvaluable>): PromoEvaluable {
   return {
