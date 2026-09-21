@@ -34,6 +34,9 @@ export function TiendaPage() {
   const [config, setConfig] = useState<ConfigTienda>({});
   const [productos, setProductos] = useState<Producto[]>([]);
   const [buscarPub, setBuscarPub] = useState("");
+  const [publicandoTodo, setPublicandoTodo] = useState(false);
+  const [avanceLote, setAvanceLote] = useState<number | null>(null);
+  const [soloConStock, setSoloConStock] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -167,6 +170,50 @@ export function TiendaPage() {
       cargarEstado();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al publicar (¿ya estaba publicado?)");
+    }
+  }
+
+  /**
+   * Publicar de uno en uno no sirve con un catálogo entero: se manda por lotes, cada
+   * uno corto, y se muestra cuántos llevan para que se vea el avance.
+   */
+  async function publicarCatalogo(publicar: boolean) {
+    if (!canPublish || publicandoTodo) return;
+    if (
+      !publicar &&
+      !window.confirm("Se quitarán de la tienda todos los productos publicados. ¿Continuar?")
+    )
+      return;
+    setError(null);
+    setMsg(null);
+    setPublicandoTodo(true);
+    setAvanceLote(0);
+    let hechos = 0;
+    try {
+      for (;;) {
+        const r = await api<{ procesados: number; restantes: number }>(
+          "/t/ecommerce/productos-publicados/lote",
+          { body: { publicar, ...(publicar && soloConStock ? { soloConStock: true } : {}) } },
+        );
+        hechos += r.procesados;
+        setAvanceLote(hechos);
+        if (r.restantes === 0 || r.procesados === 0) break;
+      }
+      setMsg(
+        publicar
+          ? `${hechos.toLocaleString("es-MX")} producto(s) publicados en la tienda`
+          : `${hechos.toLocaleString("es-MX")} producto(s) quitados de la tienda`,
+      );
+      cargarEstado();
+    } catch (err) {
+      const base = err instanceof ApiError ? err.message : "Error al publicar";
+      setError(
+        hechos > 0 ? `${base}. Se alcanzaron a procesar ${hechos}; vuelve a intentarlo.` : base,
+      );
+      cargarEstado();
+    } finally {
+      setPublicandoTodo(false);
+      setAvanceLote(null);
     }
   }
 
@@ -599,8 +646,46 @@ export function TiendaPage() {
         <section className="rounded-xl bg-white p-5 shadow-sm">
           <h2 className="mb-1 font-bold text-slate-800">Publicar productos</h2>
           <p className="mb-3 text-sm text-slate-500">
-            Pon tus productos a la venta en la tienda online.
+            Pon tus productos a la venta en la tienda online. Hay{" "}
+            {(productosPublicados ?? 0).toLocaleString("es-MX")} publicado(s).
           </p>
+          <div className="mb-4 rounded-lg border border-slate-200 p-3">
+            <p className="mb-2 font-medium text-slate-800 text-sm">Todo el catálogo</p>
+            <label className="mb-3 flex items-center gap-2 text-slate-600 text-sm">
+              <input
+                type="checkbox"
+                checked={soloConStock}
+                onChange={(e) => setSoloConStock(e.target.checked)}
+                disabled={publicandoTodo}
+              />
+              Publicar solo lo que tiene existencia
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="gx-btn-primary"
+                disabled={publicandoTodo}
+                onClick={() => void publicarCatalogo(true)}
+              >
+                {publicandoTodo && avanceLote !== null
+                  ? `Publicando ${avanceLote.toLocaleString("es-MX")}…`
+                  : "Publicar todo el catálogo"}
+              </button>
+              <button
+                type="button"
+                className="gx-btn-ghost"
+                disabled={publicandoTodo || !productosPublicados}
+                onClick={() => void publicarCatalogo(false)}
+              >
+                Quitar todos de la tienda
+              </button>
+            </div>
+            <p className="mt-2 text-slate-500 text-xs">
+              Se toma el nombre de cada producto como título; después puedes editar los que quieras.
+              Repetirlo no duplica nada.
+            </p>
+          </div>
+
           <input
             data-tour="tienda-publicar"
             value={buscarPub}

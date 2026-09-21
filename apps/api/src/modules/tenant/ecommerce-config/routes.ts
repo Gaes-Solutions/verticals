@@ -18,6 +18,8 @@ import {
   publicarProductoSchema,
 } from "./schemas.js";
 
+import { publicarLote } from "./publicacion-lote.js";
+
 const SINGLETON_ID = "tienda";
 
 /**
@@ -339,6 +341,25 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     return reply.code(201).send(pub);
+  });
+
+  // Publicar 2,000 productos de uno en uno no es viable: el catálogo se publica por lotes.
+  app.post("/productos-publicados/lote", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PUBLICAR_PRODUCTO);
+    const body = z
+      .object({
+        publicar: z.boolean().default(true),
+        categoriaIds: z.array(z.string().min(1)).max(200).optional(),
+        soloConStock: z.boolean().optional(),
+        limite: z.number().int().min(1).max(500).default(300),
+      })
+      .parse(req.body ?? {});
+    return publicarLote(
+      req.tenantPrisma,
+      body.publicar,
+      { categoriaIds: body.categoriaIds, soloConStock: body.soloConStock },
+      body.limite,
+    );
   });
 
   app.delete("/productos-publicados/:id", async (req, reply) => {
