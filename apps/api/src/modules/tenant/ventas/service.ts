@@ -421,6 +421,16 @@ function totalesVenta(
   };
 }
 
+export interface LineaComprobante {
+  varianteId: string;
+  cantidad: string;
+  precioUnitario: string;
+  descuentoUnitario: string;
+  ivaTotal: string;
+  iepsTotal: string;
+  totalLinea: string;
+}
+
 export interface VentaPreviewResult {
   subtotal: string;
   descuentoTotal: string;
@@ -429,6 +439,60 @@ export interface VentaPreviewResult {
   iepsTotal: string;
   total: string;
   promosAplicadas: number;
+  lineas: LineaComprobante[];
+}
+
+/** El desglose que la caja conserva para poder probar qué cobró de cada artículo. */
+export function comprobanteDeLineas(lineasCalc: LineaCalculo[]): LineaComprobante[] {
+  return lineasCalc.map((l) => ({
+    varianteId: l.varianteId,
+    cantidad: l.cantidad.toString(),
+    precioUnitario: l.precioUnitario.toString(),
+    descuentoUnitario: l.descuentoUnitario.toString(),
+    ivaTotal: l.ivaTotal.toString(),
+    iepsTotal: l.iepsTotal.toString(),
+    totalLinea: l.totalLinea.toString(),
+  }));
+}
+
+const CAMPOS_COMPROBANTE = [
+  "cantidad",
+  "precioUnitario",
+  "descuentoUnitario",
+  "ivaTotal",
+  "iepsTotal",
+  "totalLinea",
+] as const;
+
+/**
+ * Dos cambios que se compensan dejan el mismo total: sin comparar línea por línea,
+ * el cliente pagaría un desglose distinto del que aprobó (y así se factura).
+ */
+function diferenciaEnLineas(
+  esperadas: LineaComprobante[],
+  actuales: LineaComprobante[],
+): Record<string, unknown> | null {
+  if (esperadas.length !== actuales.length)
+    return {
+      motivo: "cambió el número de artículos",
+      esperadas: esperadas.length,
+      actuales: actuales.length,
+    };
+  for (const [i, esperada] of esperadas.entries()) {
+    const actual = actuales[i];
+    if (!actual || actual.varianteId !== esperada.varianteId)
+      return { motivo: "cambió el artículo de la línea", linea: i + 1 };
+    for (const campo of CAMPOS_COMPROBANTE) {
+      if (!new Decimal(esperada[campo]).eq(new Decimal(actual[campo])))
+        return {
+          motivo: `cambió ${campo}`,
+          linea: i + 1,
+          esperado: esperada[campo],
+          actual: actual[campo],
+        };
+    }
+  }
+  return null;
 }
 
 /**
@@ -476,6 +540,7 @@ export async function previewVenta(
     iepsTotal: totales.iepsVenta.toString(),
     total: totales.totalVenta.toString(),
     promosAplicadas: promoResult.aplicaciones.length,
+    lineas: comprobanteDeLineas(lineasCalc),
   };
 }
 
@@ -531,6 +596,15 @@ export async function prepararVenta(
       expectedTotal: input.expectedTotal,
       currentTotal: totales.totalVenta.toString(),
     });
+  }
+
+  if (input.idempotencyKey && input.expectedLineas) {
+    const diferencia = diferenciaEnLineas(input.expectedLineas, comprobanteDeLineas(lineasCalc));
+    if (diferencia)
+      throw new VentaError(409, "El detalle de la venta cambió; revísalo antes de registrarla", {
+        code: "SALE_LINES_CHANGED",
+        ...diferencia,
+      });
   }
 
   const { totalCobrado, cambio, pagoFiado, pagoCreditoB2b, pagoMonedero } = validarPagos(

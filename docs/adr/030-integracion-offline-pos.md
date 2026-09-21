@@ -79,3 +79,19 @@ datos no se completan con datos del momento de reconexión.
 Un acuse ya confirmado se recupera antes de validar precio/apertura actuales.
 Esta protección del total no sustituye el comprobante fiscal/comercial completo
 por línea ni autoriza cobros locales. [Evidencia](../avance-reconciliacion-offline-2026-09-18.md).
+
+## Comprobante por línea — 20-sep-2026
+
+La reconciliación comparaba solo el total. Dos cambios que se compensan (un
+artículo sube y otro baja lo mismo) dejaban pasar la venta con un desglose
+distinto del que aprobó el cliente, y así se habría facturado.
+
+La cotización (`POST /t/ventas/preview`) ahora devuelve, por línea, cantidad,
+precio unitario, descuento unitario, IVA, IEPS e importe. La caja conserva ese
+desglose junto al intento de cobro y lo envía como `expectedLineas`. Antes de
+persistir, el servidor recalcula y compara línea por línea; cualquier
+diferencia deja la operación para revisión, sin crear la venta.
+
+Es obligatorio para las ventas que llegan por sincronización: una operación sin
+desglose no se completa con los precios del momento de reconexión. Esto protege
+el importe y su composición; sigue sin habilitar el cobro sin conexión.

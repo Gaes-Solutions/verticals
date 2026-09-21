@@ -38,9 +38,21 @@ export const ventaPagoInputSchema = z.object({
     .optional(),
 });
 
+/** Lo que el cajero vio y cobró en cada línea; el servidor lo compara con su cálculo. */
+export const lineaComprobanteSchema = z.object({
+  varianteId: z.string().min(1),
+  cantidad: nonNegativeDecimalString,
+  precioUnitario: nonNegativeDecimalString,
+  descuentoUnitario: nonNegativeDecimalString,
+  ivaTotal: nonNegativeDecimalString,
+  iepsTotal: nonNegativeDecimalString,
+  totalLinea: nonNegativeDecimalString,
+});
+
 export const ventaCreateSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
   expectedTotal: nonNegativeDecimalString.optional(),
+  expectedLineas: z.array(lineaComprobanteSchema).min(1).max(500).optional(),
   sucursalId: z.string().min(1),
   cajaId: z.string().optional(),
   clienteId: z.string().optional(),

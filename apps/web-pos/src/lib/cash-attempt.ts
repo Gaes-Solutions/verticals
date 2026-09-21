@@ -7,6 +7,15 @@ export interface CashScope {
   cajaId: string;
   sucursalId: string;
 }
+export interface LineaComprobante {
+  varianteId: string;
+  cantidad: string;
+  precioUnitario: string;
+  descuentoUnitario: string;
+  ivaTotal: string;
+  iepsTotal: string;
+  totalLinea: string;
+}
 export interface CashPayload {
   sucursalId: string;
   cajaId: string;
@@ -19,6 +28,8 @@ export interface CashPayload {
   descuentoGlobalMotivo?: string;
   expectedTotal: string;
   expectedAperturaId: string;
+  /** Lo que el cajero vio por artículo; el servidor lo verifica antes de registrar. */
+  expectedLineas: LineaComprobante[];
 }
 export interface CashAttempt {
   key: string;
@@ -41,6 +52,8 @@ export function readCashAttempt(scope: CashScope): CashAttempt | null {
     record.payload.sucursalId !== scope.sucursalId ||
     typeof record.payload.expectedAperturaId !== "string" ||
     !record.payload.expectedAperturaId.trim() ||
+    !record.payload.expectedLineas?.length ||
+    record.payload.expectedLineas.some((l) => !l.varianteId || !l.totalLinea) ||
     !record.payload.pagos?.length ||
     record.payload.pagos.some((p) => p.metodo !== "efectivo")
   )

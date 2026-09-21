@@ -20,6 +20,17 @@ const payload: CashPayload = {
   pagos: [{ metodo: "efectivo", monto: "100.00" }],
   expectedTotal: "100.00",
   expectedAperturaId: "opening-1",
+  expectedLineas: [
+    {
+      varianteId: "v1",
+      cantidad: "1",
+      precioUnitario: "86.21",
+      descuentoUnitario: "0",
+      ivaTotal: "13.79",
+      iepsTotal: "0",
+      totalLinea: "100.00",
+    },
+  ],
 };
 const key = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ready = {
@@ -174,4 +185,14 @@ describe("sale total reconciliation", () => {
     await finishCashAttempt(scope);
     expect(readCashAttempt(scope)).toBeNull();
   });
+});
+
+it("rechaza un intento guardado sin el desglose por artículo", () => {
+  const { expectedLineas, ...sinDesglose } = payload;
+  void expectedLineas;
+  localStorage.setItem(
+    cashStorageKey(scope),
+    JSON.stringify({ key, payload: sinDesglose as CashPayload }),
+  );
+  expect(() => readCashAttempt(scope)).toThrow("no es válido");
 });

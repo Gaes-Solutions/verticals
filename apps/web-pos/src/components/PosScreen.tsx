@@ -6,6 +6,7 @@ import {
   type CashPayload,
   type CashResult,
   type CashScope,
+  type LineaComprobante,
   cashStorageKey,
   finishCashAttempt,
   readCashAttempt,
@@ -68,6 +69,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [cashError, setCashError] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [quotedTotal, setQuotedTotal] = useState<number | null>(null);
+  const [quotedLineas, setQuotedLineas] = useState<LineaComprobante[]>([]);
   useEffect(() => {
     let active = true;
     const sync = (scope: CashScope) => {
@@ -328,12 +330,16 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     setProcesando(true);
     setAviso(null);
     try {
-      const quote = await api<{ total: string }>("/t/ventas/preview", { body: saleBase() });
+      const quote = await api<{ total: string; lineas: LineaComprobante[] }>("/t/ventas/preview", {
+        body: saleBase(),
+      });
       const amount = Number(quote.total);
       if (!Number.isFinite(amount) || amount <= 0)
         throw new Error("El total del servidor no es válido.");
+      if (!quote.lineas?.length) throw new Error("El desglose del servidor no es válido.");
       setLocalSearch(false);
       setQuotedTotal(amount);
+      setQuotedLineas(quote.lineas);
       setCobrando(true);
     } catch (error) {
       setAviso(error instanceof Error ? error.message : "No se pudo cotizar la venta.");
@@ -347,7 +353,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
     saleBusy.current = true;
     setProcesando(true);
     setAviso(null);
-      const cashOnly =
+    const cashOnly =
       pago.pagos.length > 0 && pago.pagos.every((item) => item.metodo === "efectivo");
     try {
       if (cashScope && readCashAttempt(cashScope)) {
@@ -362,6 +368,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           cajaId: cashScope.cajaId,
           expectedTotal: quotedTotal.toFixed(2),
           expectedAperturaId: openingId,
+          expectedLineas: quotedLineas,
           pagos: pago.pagos.map((item) => ({ metodo: "efectivo", monto: item.monto.toFixed(2) })),
         };
         setCashResult(await startCashAttempt(cashScope, payload));

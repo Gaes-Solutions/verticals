@@ -123,8 +123,24 @@ describe("RBAC sync", () => {
   });
 });
 
+/** El desglose que la caja conserva: se pide al servidor igual que lo hace el POS. */
+async function lineasCotizadas(lineas: Array<{ varianteId: string; cantidad: string }>) {
+  const res = await app.inject({
+    method: "POST",
+    url: "/t/ventas/preview",
+    headers: auth(ownerToken),
+    payload: { sucursalId, canal: "pos", lineas },
+  });
+  expect(res.statusCode, res.body).toBe(200);
+  return res.json().lineas as Array<Record<string, string>>;
+}
+
 describe("push venta inmutable + idempotencia", () => {
   const ventaKey = randomUUID();
+  let lineasVenta: Array<Record<string, string>> = [];
+  beforeAll(async () => {
+    lineasVenta = await lineasCotizadas([{ varianteId, cantidad: "2" }]);
+  });
   const ventaOp = () => ({
     idempotencyKey: ventaKey,
     entityType: "venta",
@@ -135,6 +151,7 @@ describe("push venta inmutable + idempotencia", () => {
       cajaId,
       expectedTotal: "200",
       expectedAperturaId: aperturaId,
+      expectedLineas: lineasVenta,
       lineas: [{ varianteId, cantidad: "2" }],
       pagos: [{ metodo: "efectivo", monto: "232" }],
     },
@@ -222,7 +239,7 @@ describe("push venta inmutable + idempotencia", () => {
     expect(res.json().results[0]).toMatchObject({ status: "failed", entityIdRemoto: null });
   });
 
-  it.each(["expectedTotal", "expectedAperturaId", "cajaId"])(
+  it.each(["expectedTotal", "expectedAperturaId", "expectedLineas", "cajaId"])(
     "no aplica una venta sin %s ni inventa el dato al sincronizar",
     async (field) => {
       const op = { ...ventaOp(), idempotencyKey: randomUUID() };
@@ -237,6 +254,70 @@ describe("push venta inmutable + idempotencia", () => {
       );
     },
   );
+
+  it("rechaza dos cambios de precio que se compensan y dejan el mismo total", async () => {
+    const db = getTenantClient(TENANT_SLUG);
+    const otro = await app.inject({
+      method: "POST",
+      url: "/t/productos",
+      headers: auth(ownerToken),
+      payload: { skuPadre: "SYNC-002", nombre: "Producto Sync 2", precioBase: "100.00" },
+    });
+    expect(otro.statusCode, otro.body).toBe(201);
+    const varianteB = otro.json().variantes[0].id as string;
+    await app.inject({
+      method: "POST",
+      url: "/t/inventario/ajustes",
+      headers: auth(ownerToken),
+      payload: {
+        varianteId: varianteB,
+        sucursalId,
+        tipo: "ajuste_positivo",
+        cantidad: "50",
+        motivo: "Inicial",
+      },
+    });
+    const lineas = [
+      { varianteId, cantidad: "1" },
+      { varianteId: varianteB, cantidad: "1" },
+    ];
+    const cotizadas = await lineasCotizadas(lineas);
+    const total = cotizadas.reduce((acc, l) => acc + Number(l.totalLinea), 0).toFixed(2);
+    const before = await db.venta.count();
+    try {
+      // Uno sube 10 y el otro baja 10: el total no se mueve, el desglose sí.
+      await db.productoVariante.update({ where: { id: varianteId }, data: { precioBase: "110" } });
+      await db.productoVariante.update({ where: { id: varianteB }, data: { precioBase: "90" } });
+      const op = {
+        idempotencyKey: randomUUID(),
+        entityType: "venta",
+        entityIdLocal: "venta-compensada",
+        operation: "create",
+        payload: {
+          sucursalId,
+          cajaId,
+          expectedTotal: total,
+          expectedAperturaId: aperturaId,
+          expectedLineas: cotizadas,
+          lineas,
+          pagos: [{ metodo: "efectivo", monto: total }],
+        },
+      };
+      const res = await push(ownerToken, [op]);
+      expect(res.json().results[0]).toMatchObject({ status: "failed", entityIdRemoto: null });
+      expect(res.json().results[0].error).toContain("detalle de la venta cambió");
+      expect(await db.venta.count()).toBe(before);
+    } finally {
+      await db.productoVariante.update({
+        where: { id: varianteId },
+        data: { precioBase: "100.00" },
+      });
+      await db.productoVariante.update({
+        where: { id: varianteB },
+        data: { precioBase: "100.00" },
+      });
+    }
+  });
 
   it.each(["90", "110"])("no cambia el total cobrado si el precio pasa a %s", async (price) => {
     const db = getTenantClient(TENANT_SLUG);
@@ -459,6 +540,7 @@ describe("catálogo completo de escritorio", () => {
     expect(legacyBefore.body).not.toContain("passwordHash");
     expect(legacyBefore.body).not.toContain("NEVER_EXPORT_THIS_HASH");
     const prefix = randomUUID();
+    const productosPrevios = await db.producto.count();
     await db.producto.createMany({
       data: Array.from({ length: 501 }, (_, i) => ({
         skuPadre: `${prefix}-${i}`,
@@ -487,7 +569,7 @@ describe("catálogo completo de escritorio", () => {
       pages.push(page.json<CatalogPage>());
     }
     expect(pages.filter((p) => p.entityType === "producto").flatMap((p) => p.rows)).toHaveLength(
-      502,
+      productosPrevios + 501,
     );
     expect(
       pages.find((p) => p.entityType === "variante")?.rows.find((r) => r.id === varianteId)
