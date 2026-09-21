@@ -2,9 +2,7 @@ import { useAuth } from "@/lib/auth-store";
 import { fecha } from "@/lib/format";
 import { listNotificaciones, marcarLeida, marcarTodasLeidas } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { EmptyState, EntraParaVer, Loading } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
-import { Screen } from "@/ui/Screen";
+import { CommerceError, EmptyState, EntraParaVer, Loading, Screen } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -108,5 +106,5 @@ const s = StyleSheet.create({
   titulo: { flex: 1, fontWeight: "700", color: colors.ink, fontSize: 15 },
   dot: { width: 9, height: 9, borderRadius: 999, backgroundColor: colors.brand },
   cuerpo: { color: colors.text, fontSize: 14 },
-  fecha: { color: colors.faint, fontSize: 12, marginTop: 2 },
+  fecha: { color: colors.muted, fontSize: 12, marginTop: 2 },
 });

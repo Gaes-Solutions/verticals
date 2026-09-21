@@ -107,7 +107,7 @@ const s = StyleSheet.create({
   avatarT: { color: colors.white, fontSize: 34, fontWeight: "800" },
   nombre: { fontSize: 20, fontWeight: "800", color: colors.ink, marginTop: space.md },
   email: { fontSize: 14, color: colors.muted },
-  tienda: { fontSize: 13, color: colors.faint, marginTop: 4 },
+  tienda: { fontSize: 13, color: colors.muted, marginTop: 4 },
   link: { flexDirection: "row", alignItems: "center", gap: space.md, padding: space.lg },
   linkBorder: { borderBottomWidth: 1, borderBottomColor: colors.line },
   linkLabel: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: "600" },

@@ -110,6 +110,8 @@ export default function Login() {
             onChangeText={setPassword}
             placeholder="••••••••"
             secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={enviar}
           />
           <Button
             label={esRegistro ? "Crear cuenta" : "Entrar"}

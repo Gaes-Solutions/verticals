@@ -27,7 +27,7 @@ export function EntraParaVer({
           label="Seguir viendo la tienda"
           icon="storefront"
           variant="outline"
-          onPress={() => router.replace("/(app)/tienda")}
+          onPress={() => router.push("/(app)/tienda")}
         />
       </View>
     </View>

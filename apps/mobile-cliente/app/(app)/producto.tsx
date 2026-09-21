@@ -4,8 +4,7 @@ import { checkoutBlocksCart, useCheckout } from "@/lib/checkout-store";
 import { money } from "@/lib/format";
 import { type StoreProduct, getStoreProduct } from "@/services/comercio";
 import { colors, radius, space } from "@/theme";
-import { Button, EmptyState, Input, Loading } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
+import { Button, CommerceError, EmptyState, EntraParaVer, Input, Loading } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
@@ -27,7 +26,7 @@ export default function Producto() {
   return <ProductDetails key={product.data.id} product={product.data} />;
 }
 function ProductDetails({ product }: { product: StoreProduct }) {
-  const { tenantSlug, user } = useAuth();
+  const { status, tenantSlug, user } = useAuth();
   const checkout = useCheckout();
   const ready = useCart((state) => state.ready) && !checkoutBlocksCart(checkout);
   const [variant, setVariant] = useState(
@@ -36,6 +35,16 @@ function ProductDetails({ product }: { product: StoreProduct }) {
   const [quantity, setQuantity] = useState("1");
   const [error, setError] = useState("");
   const selected = product.variantes.find((item) => item.id === variant);
+  // Sin sesión no hay carrito que sincronizar: mejor invitar a entrar que
+  // dejar el botón de compra deshabilitado para siempre.
+  if (status !== "signedIn")
+    return (
+      <EntraParaVer
+        icono="cart"
+        titulo="Entra para comprar"
+        texto="Inicia sesión o crea tu cuenta para agregar artículos a tu carrito y hacer tu pedido."
+      />
+    );
   const add = () => {
     if (!tenantSlug || !user) return;
     const amount = validQuantity(quantity);
@@ -99,7 +108,9 @@ function ProductDetails({ product }: { product: StoreProduct }) {
         value={quantity}
         onChangeText={setQuantity}
       />
-      {product.stockPublico === 0 ? <Text style={s.note}>Sin existencias disponibles</Text> : null}
+      {product.stockPublico === 0 ? (
+        <Text style={s.soldOut}>Sin existencias disponibles</Text>
+      ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={s.error}>
           {error}
@@ -135,6 +146,7 @@ const s = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "800", color: colors.ink },
   price: { fontSize: 26, color: colors.brand, fontWeight: "800" },
   note: { color: colors.muted, fontSize: 14 },
+  soldOut: { color: colors.warn, fontSize: 14 },
   description: { color: colors.text, fontSize: 16 },
   label: { color: colors.ink, fontWeight: "700", fontSize: 16 },
   variant: {

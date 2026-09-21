@@ -1,3 +1,5 @@
+import { lightPalette } from "../../palette";
+
 export interface CardPaymentProps {
   provider: "stripe" | "conekta";
   publicKey: string;
@@ -12,7 +14,9 @@ export function cardHtml(
 ) {
   const config = JSON.stringify(props).replace(/</g, "\\u003c");
   const isStripe = props.provider === "stripe";
-  return `<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><style>body{font:16px system-ui;color:#1e293b;margin:12px}label{display:block;margin-bottom:12px}input,button{font:inherit;box-sizing:border-box;min-height:44px;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:8px}button{background:#0f766e;color:white}#error{color:#b91c1c}#card{min-height:200px}</style></head><body><form id="form">
+  // La paleta clara es la correcta aquí: el documento del WebView siempre se
+  // pinta sobre fondo blanco, con independencia del tema de la app.
+  return `<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><style>body{font:16px system-ui;color:${lightPalette.ink};margin:12px}label{display:block;margin-bottom:12px}input,button{font:inherit;box-sizing:border-box;min-height:44px;width:100%;padding:10px;border:1px solid ${lightPalette.faint};border-radius:8px}button{background:${lightPalette.brand};color:white}#error{color:${lightPalette.danger}}#card{min-height:200px}</style></head><body><form id="form">
 ${isStripe ? '<div id="card"></div>' : '<label>Nombre en la tarjeta<input id="name" autocomplete="cc-name" required maxlength="120"></label><label>Número de tarjeta<input id="number" inputmode="numeric" autocomplete="cc-number" required maxlength="23"></label><label>Mes (MM)<input id="month" inputmode="numeric" autocomplete="cc-exp-month" required maxlength="2"></label><label>Año (AAAA)<input id="year" inputmode="numeric" autocomplete="cc-exp-year" required maxlength="4"></label><label>Código de seguridad<input id="cvc" type="password" inputmode="numeric" autocomplete="cc-csc" required maxlength="4"></label>'}
 <p id="error" role="alert"></p><button id="submit" disabled>${isStripe ? "Pagar con tarjeta" : "Continuar con esta tarjeta"}</button></form><script>
 const config=${config};const button=document.getElementById('submit');const fail=()=>{document.getElementById('error').textContent='No se pudo confirmar la tarjeta. Revisa los datos o reintenta.';button.disabled=false;};

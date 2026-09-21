@@ -2,9 +2,7 @@ import { useAuth } from "@/lib/auth-store";
 import { money } from "@/lib/format";
 import { listWishlist, quitarWishlist } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { EmptyState, EntraParaVer, Icon, Loading } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
-import { Screen } from "@/ui/Screen";
+import { CommerceError, EmptyState, EntraParaVer, Icon, Loading, Screen } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 

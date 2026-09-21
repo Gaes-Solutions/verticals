@@ -1,6 +1,7 @@
+import { commerceError } from "@/lib/commerce-errors";
 import { actualizarPerfil, getPerfil } from "@/services/cliente";
 import { colors, space } from "@/theme";
-import { Button, Card, Input, Loading } from "@/ui";
+import { Button, Card, CommerceError, Input, Loading, Screen } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -29,12 +30,22 @@ export default function Perfil() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["perfil"] });
-      Alert.alert("Guardado ✓");
+      Alert.alert("Guardado");
     },
-    onError: (e) => Alert.alert("No se pudo guardar", e instanceof Error ? e.message : "Error"),
+    onError: (e) => Alert.alert("No se pudo guardar", commerceError(e)),
   });
 
   if (q.isLoading) return <Loading />;
+  if (q.isError)
+    return (
+      <Screen>
+        <CommerceError
+          error={q.error}
+          message="No pudimos cargar tu perfil. Revisa tu conexión y vuelve a intentar."
+          retry={() => void q.refetch()}
+        />
+      </Screen>
+    );
 
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={s.root}>
@@ -79,5 +90,5 @@ export default function Perfil() {
 
 const s = StyleSheet.create({
   root: { padding: space.lg },
-  email: { color: colors.faint, fontSize: 13, marginTop: space.md },
+  email: { color: colors.muted, fontSize: 13, marginTop: space.md },
 });

@@ -6,8 +6,7 @@ import { money } from "@/lib/format";
 import { deliveryOptions, paymentConfig } from "@/services/checkout";
 import { listDirecciones } from "@/services/cliente";
 import { colors, radius, space } from "@/theme";
-import { Button, EntraParaVer, Input } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
+import { Button, CommerceError, EmptyState, EntraParaVer, Input } from "@/ui";
 import { CardPayment } from "@/ui/payments/CardPayment";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -233,6 +232,20 @@ function CheckoutScreen({ owner, name }: { owner: string; name: string }) {
           </Text>
         </>
       ) : null}
+      {!sameCart ? (
+        <>
+          <EmptyState
+            icon="cart-outline"
+            title="Tu carrito está vacío o no se ha guardado"
+            subtitle="Revisa el estado del carrito y vuelve cuando tengas artículos listos para pagar."
+          />
+          <Button
+            label="Volver al carrito"
+            variant="outline"
+            onPress={() => router.push("/(app)/carrito")}
+          />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -283,7 +296,10 @@ function SavedAddresses({
           variant="outline"
           onPress={() =>
             form.setAddress({
-              nombre: name,
+              ...form.address,
+              // No pisar el nombre si el usuario ya lo editó; solo rellenar
+              // cuando quedó vacío para no bloquear el envío.
+              nombre: form.address.nombre.trim() ? form.address.nombre : name,
               calle: item.calle,
               numero: item.numeroExterior ?? "",
               colonia: item.colonia ?? "",
@@ -343,21 +359,16 @@ function AddressFields({
   full,
 }: { address: CheckoutAddress; change: (address: CheckoutAddress) => void; full: boolean }) {
   if (!full) return null;
-  const fields: { key: keyof CheckoutAddress; label: string }[] = full
-    ? [
-        { key: "nombre", label: "Nombre de quien recibe" },
-        { key: "calle", label: "Calle" },
-        { key: "numero", label: "Número" },
-        { key: "colonia", label: "Colonia" },
-        { key: "ciudad", label: "Ciudad / municipio" },
-        { key: "estado", label: "Estado" },
-        { key: "cp", label: "Código postal" },
-        { key: "telefono", label: "Teléfono (opcional)" },
-      ]
-    : [
-        { key: "estado", label: "Estado" },
-        { key: "cp", label: "Código postal" },
-      ];
+  const fields: { key: keyof CheckoutAddress; label: string }[] = [
+    { key: "nombre", label: "Nombre de quien recibe" },
+    { key: "calle", label: "Calle" },
+    { key: "numero", label: "Número" },
+    { key: "colonia", label: "Colonia" },
+    { key: "ciudad", label: "Ciudad / municipio" },
+    { key: "estado", label: "Estado" },
+    { key: "cp", label: "Código postal" },
+    { key: "telefono", label: "Teléfono (opcional)" },
+  ];
   return (
     <View style={s.card}>
       {fields.map((field) => (

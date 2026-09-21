@@ -7,7 +7,7 @@ const config: ExpoConfig = {
   owner: "gaes-soft",
   version: "0.1.0",
   orientation: "portrait",
-  userInterfaceStyle: "automatic",
+  userInterfaceStyle: "light",
   newArchEnabled: true,
   icon: "./assets/icon.png",
   ios: {
@@ -18,7 +18,7 @@ const config: ExpoConfig = {
     package: "com.gaessoft.cliente",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#4f46e5",
+      backgroundColor: "#0f766e",
     },
   },
   plugins: [
@@ -31,7 +31,7 @@ const config: ExpoConfig = {
         image: "./assets/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#4f46e5",
+        backgroundColor: "#0f766e",
       },
     ],
     [

@@ -6,9 +6,7 @@ import {
   listDirecciones,
 } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { Badge, Button, EmptyState, Icon, Input, Loading } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
-import { Screen } from "@/ui/Screen";
+import { Badge, Button, CommerceError, EmptyState, Icon, Input, Loading, Screen } from "@/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -143,7 +141,7 @@ function NuevaModal({
       <View style={s.modalRoot}>
         <View style={s.modalHead}>
           <Text style={s.modalTitle}>Nueva dirección</Text>
-          <Pressable onPress={onClose}>
+          <Pressable hitSlop={12} onPress={onClose}>
             <Icon name="close" size={26} color={colors.muted} />
           </Pressable>
         </View>

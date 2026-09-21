@@ -1,81 +1,17 @@
-import { Appearance } from "react-native";
+import { lightPalette } from "./palette";
+
+export type { Palette } from "./palette";
 
 /**
- * Tokens de marca GaesSoft para móvil. Acento app Cliente = índigo.
- * Soporta modo claro/oscuro según el sistema (se resuelve al arrancar la app).
- * Tokens por ROL (brandLight = fondo sutil, brandDark = texto/énfasis).
+ * Tokens de marca GaesSoft para móvil. Acento app Cliente = teal B2C (#0f766e).
+ * El tema se fija en CLARO de forma explícita: los estilos de cada pantalla se
+ * resuelven con StyleSheet.create al importar el módulo, así que un cambio de
+ * esquema del sistema en caliente no se reflejaría sin un refactor a hook de
+ * tema (useTheme + contexto que re-renderice). La paleta oscura queda guardada
+ * en palette.ts para ese refactor; no leer Appearance aquí.
  */
-type Palette = {
-  brand: string;
-  brandDark: string;
-  brandLight: string;
-  ok: string;
-  okLight: string;
-  danger: string;
-  dangerLight: string;
-  warn: string;
-  warnLight: string;
-  info: string;
-  infoLight: string;
-  ink: string;
-  text: string;
-  muted: string;
-  faint: string;
-  line: string;
-  bg: string;
-  card: string;
-  white: string;
-  onBrandMuted: string;
-};
-
-const light: Palette = {
-  brand: "#4f46e5",
-  brandDark: "#4338ca",
-  brandLight: "#e0e7ff",
-  ok: "#059669",
-  okLight: "#d1fae5",
-  danger: "#dc2626",
-  dangerLight: "#fee2e2",
-  warn: "#d97706",
-  warnLight: "#fef3c7",
-  info: "#2563eb",
-  infoLight: "#dbeafe",
-  ink: "#0f172a",
-  text: "#334155",
-  muted: "#64748b",
-  faint: "#94a3b8",
-  line: "#e2e8f0",
-  bg: "#eef2ff",
-  card: "#ffffff",
-  white: "#ffffff",
-  onBrandMuted: "rgba(255,255,255,0.75)",
-};
-
-const dark: Palette = {
-  brand: "#818cf8",
-  brandDark: "#c7d2fe",
-  brandLight: "#312e81",
-  ok: "#34d399",
-  okLight: "#064e3b",
-  danger: "#f87171",
-  dangerLight: "#7f1d1d",
-  warn: "#fbbf24",
-  warnLight: "#78350f",
-  info: "#60a5fa",
-  infoLight: "#1e3a8a",
-  ink: "#f8fafc",
-  text: "#cbd5e1",
-  muted: "#94a3b8",
-  faint: "#64748b",
-  line: "#334155",
-  bg: "#0b1120",
-  card: "#1e293b",
-  white: "#ffffff",
-  onBrandMuted: "rgba(255,255,255,0.75)",
-};
-
-export const isDark = Appearance.getColorScheme() === "dark";
-export const colors: Palette = isDark ? dark : light;
+export const isDark = false;
+export const colors = lightPalette;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
 export const radius = { sm: 8, md: 12, lg: 16, xl: 20, pill: 999 } as const;

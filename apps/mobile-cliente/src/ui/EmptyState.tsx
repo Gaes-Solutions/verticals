@@ -34,5 +34,5 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
   title: { fontSize: 16, fontWeight: "700", color: colors.text },
-  sub: { fontSize: 14, color: colors.faint, textAlign: "center", paddingHorizontal: 32 },
+  sub: { fontSize: 14, color: colors.muted, textAlign: "center", paddingHorizontal: 32 },
 });

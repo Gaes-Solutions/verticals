@@ -2,9 +2,7 @@ import { useAuth } from "@/lib/auth-store";
 import { fecha, money } from "@/lib/format";
 import { getPedidoDetalle, listPedidos } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { Badge, EmptyState, EntraParaVer, Icon, Loading } from "@/ui";
-import { CommerceError } from "@/ui/CommerceError";
-import { Screen } from "@/ui/Screen";
+import { Badge, CommerceError, EmptyState, EntraParaVer, Icon, Loading, Screen } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -88,7 +86,7 @@ function DetalleModal({ folio, onClose }: { folio: string | null; onClose: () =>
       <View style={s.modalRoot}>
         <View style={s.modalHead}>
           <Text style={s.modalTitle}>{p ? `Pedido #${p.folioPublico}` : "Pedido"}</Text>
-          <Pressable onPress={onClose}>
+          <Pressable hitSlop={12} onPress={onClose}>
             <Icon name="close" size={26} color={colors.muted} />
           </Pressable>
         </View>
@@ -230,9 +228,9 @@ const s = StyleSheet.create({
   dotOn: { backgroundColor: colors.brand },
   line: { flex: 1, width: 2, backgroundColor: colors.line, marginVertical: 2 },
   lineOn: { backgroundColor: colors.brand },
-  hitoText: { color: colors.faint, fontSize: 14, fontWeight: "600" },
+  hitoText: { color: colors.muted, fontSize: 14, fontWeight: "600" },
   hitoDone: { color: colors.ink },
-  hitoFecha: { color: colors.faint, fontSize: 12, marginTop: 2 },
+  hitoFecha: { color: colors.muted, fontSize: 12, marginTop: 2 },
   guia: {
     flexDirection: "row",
     alignItems: "center",
