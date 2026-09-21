@@ -18,6 +18,17 @@ export class ApiError extends Error {
 
 let accessToken: string | null = null;
 
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/**
+ * Registra qué hace la app cuando una llamada autenticada responde 401:
+ * limpiar la sesión y volver al login por estado (sin recargar la página).
+ */
+export function onUnauthorized(handler: UnauthorizedHandler): void {
+  unauthorizedHandler = handler;
+}
+
 export function setToken(token: string | null): void {
   accessToken = token;
   if (token) localStorage.setItem("gaespos_b2b_token", token);
@@ -51,7 +62,7 @@ export async function api<T = unknown>(
     // token expirado/inválido en llamada autenticada → cerrar sesión y volver al login.
     if (res.status === 401 && opts.auth !== false && loadToken()) {
       setToken(null);
-      window.location.reload();
+      unauthorizedHandler?.();
     }
     const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
     throw new ApiError(res.status, message);

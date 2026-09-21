@@ -47,6 +47,7 @@ export function Login({
         nombre: res.usuario.nombre,
         rol: res.usuario.rol,
         empresa: res.empresa.razonSocial,
+        permissions: res.usuario.permissions ?? null,
       });
     } catch (err) {
       setToken(null);
@@ -76,43 +77,39 @@ export function Login({
           )
         ) : (
           <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-medium text-slate-700">Negocio (slug)</span>
+            <span className="gx-label">Negocio (slug)</span>
             <input
               value={tenantSlug}
               onChange={(e) => setTenantSlug(e.target.value)}
               autoCapitalize="none"
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input"
             />
           </label>
         )}
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Correo</span>
+          <span className="gx-label">Correo</span>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
         </label>
         <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Contraseña</span>
+          <span className="gx-label">Contraseña</span>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+            className="gx-input"
           />
         </label>
 
-        {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
-        >
+        {error && <p className="mb-3 rounded bg-danger-light p-2 text-sm text-danger">{error}</p>}
+        <button type="submit" disabled={loading} className="gx-btn-primary w-full">
           {loading ? "Entrando…" : "Entrar"}
         </button>
       </form>

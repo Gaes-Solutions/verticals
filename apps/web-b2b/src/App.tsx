@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
-import { loadToken, setToken } from "./lib/api.js";
+import { loadToken, onUnauthorized, setToken } from "./lib/api.js";
 import { leer, onCambio } from "./lib/carrito.js";
 import { type Marca, resolverMarca } from "./lib/marca.js";
+import { puede } from "./lib/permisos.js";
 import { CarritoPage } from "./pages/CarritoPage.js";
 import { CatalogoPage } from "./pages/CatalogoPage.js";
 import { CotizacionesPage } from "./pages/CotizacionesPage.js";
@@ -14,9 +15,13 @@ export interface B2bSession {
   nombre: string;
   rol: "admin" | "comprador";
   empresa: string;
+  /** Permisos del login ("*" = dueño). null si la sesión restaurada no los trae. */
+  permissions: string[] | null;
 }
 
 type Seccion = "dashboard" | "catalogo" | "carrito" | "pedidos" | "cotizaciones" | "cuenta";
+
+const SESSION_KEY = "gaespos_b2b_session";
 
 const NAV: { key: Seccion; label: string; icon: string }[] = [
   { key: "dashboard", label: "Inicio", icon: "🏠" },
@@ -40,12 +45,36 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    document.title = marca?.nombre ?? "Portal Mayorista";
+  }, [marca]);
+
+  useEffect(() => {
     if (!loadToken()) {
       setRestoring(false);
       return;
     }
-    setSession({ nombre: "Cliente", rol: "comprador", empresa: "" });
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        setSession(JSON.parse(raw) as B2bSession);
+      } else {
+        // Token de una sesión vieja (sin snapshot): no inventar permisos.
+        setSession({ nombre: "Cliente", rol: "comprador", empresa: "", permissions: null });
+      }
+    } catch {
+      setSession({ nombre: "Cliente", rol: "comprador", empresa: "", permissions: null });
+    }
     setRestoring(false);
+  }, []);
+
+  useEffect(() => {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+  }, [session]);
+
+  useEffect(() => {
+    // 401 en cualquier llamada → limpiar sesión y volver al login por estado.
+    onUnauthorized(() => setSession(null));
   }, []);
 
   useEffect(() => {
@@ -60,7 +89,7 @@ export function App() {
   }
 
   if (restoring || marca === undefined) {
-    return <div className="flex h-full items-center justify-center text-slate-400">Cargando…</div>;
+    return <div className="flex h-full items-center justify-center text-slate-500">Cargando…</div>;
   }
   if (!session) return <Login onLogin={setSession} marca={marca} />;
 
@@ -71,6 +100,8 @@ export function App() {
     setMenuOpen(false);
   }
 
+  const puedeHacer = (permiso: string): boolean => puede(session.permissions, permiso);
+
   return (
     <div className="flex h-full flex-col md:flex-row">
       <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-slate-100 md:hidden">
@@ -79,7 +110,7 @@ export function App() {
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label="Menú"
-          className="relative rounded p-2 hover:bg-slate-800"
+          className="relative rounded-lg p-2 hover:bg-slate-800"
         >
           ☰
           {carritoCount > 0 && (
@@ -130,7 +161,7 @@ export function App() {
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded bg-slate-800 px-3 py-1 text-slate-200 hover:bg-slate-700"
+            className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
           >
             Salir
           </button>
@@ -140,9 +171,11 @@ export function App() {
       <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
         {seccion === "dashboard" && <DashboardPage irA={navegar} />}
         {seccion === "catalogo" && <CatalogoPage onAgregado={() => setSeccion("catalogo")} />}
-        {seccion === "carrito" && <CarritoPage onPedidoCreado={() => undefined} />}
+        {seccion === "carrito" && (
+          <CarritoPage onVerPedidos={() => navegar("pedidos")} puedeHacer={puedeHacer} />
+        )}
         {seccion === "pedidos" && <PedidosPage />}
-        {seccion === "cotizaciones" && <CotizacionesPage />}
+        {seccion === "cotizaciones" && <CotizacionesPage puedeHacer={puedeHacer} />}
         {seccion === "cuenta" && <EstadoCuentaPage />}
       </main>
     </div>

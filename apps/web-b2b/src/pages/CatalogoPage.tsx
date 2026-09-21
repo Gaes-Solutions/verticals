@@ -1,26 +1,54 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { EstadoError } from "../components/Estados.js";
+import { Skeleton } from "../components/Skeleton.js";
 import { api } from "../lib/api.js";
 import { agregar } from "../lib/carrito.js";
 import type { CatalogoResp, ProductoCatalogo } from "../lib/types.js";
 
 export function CatalogoPage({ onAgregado }: { onAgregado: () => void }) {
   const [items, setItems] = useState<ProductoCatalogo[]>([]);
+  const [page, setPage] = useState(1);
+  const [hayMas, setHayMas] = useState(false);
   const [q, setQ] = useState("");
   const [conLista, setConLista] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-
-  const cargar = useCallback(() => {
-    api<CatalogoResp>(`/b2b-portal/catalogo?q=${encodeURIComponent(q)}`)
-      .then((r) => {
-        setItems(r.items);
-        setConLista(r.listaPrecioCodigo !== null);
-      })
-      .catch(() => setItems([]));
-  }, [q]);
+  const avisoTimeout = useRef<number | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(cargar, 300);
-    return () => clearTimeout(t);
+    return () => {
+      if (avisoTimeout.current !== null) window.clearTimeout(avisoTimeout.current);
+    };
+  }, []);
+
+  const cargar = useCallback(
+    (nuevaPage: number, acumular: boolean) => {
+      if (acumular) setCargandoMas(true);
+      else setLoading(true);
+      setError(null);
+      api<CatalogoResp>(
+        `/b2b-portal/catalogo?q=${encodeURIComponent(q)}&page=${nuevaPage}`,
+      )
+        .then((r) => {
+          setItems((prev) => (acumular ? [...prev, ...r.items] : r.items));
+          setPage(r.page);
+          setHayMas(r.page * r.pageSize < r.total);
+          setConLista(r.listaPrecioCodigo !== null);
+        })
+        .catch(() => setError("No se pudo cargar el catálogo."))
+        .finally(() => {
+          setLoading(false);
+          setCargandoMas(false);
+        });
+    },
+    [q],
+  );
+
+  useEffect(() => {
+    const t = window.setTimeout(() => cargar(1, false), 300);
+    return () => window.clearTimeout(t);
   }, [cargar]);
 
   function agregarVariante(p: ProductoCatalogo, varianteId: string) {
@@ -35,7 +63,8 @@ export function CatalogoPage({ onAgregado }: { onAgregado: () => void }) {
     });
     setAviso(`Agregado: ${p.nombre}`);
     onAgregado();
-    setTimeout(() => setAviso(null), 1500);
+    if (avisoTimeout.current !== null) window.clearTimeout(avisoTimeout.current);
+    avisoTimeout.current = window.setTimeout(() => setAviso(null), 1500);
   }
 
   return (
@@ -49,58 +78,78 @@ export function CatalogoPage({ onAgregado }: { onAgregado: () => void }) {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Buscar producto o SKU…"
-        className="mb-4 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2"
+        aria-label="Buscar producto o SKU"
+        className="gx-input mb-4 max-w-md"
       />
 
-      {aviso && (
-        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{aviso}</p>
-      )}
+      {aviso && <p className="mb-3 rounded-lg bg-ok-light px-3 py-2 text-sm text-ok">{aviso}</p>}
 
-      <div className="space-y-3">
-        {items.map((p) => (
-          <div key={p.productoId} className="rounded-xl bg-white p-4 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-800">{p.nombre}</p>
-                <p className="text-xs text-slate-400">
-                  {p.skuPadre}
-                  {p.categoria ? ` · ${p.categoria}` : ""}
-                </p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              {p.variantes.map((v) => (
-                <div
-                  key={v.varianteId}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm"
-                >
-                  <span>{v.nombreVariante ?? v.sku}</span>
-                  <span className="flex items-center gap-3">
-                    <span className="font-semibold text-brand">${Number(v.precio).toFixed(2)}</span>
-                    {v.precioLista && (
-                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-brand">
-                        tu precio
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => agregarVariante(p, v.varianteId)}
-                      className="rounded-lg border border-brand px-3 py-1 text-xs font-semibold text-brand hover:bg-blue-50"
-                    >
-                      Agregar
-                    </button>
-                  </span>
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      ) : error && items.length === 0 ? (
+        <EstadoError mensaje={error} onRetry={() => cargar(1, false)} />
+      ) : (
+        <>
+          <div className="space-y-3">
+            {items.map((p) => (
+              <div key={p.productoId} className="gx-card">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-slate-800">{p.nombre}</p>
+                    <p className="text-xs text-slate-500">
+                      {p.skuPadre}
+                      {p.categoria ? ` · ${p.categoria}` : ""}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-1">
+                  {p.variantes.map((v) => (
+                    <div
+                      key={v.varianteId}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                    >
+                      <span>{v.nombreVariante ?? v.sku}</span>
+                      <span className="flex items-center gap-3">
+                        <span className="font-semibold text-brand">
+                          ${Number(v.precio).toFixed(2)}
+                        </span>
+                        {v.precioLista && <span className="gx-badge-info">tu precio</span>}
+                        <button
+                          type="button"
+                          onClick={() => agregarVariante(p, v.varianteId)}
+                          className="gx-btn-secondary"
+                        >
+                          Agregar
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <p className="gx-card text-center text-sm text-slate-500">Sin productos.</p>
+            )}
           </div>
-        ))}
-        {items.length === 0 && (
-          <p className="rounded-xl bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
-            Sin productos.
-          </p>
-        )}
-      </div>
+
+          {hayMas && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => cargar(page + 1, true)}
+                disabled={cargandoMas}
+                className="gx-btn-secondary"
+              >
+                {cargandoMas ? "Cargando…" : "Cargar más"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

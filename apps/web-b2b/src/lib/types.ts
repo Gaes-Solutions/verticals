@@ -1,6 +1,13 @@
 export interface LoginResponse {
   accessToken: string;
-  usuario: { id: string; nombre: string; email: string; rol: "admin" | "comprador" };
+  usuario: {
+    id: string;
+    nombre: string;
+    email: string;
+    rol: "admin" | "comprador";
+    /** Permisos de la cuenta ("*" = dueño). Puede no venir en logins antiguos. */
+    permissions?: string[];
+  };
   empresa: { razonSocial: string };
 }
 

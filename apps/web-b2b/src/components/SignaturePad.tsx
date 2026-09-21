@@ -1,4 +1,8 @@
 import { useRef, useState } from "react";
+import { Modal } from "./Modal.js";
+
+// slate-900: Tailwind no expone tokens de color a JS, se fija el hex del token.
+const TINTA_TRAZO = "#0f172a";
 
 /**
  * Captura de firma manuscrita en canvas (mouse/touch vía Pointer Events).
@@ -47,7 +51,7 @@ export function SignaturePad({
     ctx.lineTo(x, y);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#0f172a";
+    ctx.strokeStyle = TINTA_TRAZO;
     ctx.stroke();
     setTieneTrazo(true);
   }
@@ -70,51 +74,41 @@ export function SignaturePad({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="mb-1 text-lg font-bold text-slate-800">Firma de aceptación</h2>
-        <p className="mb-3 text-sm text-slate-500">{titulo}</p>
-        <div className="rounded-lg border border-slate-300">
-          <canvas
-            ref={canvasRef}
-            width={440}
-            height={180}
-            onPointerDown={inicio}
-            onPointerMove={mover}
-            onPointerUp={fin}
-            onPointerLeave={fin}
-            className="h-[180px] w-full touch-none rounded-lg bg-slate-50"
-          />
-        </div>
-        <div className="mt-2 flex justify-between">
-          <button
-            type="button"
-            onClick={limpiar}
-            className="text-sm text-slate-500 hover:text-brand"
-          >
-            Limpiar
-          </button>
-          <span className="text-xs text-slate-400">Firma con el dedo o el mouse</span>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={procesando}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700 disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={confirmar}
-            disabled={!tieneTrazo || procesando}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {procesando ? "Aceptando…" : "Firmar y aceptar"}
-          </button>
-        </div>
+    <Modal onClose={onCancel}>
+      <h2 className="mb-1 text-lg font-bold text-slate-800">Firma de aceptación</h2>
+      <p className="mb-3 text-sm text-slate-500">{titulo}</p>
+      <div className="rounded-lg border border-slate-300">
+        <canvas
+          ref={canvasRef}
+          width={440}
+          height={180}
+          onPointerDown={inicio}
+          onPointerMove={mover}
+          onPointerUp={fin}
+          onPointerLeave={fin}
+          aria-label="Área de firma"
+          className="h-[180px] w-full touch-none rounded-lg bg-slate-50"
+        />
       </div>
-    </div>
+      <div className="mt-2 flex items-center justify-between">
+        <button type="button" onClick={limpiar} className="gx-btn-ghost">
+          Limpiar
+        </button>
+        <span className="text-xs text-slate-500">Firma con el dedo o el mouse</span>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <button type="button" onClick={onCancel} disabled={procesando} className="gx-btn-ghost flex-1">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={confirmar}
+          disabled={!tieneTrazo || procesando}
+          className="gx-btn-primary flex-1"
+        >
+          {procesando ? "Aceptando…" : "Firmar y aceptar"}
+        </button>
+      </div>
+    </Modal>
   );
 }
