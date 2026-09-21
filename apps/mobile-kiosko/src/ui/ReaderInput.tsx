@@ -34,7 +34,10 @@ export function ReaderInput({
         accessibilityLabel="Código de barras o SKU"
         autoFocus
         value={value}
-        onChangeText={setValue}
+        onChangeText={(text) => {
+          setValue(text);
+          setInvalid(false);
+        }}
         onSubmitEditing={(event) => void submit(event.nativeEvent.text)}
         showSoftInputOnFocus={manual}
         blurOnSubmit={false}
@@ -46,7 +49,7 @@ export function ReaderInput({
       />
       {invalid ? (
         <Text accessibilityRole="alert" style={{ color: colors.danger }}>
-          Introduce un código válido de hasta80 caracteres.
+          Introduce un código válido de hasta 80 caracteres.
         </Text>
       ) : null}
       <View style={styles.actions}>

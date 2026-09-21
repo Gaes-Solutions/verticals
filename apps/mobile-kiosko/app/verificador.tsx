@@ -1,9 +1,15 @@
 import { accentForeground, priceColor } from "@/lib/color-contrast";
 import { money } from "@/lib/format";
 import { kioskFailure } from "@/lib/recovery";
-import { type PrecioKiosko, getIdle, getKioskoConfig, getPrecio } from "@/services/kiosko";
-import { colors, radius, space } from "@/theme";
-import { Button, Icon } from "@/ui";
+import {
+  type KioskoConfig,
+  type PrecioKiosko,
+  getIdle,
+  getKioskoConfig,
+  getPrecio,
+} from "@/services/kiosko";
+import { colors, isDark, radius, space } from "@/theme";
+import { Button, EmptyState, Icon, Loading, Screen } from "@/ui";
 import { ReaderInput } from "@/ui/ReaderInput";
 import { useQuery } from "@tanstack/react-query";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -41,7 +47,9 @@ export default function Verificador() {
   const [modo, setModo] = useState<Modo>("espera");
   const [precio, setPrecio] = useState<PrecioKiosko | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const lastScan = useRef<{ codigo: string; at: number }>({ codigo: "", at: 0 });
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const timers = useRef<{
     reposo?: ReturnType<typeof setTimeout>;
     precio?: ReturnType<typeof setTimeout>;
@@ -53,10 +61,18 @@ export default function Verificador() {
     precioSegundos = 8,
     slideSegundos = 6,
     mostrarExistencia = false,
+    contenidoReposo: contenido = "ambos",
     mensajeBienvenida = "Escanea tu producto",
   } = cfg.data ?? {};
   const reposoMs = reposoSegundos * 1000;
   const precioMs = precioSegundos * 1000;
+
+  // Brief on-screen feedback so a scan while busy or offline is never silent.
+  const flashNotice = useCallback((message: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(message);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2500);
+  }, []);
 
   const askCamera = async () => {
     try {
@@ -79,6 +95,7 @@ export default function Verificador() {
     () => () => {
       if (timers.current.precio) clearTimeout(timers.current.precio);
       if (timers.current.reposo) clearTimeout(timers.current.reposo);
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
     },
     [],
   );
@@ -99,8 +116,19 @@ export default function Verificador() {
   const onBarcode = useCallback(
     async (codigo: string) => {
       const now = Date.now();
-      if (inFlight.current || failure || !cfg.data || cfg.isError) return;
+      if (inFlight.current) {
+        flashNotice("Buscando el producto…");
+        return;
+      }
       if (codigo === lastScan.current.codigo && now - lastScan.current.at < 2500) return;
+      if (failure || cfg.isError) {
+        flashNotice("Servicio no disponible, reintenta en un momento");
+        return;
+      }
+      if (!cfg.data) {
+        flashNotice("Conectando con el servicio…");
+        return;
+      }
       lastScan.current = { codigo, at: now };
       inFlight.current = true;
       setBuscando(true);
@@ -124,14 +152,14 @@ export default function Verificador() {
         setModo("espera");
       }, precioMs);
     },
-    [failure, cfg.data, cfg.isError, precioMs],
+    [failure, cfg.data, cfg.isError, precioMs, flashNotice],
   );
 
   if (cfg.isLoading || (!readerMode && !permission)) {
     return (
-      <Centro>
-        <ActivityIndicator size="large" color={colors.brand} />
-      </Centro>
+      <Screen style={s.centro}>
+        <Loading />
+      </Screen>
     );
   }
   const currentFailure = cfg.isError ? kioskFailure(cfg.error) : failure;
@@ -166,17 +194,15 @@ export default function Verificador() {
             ? "No se pudo abrir la cámara. Revisa los permisos y reinicia la aplicación."
             : "Permiso de cámara requerido"}
         </Text>
-        <Pressable
-          style={[s.permBtn, { backgroundColor: acento }]}
+        <Button
+          label={permission?.canAskAgain ? "Permitir cámara" : "Abrir ajustes"}
+          style={{ backgroundColor: acento, marginTop: space.lg }}
+          labelColor={accentForeground(acento)}
           onPress={() => {
             setCameraError(false);
             void askCamera();
           }}
-        >
-          <Text style={[s.permBtnText, { color: accentForeground(acento) }]}>
-            {permission?.canAskAgain ? "Permitir cámara" : "Abrir ajustes"}
-          </Text>
-        </Pressable>
+        />
         <Button
           label="Usar lector o escribir código"
           variant="outline"
@@ -206,6 +232,7 @@ export default function Verificador() {
           <Reposo
             acento={acento}
             slideMs={slideSegundos * 1000}
+            contenido={contenido}
             onSalir={() => setModo("espera")}
           />
         ) : modo === "precio" && precio ? (
@@ -234,6 +261,14 @@ export default function Verificador() {
           delayLongPress={1500}
           onLongPress={configure}
         />
+
+        {notice && !readerMode ? (
+          <View style={s.noticeWrap} pointerEvents="none">
+            <View style={s.noticePill}>
+              <Text style={s.noticeText}>{notice}</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
       {readerMode ? <ReaderInput onScan={onBarcode} busy={buscando} /> : null}
       <View style={{ backgroundColor: colors.card }}>
@@ -254,7 +289,7 @@ function Espera({
   readerMode,
 }: { mensaje: string; acento: string; buscando: boolean; readerMode: boolean }) {
   return (
-    <View style={[s.overlay, { backgroundColor: "rgba(15,23,42,0.55)" }]}>
+    <View style={[s.overlay, { backgroundColor: colors.scrim }]}>
       <View style={[s.marco, { borderColor: acento }]}>
         {buscando ? (
           <ActivityIndicator size="large" color={colors.white} />
@@ -282,7 +317,12 @@ function Precio({
   const compact = width < 600;
   if (!precio.encontrado) {
     return (
-      <Pressable onPress={onEscanea} style={[s.overlay, { backgroundColor: colors.card }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Escanear otro producto"
+        onPress={onEscanea}
+        style={[s.overlay, { backgroundColor: colors.card }]}
+      >
         <Icon name="alert-circle" size={72} color={colors.warn} />
         <Text style={s.noEnc}>Producto no encontrado</Text>
         <Text style={s.esperaSub2}>Intenta con otro producto o toca para escanear</Text>
@@ -290,7 +330,7 @@ function Precio({
     );
   }
   return (
-    <Pressable style={[s.overlay, s.precioBg]} onPress={onEscanea}>
+    <View style={[s.overlay, s.precioBg]}>
       <ScrollView
         style={{ width: "100%" }}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}
@@ -350,17 +390,30 @@ function Precio({
             ) : null}
           </View>
         </View>
-        <Text style={s.tocaEscanea}>Escanea otro producto</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Escanea otro producto"
+          onPress={onEscanea}
+          hitSlop={12}
+        >
+          <Text style={s.tocaEscanea}>Escanea otro producto</Text>
+        </Pressable>
       </ScrollView>
-    </Pressable>
+    </View>
   );
 }
 
 function Reposo({
   acento,
   slideMs,
+  contenido,
   onSalir,
-}: { acento: string; slideMs: number; onSalir: () => void }) {
+}: {
+  acento: string;
+  slideMs: number;
+  contenido: KioskoConfig["contenidoReposo"];
+  onSalir: () => void;
+}) {
   const idle = useQuery({
     queryKey: ["kiosko-idle"],
     queryFn: getIdle,
@@ -369,7 +422,8 @@ function Reposo({
     refetchIntervalInBackground: true,
   });
   // Never keep showing an obsolete promotion after a refresh fails.
-  const slides = idle.isError ? [] : (idle.data?.slides ?? []);
+  const all = idle.isError ? [] : (idle.data?.slides ?? []);
+  const slides = contenido === "ambos" ? all : all.filter((slide) => slide.tipo === contenido);
   const [i, setI] = useState(0);
   const slide = slides[i % Math.max(slides.length, 1)];
   const next = () => setI((x) => x + 1);
@@ -383,7 +437,12 @@ function Reposo({
     return () => clearTimeout(t);
   }, [slides.length, slideMs, slide, i]);
   return (
-    <Pressable style={[s.overlay, s.reposoBg]} onPress={onSalir}>
+    <Pressable
+      style={[s.overlay, s.reposoBg]}
+      accessibilityRole="button"
+      accessibilityLabel="Toca o escanea para verificar un precio"
+      onPress={onSalir}
+    >
       <ScrollView
         style={{ width: "100%" }}
         contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}
@@ -416,9 +475,12 @@ function Reposo({
             {slide.texto ? <Text style={s.reposoTexto}>{slide.texto}</Text> : null}
           </>
         ) : (
-          <View style={[s.reposoIcon, { backgroundColor: acento }]}>
-            <Icon name="storefront" size={72} color={colors.white} />
-          </View>
+          <EmptyState
+            tone="onDark"
+            icon="storefront"
+            title="Verificador de precios"
+            subtitle="Escanea el código de barras de un producto para ver su precio"
+          />
         )}
         <Text style={s.reposoHint}>Toca o escanea para verificar un precio</Text>
       </ScrollView>
@@ -427,6 +489,7 @@ function Reposo({
 }
 
 function IdleVideo({ url, onNext }: { url: string; onNext: () => void }) {
+  const { height } = useWindowDimensions();
   const player = useVideoPlayer(url, (p) => {
     p.muted = true;
     p.loop = false;
@@ -449,7 +512,7 @@ function IdleVideo({ url, onNext }: { url: string; onNext: () => void }) {
   return (
     <VideoView
       player={player}
-      style={{ width: "100%", height: 420 }}
+      style={{ width: "100%", height: Math.min(height * 0.5, 420) }}
       contentFit="contain"
       nativeControls={false}
       allowsPictureInPicture={false}
@@ -458,25 +521,13 @@ function IdleVideo({ url, onNext }: { url: string; onNext: () => void }) {
 }
 
 function Centro({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={[
-        s.root,
-        {
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.bg,
-          padding: space.lg,
-        },
-      ]}
-    >
-      {children}
-    </View>
-  );
+  return <Screen style={s.centro}>{children}</Screen>;
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000" },
+  // Fondo tras la cámara y superficies "siempre oscuras": en dark no puede ser colors.ink.
+  root: { flex: 1, backgroundColor: isDark ? colors.bg : colors.ink },
+  centro: { alignItems: "center", justifyContent: "center", padding: space.lg },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -492,11 +543,11 @@ const s = StyleSheet.create({
     justifyContent: "center",
     marginBottom: space.lg,
   },
-  esperaMsg: { fontSize: 34, fontWeight: "800", color: colors.white, textAlign: "center" },
+  esperaMsg: { fontSize: 34, fontWeight: "800", color: colors.onDark, textAlign: "center" },
   esperaSub: {
     textAlign: "center",
     fontSize: 18,
-    color: "rgba(255,255,255,0.8)",
+    color: colors.onDarkMuted,
     marginTop: space.sm,
   },
   esperaSub2: { textAlign: "center", fontSize: 18, color: colors.muted, marginTop: space.sm },
@@ -518,7 +569,7 @@ const s = StyleSheet.create({
     textDecorationLine: "line-through",
     marginTop: space.md,
   },
-  precioBig: { fontSize: 84, fontWeight: "900", marginTop: 4 },
+  precioBig: { fontWeight: "900", marginTop: 4 },
   promoTag: {
     alignSelf: "flex-start",
     paddingHorizontal: 14,
@@ -536,7 +587,7 @@ const s = StyleSheet.create({
     color: colors.ink,
     marginTop: space.md,
   },
-  reposoBg: { backgroundColor: colors.ink },
+  reposoBg: { backgroundColor: isDark ? colors.bg : colors.ink },
   reposoImg: { width: "100%", maxWidth: 700, height: 200, borderRadius: radius.xl },
   reposoIcon: {
     width: 140,
@@ -548,13 +599,13 @@ const s = StyleSheet.create({
   reposoTitulo: {
     fontSize: 28,
     fontWeight: "800",
-    color: colors.white,
+    color: colors.onDark,
     textAlign: "center",
     marginTop: space.xl,
   },
   reposoTexto: {
     fontSize: 22,
-    color: "rgba(255,255,255,0.85)",
+    color: colors.onDarkMuted,
     textAlign: "center",
     marginTop: space.sm,
   },
@@ -562,7 +613,7 @@ const s = StyleSheet.create({
     marginTop: space.xl,
     textAlign: "center",
     fontSize: 16,
-    color: "rgba(255,255,255,0.6)",
+    color: colors.onDarkMuted,
   },
   permTitle: {
     textAlign: "center",
@@ -572,12 +623,19 @@ const s = StyleSheet.create({
     color: colors.ink,
     marginTop: space.md,
   },
-  permBtn: {
-    paddingHorizontal: space.xl,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    marginTop: space.lg,
+  noticeWrap: {
+    position: "absolute",
+    left: space.lg,
+    right: space.lg,
+    bottom: space.xxl,
+    alignItems: "center",
   },
-  permBtnText: { color: colors.white, fontWeight: "700", fontSize: 16 },
+  noticePill: {
+    backgroundColor: isDark ? colors.bg : colors.ink,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+  },
+  noticeText: { color: colors.onDark, fontSize: 16, fontWeight: "600" },
   reconfig: { position: "absolute", top: 0, right: 0, width: 60, height: 60 },
 });

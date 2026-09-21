@@ -3,7 +3,7 @@ import { activateKiosk, kioskFailure } from "@/lib/recovery";
 import { secureStorage } from "@/lib/storage";
 import { validateKioskoToken } from "@/services/kiosko";
 import { colors, radius, space } from "@/theme";
-import { Button, Icon, Input } from "@/ui";
+import { Button, Card, Icon, Input } from "@/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -54,7 +54,7 @@ export default function Setup() {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <View style={s.card}>
+        <Card style={s.card}>
           <View style={s.logo}>
             <Icon name="pricetags" size={34} color={colors.white} />
           </View>
@@ -93,7 +93,7 @@ export default function Setup() {
             disabled={busy}
             onPress={() => router.replace("/verificador")}
           />
-        </View>
+        </Card>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -107,11 +107,10 @@ const s = StyleSheet.create({
   content: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: space.lg },
   error: { color: colors.danger, marginVertical: space.md },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.xl,
-    padding: space.xxl,
     width: "100%",
     maxWidth: 560,
+    padding: space.xxl,
+    borderRadius: radius.xl,
     alignItems: "stretch",
   },
   logo: {

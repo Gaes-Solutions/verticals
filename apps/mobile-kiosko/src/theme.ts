@@ -27,6 +27,12 @@ type Palette = {
   card: string;
   white: string;
   onBrandMuted: string;
+  /** Texto/íconos sobre superficies siempre oscuras (reposo, scrim de cámara). */
+  onDark: string;
+  /** Texto secundario sobre superficies siempre oscuras. */
+  onDarkMuted: string;
+  /** Veladura oscura sobre el feed de cámara; no depende del tema. */
+  scrim: string;
 };
 
 const light: Palette = {
@@ -50,6 +56,9 @@ const light: Palette = {
   card: "#ffffff",
   white: "#ffffff",
   onBrandMuted: "rgba(255,255,255,0.75)",
+  onDark: "#ffffff",
+  onDarkMuted: "rgba(255,255,255,0.75)",
+  scrim: "rgba(15,23,42,0.55)",
 };
 
 const dark: Palette = {
@@ -73,6 +82,9 @@ const dark: Palette = {
   card: "#1e293b",
   white: "#ffffff",
   onBrandMuted: "rgba(255,255,255,0.75)",
+  onDark: "#ffffff",
+  onDarkMuted: "rgba(255,255,255,0.75)",
+  scrim: "rgba(15,23,42,0.55)",
 };
 
 export const isDark = Appearance.getColorScheme() === "dark";

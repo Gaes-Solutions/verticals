@@ -1,10 +1,10 @@
 import { KIOSKO_TOKEN_KEY } from "@/config";
 import { secureStorage } from "@/lib/storage";
-import { colors } from "@/theme";
-import { Button } from "@/ui";
+import { colors, space } from "@/theme";
+import { Button, Screen } from "@/ui";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text } from "react-native";
 
 export default function Index() {
   const [estado, setEstado] = useState<"cargando" | "sin-token" | "listo" | "error">("cargando");
@@ -18,27 +18,30 @@ export default function Index() {
   useEffect(load, []);
   if (estado === "error")
     return (
-      <View style={{ flex: 1, justifyContent: "center", padding: 20 }}>
-        <Text>
+      <Screen style={s.center}>
+        <Text style={s.errorText}>
           No se pudo leer la configuración segura del dispositivo. Desbloquea el dispositivo y
           vuelve a intentar.
         </Text>
         <Button label="Reintentar" onPress={load} />
-      </View>
+      </Screen>
     );
   if (estado === "cargando") {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.bg,
-        }}
-      >
+      <Screen style={s.center}>
         <ActivityIndicator size="large" color={colors.brand} />
-      </View>
+      </Screen>
     );
   }
   return <Redirect href={estado === "listo" ? "/verificador" : "/setup"} />;
 }
+
+const s = StyleSheet.create({
+  center: { alignItems: "center", justifyContent: "center", padding: space.lg },
+  errorText: {
+    color: colors.text,
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: space.lg,
+  },
+});

@@ -1,4 +1,12 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  type StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { colors, isDark, radius, space } from "../theme";
 import { Icon, type IconName } from "./Icon";
 
@@ -11,6 +19,8 @@ export function Button({
   icon,
   busy = false,
   disabled = false,
+  style,
+  labelColor,
 }: {
   label: string;
   onPress: () => void;
@@ -18,14 +28,19 @@ export function Button({
   icon?: IconName;
   busy?: boolean;
   disabled?: boolean;
+  /** Overrides container styles (e.g. a custom accent background). */
+  style?: StyleProp<ViewStyle>;
+  /** Overrides the label/icon color (pair it with a custom `style` background). */
+  labelColor?: string;
 }) {
   const off = disabled || busy;
   const txt =
-    variant === "primary" || variant === "danger"
+    labelColor ??
+    (variant === "primary" || variant === "danger"
       ? isDark
         ? colors.bg
         : colors.white
-      : colors.brand;
+      : colors.brand);
   return (
     <Pressable
       accessibilityRole="button"
@@ -33,7 +48,13 @@ export function Button({
       accessibilityState={{ disabled: off, busy }}
       onPress={onPress}
       disabled={off}
-      style={({ pressed }) => [s.base, s[variant], off && s.off, pressed && !off && s.pressed]}
+      style={({ pressed }) => [
+        s.base,
+        s[variant],
+        off && s.off,
+        pressed && !off && s.pressed,
+        style,
+      ]}
     >
       {busy ? (
         <ActivityIndicator color={txt} />
