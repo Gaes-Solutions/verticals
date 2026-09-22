@@ -15,6 +15,12 @@ export interface CrearIntentInput {
   /** Token de tarjeta generado en el frontend (Conekta.js / Stripe.js). PCI: la
    * tarjeta nunca toca nuestro backend, solo este token. */
   cardTokenId?: string;
+  /** Tarjeta guardada: cobra con la fuente persistida en el proveedor (Conekta
+   * payment_source_id) en vez de con un token de un solo uso. Excluyente con
+   * cardTokenId; requiere proveedorCustomerId. */
+  paymentSourceId?: string;
+  /** Customer del proveedor dueño de la fuente guardada (Conekta customer_id). */
+  proveedorCustomerId?: string;
   /** Meses sin intereses (3/6/9/12…). Solo aplica a pago con tarjeta. */
   mesesSinIntereses?: number;
   /** Cuenta Connect del comercio: si viene, el cobro se hace EN su cuenta (direct charge). */
@@ -69,6 +75,21 @@ export interface PaymentProvider {
     refundId: string | null,
     options: RefundOptions,
   ): Promise<VerifiedRefund | null>;
+  /** "Mis tarjetas": asegura el customer del comprador en el proveedor. */
+  crearCliente?(input: { nombre: string; email: string }): Promise<{ customerId: string }>;
+  /** Adjunta un token de tarjeta al customer como fuente reutilizable. Devuelve la máscara. */
+  agregarFuentePago?(
+    customerId: string,
+    tokenId: string,
+  ): Promise<{
+    sourceId: string;
+    marca: string;
+    last4: string;
+    expMes: number;
+    expAnio: number;
+  }>;
+  /** Elimina una fuente guardada del customer (idempotente si ya no existe). */
+  eliminarFuentePago?(customerId: string, sourceId: string): Promise<void>;
 }
 
 export class PagoError extends Error {

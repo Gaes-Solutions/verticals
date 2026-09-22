@@ -54,6 +54,7 @@ interface ConektaOrderResponse {
 interface ConektaPaymentMethod {
   type: string;
   token_id?: string;
+  payment_source_id?: string;
   monthly_installments?: number;
 }
 
@@ -61,6 +62,10 @@ interface ConektaPaymentMethod {
  * Conekta vía REST (OXXO Pay y SPEI con referencias; tarjeta requiere token
  * de Conekta.js en el frontend → V1.5). Complementa a Stripe en métodos
  * offline MX. https://developers.conekta.com/v2.1.0/reference
+ *
+ * También implementa el contrato opcional de "Mis tarjetas" (crearCliente,
+ * agregarFuentePago, eliminarFuentePago): el PAN/CVV nunca toca este cliente,
+ * solo tokens de Conekta.js y los ids de customer/source de Conekta.
  */
 export class ConektaClient implements PaymentProvider {
   readonly codigo = "conekta" as const;
@@ -78,12 +83,23 @@ export class ConektaClient implements PaymentProvider {
   }
 
   /** Arma el payment_method de Conekta según el método. Tarjeta usa el token del
-   * frontend (Conekta.js) y, si aplica, los meses sin intereses. */
+   * frontend (Conekta.js) o, si es una tarjeta guardada, su payment_source_id;
+   * en ambos casos aplica los meses sin intereses si vienen. */
   private resolverPaymentMethod(input: CrearIntentInput): ConektaPaymentMethod {
     if (input.metodo === "tarjeta") {
+      if (input.paymentSourceId) {
+        const pm: ConektaPaymentMethod = {
+          type: "card",
+          payment_source_id: input.paymentSourceId,
+        };
+        if (input.mesesSinIntereses && input.mesesSinIntereses >= 3) {
+          pm.monthly_installments = input.mesesSinIntereses;
+        }
+        return pm;
+      }
       if (!input.cardTokenId) {
         throw new PagoError(
-          "Conekta tarjeta requiere el token de la tarjeta (Conekta.js)",
+          "Conekta tarjeta requiere el token de la tarjeta (Conekta.js) o una tarjeta guardada",
           "INVALID_INPUT",
         );
       }
@@ -125,7 +141,13 @@ export class ConektaClient implements PaymentProvider {
     const paymentMethod = this.resolverPaymentMethod(input);
     const order = await this.post<ConektaOrderResponse>("/orders", {
       currency: input.moneda.toUpperCase(),
-      customer_info: { email: input.emailComprador, name: nombreConekta(input.nombreComprador) },
+      customer_info: {
+        email: input.emailComprador,
+        name: nombreConekta(input.nombreComprador),
+        // Con tarjeta guardada, Conekta exige ligar el cargo al customer dueño
+        // de la payment_source.
+        ...(input.proveedorCustomerId ? { customer_id: input.proveedorCustomerId } : {}),
+      },
       line_items: [
         {
           name: input.descripcion ?? `Pedido ${input.pedidoId}`,
@@ -146,6 +168,64 @@ export class ConektaClient implements PaymentProvider {
       ...(referencia ? { referenciaPago: referencia } : {}),
       ...(expira ? { expiraEn: new Date(expira * 1000) } : {}),
     };
+  }
+
+  // ── "Mis tarjetas" (fuentes reutilizables ligadas a un customer) ──────────
+
+  /** Asegura el customer del comprador en Conekta. */
+  async crearCliente(input: { nombre: string; email: string }): Promise<{ customerId: string }> {
+    const customer = await this.post<{ id: string }>("/customers", {
+      name: nombreConekta(input.nombre),
+      email: input.email,
+    });
+    return { customerId: customer.id };
+  }
+
+  /** Adjunta un token (Conekta.js) al customer como fuente de pago reutilizable. */
+  async agregarFuentePago(
+    customerId: string,
+    tokenId: string,
+  ): Promise<{
+    sourceId: string;
+    marca: string;
+    last4: string;
+    expMes: number;
+    expAnio: number;
+  }> {
+    const source = await this.post<{
+      id: string;
+      brand?: string;
+      last4?: string;
+      exp_month?: number | string;
+      exp_year?: number | string;
+    }>(`/customers/${encodeURIComponent(customerId)}/payment_sources`, {
+      type: "card",
+      token_id: tokenId,
+    });
+    // Conekta expresa el año de expiración a 2 dígitos en algunas respuestas.
+    const anio = Number(source.exp_year ?? 0);
+    return {
+      sourceId: source.id,
+      marca: source.brand ?? "card",
+      last4: source.last4 ?? "0000",
+      expMes: Number(source.exp_month ?? 0),
+      expAnio: anio > 0 && anio < 100 ? anio + 2000 : anio,
+    };
+  }
+
+  /** Elimina una fuente del customer. Idempotente: si Conekta ya no la tiene,
+   *  se considera eliminada (la baja local se asienta de todas formas). */
+  async eliminarFuentePago(customerId: string, sourceId: string): Promise<void> {
+    try {
+      await this.post(
+        `/customers/${encodeURIComponent(customerId)}/payment_sources/${encodeURIComponent(sourceId)}`,
+        undefined,
+        "DELETE",
+      );
+    } catch (err) {
+      if (err instanceof PagoError && err.extra?.status === 404) return;
+      throw err;
+    }
   }
 
   /** Firma propia: header `sha256=<hmac-sha256(webhookSecret, payload)>`. */

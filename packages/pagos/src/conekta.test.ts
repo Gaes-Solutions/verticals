@@ -167,6 +167,77 @@ describe("ConektaClient", () => {
     expect(body.charges[0].payment_method.monthly_installments).toBe(6);
   });
 
+  it("tarjeta guardada → cobra con payment_source_id y customer_id", async () => {
+    const spy = mockFetch(200, {
+      id: "ord_saved_1",
+      payment_status: "paid",
+      charges: { data: [{ id: "chr_s1", payment_method: { type: "card" } }] },
+    });
+    const client = new ConektaClient(OPTS);
+    const intent = await client.crearIntent({
+      pedidoId: "p",
+      montoCentavos: 25000,
+      moneda: "MXN",
+      metodo: "tarjeta",
+      emailComprador: "a@test.mx",
+      paymentSourceId: "src_saved_4242",
+      proveedorCustomerId: "cus_cliente_1",
+    });
+    expect(intent.status).toBe("confirmado");
+    const body = JSON.parse((spy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.charges[0].payment_method).toMatchObject({
+      type: "card",
+      payment_source_id: "src_saved_4242",
+    });
+    expect(body.charges[0].payment_method.token_id).toBeUndefined();
+    expect(body.customer_info.customer_id).toBe("cus_cliente_1");
+  });
+
+  it("crearCliente → POST /customers con nombre saneado", async () => {
+    const spy = mockFetch(200, { id: "cus_nuevo" });
+    const client = new ConektaClient(OPTS);
+    const r = await client.crearCliente({ nombre: "María 123 López", email: "m@test.mx" });
+    expect(r).toEqual({ customerId: "cus_nuevo" });
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.conekta.io/customers");
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ name: "María López", email: "m@test.mx" });
+  });
+
+  it("agregarFuentePago → POST payment_sources y normaliza año a 4 dígitos", async () => {
+    const spy = mockFetch(200, {
+      id: "src_4242",
+      brand: "visa",
+      last4: "4242",
+      exp_month: "12",
+      exp_year: "28",
+    });
+    const client = new ConektaClient(OPTS);
+    const r = await client.agregarFuentePago("cus_1", "tok_visa");
+    expect(r).toEqual({
+      sourceId: "src_4242",
+      marca: "visa",
+      last4: "4242",
+      expMes: 12,
+      expAnio: 2028,
+    });
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.conekta.io/customers/cus_1/payment_sources");
+    expect(JSON.parse(init.body as string)).toEqual({ type: "card", token_id: "tok_visa" });
+  });
+
+  it("eliminarFuentePago → DELETE y tolera 404 (ya eliminada)", async () => {
+    const spy = mockFetch(200, { id: "src_4242", deleted: true });
+    const client = new ConektaClient(OPTS);
+    await client.eliminarFuentePago("cus_1", "src_4242");
+    expect((spy.mock.calls[0] as [string, RequestInit])[0]).toBe(
+      "https://api.conekta.io/customers/cus_1/payment_sources/src_4242",
+    );
+    vi.restoreAllMocks();
+    mockFetch(404, { details: [{ message: "not found" }] });
+    await expect(client.eliminarFuentePago("cus_1", "src_404")).resolves.toBeUndefined();
+  });
+
   it("parseWebhook order.paid con firma válida → confirmado", () => {
     const client = new ConektaClient(OPTS);
     const payload = JSON.stringify({
