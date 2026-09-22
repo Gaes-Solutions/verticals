@@ -10,6 +10,12 @@ export {
   registrarCliente,
 } from "./auth";
 export type { RegistroClienteInput } from "./auth";
+export {
+  listarMediosPago,
+  agregarMedioPago,
+  eliminarMedioPago,
+} from "./medios-pago";
+export type { MedioPagoGuardado } from "./medios-pago";
 export type {
   StaffUser,
   TenantSession,
