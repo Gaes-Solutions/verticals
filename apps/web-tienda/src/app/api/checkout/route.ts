@@ -102,12 +102,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.statusCode !== 404) throw err;
     }
-    if (
-      process.env.NODE_ENV === "production" &&
-      !body.cardTokenId &&
-      !referenciado &&
-      !alRecoger
-    ) {
+    if (process.env.NODE_ENV === "production" && !body.cardTokenId && !referenciado && !alRecoger) {
       return NextResponse.json(
         { message: "El pago no está disponible. Contacta a la tienda o reintenta más tarde." },
         { status: 503 },

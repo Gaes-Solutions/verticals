@@ -25,6 +25,10 @@ estaba vacío. Para una tienda de globos y regalos, un catálogo en gris no vend
   como máximo 3 cargas a la vez en el proceso.
 - **Cómo se sirven:** `GET /t/tienda/imagenes/:id`, público como el catálogo, con
   caché de una semana. Si el archivo no está, 404.
+- **En la tienda:** el navegador no puede pedirle la foto al API (el catálogo se
+  sirve con el token de tienda del BFF), así que `/tienda/imagenes/:id` de
+  web-tienda la trae con el token del negocio que corresponde a ese dominio y la
+  transmite. El id es de la foto y no cambia nunca: caché de una semana.
 - **Carga en lote:** el panel sube muchas fotos de una vez y asigna cada archivo
   al producto cuyo **código de barras, SKU o código** coincida con el nombre del
   archivo (`7501234567890.jpg`). Al final lista exactamente cuáles no encontraron

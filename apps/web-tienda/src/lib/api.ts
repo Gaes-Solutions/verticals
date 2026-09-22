@@ -80,6 +80,19 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
   return (await res.json()) as T;
 }
 
+/**
+ * Igual que `api`, pero devuelve la respuesta cruda: sirve para archivos (las
+ * fotos del catálogo) que no son JSON y conviene transmitir sin pasarlos por
+ * memoria.
+ */
+export async function apiRaw(path: string): Promise<Response> {
+  const token = await getToken(await slugActual());
+  return fetch(`${API_URL}/t${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+}
+
 export interface ProductoPublicado {
   id: string;
   tituloPublico: string;
