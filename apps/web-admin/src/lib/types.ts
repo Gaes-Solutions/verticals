@@ -25,6 +25,8 @@ export interface Producto {
   aplicaIeps?: boolean;
   tasaIeps?: string | null;
   requiresBalanza?: boolean;
+  /** Unidad en la que se vende (pza, kg, lt…); va al catálogo público. */
+  unidadMedida?: string;
   isActive?: boolean;
   categoriaId?: string | null;
   claveSat?: string | null;

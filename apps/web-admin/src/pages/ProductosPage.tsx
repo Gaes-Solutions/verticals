@@ -38,6 +38,20 @@ const CLAVES_UNIDAD = [
   { clave: "E48", etiqueta: "E48 — Servicio" },
 ];
 
+// Debe coincidir con el enum UnidadMedida del API (packages/db). Es lo que ve
+// el comprador junto al precio ("/ kg", "por pieza"…).
+const UNIDADES_MEDIDA = [
+  { valor: "pza", etiqueta: "Pieza" },
+  { valor: "kg", etiqueta: "Kilogramo" },
+  { valor: "g", etiqueta: "Gramo" },
+  { valor: "lt", etiqueta: "Litro" },
+  { valor: "ml", etiqueta: "Mililitro" },
+  { valor: "m", etiqueta: "Metro" },
+  { valor: "m2", etiqueta: "Metro cuadrado" },
+  { valor: "hora", etiqueta: "Hora" },
+  { valor: "servicio", etiqueta: "Servicio" },
+] as const;
+
 export function ProductosPage() {
   const [items, setItems] = useState<Producto[]>([]);
   const [query, setQuery] = useState("");
@@ -228,6 +242,7 @@ function ProductoModal({
   const [aplicaIeps, setAplicaIeps] = useState(producto?.aplicaIeps ?? false);
   const [tasaIeps, setTasaIeps] = useState(producto?.tasaIeps ?? "");
   const [requiresBalanza, setRequiresBalanza] = useState(producto?.requiresBalanza ?? false);
+  const [unidadMedida, setUnidadMedida] = useState(producto?.unidadMedida ?? "pza");
   const [claveSat, setClaveSat] = useState(producto?.claveSat ?? "");
   const [claveUnidadSat, setClaveUnidadSat] = useState(producto?.claveUnidadSat ?? "H87");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -249,6 +264,7 @@ function ProductoModal({
         aplicaIva,
         aplicaIeps,
         requiresBalanza,
+        unidadMedida,
         ...(aplicaIeps && tasaIeps ? { tasaIeps } : {}),
         // Sin estas claves el SAT no acepta el concepto: facturar responde 409.
         ...(claveSat.trim() ? { claveSat: claveSat.trim() } : {}),
@@ -451,6 +467,22 @@ function ProductoModal({
             />
             Se vende por peso (balanza)
           </label>
+          <Field label="Unidad de medida de venta">
+            <select
+              value={unidadMedida}
+              onChange={(e) => setUnidadMedida(e.target.value)}
+              className="gx-input"
+            >
+              {UNIDADES_MEDIDA.map((u) => (
+                <option key={u.valor} value={u.valor}>
+                  {u.etiqueta}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="text-slate-500 text-xs">
+            Es como se vende y se muestra el precio en la tienda ("$45.00 / kg", "por pieza").
+          </p>
           {error && <p className="text-sm text-danger">{error}</p>}
         </div>
         <div className="mt-5 flex gap-2">
