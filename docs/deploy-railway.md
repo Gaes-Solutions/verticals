@@ -161,6 +161,33 @@ real por negocio se elige en **web-admin → Tienda online → Pasarela de pago*
 
 ---
 
+---
+
+## 6.5 Volumen de archivos (fotos de productos y anuncios del kiosco)
+
+Las fotos **no** caben en la base de datos ni pueden vivir en el disco del contenedor: cada deploy
+arranca un contenedor nuevo y se borraría todo. Van en un **Volume** de Railway montado en el
+servicio `api`.
+
+En Railway → servicio `api` → pestaña **Volumes** → **New Volume**, con mount path `/data`.
+Después, en **Variables** del mismo servicio:
+
+```
+PRODUCTOS_MEDIA_ROOT=/data/productos
+KIOSKO_MEDIA_ROOT=/data/kiosko
+```
+
+Las rutas se crean solas la primera vez que se sube un archivo. Sin estas variables el API responde
+`503` al subir una foto y lo dice en pantalla, en vez de aceptar un archivo que se perdería.
+
+Dos advertencias:
+
+- El volumen es de **un** servicio. Si algún día el `api` corre con varias réplicas, hay que mover
+  el almacén a S3/Backblaze (el modelo ya guarda `s3Key`, el cambio es solo del módulo de guardado).
+- El volumen **no entra en el backup del Postgres**. Si te importan las fotos, respáldalas aparte.
+
+---
+
 ## 7. DNS
 
 En tu proveedor de DNS, por cada subdominio crea el registro **CNAME** que Railway te indica al
@@ -178,6 +205,7 @@ automático de Railway.
 - [ ] Al menos 1 tenant dado de alta (`tenant onboard`).
 - [ ] 4 servicios frontend desplegados con su `API_UPSTREAM` / `API_URL`.
 - [ ] Dominios + SSL en los 5 servicios.
+- [ ] Volume `/data` en el servicio `api` + `PRODUCTOS_MEDIA_ROOT` y `KIOSKO_MEDIA_ROOT`.
 - [ ] Llaves de proveedores cargadas (las que apliquen) + `FLOWS_SCHEDULER_ENABLED=true`.
 - [ ] Pasarela de pago elegida por negocio en web-admin.
 - [ ] Webhooks de pagos/paqueterías apuntando a `api.gaespos.mx`.
