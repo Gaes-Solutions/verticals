@@ -16,7 +16,10 @@ interface ProductoCrudo {
   publicadoAt: Date;
   rankingScore: number;
   destacadoHome: boolean;
-  producto: { variantes: Array<{ id: string; precioBase: unknown }> };
+  producto: {
+    unidadMedida?: string | null;
+    variantes: Array<{ id: string; precioBase: unknown }>;
+  };
   [k: string]: unknown;
 }
 
@@ -24,6 +27,13 @@ export interface VentaConfig {
   mostrarInventarioPublico: boolean;
   bufferInventarioPublico: number;
   envioGratisDesde: number | null;
+  mostrarRatingProducto: boolean;
+}
+
+export interface RatingAgregado {
+  /** 0-5 con 1 decimal; null si aún no hay reseñas aprobadas. */
+  ratingPromedio: number | null;
+  ratingCuenta: number;
 }
 
 export interface CatalogoItemEnriquecido {
@@ -34,10 +44,25 @@ export interface CatalogoItemEnriquecido {
   stockPublico: number | null;
   stockBajo: boolean;
   envioGratis: boolean;
+  ratingPromedio: number | null;
+  ratingCuenta: number;
+  /** Unidad en la que se vende (pza, kg, lt…); null si no aplica. */
+  unidadMedida: string | null;
 }
 
 /** Producto enriquecido: conserva los campos crudos + los de venta. */
 export type CatalogoItem = ProductoCrudo & CatalogoItemEnriquecido;
+
+/**
+ * Resume una lista de ratings en promedio (1 decimal) + cuenta. Puro: es la
+ * pieza que el listado/detalle usan sobre el groupBy de reseñas aprobadas.
+ */
+export function resumenRating(ratings: number[]): RatingAgregado {
+  const cuenta = ratings.length;
+  if (cuenta === 0) return { ratingPromedio: null, ratingCuenta: 0 };
+  const suma = ratings.reduce((a, b) => a + b, 0);
+  return { ratingPromedio: Math.round((suma / cuenta) * 10) / 10, ratingCuenta: cuenta };
+}
 
 function precioBaseDe(p: ProductoCrudo): number {
   if (p.precioPublicoOverride != null) return Number(p.precioPublicoOverride);
@@ -87,6 +112,7 @@ function enriquecer(
   p: ProductoCrudo,
   config: VentaConfig,
   stock: Map<string, number>,
+  ratings: Map<string, RatingAgregado>,
   ahora: Date,
 ): CatalogoItem {
   const base = precioBaseDe(p);
@@ -95,6 +121,7 @@ function enriquecer(
   const descuentoPct = promo != null && base > 0 ? Math.round((1 - promo / base) * 100) : 0;
   const stockPublico = config.mostrarInventarioPublico ? (stock.get(p.id) ?? 0) : null;
   const precioActual = promo ?? base;
+  const rating = config.mostrarRatingProducto ? ratings.get(p.id) : undefined;
   return {
     ...p,
     precioDesde: base.toFixed(2),
@@ -104,7 +131,36 @@ function enriquecer(
     stockPublico,
     stockBajo: stockPublico != null && stockPublico > 0 && stockPublico <= STOCK_BAJO_UMBRAL,
     envioGratis: config.envioGratisDesde != null && precioActual >= config.envioGratisDesde,
+    ratingPromedio: rating?.ratingPromedio ?? null,
+    ratingCuenta: rating?.ratingCuenta ?? 0,
+    unidadMedida: p.producto.unidadMedida ?? null,
   };
+}
+
+/**
+ * Rating agregado (solo reseñas aprobadas) por producto publicado. Un solo
+ * groupBy para todo el lote del listado/relacionados.
+ */
+async function ratingsPorProducto(
+  prisma: TenantClient,
+  productoPublicadoIds: string[],
+): Promise<Map<string, RatingAgregado>> {
+  const porProducto = new Map<string, RatingAgregado>();
+  if (productoPublicadoIds.length === 0) return porProducto;
+  const filas = await prisma.productoResena.groupBy({
+    by: ["productoPublicadoId"],
+    where: { productoPublicadoId: { in: productoPublicadoIds }, estado: "aprobada" },
+    _avg: { rating: true },
+    _count: { _all: true },
+  });
+  for (const f of filas) {
+    const promedio = f._avg.rating != null ? Math.round(Number(f._avg.rating) * 10) / 10 : null;
+    porProducto.set(f.productoPublicadoId, {
+      ratingPromedio: promedio,
+      ratingCuenta: f._count._all,
+    });
+  }
+  return porProducto;
 }
 
 /** Precio efectivo (con promo vigente) para ordenar/filtrar por precio. */
@@ -128,6 +184,7 @@ const INCLUDE = {
   producto: {
     select: {
       id: true,
+      unidadMedida: true,
       variantes: {
         where: ACTIVE_VARIANT_FILTER,
         select: { id: true, precioBase: true, nombreVariante: true, opciones: true },
@@ -196,8 +253,16 @@ export async function listarCatalogo(
       crudos as unknown as ProductoCrudo[],
       config.bufferInventarioPublico,
     );
+    const ratings = config.mostrarRatingProducto
+      ? await ratingsPorProducto(
+          prisma,
+          crudos.map((p) => p.id),
+        )
+      : new Map<string, RatingAgregado>();
     return {
-      items: (crudos as unknown as ProductoCrudo[]).map((p) => enriquecer(p, config, stock, ahora)),
+      items: (crudos as unknown as ProductoCrudo[]).map((p) =>
+        enriquecer(p, config, stock, ratings, ahora),
+      ),
       total,
       page: q.page,
       pageSize: q.pageSize,
@@ -211,8 +276,14 @@ export async function listarCatalogo(
     take: FETCH_CAP,
   })) as unknown as ProductoCrudo[];
   const stock = await stockPorProducto(prisma, crudos, config.bufferInventarioPublico);
+  const ratings = config.mostrarRatingProducto
+    ? await ratingsPorProducto(
+        prisma,
+        crudos.map((p) => p.id),
+      )
+    : new Map<string, RatingAgregado>();
 
-  let lista = crudos.map((p) => enriquecer(p, config, stock, ahora));
+  let lista = crudos.map((p) => enriquecer(p, config, stock, ratings, ahora));
   if (q.soloDisponibles) lista = lista.filter((p) => (p.stockPublico ?? 1) > 0);
   if (q.precioMin !== undefined) {
     lista = lista.filter((p) => precioEfectivo(p, ahora) >= (q.precioMin as number));
@@ -245,7 +316,7 @@ export async function listarCatalogo(
   };
 }
 
-/** Enriquece un solo producto (detalle) con promo + stock + envío gratis. */
+/** Enriquece un solo producto (detalle) con promo + stock + envío gratis + rating. */
 export async function enriquecerDetalle(
   prisma: TenantClient,
   config: VentaConfig,
@@ -254,7 +325,10 @@ export async function enriquecerDetalle(
     precioPublicoOverride: unknown;
     precioPromocion: unknown;
     promocionVigenteHasta: Date | null;
-    producto: { variantes: Array<{ id: string; precioBase: unknown }> };
+    producto: {
+      unidadMedida?: string | null;
+      variantes: Array<{ id: string; precioBase: unknown }>;
+    };
   },
 ): Promise<
   Pick<
@@ -266,6 +340,9 @@ export async function enriquecerDetalle(
     | "stockPublico"
     | "stockBajo"
     | "envioGratis"
+    | "ratingPromedio"
+    | "ratingCuenta"
+    | "unidadMedida"
   >
 > {
   const crudo = {
@@ -279,7 +356,17 @@ export async function enriquecerDetalle(
     producto: prod.producto,
   } as ProductoCrudo;
   const stock = await stockPorProducto(prisma, [crudo], config.bufferInventarioPublico);
-  const e = enriquecer(crudo, config, stock, new Date());
+  // Rating sobre TODAS las reseñas aprobadas (las que el detalle trae capeadas
+  // en 20 solo alimentan la lista; la cuenta del badge sale del agregado real).
+  const ratings = new Map<string, RatingAgregado>();
+  if (config.mostrarRatingProducto) {
+    const aprobadas = await prisma.productoResena.findMany({
+      where: { productoPublicadoId: prod.id, estado: "aprobada" },
+      select: { rating: true },
+    });
+    ratings.set(prod.id, resumenRating(aprobadas.map((r) => r.rating)));
+  }
+  const e = enriquecer(crudo, config, stock, ratings, new Date());
   return {
     precioDesde: e.precioDesde,
     precioPromocion: e.precioPromocion,
@@ -288,6 +375,9 @@ export async function enriquecerDetalle(
     stockPublico: e.stockPublico,
     stockBajo: e.stockBajo,
     envioGratis: e.envioGratis,
+    ratingPromedio: e.ratingPromedio,
+    ratingCuenta: e.ratingCuenta,
+    unidadMedida: e.unidadMedida,
   };
 }
 
@@ -327,7 +417,13 @@ export async function productosRelacionados(
   }
   const todos = [...explicitos, ...porCategoria].slice(0, limite);
   const stock = await stockPorProducto(prisma, todos, config.bufferInventarioPublico);
-  return todos.map((p) => enriquecer(p, config, stock, ahora));
+  const ratings = config.mostrarRatingProducto
+    ? await ratingsPorProducto(
+        prisma,
+        todos.map((p) => p.id),
+      )
+    : new Map<string, RatingAgregado>();
+  return todos.map((p) => enriquecer(p, config, stock, ratings, ahora));
 }
 
 /** Lee la config de venta del tenant para enriquecer el catálogo. */
@@ -346,5 +442,6 @@ export async function ventaConfig(prisma: TenantClient): Promise<VentaConfig> {
     envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
       ? Number(tarifaGratis.montoMinimoEnvioGratis)
       : null,
+    mostrarRatingProducto: config?.mostrarRatingProducto ?? true,
   };
 }
