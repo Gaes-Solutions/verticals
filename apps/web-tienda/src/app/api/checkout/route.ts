@@ -1,4 +1,4 @@
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, getTiendaConfig } from "@/lib/api";
 import { checkoutIdentity, sameOriginRequest } from "@/lib/checkout-session";
 import { ClienteSessionError } from "@/lib/cliente";
 import { type NextRequest, NextResponse } from "next/server";
@@ -8,11 +8,17 @@ interface CheckoutResult {
   intentId: string;
   total: string;
   intentStatus: "confirmado" | "pendiente" | "requiere_accion" | "fallido";
+  referenciaPago?: string;
 }
 
 function publicResult(result: CheckoutResult) {
   return NextResponse.json(
-    { folioPublico: result.folioPublico, total: result.total, intentStatus: result.intentStatus },
+    {
+      folioPublico: result.folioPublico,
+      total: result.total,
+      intentStatus: result.intentStatus,
+      ...(result.referenciaPago ? { referenciaPago: result.referenciaPago } : {}),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -55,6 +61,7 @@ export async function POST(req: NextRequest) {
       emailComprador: string;
       items: Array<{ varianteId: string; cantidad: number }>;
       metodoEnvio: "paqueteria" | "click_collect";
+      metodoPago?: "tarjeta" | "oxxo" | "spei";
       tarifaEnvioId?: string;
       sucursalPickupId?: string;
       direccionEnvio?: Record<string, unknown>;
@@ -62,6 +69,24 @@ export async function POST(req: NextRequest) {
       cardTokenId?: string;
       mesesSinIntereses?: number;
     };
+    const metodoPago = body.metodoPago ?? "tarjeta";
+    if (metodoPago !== "tarjeta" && metodoPago !== "oxxo" && metodoPago !== "spei") {
+      return NextResponse.json({ message: "Método de pago no soportado." }, { status: 422 });
+    }
+    // OXXO/SPEI solo si el tenant los anuncia en su config pública (su proveedor
+    // es Conekta). El fallback sin config es tarjeta: nunca pasamos un método
+    // referenciado que el API vaya a tener que rechazar.
+    const referenciado = metodoPago === "oxxo" || metodoPago === "spei";
+    if (referenciado) {
+      const config = await getTiendaConfig();
+      const permitidos = config.metodosPago ?? ["tarjeta"];
+      if (!permitidos.includes(metodoPago)) {
+        return NextResponse.json(
+          { message: "Este método de pago no está disponible en esta tienda." },
+          { status: 422 },
+        );
+      }
+    }
     const identity = await checkoutIdentity(body.checkoutContext, body.idempotencyKey);
     const recoveryPath = `/checkout/intentos/${identity.key}`;
     try {
@@ -69,7 +94,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.statusCode !== 404) throw err;
     }
-    if (process.env.NODE_ENV === "production" && !body.cardTokenId) {
+    if (process.env.NODE_ENV === "production" && !body.cardTokenId && !referenciado) {
       return NextResponse.json(
         { message: "El pago no está disponible. Contacta a la tienda o reintenta más tarde." },
         { status: 503 },
@@ -92,8 +117,8 @@ export async function POST(req: NextRequest) {
         carritoId: carrito.id,
         idempotencyKey: identity.key,
         emailComprador: body.emailComprador,
-        metodoPago: "tarjeta",
-        proveedorPago: conConekta ? "conekta" : "mock",
+        metodoPago,
+        proveedorPago: conConekta || referenciado ? "conekta" : "mock",
         metodoEnvio: body.metodoEnvio,
         ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
         ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
@@ -102,7 +127,9 @@ export async function POST(req: NextRequest) {
         ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
       },
     });
-    if (!conConekta)
+    // Los referenciados (OXXO/SPEI) quedan pendientes hasta el webhook del
+    // proveedor: no se confirman mock ni se toca el intento.
+    if (!conConekta && !referenciado)
       await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
     // El resultado del proveedor no demuestra que la venta haya quedado asentada.
     return publicResult(await api<CheckoutResult>(recoveryPath));

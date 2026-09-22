@@ -9,7 +9,7 @@ import {
   prepareAttempt,
   submitAttempt,
 } from "@/lib/checkout-attempt";
-import { CreditCard, ImageOff, Plus, Store, Truck } from "lucide-react";
+import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -34,6 +34,7 @@ interface TiendaConfig {
   msiMontoMinimo: string;
   cuponEnCheckout: boolean;
   envioGratisDesde: string | null;
+  metodosPago?: string[];
 }
 
 interface DireccionGuardada {
@@ -49,6 +50,69 @@ interface DireccionGuardada {
 }
 
 const FORM_PAGO_ID = "form-pago-tarjeta";
+
+type MetodoPago = "tarjeta" | "oxxo" | "spei";
+
+/**
+ * OXXO/SPEI devuelven un pago "pendiente": el pedido queda apartado esperando el
+ * pago offline. Guardamos la referencia en localStorage para re-mostrarla si el
+ * comprador vuelve antes de que llegue el webhook del proveedor (el intento
+ * sigue bloqueado, así que no hay riesgo de doble pedido).
+ */
+interface PagoPendiente {
+  folioPublico: string;
+  total: string;
+  referenciaPago: string;
+  metodo: "oxxo" | "spei";
+}
+const PAGO_PENDIENTE_KEY = "gaespos_pago_pendiente_v1";
+
+interface RespuestaCheckout {
+  message?: string;
+  intentStatus?: string;
+  folioPublico?: string;
+  total?: string;
+  referenciaPago?: string;
+}
+
+/**
+ * Un intento "pendiente" con referencia (OXXO/SPEI) NO es error: el pedido queda
+ * apartado esperando el pago offline. Si ya teníamos esa referencia persistida
+ * (re-consulta tras recargar), conserva su método; solo una compra nueva usa el
+ * método seleccionado. Devuelve null cuando la respuesta no es un pendiente
+ * referenciado.
+ */
+function resolverPagoPendiente(
+  data: RespuestaCheckout,
+  metodoSeleccionado: MetodoPago,
+  previo: PagoPendiente | null,
+): PagoPendiente | null {
+  if (data.intentStatus !== "pendiente" || !data.referenciaPago) return null;
+  const metodo =
+    previo?.referenciaPago === data.referenciaPago
+      ? previo.metodo
+      : metodoSeleccionado === "spei"
+        ? "spei"
+        : "oxxo";
+  return {
+    folioPublico: data.folioPublico ?? "",
+    total: data.total ?? "",
+    referenciaPago: data.referenciaPago,
+    metodo,
+  };
+}
+
+function leerPagoPendiente(): PagoPendiente | null {
+  try {
+    const raw = localStorage.getItem(PAGO_PENDIENTE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PagoPendiente;
+    if (typeof p?.folioPublico !== "string" || typeof p?.referenciaPago !== "string") return null;
+    return { ...p, metodo: p.metodo === "spei" ? "spei" : "oxxo" };
+  } catch {
+    return null;
+  }
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -88,6 +152,28 @@ export default function CheckoutPage() {
   const [attempt, setAttempt] = useState<CheckoutAttempt | null>(null);
   const [sessionRetry, setSessionRetry] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
+  const [pagoPendiente, setPagoPendiente] = useState<PagoPendiente | null>(null);
+
+  function marcarPendiente(p: PagoPendiente) {
+    setPagoPendiente(p);
+    try {
+      localStorage.setItem(PAGO_PENDIENTE_KEY, JSON.stringify(p));
+    } catch {
+      // Sin persistencia la pantalla sigue funcionando en la sesión actual.
+    }
+  }
+
+  function limpiarPendiente() {
+    setPagoPendiente(null);
+    try {
+      localStorage.removeItem(PAGO_PENDIENTE_KEY);
+    } catch {}
+  }
+
+  useEffect(() => {
+    setPagoPendiente(leerPagoPendiente());
+  }, []);
 
   useEffect(() => {
     setItems(leerCarrito());
@@ -270,22 +356,31 @@ export default function CheckoutPage() {
     return true;
   }
 
+  function manejarNoConfirmado(data: RespuestaCheckout) {
+    if (data.intentStatus === "fallido") limpiarPendiente();
+    setError(
+      data.intentStatus === "fallido"
+        ? "Este intento no pudo completarse. Contacta a la tienda antes de iniciar otro pago."
+        : "Tu pago sigue pendiente de confirmación. Consulta este mismo intento; no vuelvas a pagar.",
+    );
+  }
+
   async function handleCheckoutResponse(response: Response, current: CheckoutAttempt) {
-    const data = (await response.json()) as {
-      message?: string;
-      intentStatus?: string;
-      folioPublico?: string;
-    };
+    const data = (await response.json()) as RespuestaCheckout;
     if (!response.ok)
       throw new Error(data.message ?? "Estamos verificando el pago. No vuelvas a pagar.");
-    if (data.intentStatus !== "confirmado" || !data.folioPublico) {
-      setError(
-        data.intentStatus === "fallido"
-          ? "Este intento no pudo completarse. Contacta a la tienda antes de iniciar otro pago."
-          : "Tu pago sigue pendiente de confirmación. Consulta este mismo intento; no vuelvas a pagar.",
-      );
+    // Pago referenciado (OXXO/SPEI): NO es error; el pedido queda apartado
+    // esperando el pago offline y el proveedor confirma por webhook.
+    const pendiente = resolverPagoPendiente(data, metodoActivo, pagoPendiente);
+    if (pendiente) {
+      marcarPendiente(pendiente);
       return;
     }
+    if (data.intentStatus !== "confirmado" || !data.folioPublico) {
+      manejarNoConfirmado(data);
+      return;
+    }
+    limpiarPendiente();
     if (guardarDir && modoEntrega === "envio") {
       await fetch("/api/cuenta/direcciones", {
         method: "POST",
@@ -326,13 +421,13 @@ export default function CheckoutPage() {
     }
   }
 
-  async function procesarPedido(cardTokenId?: string, meses?: number | null) {
+  async function procesarPedido(metodo: MetodoPago, cardTokenId?: string, meses?: number | null) {
     if (!attempt || procesando) return;
     if (attempt.submitted) {
       await consultarPedido();
       return;
     }
-    if (!cardTokenId && !permiteDemo) {
+    if (metodo === "tarjeta" && !cardTokenId && !permiteDemo) {
       setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
       return;
     }
@@ -363,6 +458,7 @@ export default function CheckoutPage() {
           emailComprador: email,
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
+          metodoPago: metodo,
           ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
           ...(cardTokenId ? { cardTokenId } : {}),
           ...(meses ? { mesesSinIntereses: meses } : {}),
@@ -384,6 +480,17 @@ export default function CheckoutPage() {
     }
   }
 
+  if (pagoPendiente) {
+    return (
+      <PantallaPagoPendiente
+        pago={pagoPendiente}
+        email={email}
+        procesando={procesando}
+        onConsultar={consultarPedido}
+      />
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="text-center">
@@ -397,6 +504,36 @@ export default function CheckoutPage() {
 
   const pagoDeshabilitado = !entregaLista || !attempt || attempt.submitted || procesando;
   const maxMsi = msiOfrecibles.length > 0 ? Math.max(...msiOfrecibles) : 0;
+  // Métodos que el tenant ofrece (los anuncia el API según su proveedor). El
+  // método activo siempre pertenece a la lista: si la config aún no carga, solo
+  // existe tarjeta (comportamiento previo a OXXO/SPEI).
+  const metodosDisponibles = config?.metodosPago ?? ["tarjeta"];
+  const metodoActivo = (
+    metodosDisponibles.includes(metodoPago) ? metodoPago : (metodosDisponibles[0] ?? "tarjeta")
+  ) as MetodoPago;
+  const mostrarSelector = metodosDisponibles.length > 1;
+  const opcionesPago = (
+    [
+      {
+        id: "tarjeta",
+        titulo: "Tarjeta de crédito o débito",
+        descripcion: `Visa · Mastercard · AMEX${maxMsi > 0 ? ` · hasta ${maxMsi} meses sin intereses` : ""}`,
+        icon: <CreditCard size={16} strokeWidth={2} />,
+      },
+      {
+        id: "oxxo",
+        titulo: "OXXO",
+        descripcion: "Paga en efectivo en cualquier OXXO",
+        icon: <Barcode size={16} strokeWidth={2} />,
+      },
+      {
+        id: "spei",
+        titulo: "SPEI",
+        descripcion: "Transferencia desde tu banco",
+        icon: <Landmark size={16} strokeWidth={2} />,
+      },
+    ] satisfies Array<{ id: MetodoPago; titulo: string; descripcion: string; icon: ReactNode }>
+  ).filter((o) => metodosDisponibles.includes(o.id));
 
   return (
     <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
@@ -594,15 +731,52 @@ export default function CheckoutPage() {
 
           {/* ② Pago */}
           <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
-            <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
-              <p className="flex items-center gap-2 font-medium text-sm">
-                <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
-              </p>
-              <p className="mt-0.5 text-slate-500 text-xs">
-                Visa · Mastercard · AMEX
-                {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
-              </p>
-            </div>
+            {mostrarSelector ? (
+              <div className="space-y-2" role="radiogroup" aria-label="Método de pago">
+                {opcionesPago.map((o) => {
+                  const activa = metodoActivo === o.id;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta — mismo patrón que direcciones guardadas
+                      role="radio"
+                      aria-checked={activa}
+                      onClick={() => setMetodoPago(o.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                        activa
+                          ? "border-marca bg-marca/5 ring-1 ring-marca"
+                          : "border-slate-300 hover:border-marca"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                          activa ? "border-marca" : "border-slate-300"
+                        }`}
+                      >
+                        {activa && <span className="h-2 w-2 rounded-full bg-marca" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 font-medium">
+                          {o.icon} {o.titulo}
+                        </span>
+                        <span className="block text-slate-500 text-xs">{o.descripcion}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+                <p className="flex items-center gap-2 font-medium text-sm">
+                  <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
+                </p>
+                <p className="mt-0.5 text-slate-500 text-xs">
+                  Visa · Mastercard · AMEX
+                  {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
+                </p>
+              </div>
+            )}
 
             {!attempt && (
               <div className="mt-3 space-y-2 text-sm text-slate-600">
@@ -632,58 +806,72 @@ export default function CheckoutPage() {
                 </button>
               </div>
             )}
-            <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
-              {conektaKey ? (
-                <PagoTarjetaConekta
-                  publicKey={conektaKey}
-                  montoTotal={total}
-                  msiMeses={msiOfrecibles}
-                  procesando={procesando}
-                  formId={FORM_PAGO_ID}
-                  onPagar={(token, meses) => procesarPedido(token, meses)}
-                />
-              ) : permiteDemo ? (
-                <>
-                  {msiOfrecibles.length > 0 && (
-                    <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                      <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
-                        <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
-                      </p>
-                      <div className="space-y-1 text-slate-600 text-sm">
-                        {[...msiOfrecibles]
-                          .sort((a, b) => a - b)
-                          .map((m) => (
-                            <div key={m} className="flex justify-between">
-                              <span>{m} pagos de</span>
-                              <span className="font-semibold">${(total / m).toFixed(2)}</span>
-                            </div>
-                          ))}
+            {metodoActivo === "tarjeta" ? (
+              <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
+                {conektaKey ? (
+                  <PagoTarjetaConekta
+                    publicKey={conektaKey}
+                    montoTotal={total}
+                    msiMeses={msiOfrecibles}
+                    procesando={procesando}
+                    formId={FORM_PAGO_ID}
+                    onPagar={(token, meses) => procesarPedido("tarjeta", token, meses)}
+                  />
+                ) : permiteDemo ? (
+                  <>
+                    {msiOfrecibles.length > 0 && (
+                      <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+                        <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
+                          <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
+                        </p>
+                        <div className="space-y-1 text-slate-600 text-sm">
+                          {[...msiOfrecibles]
+                            .sort((a, b) => a - b)
+                            .map((m) => (
+                              <div key={m} className="flex justify-between">
+                                <span>{m} pagos de</span>
+                                <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => procesarPedido()}
-                    disabled={procesando}
-                    className="gx-btn-primary w-full !py-3"
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => procesarPedido("tarjeta")}
+                      disabled={procesando}
+                      className="gx-btn-primary w-full !py-3"
+                    >
+                      {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+                    </button>
+                    <p className="mt-2 text-center text-slate-400 text-xs">
+                      Pago simulado con proveedor mock (sin cobro real). Configura Conekta para
+                      cobrar de verdad con MSI.
+                    </p>
+                  </>
+                ) : (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
                   >
-                    {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
-                  </button>
-                  <p className="mt-2 text-center text-slate-400 text-xs">
-                    Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar
-                    de verdad con MSI.
+                    El pago en línea no está disponible en este momento. Tu carrito se conserva para
+                    que puedas intentarlo más tarde.
                   </p>
-                </>
-              ) : (
-                <p
-                  role="alert"
-                  className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
-                >
-                  El pago en línea no está disponible en este momento. Tu carrito se conserva para
-                  que puedas intentarlo más tarde.
+                )}
+              </fieldset>
+            ) : (
+              <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="flex items-center gap-2 font-medium">
+                  {opcionesPago.find((o) => o.id === metodoActivo)?.icon}
+                  {opcionesPago.find((o) => o.id === metodoActivo)?.titulo}
                 </p>
-              )}
-            </fieldset>
+                <p className="text-slate-600">
+                  {metodoActivo === "oxxo"
+                    ? "Al confirmar tu compra te mostraremos la referencia para pagar en efectivo en cualquier OXXO. Tu pedido queda apartado mientras realizas tu pago."
+                    : "Al confirmar tu compra te mostraremos la CLABE para transferir desde tu banca en línea. Tu pedido queda apartado mientras realizas tu pago."}
+                </p>
+              </div>
+            )}
           </SeccionCheckout>
         </div>
 
@@ -809,6 +997,15 @@ export default function CheckoutPage() {
             >
               {procesando ? "Consultando…" : "Consultar pago"}
             </button>
+          ) : metodoActivo !== "tarjeta" ? (
+            <button
+              type="button"
+              onClick={() => procesarPedido(metodoActivo)}
+              disabled={pagoDeshabilitado}
+              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
+            </button>
           ) : conektaKey ? (
             <button
               type="submit"
@@ -821,7 +1018,7 @@ export default function CheckoutPage() {
           ) : permiteDemo ? (
             <button
               type="button"
-              onClick={() => procesarPedido()}
+              onClick={() => procesarPedido("tarjeta")}
               disabled={pagoDeshabilitado}
               className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -862,6 +1059,121 @@ function SeccionCheckout({
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Resultado de OXXO/SPEI: el intento queda "pendiente" y el proveedor confirma
+ * por webhook al recibir el pago. Mostramos folio, total y la referencia/CLABE
+ * para que el comprador pague offline; NO es un error ni se descarta el pedido.
+ */
+function PantallaPagoPendiente({
+  pago,
+  email,
+  procesando,
+  onConsultar,
+}: {
+  pago: PagoPendiente;
+  email: string;
+  procesando: boolean;
+  onConsultar: () => Promise<void>;
+}) {
+  const [copiado, setCopiado] = useState(false);
+  const [errorCopia, setErrorCopia] = useState(false);
+  const esSpei = pago.metodo === "spei";
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(pago.referenciaPago);
+      setCopiado(true);
+      setErrorCopia(false);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {
+      setErrorCopia(true);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="gx-card !p-6 text-center">
+        <span className="gx-badge-warn inline-flex items-center gap-1.5">
+          <Clock size={14} strokeWidth={2} /> Pago pendiente
+        </span>
+        <h1 className="mt-3 font-bold text-2xl text-slate-900">Tu pedido quedó apartado</h1>
+        <p className="mt-1 text-slate-600 text-sm">
+          Realiza tu pago para que la tienda confirme tu pedido.
+        </p>
+
+        <div className="mx-auto mt-5 flex max-w-md justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="text-left">
+            <p className="gx-label">Folio del pedido</p>
+            <p className="font-semibold">{pago.folioPublico || "—"}</p>
+          </div>
+          <div className="text-right">
+            <p className="gx-label">Total a pagar</p>
+            <p className="font-semibold">{pago.total ? `$${pago.total}` : "—"}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-marca/30 bg-marca/5 p-4">
+          <p className="gx-label">
+            {esSpei ? "CLABE interbancaria (18 dígitos)" : "Referencia OXXO"}
+          </p>
+          <p className="mt-1 flex items-center justify-center gap-2 font-mono text-xl font-bold tracking-wider text-marca">
+            {esSpei ? (
+              <Landmark size={20} strokeWidth={2} />
+            ) : (
+              <Barcode size={20} strokeWidth={2} />
+            )}
+            {pago.referenciaPago}
+          </p>
+          <button type="button" onClick={copiar} className="gx-btn-secondary mt-3 w-full sm:w-auto">
+            {copiado ? "Copiado ✓" : "Copiar"}
+          </button>
+          {errorCopia && (
+            <p role="alert" className="mt-2 text-danger text-xs">
+              No se pudo copiar automáticamente; anota la {esSpei ? "CLABE" : "referencia"}.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-sm text-slate-600">
+          {esSpei ? (
+            <p>
+              Transfiere el monto exacto desde la app o la banca en línea de tu banco usando la
+              CLABE de arriba. Como concepto puedes indicar el folio de tu pedido.
+            </p>
+          ) : (
+            <p>Ve a cualquier OXXO, muestra la referencia en caja y paga el monto en efectivo.</p>
+          )}
+        </div>
+
+        <p className="mt-4 text-slate-600 text-sm">
+          La tienda confirma tu pago al recibirlo y te avisará por correo. Conserva tu folio para el
+          seguimiento.
+        </p>
+
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={onConsultar}
+            disabled={procesando}
+            className="gx-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {procesando ? "Consultando…" : "Ya pagué · consultar estado"}
+          </button>
+          <Link
+            href={`/seguimiento?folio=${encodeURIComponent(pago.folioPublico)}&email=${encodeURIComponent(email)}`}
+            className="gx-btn-secondary"
+          >
+            Seguir mi pedido
+          </Link>
+          <Link href="/cuenta" className="gx-btn-ghost">
+            Mis pedidos
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
