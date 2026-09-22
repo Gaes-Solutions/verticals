@@ -128,6 +128,7 @@ function buildCheckoutInput(
     ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
     ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
     ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
+    ...(body.medioPagoGuardadoId ? { medioPagoGuardadoId: body.medioPagoGuardadoId } : {}),
     ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
     requiereFactura: body.requiereFactura,
     ...(body.datosFactura ? { datosFactura: body.datosFactura } : {}),

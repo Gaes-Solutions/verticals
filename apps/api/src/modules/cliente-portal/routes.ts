@@ -1,4 +1,5 @@
 import { getTenantClient } from "@gaespos/db";
+import { PagoError } from "@gaespos/pagos";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { canalCliente } from "../../realtime/bus.js";
@@ -34,6 +35,12 @@ import {
   eliminarDireccion,
   listarDirecciones,
 } from "./direcciones-service.js";
+import {
+  MedioPagoError,
+  agregarMedioPago,
+  eliminarMedioPago,
+  listarMediosPago,
+} from "./medios-pago-service.js";
 import {
   ClientePortalError,
   actualizarPerfilCliente,
@@ -108,6 +115,26 @@ function handleErr(reply: FastifyReply, err: unknown): boolean {
             ? "Unauthorized"
             : "Bad Request",
       message: err.message,
+    });
+    return true;
+  }
+  return false;
+}
+
+function handleMedioPagoErr(reply: FastifyReply, err: unknown): boolean {
+  if (err instanceof MedioPagoError) {
+    reply.code(err.statusCode).send({
+      statusCode: err.statusCode,
+      error: err.statusCode >= 500 ? "Internal" : "Unprocessable Entity",
+      message: err.message,
+    });
+    return true;
+  }
+  if (err instanceof PagoError) {
+    reply.code(503).send({
+      statusCode: 503,
+      error: "Service Unavailable",
+      message: "El guardado de tarjetas no está disponible en este momento",
     });
     return true;
   }
@@ -562,6 +589,57 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   app.get("/resenables", async (req) => {
     const { clienteId, tenantSlug } = clienteCtx(req);
     return getComprasResenables(getTenantClient(tenantSlug), clienteId);
+  });
+
+  // ── Mis tarjetas (pagar en 1 toque; solo Conekta) ─────────────────────────
+  app.get("/medios-pago", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    try {
+      return await listarMediosPago(getTenantClient(tenantSlug), clienteId);
+    } catch (err) {
+      if (handleMedioPagoErr(reply, err)) return;
+      throw err;
+    }
+  });
+
+  app.post(
+    "/medios-pago",
+    { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const { clienteId, tenantSlug } = clienteCtx(req);
+      const body = z.object({ cardTokenId: z.string().min(5).max(200) }).parse(req.body);
+      try {
+        const provider = app.pagoProviderFactory("conekta");
+        const medio = await agregarMedioPago(
+          getTenantClient(tenantSlug),
+          provider,
+          clienteId,
+          body.cardTokenId,
+        );
+        return reply.code(201).send(medio);
+      } catch (err) {
+        if (handleMedioPagoErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  app.delete("/medios-pago/:id", async (req, reply) => {
+    const { clienteId, tenantSlug } = clienteCtx(req);
+    const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
+    try {
+      let provider = null;
+      try {
+        provider = app.pagoProviderFactory("conekta");
+      } catch {
+        // Keys de Conekta no configuradas: la baja local se asienta igual.
+      }
+      await eliminarMedioPago(getTenantClient(tenantSlug), provider, clienteId, id);
+      return reply.code(204).send();
+    } catch (err) {
+      if (handleMedioPagoErr(reply, err)) return;
+      throw err;
+    }
   });
 
   app.post("/resenas", async (req, reply) => {

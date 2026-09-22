@@ -61,6 +61,8 @@ export interface IniciarCheckoutInput {
   direccionEnvio?: Record<string, unknown>;
   tarifaEnvioId?: string | undefined;
   cardTokenId?: string | undefined;
+  /** Pago con tarjeta guardada ("Mis tarjetas"): id de ClienteMedioPago. */
+  medioPagoGuardadoId?: string | undefined;
   mesesSinIntereses?: number | undefined;
   requiereFactura: boolean;
   datosFactura?: Record<string, unknown>;
@@ -332,6 +334,36 @@ interface CrearPedidoParams {
   paqueteria: string | undefined;
 }
 
+/**
+ * Resuelve la tarjeta guardada del comprador para cobrar con la fuente del
+ * proveedor (payment_source_id) en vez de con un token de un solo uso. Valida
+ * propiedad (debe pertenecer al dueño del carrito), que siga activa y que el
+ * proveedor del medio coincida con el proveedor del cobro.
+ */
+async function resolverMedioGuardado(
+  client: TenantClient,
+  provider: PaymentProvider,
+  input: Pick<IniciarCheckoutInput, "metodoPago" | "medioPagoGuardadoId">,
+  carrito: { clienteId: string | null },
+) {
+  if (input.metodoPago !== "tarjeta") {
+    throw new CheckoutError(422, "La tarjeta guardada solo aplica a pagos con tarjeta");
+  }
+  if (!carrito.clienteId) {
+    throw new CheckoutError(422, "Inicia sesión para pagar con una tarjeta guardada");
+  }
+  const medioPagoGuardadoId = input.medioPagoGuardadoId;
+  if (!medioPagoGuardadoId) throw new CheckoutError(422, "Tarjeta guardada no disponible");
+  const medio = await client.clienteMedioPago.findFirst({
+    where: { id: medioPagoGuardadoId, clienteId: carrito.clienteId, activo: true },
+  });
+  if (!medio) throw new CheckoutError(422, "Tarjeta guardada no disponible");
+  if (medio.proveedor !== provider.codigo) {
+    throw new CheckoutError(422, "Tarjeta guardada no disponible para este proveedor de pago");
+  }
+  return medio;
+}
+
 async function reservarCuponCheckout(
   client: Pick<TenantClient, "cuponTenant">,
   codigo: string | null,
@@ -400,6 +432,14 @@ async function crearPedidoConIntent(
   onProviderStart: () => void,
 ): Promise<IniciarCheckoutResult> {
   const { subtotal, paqueteria } = params;
+  if (input.cardTokenId && input.medioPagoGuardadoId) {
+    throw new CheckoutError(422, "Usa tu tarjeta guardada o una tarjeta nueva, no ambas");
+  }
+  // Se resuelve ANTES de crear el pedido: si la tarjeta guardada no aplica,
+  // falla sin dejar pedido huérfano.
+  const medioGuardado = input.medioPagoGuardadoId
+    ? await resolverMedioGuardado(client, provider, input, carrito)
+    : null;
   const { pedido, total } = await client.$transaction(async (tx) => {
     if (input.requirePublicStore)
       await validatePublicStore(tx, carrito.items as unknown as CarritoItem[]);
@@ -486,6 +526,13 @@ async function crearPedidoConIntent(
 
   const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
   const montoCentavos = Math.round(total.times(100).toNumber());
+  // Tarjeta guardada: cobro con la fuente del proveedor, no con token de un solo uso.
+  const fuenteGuardada = medioGuardado
+    ? {
+        paymentSourceId: medioGuardado.proveedorSourceId,
+        proveedorCustomerId: medioGuardado.proveedorCustomerId,
+      }
+    : {};
   onProviderStart();
   const intent = await provider.crearIntent({
     pedidoId: pedido.id,
@@ -502,6 +549,7 @@ async function crearPedidoConIntent(
       ...(input.mesesSinIntereses ? { msi: String(input.mesesSinIntereses) } : {}),
     },
     ...(input.cardTokenId ? { cardTokenId: input.cardTokenId } : {}),
+    ...fuenteGuardada,
     ...(input.mesesSinIntereses ? { mesesSinIntereses: input.mesesSinIntereses } : {}),
     ...(input.stripeAccountId ? { stripeAccountId: input.stripeAccountId } : {}),
     ...(input.stripeAccountId && input.platformFeeBps
