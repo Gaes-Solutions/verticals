@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FotosDeProducto } from "../components/FotosDeProducto.js";
 import { ApiError, api, puede } from "../lib/api.js";
 import type { Categoria, Paged, Producto } from "../lib/types.js";
 
@@ -368,6 +369,7 @@ function ProductoModal({
               ))}
             </select>
           </Field>
+          {editando && producto && <FotosDeProducto productoId={producto.id} />}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="font-semibold text-slate-700 text-sm">Datos para facturar (SAT)</p>
             <p className="mb-3 text-slate-500 text-xs">
