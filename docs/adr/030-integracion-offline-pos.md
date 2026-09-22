@@ -122,3 +122,25 @@ mismo total y el mismo desglose línea por línea.
 Falta para cobrar sin internet: registrar la venta local en la cola con ese
 desglose, la pantalla que distinga cobrado localmente de confirmado, y los
 instaladores.
+
+## Cobro en efectivo sin internet — 21-sep-2026
+
+`cobrarSinInternet` (en `@gaespos/sync-client`) arma la venta cobrada en el
+equipo y la deja en la cola antes de dar el cobro por bueno. Va con el turno de
+caja vigente y con el desglose que calculó la caja, que es el mismo que vio el
+cliente.
+
+Reglas de ese cobro: solo efectivo (una tarjeta necesita terminal o proveedor en
+línea, y no se promete un cobro que nadie autorizó), exige turno de caja abierto,
+el efectivo recibido debe cubrir el total, y el desglose debe corresponder a los
+artículos. Cada venta lleva su propia clave, así que un reintento no pisa otra.
+
+Verificado de punta a punta (`apps/api/test/tenant-cobro-sin-internet.test.ts`):
+el servidor acepta la venta con el importe cobrado y la asienta con su desglose;
+reenviarla responde `deduped` sin crear otra; si el precio cambió mientras no
+había internet la venta queda para revisión y no se crea; y una venta de un turno
+cerrado no entra al turno nuevo.
+
+Sigue pendiente: la pantalla del POS que cobre por este camino cuando no hay red
+y distinga cobrado en la caja de confirmado por el servidor, el corte de caja con
+ventas pendientes de confirmar, y los instaladores.

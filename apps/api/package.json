@@ -53,6 +53,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@gaespos/sync-client": "workspace:*",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "@types/web-push": "^3.6.4",

@@ -138,6 +138,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@gaespos/sync-client':
+        specifier: workspace:*
+        version: link:../../packages/sync-client
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.17

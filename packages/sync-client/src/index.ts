@@ -5,4 +5,5 @@ export * from "./operation-builder.js";
 
 export * from "./sqlite-storage.js";
 export * from "./catalog-download.js";
+export * from "./venta-offline.js";
 export type { CatalogManifest, CatalogPage } from "@gaespos/sync";
