@@ -178,6 +178,15 @@ export interface CompraResenable {
   yaResenado: boolean;
 }
 
+/** Tarjeta guardada ("Mis tarjetas"): solo máscara, nunca PAN/CVV. */
+export interface MedioPagoGuardado {
+  id: string;
+  marca: string;
+  last4: string;
+  expMes: number;
+  expAnio: number;
+}
+
 /** Proxy al backend para registro/login; el route handler setea la cookie. */
 export async function authClienteBackend(
   accion: "registro" | "login",

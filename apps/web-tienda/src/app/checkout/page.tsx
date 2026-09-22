@@ -9,6 +9,7 @@ import {
   prepareAttempt,
   submitAttempt,
 } from "@/lib/checkout-attempt";
+import type { MedioPagoGuardado } from "@/lib/cliente";
 import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -154,6 +155,12 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
   const [pagoPendiente, setPagoPendiente] = useState<PagoPendiente | null>(null);
+  // "Mis tarjetas": tarjetas guardadas del comprador (pago en 1 toque).
+  const [mediosPago, setMediosPago] = useState<MedioPagoGuardado[]>([]);
+  // "" = pagar con tarjeta nueva; id = tarjeta guardada seleccionada.
+  const [medioPagoSel, setMedioPagoSel] = useState("");
+  const [guardarTarjeta, setGuardarTarjeta] = useState(false);
+  const [sesionCliente, setSesionCliente] = useState(false);
 
   function marcarPendiente(p: PagoPendiente) {
     setPagoPendiente(p);
@@ -183,9 +190,19 @@ export default function CheckoutPage() {
     // prefill con la sesión del cliente si está logueado
     fetch("/api/cuenta/me").then(async (res) => {
       if (!res.ok) return;
+      setSesionCliente(true);
       const me = (await res.json()) as { nombre: string; email: string | null };
       setEmail((prev) => prev || (me.email ?? ""));
       setNombre((prev) => prev || me.nombre);
+    });
+    // tarjetas guardadas ("Mis tarjetas"): [] para invitado; con al menos una,
+    // la primera queda pre-seleccionada para pagar en 1 toque.
+    fetch("/api/cuenta/medios-pago").then(async (res) => {
+      if (!res.ok) return;
+      const medios = (await res.json()) as MedioPagoGuardado[];
+      if (!Array.isArray(medios) || medios.length === 0) return;
+      setMediosPago(medios);
+      setMedioPagoSel(medios[0]?.id ?? "");
     });
     // direcciones guardadas (checkout rápido): la predeterminada queda pre-seleccionada
     fetch("/api/cuenta/direcciones").then(async (res) => {
@@ -422,13 +439,18 @@ export default function CheckoutPage() {
     }
   }
 
-  async function procesarPedido(metodo: MetodoPago, cardTokenId?: string, meses?: number | null) {
+  async function procesarPedido(
+    metodo: MetodoPago,
+    cardTokenId?: string,
+    meses?: number | null,
+    extra?: { medioPagoGuardadoId?: string; guardarTarjeta?: boolean },
+  ) {
     if (!attempt || procesando) return;
     if (attempt.submitted) {
       await consultarPedido();
       return;
     }
-    if (metodo === "tarjeta" && !cardTokenId && !permiteDemo) {
+    if (metodo === "tarjeta" && !cardTokenId && !extra?.medioPagoGuardadoId && !permiteDemo) {
       setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
       return;
     }
@@ -462,6 +484,8 @@ export default function CheckoutPage() {
           metodoPago: metodo,
           ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
           ...(cardTokenId ? { cardTokenId } : {}),
+          ...(extra?.medioPagoGuardadoId ? { medioPagoGuardadoId: extra.medioPagoGuardadoId } : {}),
+          ...(extra?.guardarTarjeta ? { guardarTarjeta: true } : {}),
           ...(meses ? { mesesSinIntereses: meses } : {}),
           ...(modoEntrega === "pickup"
             ? { sucursalPickupId: sucursalId }
@@ -546,6 +570,10 @@ export default function CheckoutPage() {
       },
     ] satisfies Array<{ id: MetodoPago; titulo: string; descripcion: string; icon: ReactNode }>
   ).filter((o) => metodosDisponibles.includes(o.id));
+
+  // "Mis tarjetas": tarjeta guardada seleccionada (pago en 1 toque) o tarjeta nueva.
+  const tarjetaGuardadaSel = mediosPago.find((m) => m.id === medioPagoSel) ?? null;
+  const pagarConTarjetaNueva = !tarjetaGuardadaSel;
 
   return (
     <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
@@ -820,15 +848,107 @@ export default function CheckoutPage() {
             )}
             {metodoActivo === "tarjeta" ? (
               <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
-                {conektaKey ? (
-                  <PagoTarjetaConekta
-                    publicKey={conektaKey}
-                    montoTotal={total}
-                    msiMeses={msiOfrecibles}
-                    procesando={procesando}
-                    formId={FORM_PAGO_ID}
-                    onPagar={(token, meses) => procesarPedido("tarjeta", token, meses)}
-                  />
+                {mediosPago.length > 0 && (
+                  <div className="mb-3 space-y-2" role="radiogroup" aria-label="Tu tarjeta">
+                    <p className="gx-label">Tu tarjeta</p>
+                    {mediosPago.map((m) => {
+                      const seleccionada = tarjetaGuardadaSel?.id === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (mismo patrón que direcciones guardadas)
+                          role="radio"
+                          aria-checked={seleccionada}
+                          onClick={() => setMedioPagoSel(m.id)}
+                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                            seleccionada
+                              ? "border-marca bg-marca/5 ring-1 ring-marca"
+                              : "border-slate-300 hover:border-marca"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                              seleccionada ? "border-marca" : "border-slate-300"
+                            }`}
+                          >
+                            {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
+                          </span>
+                          <CreditCard size={16} strokeWidth={2} className="flex-shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium capitalize">{m.marca}</span>
+                            <span className="block text-slate-500 text-xs">
+                              •••• {m.last4} · exp {String(m.expMes).padStart(2, "0")}/{m.expAnio}
+                            </span>
+                          </span>
+                          <span className="text-marca text-xs">1 toque</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del selector de tarjetas guardadas
+                      role="radio"
+                      aria-checked={pagarConTarjetaNueva}
+                      onClick={() => setMedioPagoSel("")}
+                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                        pagarConTarjetaNueva
+                          ? "border-marca bg-marca/5 ring-1 ring-marca"
+                          : "border-slate-300 hover:border-marca"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                          pagarConTarjetaNueva ? "border-marca" : "border-slate-300"
+                        }`}
+                      >
+                        {pagarConTarjetaNueva && <span className="h-2 w-2 rounded-full bg-marca" />}
+                      </span>
+                      <span className="flex items-center gap-1 font-medium">
+                        <Plus size={14} strokeWidth={2.5} /> Usar otra tarjeta
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {tarjetaGuardadaSel ? (
+                  <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+                    <p className="flex items-center gap-2 font-medium text-sm">
+                      <CreditCard size={16} strokeWidth={2} />
+                      <span className="capitalize">{tarjetaGuardadaSel.marca}</span> ••••{" "}
+                      {tarjetaGuardadaSel.last4}
+                    </p>
+                    <p className="mt-0.5 text-slate-500 text-xs">
+                      Expira {String(tarjetaGuardadaSel.expMes).padStart(2, "0")}/
+                      {tarjetaGuardadaSel.expAnio} · pagas en un paso sin volver a capturar tu
+                      tarjeta
+                    </p>
+                  </div>
+                ) : conektaKey ? (
+                  <>
+                    <PagoTarjetaConekta
+                      publicKey={conektaKey}
+                      montoTotal={total}
+                      msiMeses={msiOfrecibles}
+                      procesando={procesando}
+                      formId={FORM_PAGO_ID}
+                      onPagar={(token, meses) =>
+                        procesarPedido("tarjeta", token, meses, {
+                          ...(guardarTarjeta ? { guardarTarjeta: true } : {}),
+                        })
+                      }
+                    />
+                    {sesionCliente && (
+                      <label className="mt-3 flex items-center gap-2 text-slate-600 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={guardarTarjeta}
+                          onChange={(e) => setGuardarTarjeta(e.target.checked)}
+                        />
+                        Guardar mi tarjeta para la próxima vez
+                      </label>
+                    )}
+                  </>
                 ) : permiteDemo ? (
                   <>
                     {msiOfrecibles.length > 0 && (
@@ -1023,6 +1143,19 @@ export default function CheckoutPage() {
                 : metodoActivo === "cod"
                   ? `Apartar pedido · $${total.toFixed(2)}`
                   : `Pagar $${total.toFixed(2)}`}
+            </button>
+          ) : tarjetaGuardadaSel ? (
+            <button
+              type="button"
+              onClick={() =>
+                procesarPedido("tarjeta", undefined, undefined, {
+                  medioPagoGuardadoId: tarjetaGuardadaSel.id,
+                })
+              }
+              disabled={pagoDeshabilitado}
+              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
             </button>
           ) : conektaKey ? (
             <button

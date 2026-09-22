@@ -1,6 +1,7 @@
 import { DireccionesCuenta } from "@/components/direcciones-cuenta";
 import { EstadoError } from "@/components/estado-error";
 import { LogoutBoton } from "@/components/logout-boton";
+import { MediosPagoCuenta } from "@/components/medios-pago-cuenta";
 import { NotificacionesCliente } from "@/components/notificaciones-cliente";
 import { PerfilCuenta } from "@/components/perfil-cuenta";
 import { PwaPush } from "@/components/pwa-push";
@@ -120,6 +121,10 @@ export default async function CuentaPage() {
 
       <div className="mt-10">
         <DireccionesCuenta />
+      </div>
+
+      <div className="mt-10">
+        <MediosPagoCuenta />
       </div>
 
       <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>

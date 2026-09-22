@@ -3,12 +3,47 @@ import { checkoutIdentity, sameOriginRequest } from "@/lib/checkout-session";
 import { ClienteSessionError } from "@/lib/cliente";
 import { type NextRequest, NextResponse } from "next/server";
 
+const API_URL = process.env.API_URL ?? "http://localhost:3000";
+
 interface CheckoutResult {
   folioPublico: string;
   intentId: string;
   total: string;
   intentStatus: "confirmado" | "pendiente" | "requiere_accion" | "fallido";
   referenciaPago?: string;
+}
+
+interface MedioPagoGuardado {
+  id: string;
+  marca: string;
+  last4: string;
+  expMes: number;
+  expAnio: number;
+}
+
+/** Guarda la tarjeta tokenizada en "Mis tarjetas" usando la sesión del comprador. */
+async function guardarMedioPago(token: string, cardTokenId: string): Promise<MedioPagoGuardado> {
+  const res = await fetch(`${API_URL}/cliente-portal/medios-pago`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ cardTokenId }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("No se pudo guardar tu tarjeta.");
+  return (await res.json()) as MedioPagoGuardado;
+}
+
+/** Baja best-effort la tarjeta que acabamos de guardar (el cobro falló). */
+async function revertirMedioPago(token: string, id: string): Promise<void> {
+  try {
+    await fetch(`${API_URL}/cliente-portal/medios-pago/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
+    // best-effort: si falla, la tarjeta queda guardada pero nunca se usará sola.
+  }
 }
 
 function publicResult(result: CheckoutResult) {
@@ -67,6 +102,8 @@ export async function POST(req: NextRequest) {
       direccionEnvio?: Record<string, unknown>;
       cuponCodigo?: string;
       cardTokenId?: string;
+      medioPagoGuardadoId?: string;
+      guardarTarjeta?: boolean;
       mesesSinIntereses?: number;
     };
     const metodoPago = body.metodoPago ?? "tarjeta";
@@ -96,19 +133,63 @@ export async function POST(req: NextRequest) {
       }
     }
     const identity = await checkoutIdentity(body.checkoutContext, body.idempotencyKey);
+    if (body.medioPagoGuardadoId && !identity.session) {
+      return NextResponse.json(
+        { message: "Inicia sesión para pagar con una tarjeta guardada." },
+        { status: 422 },
+      );
+    }
+    if (body.guardarTarjeta && !body.cardTokenId) {
+      return NextResponse.json(
+        { message: "Solo puedes guardar una tarjeta nueva (no una tarjeta guardada)." },
+        { status: 422 },
+      );
+    }
+    if (body.guardarTarjeta && !identity.session) {
+      return NextResponse.json(
+        { message: "Inicia sesión para guardar tu tarjeta." },
+        { status: 422 },
+      );
+    }
     const recoveryPath = `/checkout/intentos/${identity.key}`;
     try {
       return publicResult(await api<CheckoutResult>(recoveryPath));
     } catch (err) {
       if (!(err instanceof ApiError) || err.statusCode !== 404) throw err;
     }
-    if (process.env.NODE_ENV === "production" && !body.cardTokenId && !referenciado && !alRecoger) {
+    if (
+      process.env.NODE_ENV === "production" &&
+      !body.cardTokenId &&
+      !body.medioPagoGuardadoId &&
+      !referenciado &&
+      !alRecoger
+    ) {
       return NextResponse.json(
         { message: "El pago no está disponible. Contacta a la tienda o reintenta más tarde." },
         { status: 503 },
       );
     }
-    const conConekta = Boolean(body.cardTokenId);
+    // "Guardar mi tarjeta": se guarda ANTES del cobro (el token de Conekta es de
+    // un solo uso y no se puede adjuntar al customer tras consumirlo en el
+    // cargo) y el cobro sale con la fuente guardada (mismo path que pagar con
+    // tarjeta guardada). Si el cobro se confirma como fallido, se revierte el
+    // guardado para no conservar tarjetas que no pudieron cobrarse.
+    let medioNuevo: MedioPagoGuardado | null = null;
+    if (body.guardarTarjeta && body.cardTokenId && identity.session) {
+      try {
+        medioNuevo = await guardarMedioPago(identity.session.token, body.cardTokenId);
+      } catch {
+        return NextResponse.json(
+          {
+            message:
+              "No se pudo guardar tu tarjeta y el pago NO se realizó. Quita “guardar tarjeta” e inténtalo de nuevo.",
+          },
+          { status: 503 },
+        );
+      }
+    }
+    const conConekta =
+      Boolean(body.cardTokenId) || Boolean(body.medioPagoGuardadoId) || Boolean(medioNuevo);
     const carrito = await api<{ id: string }>("/tienda", {
       body: {
         ...(identity.session
@@ -128,7 +209,14 @@ export async function POST(req: NextRequest) {
         metodoPago,
         proveedorPago: conConekta || referenciado ? "conekta" : "mock",
         metodoEnvio: body.metodoEnvio,
-        ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
+        // Tarjeta nueva + "guardar": se cobra con la fuente recién guardada.
+        ...(medioNuevo
+          ? { medioPagoGuardadoId: medioNuevo.id }
+          : body.medioPagoGuardadoId
+            ? { medioPagoGuardadoId: body.medioPagoGuardadoId }
+            : body.cardTokenId
+              ? { cardTokenId: body.cardTokenId }
+              : {}),
         ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
         ...(body.tarifaEnvioId ? { tarifaEnvioId: body.tarifaEnvioId } : {}),
         ...(body.sucursalPickupId ? { sucursalPickupId: body.sucursalPickupId } : {}),
@@ -140,7 +228,11 @@ export async function POST(req: NextRequest) {
     if (!conConekta && !referenciado && !alRecoger)
       await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
     // El resultado del proveedor no demuestra que la venta haya quedado asentada.
-    return publicResult(await api<CheckoutResult>(recoveryPath));
+    const final = await api<CheckoutResult>(recoveryPath);
+    if (medioNuevo && final.intentStatus === "fallido" && identity.session) {
+      await revertirMedioPago(identity.session.token, medioNuevo.id);
+    }
+    return publicResult(final);
   } catch (err) {
     return checkoutError(err);
   }
