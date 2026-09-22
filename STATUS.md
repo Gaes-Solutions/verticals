@@ -1,5 +1,20 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Fotos del catálogo — 21-sep-2026
+
+El catálogo importado (2,049 productos) se publicó sin una sola foto porque no
+había forma de subirlas. Ya existe: el panel sube muchas de una vez y asigna cada
+archivo al producto cuyo código de barras, SKU o código coincida con el nombre
+del archivo; el API las guarda en el volumen del servicio validando los primeros
+bytes (JPG/PNG/WebP, 5 MB, sin SVG); la tienda las muestra a través de su propio
+BFF con caché de una semana. 11 pruebas nuevas (7 API, 4 tienda).
+
+**Falta que Gaby lo habilite en producción**: Volume `/data` en el servicio `api`
+de Railway + `PRODUCTOS_MEDIA_ROOT=/data/productos` y `KIOSKO_MEDIA_ROOT=/data/kiosko`.
+Sin eso, subir una foto responde 503. Ver [runbook §6.5](docs/deploy-railway.md) y
+[ADR 032](docs/adr/032-fotos-de-producto.md). Sin miniaturas ni reordenar todavía.
+
+
 ## Reconciliación offline — 18-sep-2026
 
 La sincronización exige total original y apertura de origen. Rechaza cambios de importe o de turno sin crear venta; conserva la operación local para revisión y los acuses de ventas ya aplicadas. API24, sync35 y POS164 aprobados; tipos API/POS correctos. Comprobante completo, cálculo local y cobro offline aún pendientes. [Evidencia y cambio de contrato](docs/avance-reconciliacion-offline-2026-09-18.md).
