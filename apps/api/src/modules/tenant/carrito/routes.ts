@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { metodosPagoDeProveedor, tarjetaListaPara } from "../../../lib/metodos-pago.js";
 import { evaluarCupon } from "../checkout/cupon-service.js";
 import { estadoTienda } from "../ecommerce-config/estado-tienda.js";
 import {
@@ -93,6 +94,10 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       facturacionSelfService: c.facturacionSelfService,
       preguntasPublicas: c.preguntasPublicas,
       pushHabilitado: c.pushHabilitado,
+      metodosPago: metodosPagoDeProveedor(
+        c.pasarelaPagoProvider,
+        tarjetaListaPara(c.pasarelaPagoProvider),
+      ),
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
       envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
         ? Number(tarifaGratis.montoMinimoEnvioGratis).toFixed(2)
