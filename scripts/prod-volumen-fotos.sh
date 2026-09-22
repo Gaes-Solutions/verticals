@@ -23,9 +23,20 @@ echo
 if railway volume list 2>/dev/null | grep -q "Attached to: ${SERVICIO}"; then
   echo "✓ El servicio ya tiene un volumen; no se crea otro."
 else
-  echo "→ Creando el volumen…"
-  # El servicio va ANTES del subcomando: `volume add` no acepta -s.
-  railway volume -s "${SERVICIO}" add -m "${MONTAJE}"
+  # `railway volume` quiere el ID del servicio, no su nombre: con el nombre
+  # truena con un panic de Rust en vez de decirlo.
+  ID="$(railway status --json | python3 -c "
+import json,sys
+nombre = sys.argv[1]
+datos = json.load(sys.stdin)
+for s in datos.get('services', {}).get('edges', []):
+    if s['node'].get('name') == nombre:
+        print(s['node']['id'])
+        break
+" "${SERVICIO}")"
+  if [ -z "${ID}" ]; then echo "No encontré el servicio ${SERVICIO} en este proyecto" >&2; exit 1; fi
+  echo "→ Creando el volumen en ${SERVICIO} (${ID})…"
+  railway volume -s "${ID}" add -m "${MONTAJE}"
 fi
 
 echo
