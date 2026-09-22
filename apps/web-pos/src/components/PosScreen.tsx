@@ -26,6 +26,7 @@ import { DirectPrint } from "./DirectPrint.js";
 import { PesoModal } from "./PesoModal.js";
 import { RecargaModal } from "./RecargaModal.js";
 import { Recibo } from "./Recibo.js";
+import { VentasPorRevisar } from "./VentasPorRevisar.js";
 
 interface PesajePendiente {
   varianteId: string;
@@ -737,6 +738,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           {avisoSinRed}
         </output>
       )}
+      <VentasPorRevisar session={session} />
       {porConfirmar > 0 && (
         <p className="border-b border-warn/30 bg-warn/10 px-4 py-2 text-slate-800 text-sm">
           {porConfirmar === 1

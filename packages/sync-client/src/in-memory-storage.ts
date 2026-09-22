@@ -1,5 +1,11 @@
 import type { SyncOpResult, SyncOperation } from "@gaespos/sync";
-import type { LocalQueueEntry, LocalStorage, PendingConflict, QueueStats } from "./types.js";
+import type {
+  LocalOpStatus,
+  LocalQueueEntry,
+  LocalStorage,
+  PendingConflict,
+  QueueStats,
+} from "./types.js";
 
 /**
  * Implementación in-memory de LocalStorage para tests y demos. En producción
@@ -69,6 +75,13 @@ export class InMemoryStorage implements LocalStorage {
     e.lastError = error;
   }
 
+  async getByStatus(statuses: LocalOpStatus[], limit: number): Promise<LocalQueueEntry[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Límite inválido");
+    return [...this.queue.values()]
+      .filter((e) => statuses.includes(e.status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
   async getConflicts(): Promise<PendingConflict[]> {
     return Array.from(this.queue.values())
       .filter((e) => e.status === "conflict" && e.conflict)

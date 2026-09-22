@@ -151,6 +151,19 @@ export class SqliteStorage implements LocalStorage {
       conflict: JSON.parse(row.conflict_json ?? "null") as ConflictInfo,
     }));
   }
+  async getByStatus(statuses: LocalOpStatus[], limit: number): Promise<LocalQueueEntry[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Límite inválido");
+    const validos = statuses.filter((s) =>
+      ["pending", "syncing", "synced", "conflict", "failed"].includes(s),
+    );
+    if (!validos.length) return [];
+    const marcadores = validos.map((_, i) => `?${i + 2}`).join(",");
+    const rows = await this.database.select<QueueRow[]>(
+      `SELECT * FROM pos_sync_queue WHERE scope=?1 AND status IN (${marcadores}) ORDER BY created_at DESC,idempotency_key LIMIT ?${validos.length + 2}`,
+      [this.scope, ...validos, limit],
+    );
+    return rows.map(entry);
+  }
   async resolveConflict(key: string, resolution: "abandon" | "retry"): Promise<void> {
     if (resolution === "abandon") {
       // Never discard a cash sale that may already have exchanged money locally.

@@ -51,6 +51,8 @@ export interface LocalStorage {
   applyResult(result: SyncOpResult): Promise<void>;
   scheduleRetry(idempotencyKey: string, nextAttemptAt: Date, error: string): Promise<void>;
   getConflicts(): Promise<PendingConflict[]>;
+  /** Cola por estado: el cajero tiene que poder ver lo cobrado que aún no confirma el servidor. */
+  getByStatus(statuses: LocalOpStatus[], limit: number): Promise<LocalQueueEntry[]>;
   resolveConflict(idempotencyKey: string, resolution: "abandon" | "retry"): Promise<void>;
   getStats(): Promise<QueueStats>;
   getLastSyncAt(): Promise<string | null>;

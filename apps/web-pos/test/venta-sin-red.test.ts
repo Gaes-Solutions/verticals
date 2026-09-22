@@ -14,9 +14,14 @@ vi.mock("../src/lib/local-catalog.js", () => ({
   readCatalogAccess: async () => access.valor,
 }));
 
-const { calcularSinRed, cobrarSinRed, ventasPorConfirmar } = await import(
-  "../src/lib/venta-sin-red.js"
-);
+const {
+  calcularSinRed,
+  cobrarSinRed,
+  pendientesDeCaja,
+  reintentarVenta,
+  ventasPorConfirmar,
+  ventasRechazadas,
+} = await import("../src/lib/venta-sin-red.js");
 
 const session = {
   identity: { id: "u", tenantSlug: "t", nombre: "Caja 1", permissions: ["ventas.crear"] },
@@ -118,5 +123,41 @@ describe("cobro sin red en la caja", () => {
     await expect(cobrarSinRed(session, { ...cobro, efectivo: "100.00" })).rejects.toThrow(
       "no cubre el total",
     );
+  });
+
+  it("el corte ve el importe cobrado que el servidor no ha confirmado", async () => {
+    const storage = storageConCatalogo();
+    access.valor = { storage, grant: { catalogId: "cat-1" } };
+    await cobrarSinRed(session, cobro);
+    await cobrarSinRed(session, cobro);
+
+    expect(await pendientesDeCaja(session)).toEqual({ cantidad: 2, total: "502.00" });
+  });
+
+  it("muestra la venta que el servidor rechazó y la deja reintentar", async () => {
+    const storage = storageConCatalogo();
+    access.valor = { storage, grant: { catalogId: "cat-1" } };
+    const venta = await cobrarSinRed(session, cobro);
+    const [pendiente] = await storage.getPending(5);
+    await storage.markSyncing([venta.idempotencyKey]);
+    await storage.applyResult({
+      idempotencyKey: venta.idempotencyKey,
+      entityType: "venta",
+      entityIdLocal: pendiente?.operation.entityIdLocal ?? "",
+      entityIdRemoto: null,
+      status: "failed",
+      error: "El detalle de la venta cambió; revísalo antes de registrarla",
+    });
+
+    const rechazadas = await ventasRechazadas(session);
+    expect(rechazadas).toHaveLength(1);
+    expect(rechazadas[0]).toMatchObject({
+      total: "251",
+      motivo: "El detalle de la venta cambió; revísalo antes de registrarla",
+    });
+
+    await reintentarVenta(session, venta.idempotencyKey);
+    expect(await ventasRechazadas(session)).toHaveLength(0);
+    expect((await storage.getStats()).pending).toBe(1);
   });
 });

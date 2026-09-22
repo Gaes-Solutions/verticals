@@ -165,3 +165,23 @@ cajero sepa si quedó algo del turno anterior sin subir.
 
 Sigue pendiente: reintento visible de una venta rechazada, el corte de caja con
 ventas pendientes de confirmar, y los instaladores por sistema operativo.
+
+## Ventas rechazadas y corte de caja — 21-sep-2026
+
+Una venta cobrada en el equipo puede ser rechazada por el servidor (el precio
+cambió, el turno se cerró). El dinero ya está en el cajón, así que esas ventas
+se listan en la caja con su importe, hora y motivo, y se pueden reintentar desde
+ahí. No se descartan solas y el almacén ya impedía descartar una venta a mano.
+
+El corte también lo considera: antes de cortar, la caja muestra cuántas ventas y
+por cuánto siguen sin confirmar, y **no deja hacer el corte Z** mientras existan.
+Ese efectivo está en el cajón pero todavía no aparece en las ventas del servidor,
+así que cerrar el turno dejaría el corte corto por ese importe. El corte X (solo
+lectura) se permite siempre.
+
+La consulta de la cola se generalizó a `getByStatus(estados, límite)` en el
+almacén local (SQLite y en memoria), que es lo que alimenta tanto la lista de
+rechazadas como el importe pendiente del corte.
+
+Sigue pendiente: instaladores por sistema operativo y pruebas con impresora,
+cajón y escáner reales.

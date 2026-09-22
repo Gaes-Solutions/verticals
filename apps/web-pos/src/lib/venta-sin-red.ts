@@ -119,6 +119,32 @@ export async function ventasPorConfirmar(session: Session): Promise<number> {
   return stats.pending + stats.syncing + stats.failed + stats.conflict;
 }
 
+export interface PendientesDeCaja {
+  cantidad: number;
+  total: string;
+}
+
+/**
+ * Lo cobrado en este equipo que el servidor todavía no asentó. El corte lo
+ * necesita: ese efectivo está en el cajón pero aún no aparece en las ventas del
+ * servidor, así que cerrar el turno sin avisar dejaría el corte descuadrado.
+ */
+export async function pendientesDeCaja(session: Session): Promise<PendientesDeCaja> {
+  const access = await readCatalogAccess(desktopScope(session));
+  if (!access) return { cantidad: 0, total: "0.00" };
+  const entradas = await access.storage.getByStatus(
+    ["pending", "syncing", "failed", "conflict"],
+    200,
+  );
+  const ventas = entradas.filter((e) => e.operation.entityType === "venta");
+  const centavos = ventas.reduce((acc, entrada) => {
+    const payload = entrada.operation.payload as { expectedTotal?: unknown };
+    const valor = typeof payload.expectedTotal === "string" ? Number(payload.expectedTotal) : 0;
+    return acc + (Number.isFinite(valor) ? Math.round(valor * 100) : 0);
+  }, 0);
+  return { cantidad: ventas.length, total: (centavos / 100).toFixed(2) };
+}
+
 const APERTURA_KEY = "gaespos_pos_apertura";
 
 /**
@@ -148,4 +174,42 @@ export function olvidarApertura(cajaId: string): void {
   } catch {
     // nada que limpiar
   }
+}
+
+export interface VentaRechazada {
+  idempotencyKey: string;
+  total: string;
+  cobradaAt: string;
+  motivo: string;
+  intentos: number;
+}
+
+/**
+ * Ventas cobradas en este equipo que el servidor rechazó (un precio que cambió,
+ * un turno que se cerró). El dinero ya se recibió, así que el cajero tiene que
+ * verlas y decidir; nunca se descartan solas.
+ */
+export async function ventasRechazadas(session: Session): Promise<VentaRechazada[]> {
+  const access = await readCatalogAccess(desktopScope(session));
+  if (!access) return [];
+  const fallidas = await access.storage.getByStatus(["failed", "conflict"], 50);
+  return fallidas
+    .filter((entrada) => entrada.operation.entityType === "venta")
+    .map((entrada) => {
+      const payload = entrada.operation.payload as { expectedTotal?: unknown };
+      return {
+        idempotencyKey: entrada.operation.idempotencyKey,
+        total: typeof payload.expectedTotal === "string" ? payload.expectedTotal : "0",
+        cobradaAt: entrada.operation.localUpdatedAt ?? entrada.createdAt,
+        motivo: entrada.lastError ?? "El servidor no aceptó la venta",
+        intentos: entrada.attempts,
+      };
+    });
+}
+
+/** Vuelve a poner la venta en la cola para que el siguiente envío la intente. */
+export async function reintentarVenta(session: Session, idempotencyKey: string): Promise<void> {
+  const access = await readCatalogAccess(desktopScope(session));
+  if (!access) throw new Error("No hay almacenamiento local para reintentar la venta");
+  await access.storage.resolveConflict(idempotencyKey, "retry");
 }

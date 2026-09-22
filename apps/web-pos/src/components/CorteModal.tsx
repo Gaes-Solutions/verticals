@@ -14,6 +14,7 @@ import {
   setCortePendiente,
 } from "../lib/corte-recovery.js";
 import type { AperturaActual, CorteResultado } from "../lib/types.js";
+import { type PendientesDeCaja, pendientesDeCaja } from "../lib/venta-sin-red.js";
 
 const BILLETES = ["1000", "500", "200", "100", "50", "20"] as const;
 const MONEDAS = ["20", "10", "5", "2", "1", "0.5"] as const;
@@ -39,6 +40,12 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
     getCortePendiente(scope),
   );
   const [contadoConfirmado, setContadoConfirmado] = useState<string | null>(null);
+  // Lo cobrado sin internet está en el cajón pero no en las ventas del servidor:
+  // cerrar el turno así dejaría el corte corto por ese importe.
+  const [sinConfirmar, setSinConfirmar] = useState<PendientesDeCaja>({
+    cantidad: 0,
+    total: "0.00",
+  });
   const guard = useRef(false);
   const active = useRef(true);
   const generation = useRef(0);
@@ -48,6 +55,15 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
   const headingId = useId();
   const canRead = puede("corte.consultar");
   const canClose = puede("caja.cerrar");
+  useEffect(() => {
+    let vigente = true;
+    void pendientesDeCaja(session).then((r) => {
+      if (vigente) setSinConfirmar(r);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [session]);
   const load = useCallback(async () => {
     const version = ++generation.current;
     request.current?.abort();
@@ -206,10 +222,12 @@ function useCorte({ session, onClose, onCierreZ }: CorteProps) {
     canClose,
     hacerCorte,
     reintentarLecturaX,
+    sinConfirmar,
   };
 }
 export function CorteModal(props: CorteProps) {
   const {
+    sinConfirmar,
     dialogRef,
     headingRef,
     headingId,
@@ -314,6 +332,19 @@ export function CorteModal(props: CorteProps) {
               />
             </div>
 
+            {sinConfirmar.cantidad > 0 && (
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-warn/40 bg-warn/10 p-3 text-slate-800 text-sm"
+              >
+                {sinConfirmar.cantidad === 1
+                  ? `Hay 1 venta cobrada en esta caja por $${sinConfirmar.total} que el servidor aún no confirma.`
+                  : `Hay ${sinConfirmar.cantidad} ventas cobradas en esta caja por $${sinConfirmar.total} que el servidor aún no confirma.`}{" "}
+                Ese efectivo ya está en el cajón pero no aparece en el corte. Conéctate para que
+                suban antes de cerrar el turno.
+              </p>
+            )}
+
             <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
               <span className="text-slate-600">Efectivo contado</span>
               <span className="text-xl font-bold text-slate-900">
@@ -341,7 +372,7 @@ export function CorteModal(props: CorteProps) {
               <button
                 type="button"
                 onClick={() => hacerCorte("Z")}
-                disabled={blocked || !canRead || !canClose}
+                disabled={blocked || !canRead || !canClose || sinConfirmar.cantidad > 0}
                 className="flex-1 rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
               >
                 Corte Z (cierre)
