@@ -75,6 +75,14 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { montoMinimoEnvioGratis: "asc" },
       select: { montoMinimoEnvioGratis: true },
     });
+    // ETA y recogida: solo se publican si el negocio realmente ofrece esa
+    // entrega (mismo criterio que el checkout para saber si hay envío).
+    const [enviosActivos, recogidasActivas] = await Promise.all([
+      req.tenantPrisma.tarifaEnvio.count({ where: { isActive: true } }),
+      req.tenantPrisma.configPickupSucursal.count({
+        where: { activa: true, sucursal: { isActive: true } },
+      }),
+    ]);
     const estado = await estadoTienda(req.tenantPrisma);
     return {
       abierta: estado.abierta,
@@ -94,6 +102,10 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       facturacionSelfService: c.facturacionSelfService,
       preguntasPublicas: c.preguntasPublicas,
       pushHabilitado: c.pushHabilitado,
+      // Entrega estimada: sólo si hay tarifas de envío activas; la recogida en
+      // tienda aplica cuando hay pickup activo (aunque no haya envío a domicilio).
+      etaEnvio: enviosActivos > 0 ? { min: c.etaDiasEnvioMin, max: c.etaDiasEnvioMax } : null,
+      recogidaEnTienda: recogidasActivas > 0,
       metodosPago: metodosPagoDeProveedor(
         c.pasarelaPagoProvider,
         tarjetaListaPara(c.pasarelaPagoProvider),

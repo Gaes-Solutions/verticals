@@ -1,65 +1,80 @@
 import { z } from "zod";
 
-export const configTiendaSchema = z.object({
-  envioVarianteId: z.string().min(1).nullable().optional(),
-  activa: z.boolean().optional(),
-  subdominio: z
-    .string()
-    .min(3)
-    .max(63)
-    .regex(/^[a-z0-9-]+$/, "Subdominio solo minúsculas, números y guiones"),
-  nombre: z.string().min(1).max(120),
-  // Dominio propio del cliente (ej. "tienda.minegocio.com"). null/"" lo desconecta.
-  dominioPropio: z
-    .string()
-    .max(253)
-    .regex(
-      /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i,
-      "Dominio inválido (ej. tienda.minegocio.com)",
-    )
-    .transform((v) => v.toLowerCase())
-    .nullable()
-    .optional(),
-  lema: z.string().max(200).optional(),
-  descripcionSeo: z.string().max(300).optional(),
-  monedas: z.array(z.string()).optional(),
-  paisesEnvio: z.array(z.string()).optional(),
-  whatsappChatWidget: z.string().max(20).optional(),
-  modo: z.enum(["b2c", "b2b_only"]).optional(),
-  mostrarInventarioPublico: z.boolean().optional(),
-  bufferInventarioPublico: z.number().int().min(0).optional(),
-  guestCheckoutPermitido: z.boolean().optional(),
-  // Funciones del storefront (configurables por el tenant).
-  msiHabilitado: z.boolean().optional(),
-  msiMeses: z.array(z.number().int().min(2).max(48)).max(8).optional(),
-  msiMontoMinimo: z
-    .union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)])
-    .transform((v) => String(v))
-    .optional(),
-  galeriaZoom: z.boolean().optional(),
-  mostrarRatingProducto: z.boolean().optional(),
-  cuponEnCheckout: z.boolean().optional(),
-  comprarAhora: z.boolean().optional(),
-  cancelacionCliente: z.boolean().optional(),
-  facturacionSelfService: z.boolean().optional(),
-  preguntasPublicas: z.boolean().optional(),
-  // Pasarela de pago real del negocio (checkout tienda + links de cobro).
-  pasarelaPagoProvider: z.enum(["conekta", "stripe"]).nullable().optional(),
-  // Logística automática + push transaccional (Tanda 4).
-  paqueteriaProvider: z.enum(["skydropx", "envia"]).nullable().optional(),
-  paqueteriaAutoGuia: z.boolean().optional(),
-  tarifasEnVivo: z.boolean().optional(),
-  paqueteriaPesoDefaultKg: z
-    .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
-    .transform((v) => String(v))
-    .optional(),
-  pushHabilitado: z.boolean().optional(),
-  pushEventos: z
-    .array(z.enum(["pago_confirmado", "enviado", "entregado"]))
-    .max(3)
-    .optional(),
-  politicasHtml: z.record(z.string().max(20_000)).optional(),
-});
+export const configTiendaSchema = z
+  .object({
+    envioVarianteId: z.string().min(1).nullable().optional(),
+    activa: z.boolean().optional(),
+    subdominio: z
+      .string()
+      .min(3)
+      .max(63)
+      .regex(/^[a-z0-9-]+$/, "Subdominio solo minúsculas, números y guiones"),
+    nombre: z.string().min(1).max(120),
+    // Dominio propio del cliente (ej. "tienda.minegocio.com"). null/"" lo desconecta.
+    dominioPropio: z
+      .string()
+      .max(253)
+      .regex(
+        /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i,
+        "Dominio inválido (ej. tienda.minegocio.com)",
+      )
+      .transform((v) => v.toLowerCase())
+      .nullable()
+      .optional(),
+    lema: z.string().max(200).optional(),
+    descripcionSeo: z.string().max(300).optional(),
+    monedas: z.array(z.string()).optional(),
+    paisesEnvio: z.array(z.string()).optional(),
+    whatsappChatWidget: z.string().max(20).optional(),
+    modo: z.enum(["b2c", "b2b_only"]).optional(),
+    mostrarInventarioPublico: z.boolean().optional(),
+    bufferInventarioPublico: z.number().int().min(0).optional(),
+    guestCheckoutPermitido: z.boolean().optional(),
+    // Funciones del storefront (configurables por el tenant).
+    msiHabilitado: z.boolean().optional(),
+    msiMeses: z.array(z.number().int().min(2).max(48)).max(8).optional(),
+    msiMontoMinimo: z
+      .union([z.number().nonnegative(), z.string().regex(/^\d+(\.\d+)?$/)])
+      .transform((v) => String(v))
+      .optional(),
+    galeriaZoom: z.boolean().optional(),
+    mostrarRatingProducto: z.boolean().optional(),
+    cuponEnCheckout: z.boolean().optional(),
+    comprarAhora: z.boolean().optional(),
+    cancelacionCliente: z.boolean().optional(),
+    facturacionSelfService: z.boolean().optional(),
+    preguntasPublicas: z.boolean().optional(),
+    // Pasarela de pago real del negocio (checkout tienda + links de cobro).
+    pasarelaPagoProvider: z.enum(["conekta", "stripe"]).nullable().optional(),
+    // Logística automática + push transaccional (Tanda 4).
+    paqueteriaProvider: z.enum(["skydropx", "envia"]).nullable().optional(),
+    paqueteriaAutoGuia: z.boolean().optional(),
+    tarifasEnVivo: z.boolean().optional(),
+    paqueteriaPesoDefaultKg: z
+      .union([z.number().positive(), z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d+)?$/)])
+      .transform((v) => String(v))
+      .optional(),
+    pushHabilitado: z.boolean().optional(),
+    pushEventos: z
+      .array(z.enum(["pago_confirmado", "enviado", "entregado"]))
+      .max(3)
+      .optional(),
+    // ETA de entrega mostrada en el storefront (días).
+    etaDiasEnvioMin: z.number().int().min(0).max(90).optional(),
+    etaDiasEnvioMax: z.number().int().min(0).max(90).optional(),
+    politicasHtml: z.record(z.string().max(20_000)).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.etaDiasEnvioMin !== undefined && v.etaDiasEnvioMax !== undefined) {
+      if (v.etaDiasEnvioMin > v.etaDiasEnvioMax) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["etaDiasEnvioMax"],
+          message: "El máximo de días de entrega no puede ser menor al mínimo",
+        });
+      }
+    }
+  });
 
 export const publicarProductoSchema = z.object({
   productoId: z.string().min(1),

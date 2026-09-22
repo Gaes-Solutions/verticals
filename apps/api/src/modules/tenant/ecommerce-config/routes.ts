@@ -227,6 +227,8 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
         : {}),
       ...(body.pushHabilitado !== undefined ? { pushHabilitado: body.pushHabilitado } : {}),
       ...(body.pushEventos ? { pushEventos: body.pushEventos } : {}),
+      ...(body.etaDiasEnvioMin !== undefined ? { etaDiasEnvioMin: body.etaDiasEnvioMin } : {}),
+      ...(body.etaDiasEnvioMax !== undefined ? { etaDiasEnvioMax: body.etaDiasEnvioMax } : {}),
       ...(body.politicasHtml ? { politicasHtml: body.politicasHtml } : {}),
       ...patchDominioPropio(body.dominioPropio, existing?.dominioPropio ?? null),
     };
