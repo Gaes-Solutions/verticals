@@ -1365,6 +1365,7 @@ model Cliente {
   optOuts               ClienteOptOut[]
   loyalty               ClienteLoyalty[]
   notificaciones        Notificacion[]           @relation("NotificacionCliente")
+  mediosPago            ClienteMedioPago[]
   solicitudesDevolucion SolicitudDevolucion[]
   mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
   preguntasProducto     PreguntaProducto[]       @relation("PreguntaProductoCliente")
@@ -1378,6 +1379,29 @@ model Cliente {
   @@index([isActive])
   @@index([clienteGrupoId])
   @@map("clientes")
+}
+
+// Tarjeta guardada del comprador ("Mis tarjetas"). PCI: jamás se persiste PAN
+// ni CVV — solo los ids del proveedor (customer/source) y la máscara
+// (marca + last4 + expiración) para mostrarla al cliente.
+model ClienteMedioPago {
+  id                  String   @id @default(cuid())
+  clienteId           String   @map("cliente_id")
+  proveedor           String
+  proveedorCustomerId String   @map("proveedor_customer_id")
+  proveedorSourceId   String   @map("proveedor_source_id")
+  marca               String
+  last4               String
+  expMes              Int      @map("exp_mes")
+  expAnio             Int      @map("exp_anio")
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, proveedorSourceId])
+  @@index([clienteId, activo])
+  @@map("clientes_medios_pago")
 }
 
 model ClienteDireccion {
