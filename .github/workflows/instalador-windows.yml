@@ -1,0 +1,79 @@
+name: Instalador Windows (POS de escritorio)
+
+# El instalador de Windows se construye en Windows: compilar desde Linux exige
+# cadenas cruzadas frágiles y produce binarios que nadie probó en el sistema real.
+# Se dispara a mano para no gastar minutos en cada push.
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: URL HTTPS del API que usará esta distribución
+        required: true
+        default: https://api.angaes.com
+
+concurrency:
+  group: instalador-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  construir:
+    name: MSI + instalador NSIS
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache de compilación Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/pos-desktop/src-tauri
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Construir el POS de escritorio
+        env:
+          GAESPOS_API_BASE: ${{ inputs.api_base }}
+        run: pnpm --filter @gaespos/pos-desktop build:windows
+
+      - name: Publicar los instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: gaespos-pos-windows
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            apps/pos-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            apps/pos-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+
+      - name: Huellas SHA256 para verificar la descarga
+        shell: pwsh
+        run: |
+          $base = "apps/pos-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle"
+          Get-ChildItem -Path "$base/msi/*.msi","$base/nsis/*.exe" |
+            ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name } |
+            Tee-Object -FilePath "$env:RUNNER_TEMP/SHA256SUMS.txt"
+
+      - name: Publicar las huellas
+        uses: actions/upload-artifact@v4
+        with:
+          name: gaespos-pos-windows-sha256
+          path: ${{ runner.temp }}/SHA256SUMS.txt

@@ -1,5 +1,30 @@
 # GaesSoft POS de escritorio — estado de empaquetado
 
+## Instalador de Windows (21-sep-2026)
+
+El instalador se construye en GitHub Actions sobre una máquina Windows:
+`.github/workflows/instalador-windows.yml`. Compilar Windows desde Linux exige
+cadenas cruzadas frágiles y entrega binarios que nadie probó en el sistema real.
+
+**Cómo generarlo:** en GitHub → Actions → "Instalador Windows (POS de escritorio)"
+→ Run workflow. Pide la URL del API de esa distribución (por omisión
+`https://api.angaes.com`); esa URL queda fija en el ejecutable y en su CSP, así
+que una caja no puede apuntarse a otro servidor por accidente.
+
+**Qué entrega:** un `.msi` (instalación por directiva/empresa) y un `.exe` NSIS
+(instalación normal), más `SHA256SUMS.txt` para verificar la descarga. Quedan
+como artefactos del workflow durante 30 días. La primera compilación tarda unos
+30 minutos; las siguientes reusan la caché de Rust.
+
+**Al instalar en la caja:** Windows va a mostrar el aviso de SmartScreen
+("editor desconocido") porque el ejecutable **no está firmado**. Firmarlo
+requiere comprar un certificado de firma de código a nombre de la empresa; hasta
+entonces hay que aceptar el aviso con "Más información → Ejecutar de todas
+formas". `tauri.conf.json` ya tiene el lugar para la huella del certificado.
+
+**Lo que este instalador NO demuestra:** que la impresora, el cajón o el escáner
+funcionen en ese equipo. Eso se prueba con el hardware conectado.
+
 ## Avance del 17-sep-2026
 
 Migraciones SQLite registradas, permisos SQL limitados a la ventana local,
