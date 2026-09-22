@@ -1,13 +1,8 @@
 import type { TenantPrismaClient } from "@gaespos/db";
+import { type VarianteSnapshot, calcularImpuestosLinea } from "@gaespos/pricing";
 import Decimal from "decimal.js";
 import { z } from "zod";
-import {
-  type VarianteSnapshot,
-  VentaError,
-  type VentaPreparada,
-  calcularImpuestosLinea,
-  loadSnapshots,
-} from "./service.js";
+import { VentaError, type VentaPreparada, loadSnapshots } from "./service.js";
 
 const amount = z.string().regex(/^\d+(\.\d+)?$/);
 const productSchema = z.object({

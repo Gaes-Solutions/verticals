@@ -13,6 +13,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@gaespos/pricing": "workspace:*",
     "@gaespos/sync-client": "workspace:*",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-sql": "^2.4.1",

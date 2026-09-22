@@ -95,3 +95,30 @@ diferencia deja la operación para revisión, sin crear la venta.
 Es obligatorio para las ventas que llegan por sincronización: una operación sin
 desglose no se completa con los precios del momento de reconexión. Esto protege
 el importe y su composición; sigue sin habilitar el cobro sin conexión.
+
+## Un solo motor de cálculo — 21-sep-2026
+
+Para cobrar sin internet la caja tiene que llegar al mismo importe que el
+servidor. El cálculo vivía dentro del API, así que la única salida era copiarlo
+al equipo, y dos motores separados terminan cobrando distinto.
+
+Se movió a `@gaespos/pricing`, junto al cálculo de precios que ya estaba ahí:
+el motor de promociones, el cálculo de líneas con IVA e IEPS, los totales y el
+desglose del comprobante. El API conserva solo lo que lee de la base.
+
+El catálogo que baja al equipo ahora incluye lo que faltaba para calcular:
+listas de precio con sus artículos, precios escalonados y reglas de precio con
+sus productos y categorías. Sin eso, la caja habría cobrado el precio base.
+
+`calcularVentaLocal` arma el ticket con ese catálogo en el mismo orden que el
+servidor: precios y reglas, promociones, impuestos y totales. No evalúa cupones:
+sus topes de uso solo los conoce el servidor.
+
+Verificado contra el servidor sobre el mismo catálogo descargado (6 pruebas en
+`apps/api/test/tenant-paridad-caja-local.test.ts`): IVA, IEPS por cuota, precio
+escalonado por cantidad, lista de mayoreo y un ticket con los tres juntos dan el
+mismo total y el mismo desglose línea por línea.
+
+Falta para cobrar sin internet: registrar la venta local en la cola con ese
+desglose, la pantalla que distinga cobrado localmente de confirmado, y los
+instaladores.

@@ -107,6 +107,95 @@ function sources(principal: PermissionPrincipal): EntitySource[] {
           : Promise.resolve([]),
     },
     {
+      // Sin listas de precio, escalonados y reglas, la caja sin internet calcularía
+      // con el precio base y cobraría distinto del servidor.
+      entityType: "lista_precio",
+      fetch: (tx, after) =>
+        tx.listaPrecio.findMany({
+          where: { ...(after ? { id: { gt: after } } : {}), isActive: true },
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            tipo: true,
+            isDefault: true,
+            vigenteDesde: true,
+            vigenteHasta: true,
+            updatedAt: true,
+          },
+        }),
+    },
+    {
+      entityType: "lista_precio_item",
+      fetch: async (tx, after) => {
+        const [listaPrecioId, varianteId] = (after ?? "").split(":");
+        const items = await tx.listaPrecioItem.findMany({
+          ...(listaPrecioId && varianteId
+            ? { cursor: { listaPrecioId_varianteId: { listaPrecioId, varianteId } }, skip: 1 }
+            : {}),
+          where: { lista: { isActive: true } },
+          orderBy: [{ listaPrecioId: "asc" }, { varianteId: "asc" }],
+          take: PAGE_SIZE,
+          select: {
+            listaPrecioId: true,
+            varianteId: true,
+            precio: true,
+            precioMinimoNegociacion: true,
+            incluyeIva: true,
+          },
+        });
+        // La tabla no tiene id propio: el par lista+variante es su identidad.
+        return items.map((item) => ({ ...item, id: `${item.listaPrecioId}:${item.varianteId}` }));
+      },
+    },
+    {
+      entityType: "precio_escalonado",
+      fetch: (tx, after) =>
+        tx.productoPrecioEscalonado.findMany({
+          where: { ...(after ? { id: { gt: after } } : {}), isActive: true },
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          select: {
+            id: true,
+            varianteId: true,
+            nivel: true,
+            cantidadMinima: true,
+            cantidadMaxima: true,
+            precioUnitario: true,
+            updatedAt: true,
+          },
+        }),
+    },
+    {
+      entityType: "regla_precio",
+      fetch: (tx, after) =>
+        tx.reglaPrecio.findMany({
+          where: { ...(after ? { id: { gt: after } } : {}), isActive: true },
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          select: {
+            id: true,
+            codigo: true,
+            tipo: true,
+            prioridad: true,
+            stackable: true,
+            excluyeProductosConEscalonado: true,
+            aplicaA: true,
+            condicion: true,
+            accion: true,
+            vigenteDesde: true,
+            vigenteHasta: true,
+            diasSemana: true,
+            horarios: true,
+            updatedAt: true,
+            productos: { select: { productoId: true } },
+            categorias: { select: { categoriaId: true } },
+          },
+        }),
+    },
+    {
       entityType: "promocion",
       fetch: (tx, after) =>
         hasPermission(principal, PERMISSIONS.VENTAS_CREAR)

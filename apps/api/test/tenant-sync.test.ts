@@ -255,6 +255,55 @@ describe("push venta inmutable + idempotencia", () => {
     },
   );
 
+  it("el catálogo del equipo baja precios de lista, escalonados y reglas", async () => {
+    const db = getTenantClient(TENANT_SLUG);
+    const lista = await db.listaPrecio.findFirstOrThrow({ where: { isActive: true } });
+    await db.listaPrecioItem.upsert({
+      where: { listaPrecioId_varianteId: { listaPrecioId: lista.id, varianteId } },
+      create: { listaPrecioId: lista.id, varianteId, precio: "88.00" },
+      update: { precio: "88.00" },
+    });
+    await db.productoPrecioEscalonado.upsert({
+      where: { varianteId_nivel: { varianteId, nivel: 1 } },
+      create: { varianteId, nivel: 1, cantidadMinima: "10", precioUnitario: "80.00" },
+      update: { precioUnitario: "80.00" },
+    });
+
+    const creado = await app.inject({
+      method: "POST",
+      url: "/t/sync/catalog",
+      headers: auth(ownerToken),
+    });
+    expect(creado.statusCode, creado.body).toBe(200);
+    const manifest = creado.json<CatalogManifest>();
+    const paginas: CatalogPage[] = [];
+    for (let i = 0; i < manifest.pageCount; i++) {
+      const page = await app.inject({
+        method: "GET",
+        url: `/t/sync/catalog/${manifest.id}/${i}`,
+        headers: auth(ownerToken),
+      });
+      expect(page.statusCode).toBe(200);
+      paginas.push(page.json<CatalogPage>());
+    }
+    const filasDe = (tipo: string) =>
+      paginas.filter((p) => p.entityType === tipo).flatMap((p) => p.rows);
+
+    expect(filasDe("lista_precio").some((r) => r.id === lista.id)).toBe(true);
+    const item = filasDe("lista_precio_item").find(
+      (r) => r.listaPrecioId === lista.id && r.varianteId === varianteId,
+    );
+    expect(item?.precio).toBe("88");
+    const escalon = filasDe("precio_escalonado").find((r) => r.varianteId === varianteId);
+    expect(escalon?.precioUnitario).toBe("80");
+    expect(escalon?.cantidadMinima).toBe("10");
+    // Las reglas viajan con sus productos y categorías para poder evaluarlas local.
+    for (const regla of filasDe("regla_precio")) {
+      expect(Array.isArray(regla.productos)).toBe(true);
+      expect(Array.isArray(regla.categorias)).toBe(true);
+    }
+  });
+
   it("rechaza dos cambios de precio que se compensan y dejan el mismo total", async () => {
     const db = getTenantClient(TENANT_SLUG);
     const otro = await app.inject({
