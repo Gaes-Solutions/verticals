@@ -87,6 +87,10 @@ import pacientesRoutes from "./modules/tenant/pacientes/routes.js";
 import pedidosEcommerceRoutes from "./modules/tenant/pedidos-ecommerce/routes.js";
 import pedidosRoutes from "./modules/tenant/pedidos/routes.js";
 import preguntasRoutes from "./modules/tenant/preguntas/routes.js";
+import {
+  imagenesProductoRoutes,
+  imagenesPublicasRoutes,
+} from "./modules/tenant/productos/imagenes-routes.js";
 import productosRoutes from "./modules/tenant/productos/routes.js";
 import promocionesRoutes from "./modules/tenant/promociones/routes.js";
 import recargasRoutes from "./modules/tenant/recargas/routes.js";
@@ -269,6 +273,7 @@ export async function buildApp(
       await tenantApp.register(categoriasRoutes, { prefix: "/categorias" });
       await tenantApp.register(marcasRoutes, { prefix: "/marcas" });
       await tenantApp.register(productosRoutes, { prefix: "/productos" });
+      await tenantApp.register(imagenesProductoRoutes, { prefix: "/productos" });
       await tenantApp.register(onboardingRoutes, { prefix: "/onboarding" });
       await tenantApp.register(b2bDominioRoutes, { prefix: "/b2b-dominio" });
       await tenantApp.register(variantesRoutes, { prefix: "/variantes" });
@@ -319,6 +324,7 @@ export async function buildApp(
       await tenantApp.register(diotRoutes, { prefix: "/diot" });
       await tenantApp.register(ecommerceConfigRoutes, { prefix: "/ecommerce" });
       await tenantApp.register(carritoRoutes, { prefix: "/tienda" });
+      await tenantApp.register(imagenesPublicasRoutes, { prefix: "/tienda" });
       await tenantApp.register(enviosRoutes, { prefix: "/envios" });
       await tenantApp.register(checkoutRoutes, { prefix: "/checkout" });
       await tenantApp.register(pedidosEcommerceRoutes, { prefix: "/pedidos-ecommerce" });

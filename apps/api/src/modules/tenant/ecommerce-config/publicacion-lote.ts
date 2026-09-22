@@ -55,7 +55,13 @@ export async function publicarLote(
   };
   const productos = await prisma.producto.findMany({
     where,
-    select: { id: true, nombre: true, skuPadre: true, productoPublicado: { select: { id: true } } },
+    select: {
+      id: true,
+      nombre: true,
+      skuPadre: true,
+      productoPublicado: { select: { id: true } },
+      imagenes: { orderBy: { orden: "asc" }, select: { cdnUrl: true } },
+    },
     orderBy: { createdAt: "asc" },
     take: limite,
   });
@@ -98,6 +104,8 @@ export async function publicarLote(
         tituloPublico: producto.nombre,
         isPublicado: true,
         slugSeo,
+        // La tienda muestra estas fotos; publicar sin ellas dejaría el catálogo en gris.
+        fotosArray: producto.imagenes.map((i) => i.cdnUrl),
       },
     });
   }

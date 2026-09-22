@@ -10,6 +10,7 @@ import {
   Globe,
   HandCoins,
   HelpCircle,
+  Image,
   KeyRound,
   Languages,
   Link2,
@@ -60,6 +61,7 @@ import { DevolucionesPage } from "./pages/DevolucionesPage.js";
 import { DominioB2bPage } from "./pages/DominioB2bPage.js";
 import { EnviosPage } from "./pages/EnviosPage.js";
 import { EtiquetasPage } from "./pages/EtiquetasPage.js";
+import { FotosProductosPage } from "./pages/FotosProductosPage.js";
 import { GuiaInicioPage } from "./pages/GuiaInicioPage.js";
 import { ImportadorPage } from "./pages/ImportadorPage.js";
 import { InventarioInsightsPage } from "./pages/InventarioInsightsPage.js";
@@ -104,6 +106,7 @@ type Seccion =
   | "resenas"
   | "automatizaciones"
   | "importador"
+  | "fotos-productos"
   | "compras"
   | "cfdi"
   | "contabilidad"
@@ -161,6 +164,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "inventario", label: "Inventario", icon: Tags, perm: "inventario.leer" },
       { key: "etiquetas", label: "Etiquetas y códigos", icon: QrCode, perm: "productos.leer" },
       { key: "importador", label: "Carga masiva", icon: Upload, perm: "productos.bulk_import" },
+      { key: "fotos-productos", label: "Fotos", icon: Image, perm: "productos.actualizar" },
       {
         key: "inventario-iq",
         label: "Inteligencia inventario",
@@ -240,6 +244,7 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
   "inventario-iq": InventarioInsightsPage,
   etiquetas: EtiquetasPage,
   importador: ImportadorPage,
+  "fotos-productos": FotosProductosPage,
   compras: ComprasPage,
   cfdi: CfdiPage,
   usuarios: UsuariosRolesPage,
