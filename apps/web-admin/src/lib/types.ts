@@ -111,6 +111,9 @@ export interface ConfigTienda {
   paqueteriaPesoDefaultKg?: string | number | null;
   pushHabilitado?: boolean;
   pushEventos?: Array<"pago_confirmado" | "enviado" | "entregado">;
+  /** ETA de entrega mostrada en la tienda (días); aplica con envíos activos. */
+  etaDiasEnvioMin?: string | number | null;
+  etaDiasEnvioMax?: string | number | null;
   politicasHtml?: Record<string, string>;
   /** Texto base que calcula el servidor con los datos del negocio; el dueño lo edita. */
   politicasSugeridas?: Record<string, string>;

@@ -138,6 +138,8 @@ export function TiendaPage() {
           paqueteriaAutoGuia: config.paqueteriaAutoGuia ?? false,
           tarifasEnVivo: config.tarifasEnVivo ?? false,
           paqueteriaPesoDefaultKg: String(config.paqueteriaPesoDefaultKg ?? 1),
+          etaDiasEnvioMin: Number(config.etaDiasEnvioMin ?? 3),
+          etaDiasEnvioMax: Number(config.etaDiasEnvioMax ?? 5),
           pushHabilitado: config.pushHabilitado ?? false,
           pushEventos: config.pushEventos ?? ["pago_confirmado", "enviado", "entregado"],
           politicasHtml: config.politicasHtml ?? {},
@@ -502,6 +504,40 @@ export function TiendaPage() {
             disabled={guardando || !configLoaded}
           />
         )}
+
+        <div className="mb-4 rounded-lg border border-slate-200 p-3">
+          <span className="mb-2 block font-medium text-slate-800 text-sm">
+            Tiempo estimado de entrega (días)
+          </span>
+          <p className="mb-3 text-slate-500 text-xs">
+            Se muestra en la tienda como "Entrega en X–Y días" cuando tienes tarifas de envío
+            activas. Si solo vendes con recogida en tienda, la tienda muestra "Recoge hoy".
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <label className="block">
+              <span className="mb-1 block text-slate-500 text-xs">Mínimo</span>
+              <input
+                type="number"
+                min={0}
+                max={90}
+                value={Number(config.etaDiasEnvioMin ?? 3)}
+                onChange={(e) => setConfig({ ...config, etaDiasEnvioMin: e.target.value })}
+                className="gx-input w-24"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-slate-500 text-xs">Máximo</span>
+              <input
+                type="number"
+                min={0}
+                max={90}
+                value={Number(config.etaDiasEnvioMax ?? 5)}
+                onChange={(e) => setConfig({ ...config, etaDiasEnvioMax: e.target.value })}
+                className="gx-input w-24"
+              />
+            </label>
+          </div>
+        </div>
 
         <div className="mb-4 rounded-lg border border-slate-200 p-3">
           <span className="mb-2 block font-medium text-slate-800 text-sm">
