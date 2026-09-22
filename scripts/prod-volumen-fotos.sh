@@ -24,7 +24,8 @@ if railway volume list 2>/dev/null | grep -q "Attached to: ${SERVICIO}"; then
   echo "✓ El servicio ya tiene un volumen; no se crea otro."
 else
   echo "→ Creando el volumen…"
-  railway volume add -m "${MONTAJE}" -s "${SERVICIO}"
+  # El servicio va ANTES del subcomando: `volume add` no acepta -s.
+  railway volume -s "${SERVICIO}" add -m "${MONTAJE}"
 fi
 
 echo
