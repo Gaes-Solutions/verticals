@@ -15,9 +15,11 @@ import {
 } from "../lib/cash-attempt.js";
 import { LatestSearch, findBarcode, searchProducts } from "../lib/product-search.js";
 import type { Cliente, Producto, TicketLinea, VentaDetalle, VentaResponse } from "../lib/types.js";
+import { recordarApertura, ventasPorConfirmar } from "../lib/venta-sin-red.js";
 import { ApartadosModal } from "./ApartadosModal.js";
 import { ClienteModal } from "./ClienteModal.js";
 import { CobroModal, type CobroResult } from "./CobroModal.js";
+import { CobroSinRed } from "./CobroSinRed.js";
 import { CorteModal } from "./CorteModal.js";
 import { DevolucionModal } from "./DevolucionModal.js";
 import { DirectPrint } from "./DirectPrint.js";
@@ -70,6 +72,19 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [quotedTotal, setQuotedTotal] = useState<number | null>(null);
   const [quotedLineas, setQuotedLineas] = useState<LineaComprobante[]>([]);
+  const [cobroSinRed, setCobroSinRed] = useState(false);
+  const [porConfirmar, setPorConfirmar] = useState(0);
+  const [avisoSinRed, setAvisoSinRed] = useState<string | null>(null);
+  // Al abrir la caja, el cajero debe ver si quedaron ventas suyas sin confirmar.
+  useEffect(() => {
+    let vigente = true;
+    void ventasPorConfirmar(session).then((n) => {
+      if (vigente) setPorConfirmar(n);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [session]);
   useEffect(() => {
     let active = true;
     const sync = (scope: CashScope) => {
@@ -109,6 +124,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
         if (!opening.id) throw new Error("La apertura de caja no tiene identificador válido.");
         if (active) {
           setOpeningId(opening.id);
+          // El turno se abre con internet; el equipo lo recuerda para poder cobrar si se cae.
+          recordarApertura(scope.cajaId, opening.id);
           setCashScope(scope);
           sync(scope);
         }
@@ -343,6 +360,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       setCobrando(true);
     } catch (error) {
       setAviso(error instanceof Error ? error.message : "No se pudo cotizar la venta.");
+      // Sin respuesta del servidor queda el camino sin red, con el catálogo del equipo.
+      if (localSearch || !navigator.onLine) setCobroSinRed(true);
     } finally {
       saleBusy.current = false;
       setProcesando(false);
@@ -713,6 +732,18 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           reconectar.
         </p>
       )}
+      {avisoSinRed && (
+        <output className="block border-b border-ok/30 bg-ok/10 px-4 py-2 text-slate-800 text-sm">
+          {avisoSinRed}
+        </output>
+      )}
+      {porConfirmar > 0 && (
+        <p className="border-b border-warn/30 bg-warn/10 px-4 py-2 text-slate-800 text-sm">
+          {porConfirmar === 1
+            ? "1 venta cobrada en esta caja espera confirmación del servidor."
+            : `${porConfirmar} ventas cobradas en esta caja esperan confirmación del servidor.`}
+        </p>
+      )}
       <div className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Izquierda: búsqueda + resultados */}
         <div className="flex min-h-[40vh] w-full flex-col border-b border-slate-200 p-4 md:min-h-0 md:w-1/2 md:border-b-0 md:border-r">
@@ -945,6 +976,27 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           )}
         </div>
       </div>
+
+      {cobroSinRed && cashScope && (
+        <CobroSinRed
+          session={session}
+          cajaId={cashScope.cajaId}
+          aperturaId={openingId}
+          lineas={ticket.map((l) => ({ varianteId: l.varianteId, cantidad: String(l.cantidad) }))}
+          {...(precioMayoreo ? { listaPrecioCodigo: "MAYOREO" } : {})}
+          {...(cliente ? { clienteId: cliente.id } : {})}
+          onCancelar={() => setCobroSinRed(false)}
+          onCobrada={(resumen) => {
+            setCobroSinRed(false);
+            setCobrando(false);
+            clearTicket();
+            setPorConfirmar(resumen.pendientes);
+            setAvisoSinRed(
+              `Cobrada en esta caja por $${resumen.total}. Cambio $${resumen.cambio}. Se confirma con el servidor al reconectar.`,
+            );
+          }}
+        />
+      )}
 
       {cobrando && (
         <CobroModal

@@ -144,3 +144,24 @@ cerrado no entra al turno nuevo.
 Sigue pendiente: la pantalla del POS que cobre por este camino cuando no hay red
 y distinga cobrado en la caja de confirmado por el servidor, el corte de caja con
 ventas pendientes de confirmar, y los instaladores.
+
+## La caja cobra sin red desde su pantalla — 21-sep-2026
+
+Cuando la cotización no obtiene respuesta del servidor y el equipo está
+trabajando con su catálogo guardado, el POS ofrece cobrar sin internet: muestra
+el total calculado en el equipo con su IVA e IEPS, pide el efectivo recibido,
+calcula el cambio y deja la venta en la cola. Al terminar avisa "cobrada en esta
+caja" y cuánto falta por confirmar.
+
+El turno de caja se abre con internet y el equipo lo recuerda (`recordarApertura`)
+para poder cobrar si la conexión se cae después. Sin turno recordado no se cobra:
+se le dice al cajero que conecte y abra la caja. El servidor vuelve a validar el
+turno al sincronizar, así que una venta de un turno cerrado no entra al nuevo.
+
+La pantalla distingue tres cosas: resultados del catálogo guardado, ventas
+cobradas en la caja esperando confirmación, y la venta ya confirmada por el
+servidor. El contador de pendientes se muestra al abrir la caja, para que el
+cajero sepa si quedó algo del turno anterior sin subir.
+
+Sigue pendiente: reintento visible de una venta rechazada, el corte de caja con
+ventas pendientes de confirmar, y los instaladores por sistema operativo.
