@@ -3631,6 +3631,10 @@ model ConfigTiendaEcommerce {
   // Push transaccional (PWA): qué eventos del pedido disparan notificación push.
   pushHabilitado                 Boolean    @default(false) @map("push_habilitado")
   pushEventos                    Json       @default("[\"pago_confirmado\", \"enviado\", \"entregado\"]") @map("push_eventos")
+  // ETA de entrega mostrada en el storefront ("Entrega en X–Y días") cuando el
+  // negocio tiene tarifas de envío activas.
+  etaDiasEnvioMin                Int        @default(3) @map("eta_dias_envio_min")
+  etaDiasEnvioMax                Int        @default(5) @map("eta_dias_envio_max")
   createdAt                      DateTime   @default(now()) @map("created_at")
   updatedAt                      DateTime   @updatedAt @map("updated_at")
 
