@@ -43,6 +43,10 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** Botones del header sobre fondo brand: altura táctil (≥40px) sin salirnos del acento. */
+const headerBtnCls =
+  "flex min-h-10 items-center rounded-lg bg-brand-dark px-3 text-sm font-semibold hover:bg-white/10";
+
 export function PosScreen({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
@@ -468,7 +472,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             {ventaRegistrada.folio} · ${ventaRegistrada.total}
           </p>
           {aviso && (
-            <p role="alert" className="my-3 text-red-700">
+            <p role="alert" className="my-3 text-danger">
               {aviso}
             </p>
           )}
@@ -523,7 +527,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
             {session.sucursal.nombre} · {session.caja?.codigo}
           </p>
           {cashError && (
-            <p role="alert" className="my-3 break-words text-red-700">
+            <p role="alert" className="my-3 break-words text-danger">
               {cashError}
             </p>
           )}
@@ -642,50 +646,34 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
       <header className="flex flex-wrap items-center justify-between gap-2 bg-brand px-4 py-3 text-white">
         <div>
           <span className="font-bold">GaesSoft POS</span>
-          <span className="ml-2 block text-xs text-teal-100 sm:ml-3 sm:inline sm:text-sm">
+          <span className="ml-2 block text-xs text-brand-light sm:ml-3 sm:inline sm:text-sm">
             {session.sucursal.nombre}
             {session.caja ? ` · ${session.caja.codigo}` : " · sin caja"}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
-          <span className="hidden text-teal-100 sm:inline">{session.cajeroNombre}</span>
+          <span className="hidden text-brand-light sm:inline">{session.cajeroNombre}</span>
           {puede("ventas.devolver") && (
-            <button
-              type="button"
-              onClick={() => setModalDevolucion(true)}
-              className="rounded bg-brand-dark px-3 py-1"
-            >
+            <button type="button" onClick={() => setModalDevolucion(true)} className={headerBtnCls}>
               Devolución
             </button>
           )}
           {puede("recargas.vender") && (
-            <button
-              type="button"
-              onClick={() => setModalRecarga(true)}
-              className="rounded bg-brand-dark px-3 py-1"
-            >
+            <button type="button" onClick={() => setModalRecarga(true)} className={headerBtnCls}>
               Recarga
             </button>
           )}
           {puede("apartados.leer") && (
-            <button
-              type="button"
-              onClick={() => setModalApartados(true)}
-              className="rounded bg-brand-dark px-3 py-1"
-            >
+            <button type="button" onClick={() => setModalApartados(true)} className={headerBtnCls}>
               Apartados
             </button>
           )}
           {session.caja && puede("corte.consultar") && (
-            <button
-              type="button"
-              onClick={() => setModalCorte(true)}
-              className="rounded bg-brand-dark px-3 py-1"
-            >
+            <button type="button" onClick={() => setModalCorte(true)} className={headerBtnCls}>
               Corte
             </button>
           )}
-          <button type="button" onClick={onLogout} className="rounded bg-brand-dark px-3 py-1">
+          <button type="button" onClick={onLogout} className={headerBtnCls}>
             Salir
           </button>
         </div>
@@ -702,13 +690,13 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
               if (e.key === "Enter") void onSearchEnter();
             }}
             placeholder="Buscar producto o escanear código…"
-            className="w-full rounded-lg border border-slate-300 px-4 py-3 text-lg focus:border-brand focus:outline-none"
+            className="gx-input px-4 py-3 text-lg"
           />
           <div className="mt-3 flex-1 overflow-y-auto">
             {buscando && <p className="text-sm text-slate-400">Buscando…</p>}
             {searchError && (
               <div className="my-3">
-                <p role="alert" className="break-words text-sm text-red-700">
+                <p role="alert" className="break-words text-sm text-danger">
                   {searchError}
                 </p>
                 <button
@@ -825,7 +813,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                         type="button"
                         onClick={() => quitarLinea(l.varianteId)}
                         aria-label={`Eliminar ${l.nombre} del ticket`}
-                        className="flex h-10 w-10 items-center justify-center text-slate-600 hover:text-red-700"
+                        className="flex h-10 w-10 items-center justify-center text-slate-600 hover:text-danger"
                       >
                         <X size={16} />
                       </button>
@@ -834,12 +822,12 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 )}
               </div>
 
-              {aviso && <p className="mb-2 text-sm text-red-600">{aviso}</p>}
+              {aviso && <p className="mb-2 text-sm text-danger">{aviso}</p>}
 
               <button
                 type="button"
                 onClick={() => setModalCliente(true)}
-                className="mb-2 flex w-full items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-sm hover:border-brand"
+                className="mb-2 flex min-h-10 w-full items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-sm hover:border-brand"
               >
                 <span className="text-slate-500">Cliente</span>
                 <span className="font-medium text-slate-800">
@@ -847,31 +835,33 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                 </span>
               </button>
 
-              <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-sm text-slate-500">Descuento</span>
-                <input
-                  type="number"
-                  aria-label="Descuento porcentual"
-                  min={0}
-                  max={100}
-                  value={descuentoPct || ""}
-                  onChange={(e) =>
-                    setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                  }
-                  className="min-h-10 w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
-                  placeholder="0"
-                />
-                <span className="text-sm text-slate-500">%</span>
-                {descuentoPct > 0 && (
+              {puede("ventas.aplicar_descuento") && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className="text-sm text-slate-500">Descuento</span>
                   <input
-                    value={descuentoMotivo}
-                    aria-label="Motivo del descuento"
-                    onChange={(e) => setDescuentoMotivo(e.target.value)}
-                    placeholder="Motivo"
-                    className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                    type="number"
+                    aria-label="Descuento porcentual"
+                    min={0}
+                    max={100}
+                    value={descuentoPct || ""}
+                    onChange={(e) =>
+                      setDescuentoPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                    }
+                    className="gx-input min-h-10 w-16 px-2 py-1 text-right"
+                    placeholder="0"
                   />
-                )}
-              </div>
+                  <span className="text-sm text-slate-500">%</span>
+                  {descuentoPct > 0 && (
+                    <input
+                      value={descuentoMotivo}
+                      aria-label="Motivo del descuento"
+                      onChange={(e) => setDescuentoMotivo(e.target.value)}
+                      placeholder="Motivo"
+                      className="gx-input min-h-10 flex-1 px-2 py-1"
+                    />
+                  )}
+                </div>
+              )}
 
               {mayoreoDisponible && (
                 <label className="mb-2 flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
@@ -896,7 +886,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                   </div>
                 )}
                 {descuentoPct > 0 && (
-                  <div className="mb-2 flex items-center justify-between text-sm text-emerald-600">
+                  <div className="mb-2 flex items-center justify-between text-sm text-ok">
                     <span>Descuento ({descuentoPct}%)</span>
                     <span>−{money(descuentoMonto)}</span>
                   </div>
@@ -914,7 +904,7 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
                   type="button"
                   onClick={() => void quoteSale()}
                   disabled={ticket.length === 0}
-                  className="w-full rounded-lg bg-brand py-4 text-lg font-bold text-white hover:bg-brand-dark disabled:opacity-40"
+                  className="gx-btn-primary w-full py-4 text-lg"
                 >
                   Cobrar {money(total)}
                 </button>
@@ -1024,7 +1014,7 @@ function TicketResultado({
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
-      <CheckCircle2 size={56} className="mb-2 text-emerald-500" />
+      <CheckCircle2 size={56} className="mb-2 text-ok" />
       <h2 className="text-xl font-bold text-slate-800">Venta registrada</h2>
       <p className="mb-1 text-slate-500">Folio {venta.folio}</p>
       <p className="mb-6 text-3xl font-bold text-brand">
@@ -1032,27 +1022,21 @@ function TicketResultado({
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 rounded-lg border border-brand px-5 py-3 font-semibold text-brand hover:bg-teal-50"
-        >
+        <button type="button" onClick={() => window.print()} className="gx-btn-secondary px-5 py-3">
           <Printer size={18} /> Imprimir
         </button>
         <DirectPrint saleId={venta.id} />
-        <button
-          type="button"
-          onClick={facturar}
-          disabled={facturando}
-          className="rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {facturando ? "Facturando…" : "Facturar (CFDI)"}
-        </button>
-        <button
-          type="button"
-          onClick={onNueva}
-          className="rounded-lg bg-brand px-6 py-3 font-semibold text-white hover:bg-brand-dark"
-        >
+        {puede("cfdi.emitir") && (
+          <button
+            type="button"
+            onClick={facturar}
+            disabled={facturando}
+            className="gx-btn-ghost border border-slate-300 px-5 py-3 disabled:opacity-50"
+          >
+            {facturando ? "Facturando…" : "Facturar (CFDI)"}
+          </button>
+        )}
+        <button type="button" onClick={onNueva} className="gx-btn-primary px-6 py-3">
           Nueva venta
         </button>
       </div>

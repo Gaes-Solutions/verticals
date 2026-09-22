@@ -108,9 +108,9 @@ export function CobroModal({
         <button
           type="button"
           onClick={() => setUsarMonedero((v) => !v)}
-          className={`mb-3 flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
+          className={`mb-3 flex min-h-10 w-full items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
             usarMonedero
-              ? "border-brand bg-teal-50 text-brand"
+              ? "border-brand bg-brand-light text-brand"
               : "border-slate-300 bg-white text-slate-700"
           }`}
         >
@@ -140,10 +140,10 @@ export function CobroModal({
                 key={m.value}
                 type="button"
                 onClick={() => setMetodo(m.value)}
-                className={`rounded-lg border py-2.5 text-sm font-medium ${
+                className={`min-h-10 ${
                   metodo === m.value
-                    ? "border-brand bg-brand text-white"
-                    : "border-slate-300 bg-white text-slate-700"
+                    ? "gx-btn-primary"
+                    : "gx-btn border border-slate-300 bg-white font-medium text-slate-700"
                 }`}
               >
                 {m.label}
@@ -154,10 +154,10 @@ export function CobroModal({
             <button
               type="button"
               onClick={() => setMetodo("credito_fiado")}
-              className={`mb-4 w-full rounded-lg border py-2.5 text-sm font-medium ${
+              className={`mb-4 min-h-10 w-full rounded-lg border py-2.5 text-sm font-medium ${
                 esFiado
-                  ? "border-amber-500 bg-amber-500 text-white"
-                  : "border-amber-300 bg-amber-50 text-amber-700"
+                  ? "border-warn bg-warn text-white"
+                  : "border-warn/40 bg-warn-light text-warn"
               }`}
             >
               Fiar a {clienteNombre}
@@ -171,14 +171,14 @@ export function CobroModal({
       )}
 
       {cubreTodoMonedero && (
-        <p className="mb-4 rounded-lg bg-teal-50 px-3 py-2 text-sm text-brand">
+        <p className="mb-4 rounded-lg bg-brand-light px-3 py-2 text-sm text-brand">
           El monedero cubre el total de la venta.
         </p>
       )}
 
       {cobraEfectivo && (
         <div className="mb-4">
-          <label htmlFor="recibido" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="recibido" className="gx-label">
             Recibido
           </label>
           <input
@@ -186,7 +186,7 @@ export function CobroModal({
             type="number"
             value={recibido}
             onChange={(e) => setRecibido(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-lg focus:border-brand focus:outline-none"
+            className="gx-input py-3 text-lg"
             step="0.01"
             min={0}
           />
@@ -213,7 +213,7 @@ export function CobroModal({
           type="button"
           onClick={onCancel}
           disabled={procesando}
-          className="flex-1 rounded-lg border border-slate-300 py-2.5 font-medium text-slate-700 disabled:opacity-50"
+          className="gx-btn-ghost min-h-10 flex-1 border border-slate-300"
         >
           Cancelar
         </button>
@@ -221,7 +221,7 @@ export function CobroModal({
           type="button"
           onClick={confirmar}
           disabled={procesando || insuficiente}
-          className="flex-1 rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          className="gx-btn-primary min-h-10 flex-1"
         >
           {procesando ? "Cobrando…" : "Confirmar"}
         </button>

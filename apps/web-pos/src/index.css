@@ -13,7 +13,7 @@ body,
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: #f1f5f9;
+  @apply bg-slate-100;
 }
 
 /* Recibo imprimible: oculto en pantalla, único visible al imprimir (58mm) */

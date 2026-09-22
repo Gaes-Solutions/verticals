@@ -294,21 +294,21 @@ export function DevolucionModal(props: RefundProps) {
           onClick={close}
           disabled={procesando}
           aria-label="Cerrar devolución"
-          className="flex min-h-10 min-w-10 items-center justify-center text-slate-400 hover:text-slate-600"
+          className="gx-btn-ghost h-10 w-10 p-0 text-slate-400 hover:text-slate-600"
         >
           <X size={20} />
         </button>
       </div>
 
       {!allowed ? (
-        <p role="alert" className="mb-3 text-red-700">
+        <p role="alert" className="mb-3 text-danger">
           No tienes permiso para procesar devoluciones.
         </p>
       ) : null}
       {!scope ? (
         <button
           type="button"
-          className="mb-3 min-h-10 rounded border px-3"
+          className="gx-btn-secondary mb-3"
           onClick={() => void cargarIdentidad()}
         >
           Verificar identidad e intento guardado
@@ -324,11 +324,7 @@ export function DevolucionModal(props: RefundProps) {
             veces.
           </p>
           {resultado.folio && <p className="text-slate-500">Folio {resultado.folio}</p>}
-          <button
-            type="button"
-            onClick={close}
-            className="mt-6 w-full rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark"
-          >
+          <button type="button" onClick={close} className="gx-btn-primary mt-6 w-full">
             Listo
           </button>
         </div>
@@ -344,20 +340,20 @@ export function DevolucionModal(props: RefundProps) {
                 if (e.key === "Enter") void buscarVenta();
               }}
               placeholder="Folio de la venta (p.ej. SUC-PRINCIPAL-000001)"
-              className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input min-h-10 min-w-0 flex-1"
             />
             <button
               type="button"
               onClick={buscarVenta}
               disabled={locked || buscando || !folio.trim() || !allowed}
-              className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+              className="gx-btn-primary min-h-10"
             >
               {buscando ? "…" : "Buscar"}
             </button>
           </div>
 
           {error && (
-            <div role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <div role="alert" className="mb-3 rounded-lg bg-danger-light p-3 text-sm text-danger">
               {error}
             </div>
           )}
@@ -436,7 +432,7 @@ function DetalleDevolucion({ model, session }: { model: RefundModel; session: Se
                       const v = e.target.value === "" ? 0 : Number(e.target.value);
                       setCantidades((prev) => ({ ...prev, [l.id]: v }));
                     }}
-                    className="min-h-10 w-20 rounded border border-slate-300 px-2 py-1 text-right text-sm focus:border-brand focus:outline-none"
+                    className="gx-input min-h-10 w-20 px-2 py-1 text-right"
                     placeholder="0"
                   />
                 </div>
@@ -445,7 +441,7 @@ function DetalleDevolucion({ model, session }: { model: RefundModel; session: Se
           </div>
 
           {!cantidadesValidas ? (
-            <p role="alert" className="mb-3 text-sm text-red-700">
+            <p role="alert" className="mb-3 text-sm text-danger">
               Cantidad inválida: usa como máximo tres decimales, sin valores negativos ni cantidades
               superiores a las vendidas. No se redondeará.
             </p>
@@ -461,7 +457,7 @@ function DetalleDevolucion({ model, session }: { model: RefundModel; session: Se
                 disabled={locked || !allowed}
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value as MotivoDevolucion)}
-                className="min-h-10 w-full rounded-lg border border-slate-300 px-2 py-2 focus:border-brand focus:outline-none"
+                className="gx-input min-h-10 w-full px-2 py-2"
               >
                 {MOTIVOS.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -476,7 +472,7 @@ function DetalleDevolucion({ model, session }: { model: RefundModel; session: Se
                 disabled={locked || !allowed}
                 value={metodoReembolso}
                 onChange={(e) => setMetodoReembolso(e.target.value as MetodoReembolso)}
-                className="min-h-10 w-full rounded-lg border border-slate-300 px-2 py-2 focus:border-brand focus:outline-none"
+                className="gx-input min-h-10 w-full px-2 py-2"
               >
                 {REEMBOLSOS.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -508,7 +504,7 @@ function DetalleDevolucion({ model, session }: { model: RefundModel; session: Se
               lineasADevolver.length === 0 ||
               (metodoReembolso === "efectivo" && !session.caja)
             }
-            className="w-full rounded-lg bg-brand py-3 font-semibold text-white hover:bg-brand-dark disabled:opacity-40"
+            className="gx-btn-primary w-full py-3"
           >
             {procesando ? "Procesando…" : `Devolver ${lineasADevolver.length} producto(s)`}
           </button>
@@ -523,7 +519,7 @@ function RecuperacionDevolucion({ model }: { model: RefundModel }) {
   return (
     <>
       {pendiente && !resultado ? (
-        <div className="mb-3 space-y-2 rounded border border-amber-300 p-3">
+        <div className="mb-3 space-y-2 rounded border border-warn/40 p-3">
           <p role="alert">
             Devolución pendiente de la venta {pendiente.folio}. Conservamos la misma clave y
             cantidades. No entregues efectivo otra vez.
@@ -541,7 +537,7 @@ function RecuperacionDevolucion({ model }: { model: RefundModel }) {
               <button
                 type="button"
                 disabled={procesando}
-                className="min-h-10 rounded border px-3"
+                className="gx-btn-secondary min-h-10"
                 onClick={() => void recuperar()}
               >
                 Consultar devolución pendiente
@@ -549,7 +545,7 @@ function RecuperacionDevolucion({ model }: { model: RefundModel }) {
               <button
                 type="button"
                 disabled={procesando}
-                className="min-h-10 rounded border px-3"
+                className="gx-btn-secondary min-h-10"
                 onClick={() => setConfirm("cancel")}
               >
                 Cancelar intento sin devolución
@@ -559,7 +555,7 @@ function RecuperacionDevolucion({ model }: { model: RefundModel }) {
                 <button
                   type="button"
                   disabled={procesando}
-                  className="min-h-10 rounded border px-3"
+                  className="gx-btn-secondary min-h-10"
                   onClick={() => setConfirm("retry")}
                 >
                   Reenviar la misma devolución
@@ -586,7 +582,7 @@ function ConfirmarDevolucion({ model }: { model: RefundModel }) {
       <button
         type="button"
         disabled={procesando}
-        className="min-h-10 rounded border px-3"
+        className="gx-btn-secondary min-h-10"
         onClick={() => void recuperar(confirm)}
       >
         Confirmar{" "}
@@ -595,7 +591,7 @@ function ConfirmarDevolucion({ model }: { model: RefundModel }) {
       <button
         type="button"
         disabled={procesando}
-        className="min-h-10 rounded border px-3"
+        className="gx-btn-secondary min-h-10"
         onClick={() => setConfirm(null)}
       >
         Volver sin cambios

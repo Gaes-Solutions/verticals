@@ -54,11 +54,15 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">Recarga / servicio</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button
+            type="button"
+            onClick={onClose}
+            className="gx-btn-ghost h-10 w-10 p-0 text-slate-400 hover:text-slate-600"
+          >
             <X size={20} />
           </button>
         </div>
@@ -67,7 +71,7 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
           <div className="text-center">
             {resultado.estado === "exitosa" ? (
               <>
-                <CheckCircle2 className="mx-auto mb-2 text-green-500" size={48} />
+                <CheckCircle2 className="mx-auto mb-2 text-ok" size={48} />
                 <p className="text-lg font-semibold text-slate-800">Recarga exitosa</p>
                 <p className="mt-1 text-sm text-slate-500">Folio {resultado.folio}</p>
                 {resultado.folioProveedor && (
@@ -79,23 +83,19 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
               </>
             ) : (
               <>
-                <X className="mx-auto mb-2 text-red-500" size={48} />
-                <p className="text-lg font-semibold text-red-600">Recarga fallida</p>
+                <X className="mx-auto mb-2 text-danger" size={48} />
+                <p className="text-lg font-semibold text-danger">Recarga fallida</p>
                 <p className="mt-1 text-sm text-slate-500">Folio {resultado.folio}</p>
               </>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-5 w-full rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark"
-            >
+            <button type="button" onClick={onClose} className="gx-btn-primary mt-5 min-h-10 w-full">
               Cerrar
             </button>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <span className="mb-1 block text-sm font-medium text-slate-700">Compañía</span>
+              <span className="gx-label">Compañía</span>
               <div className="grid grid-cols-3 gap-2">
                 {companias.map((c) => (
                   <button
@@ -105,10 +105,10 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
                       setCompania(c);
                       setMonto("");
                     }}
-                    className={`rounded-lg border px-2 py-2 text-sm ${
+                    className={`min-h-10 px-2 py-2 text-sm ${
                       compania?.codigo === c.codigo
-                        ? "border-brand bg-brand/10 font-semibold text-brand"
-                        : "border-slate-300 text-slate-700"
+                        ? "gx-btn border-brand bg-brand/10 font-semibold text-brand"
+                        : "gx-btn border border-slate-300 font-normal text-slate-700"
                     }`}
                   >
                     {c.nombre}
@@ -120,17 +120,17 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
             {compania && (
               <>
                 <div>
-                  <span className="mb-1 block text-sm font-medium text-slate-700">Monto</span>
+                  <span className="gx-label">Monto</span>
                   <div className="flex flex-wrap gap-2">
                     {compania.montosDisponibles.map((m) => (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setMonto(String(m))}
-                        className={`rounded-lg border px-3 py-2 text-sm ${
+                        className={`min-h-10 px-3 py-2 text-sm ${
                           monto === String(m)
-                            ? "border-brand bg-brand/10 font-semibold text-brand"
-                            : "border-slate-300 text-slate-700"
+                            ? "gx-btn border-brand bg-brand/10 font-semibold text-brand"
+                            : "gx-btn border border-slate-300 font-normal text-slate-700"
                         }`}
                       >
                         ${m}
@@ -144,47 +144,43 @@ export function RecargaModal({ session, onClose }: { session: Session; onClose: 
                       value={monto}
                       onChange={(e) => setMonto(e.target.value)}
                       placeholder="Monto personalizado"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                      className="gx-input mt-2 min-h-10"
                     />
                   )}
                 </div>
 
                 <div>
-                  <span className="mb-1 block text-sm font-medium text-slate-700">
-                    Teléfono (10 dígitos)
-                  </span>
+                  <span className="gx-label">Teléfono (10 dígitos)</span>
                   <input
                     inputMode="numeric"
                     value={telefono}
                     onChange={(e) => setTelefono(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     placeholder="3312345678"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                    className="gx-input min-h-10"
                   />
                 </div>
 
                 {compania.requiereReferencia && (
                   <div>
-                    <span className="mb-1 block text-sm font-medium text-slate-700">
-                      Referencia
-                    </span>
+                    <span className="gx-label">Referencia</span>
                     <input
                       value={referencia}
                       onChange={(e) => setReferencia(e.target.value)}
                       placeholder="Cuenta / contrato"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+                      className="gx-input min-h-10"
                     />
                   </div>
                 )}
               </>
             )}
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
 
             <button
               type="button"
               onClick={vender}
               disabled={!puedeVender}
-              className="w-full rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+              className="gx-btn-primary min-h-10 w-full"
             >
               {procesando ? "Procesando…" : "Vender recarga"}
             </button>

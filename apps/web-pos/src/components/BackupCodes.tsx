@@ -38,18 +38,10 @@ export function BackupCodes({ codes }: { codes: string[] }) {
         ))}
       </div>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={copiar}
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
+        <button type="button" onClick={copiar} className="gx-btn-secondary min-h-10 flex-1">
           {copiado ? "Copiado" : "Copiar"}
         </button>
-        <button
-          type="button"
-          onClick={descargar}
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-        >
+        <button type="button" onClick={descargar} className="gx-btn-secondary min-h-10 flex-1">
           Descargar
         </button>
       </div>

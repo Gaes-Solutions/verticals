@@ -147,11 +147,9 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     }
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none";
+  const inputCls = "gx-input min-h-10";
   const codeCls = `${inputCls} text-center font-mono text-lg tracking-widest`;
-  const btnCls =
-    "w-full rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50";
+  const btnCls = "gx-btn-primary min-h-10 w-full";
 
   return (
     <div className="flex h-full items-center justify-center p-4">
@@ -177,7 +175,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
                       key={n.slug}
                       type="button"
                       onClick={() => void submitPassword(undefined, n.slug)}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-left hover:border-brand"
+                      className="gx-btn min-h-10 w-full justify-start border border-slate-300 font-normal hover:border-brand"
                     >
                       {n.nombre}
                     </button>
@@ -186,7 +184,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               </div>
             )}
             <label className="mb-3 block">
-              <span className="mb-1 block font-medium text-slate-700 text-sm">Correo</span>
+              <span className="gx-label">Correo</span>
               <input
                 type="email"
                 value={email}
@@ -196,7 +194,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               />
             </label>
             <label className="mb-5 block">
-              <span className="mb-1 block font-medium text-slate-700 text-sm">Contraseña</span>
+              <span className="gx-label">Contraseña</span>
               <input
                 type="password"
                 value={password}
@@ -205,7 +203,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
                 required
               />
             </label>
-            {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-4 text-danger text-sm">{error}</p>}
             <button type="submit" disabled={loading} className={btnCls}>
               {loading ? "Entrando…" : "Entrar"}
             </button>
@@ -232,7 +230,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               className={`mb-3 ${codeCls}`}
               required
             />
-            {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-3 text-danger text-sm">{error}</p>}
             <button type="submit" disabled={loading} className={btnCls}>
               {loading ? "Activando…" : "Activar y entrar"}
             </button>
@@ -264,7 +262,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
               className={`mb-3 ${codeCls}`}
               required
             />
-            {error && <p className="mb-3 text-red-600 text-sm">{error}</p>}
+            {error && <p className="mb-3 text-danger text-sm">{error}</p>}
             <button type="submit" disabled={loading} className={btnCls}>
               {loading ? "Entrando…" : "Entrar"}
             </button>
@@ -275,7 +273,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
                 setCode("");
                 setError(null);
               }}
-              className="mt-3 w-full text-center text-brand text-sm hover:underline"
+              className="gx-btn-ghost mt-3 min-h-10 w-full text-brand hover:underline"
             >
               {usarRespaldo
                 ? "Usar código de la app"

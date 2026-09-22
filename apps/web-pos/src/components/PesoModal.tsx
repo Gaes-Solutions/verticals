@@ -24,8 +24,8 @@ export function PesoModal({
   const importe = valido ? pesoNum * precioPorKg : 0;
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-xs">
         <div className="mb-3 flex items-center gap-2">
           <Scale size={20} className="text-brand" />
           <h2 className="text-lg font-bold text-slate-800">Peso</h2>
@@ -41,7 +41,7 @@ export function PesoModal({
           value={peso}
           onChange={(e) => setPeso(e.target.value)}
           placeholder="0.000"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-2xl focus:border-brand focus:outline-none"
+          className="gx-input py-2 text-2xl"
         />
         <p className="mt-1 text-right text-sm text-slate-500">kg</p>
         <p className="mt-2 text-right text-xl font-bold text-slate-800">${importe.toFixed(2)}</p>
@@ -49,7 +49,7 @@ export function PesoModal({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
+            className="gx-btn-ghost min-h-10 flex-1 border border-slate-300"
           >
             Cancelar
           </button>
@@ -57,7 +57,7 @@ export function PesoModal({
             type="button"
             onClick={() => onConfirm(pesoNum)}
             disabled={!valido}
-            className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+            className="gx-btn-primary min-h-10 flex-1"
           >
             Agregar
           </button>
