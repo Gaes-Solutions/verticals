@@ -3,12 +3,14 @@ import { EstadoError } from "@/components/estado-error";
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
 import { PreguntasProducto } from "@/components/preguntas-producto";
-import { ProductoGrid } from "@/components/producto-card";
+import { EstrellasProducto, ProductoGrid } from "@/components/producto-card";
 import { ProductoCompra } from "@/components/producto-compra";
 import { ResenasResumen } from "@/components/resenas-resumen";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { RegistrarVisto, VistosRecientes } from "@/components/vistos-recientes";
 import { ApiError, type ProductoPublicado, api, getTiendaConfig } from "@/lib/api";
+import { lineaEntrega } from "@/lib/etiquetas";
+import { Clock, Store } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,6 +26,7 @@ interface ProductoDetalle {
   precioPublicoOverride: string | null;
   categoriaPublica: { nombre: string; slugSeo: string } | null;
   producto: {
+    unidadMedida?: string | null;
     variantes: Array<{
       id: string;
       precioBase: string;
@@ -48,6 +51,11 @@ interface ProductoDetalle {
   stockPublico: number | null;
   stockBajo: boolean;
   envioGratis: boolean;
+  // Rating agregado sobre todas las reseñas aprobadas (puede no venir en caché).
+  ratingPromedio?: number | null;
+  ratingCuenta?: number;
+  // Unidad en la que se vende (pza, kg, lt…).
+  unidadMedida?: string | null;
   relacionados: ProductoPublicado[];
 }
 
@@ -56,6 +64,12 @@ function precioDe(prod: ProductoDetalle): string {
   return (
     prod.precioDesde ?? prod.precioPublicoOverride ?? prod.producto.variantes[0]?.precioBase ?? "0"
   );
+}
+
+/** Rating agregado del API (todas las reseñas aprobadas); null si no vino o no hay. */
+function ratingAgregadoDe(prod: ProductoDetalle): { promedio: number; cuenta: number } | null {
+  if (prod.ratingCuenta == null || prod.ratingCuenta <= 0) return null;
+  return { promedio: prod.ratingPromedio ?? 0, cuenta: prod.ratingCuenta };
 }
 
 // Serializa JSON-LD escapando `<`/`>`/`&` para que un nombre de producto con
@@ -96,7 +110,10 @@ export async function generateMetadata({
 
 /** JSON-LD schema.org/Product para rich results en Google. */
 function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
-  const ratings = prod.resenas.map((r) => r.rating);
+  // El agregado real (todas las aprobadas) gana sobre el cálculo con las 20 que
+  // trae el detalle; en respuestas cacheadas sin agregado se conserva el previo.
+  const agg = ratingAgregadoDe(prod);
+  const ratings = agg ? [agg.promedio] : prod.resenas.map((r) => r.rating);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -119,8 +136,10 @@ function ProductoJsonLd({ prod }: { prod: ProductoDetalle }) {
       ? {
           aggregateRating: {
             "@type": "AggregateRating",
-            ratingValue: (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
-            reviewCount: ratings.length,
+            ratingValue: agg
+              ? agg.promedio.toFixed(1)
+              : (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
+            reviewCount: agg ? agg.cuenta : ratings.length,
           },
         }
       : {}),
@@ -181,6 +200,8 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
   }
   const ratings = prod.resenas.map((r) => r.rating);
   const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+  const agg = ratingAgregadoDe(prod);
+  const textoEntrega = lineaEntrega(config.etaEnvio, config.recogidaEnTienda);
 
   const precioActual = Number(precioDe(prod));
 
@@ -223,9 +244,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         </div>
         <div className="gx-card p-5 sm:p-6">
           <h1 className="font-bold text-2xl">{prod.tituloPublico}</h1>
-          {config.mostrarRatingProducto && ratings.length > 0 && (
+          {config.mostrarRatingProducto && agg && (
+            <div className="mt-2 text-sm">
+              <EstrellasProducto promedio={agg.promedio} cuenta={agg.cuenta} />
+            </div>
+          )}
+          {config.mostrarRatingProducto && !agg && ratings.length > 0 && (
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className="text-warn">
+              <span className="text-warn" aria-hidden="true">
                 {"★".repeat(Math.round(ratingProm))}
                 {"☆".repeat(5 - Math.round(ratingProm))}
               </span>
@@ -252,10 +278,21 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             stockPublico={prod.stockPublico}
             stockBajo={prod.stockBajo}
             envioGratis={prod.envioGratis}
+            unidadMedida={prod.unidadMedida ?? prod.producto.unidadMedida ?? null}
             {...(prod.fotosArray[0] ? { imagenUrl: prod.fotosArray[0] } : {})}
             slugSeo={slug}
             productoPublicadoId={prod.id}
           />
+          {textoEntrega && (
+            <p className="mt-3 flex items-center gap-1.5 text-slate-500 text-sm">
+              {config.etaEnvio ? (
+                <Clock size={15} strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <Store size={15} strokeWidth={2} aria-hidden="true" />
+              )}
+              {textoEntrega}
+            </p>
+          )}
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
           </div>
@@ -314,6 +351,10 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
               habilitado: config.msiHabilitado,
               meses: config.msiMeses,
               montoMinimo: config.msiMontoMinimo,
+            }}
+            entrega={{
+              eta: config.etaEnvio ?? null,
+              recogida: config.recogidaEnTienda ?? false,
             }}
           />
         </section>

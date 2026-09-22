@@ -1,6 +1,6 @@
 import { BarraFiltros, PanelFiltros } from "@/components/filtros";
 import { Paginacion } from "@/components/paginacion";
-import { ProductoGrid } from "@/components/producto-card";
+import { type EntregaConfigPublica, ProductoGrid } from "@/components/producto-card";
 import { RepetirDespensa } from "@/components/repetir-despensa";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { ApiError, type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
@@ -23,12 +23,14 @@ function Seccion({
   items,
   verMas,
   msi,
+  entrega,
 }: {
   icono: ReactNode;
   titulo: string;
   items: CatalogoResponse["items"];
   verMas?: string;
   msi?: { habilitado: boolean; meses: number[]; montoMinimo: string };
+  entrega?: EntregaConfigPublica;
 }) {
   if (items.length === 0) return null;
   return (
@@ -44,7 +46,7 @@ function Seccion({
           </Link>
         )}
       </div>
-      <ProductoGrid items={items} {...(msi ? { msi } : {})} />
+      <ProductoGrid items={items} {...(msi ? { msi } : {})} {...(entrega ? { entrega } : {})} />
     </section>
   );
 }
@@ -142,6 +144,10 @@ export default async function CatalogoPage({
     meses: tienda.msiMeses,
     montoMinimo: tienda.msiMontoMinimo,
   };
+  const entregaCfg: EntregaConfigPublica = {
+    eta: tienda.etaEnvio ?? null,
+    recogida: tienda.recogidaEnTienda ?? false,
+  };
 
   return (
     <div>
@@ -155,6 +161,7 @@ export default async function CatalogoPage({
             items={ofertas}
             verMas="/?soloOfertas=true"
             msi={msiCfg}
+            entrega={entregaCfg}
           />
           <Seccion
             icono={<Sparkles size={22} className="text-marca" />}
@@ -162,6 +169,7 @@ export default async function CatalogoPage({
             items={novedades}
             verMas="/?orden=novedad"
             msi={msiCfg}
+            entrega={entregaCfg}
           />
           <Seccion
             icono={<TrendingUp size={22} className="text-marca" />}
@@ -169,6 +177,7 @@ export default async function CatalogoPage({
             items={populares}
             verMas="/?orden=populares"
             msi={msiCfg}
+            entrega={entregaCfg}
           />
         </>
       )}
@@ -199,7 +208,7 @@ export default async function CatalogoPage({
             </div>
           ) : (
             <>
-              <ProductoGrid items={data.items} msi={msiCfg} />
+              <ProductoGrid items={data.items} msi={msiCfg} entrega={entregaCfg} />
               <Paginacion page={data.page} pageSize={data.pageSize} total={data.total} sp={sp} />
             </>
           )}

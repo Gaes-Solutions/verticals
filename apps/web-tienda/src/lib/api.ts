@@ -111,6 +111,12 @@ export interface ProductoPublicado {
   stockPublico: number | null;
   stockBajo: boolean;
   envioGratis: boolean;
+  // Rating agregado (solo reseñas aprobadas; sólo cuando el tenant activó la
+  // función y ya hay reseñas — si no vienen, la tarjeta no muestra estrellas).
+  ratingPromedio?: number | null;
+  ratingCuenta?: number;
+  // Unidad en la que se vende (pza, kg, lt…); ausente en respuestas cacheadas.
+  unidadMedida?: string | null;
 }
 
 export interface CatalogoResponse {
@@ -161,6 +167,13 @@ export interface TiendaConfig {
    * su proveedor configurado en el API. Ausente en tiendas aún no migradas.
    */
   metodosPago?: string[];
+  /**
+   * ETA de entrega a domicilio en días, sólo si el negocio tiene tarifas de
+   * envío activas; null si no hace envíos (mostrar "Recoge hoy" o nada).
+   */
+  etaEnvio?: { min: number; max: number } | null;
+  /** Hay al menos una sucursal con recogida en tienda (click & collect) activa. */
+  recogidaEnTienda?: boolean;
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -184,6 +197,8 @@ const DEFAULT_CONFIG: TiendaConfig = {
   politicasHtml: {},
   // Fallback conservador: sin config del API solo se ofrece tarjeta (flujo actual).
   metodosPago: ["tarjeta"],
+  etaEnvio: null,
+  recogidaEnTienda: false,
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {

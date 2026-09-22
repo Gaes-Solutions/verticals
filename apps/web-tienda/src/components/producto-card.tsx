@@ -2,7 +2,8 @@
 
 import type { ProductoPublicado } from "@/lib/api";
 import { actualizarCantidad, agregar, leerCarrito } from "@/lib/carrito-store";
-import { ImageOff, Plus, Truck } from "lucide-react";
+import { ariaCalificacion, estrellasDe, etiquetaUnidad, lineaEntrega } from "@/lib/etiquetas";
+import { Clock, ImageOff, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { type MouseEvent, useEffect, useState } from "react";
 
@@ -13,24 +14,50 @@ export interface MsiConfigPublica {
   montoMinimo: string;
 }
 
+/** Entrega configurable del tenant: ETA de envío y/o recogida en tienda. */
+export interface EntregaConfigPublica {
+  eta: { min: number; max: number } | null;
+  recogida: boolean;
+}
+
 function partePrecio(valor: number): { ent: string; cent: string } {
   const [ent = "0", cent = "00"] = valor.toFixed(2).split(".");
   return { ent, cent };
 }
 
+/** Estrellas readonly nivel marketplace + cuenta, accesibles con aria-label. */
+export function EstrellasProducto({
+  promedio,
+  cuenta,
+}: {
+  promedio: number;
+  cuenta: number;
+}) {
+  return (
+    <span className="flex items-center gap-1" aria-label={ariaCalificacion(promedio, cuenta)}>
+      <span className="text-warn" aria-hidden="true">
+        {estrellasDe(promedio)}
+      </span>
+      <span className="text-slate-500 text-xs">({cuenta})</span>
+    </span>
+  );
+}
+
 /** Tarjeta de producto nivel marketplace: badges de oferta/FULL, MSI y quick-add. */
-export function ProductoCard({ p, msi }: { p: ProductoPublicado; msi?: MsiConfigPublica }) {
+export function ProductoCard({
+  p,
+  msi,
+  entrega,
+}: {
+  p: ProductoPublicado;
+  msi?: MsiConfigPublica;
+  entrega?: EntregaConfigPublica;
+}) {
   const base = Number(
     p.precioDesde || p.precioPublicoOverride || p.producto.variantes[0]?.precioBase || 0,
   );
   const promo = p.enOferta && p.precioPromocion ? Number(p.precioPromocion) : null;
   const precio = promo ?? base;
-  const { ent, cent } = partePrecio(precio);
-
-  const mostrarMsi = msi?.habilitado && msi.meses.length > 0 && precio >= Number(msi.montoMinimo);
-  const mesesMsi = mostrarMsi
-    ? (msi?.meses.filter((m) => m >= 3).sort((a, b) => a - b)[0] ?? msi?.meses[0] ?? 0)
-    : 0;
 
   return (
     <Link
@@ -67,21 +94,19 @@ export function ProductoCard({ p, msi }: { p: ProductoPublicado; msi?: MsiConfig
         <h2 className="line-clamp-2 flex-1 font-medium text-slate-800 text-sm group-hover:text-marca">
           {p.tituloPublico}
         </h2>
-        <div className="mt-2">
-          {promo != null && (
-            <span className="text-slate-400 text-xs line-through">${base.toFixed(2)}</span>
-          )}
-          <p className="flex items-baseline gap-0.5 font-black text-slate-900 text-2xl">
-            <span className="text-base">$</span>
-            {ent}
-            <sup className="font-bold text-xs">{cent}</sup>
-          </p>
-          {mostrarMsi && mesesMsi > 0 && (
-            <p className="mt-0.5 font-medium text-ok text-xs">
-              {mesesMsi} x ${(precio / mesesMsi).toFixed(2)} sin intereses
-            </p>
-          )}
-        </div>
+        {p.ratingCuenta != null && p.ratingCuenta > 0 && p.ratingPromedio != null && (
+          <div className="mt-1">
+            <EstrellasProducto promedio={p.ratingPromedio} cuenta={p.ratingCuenta} />
+          </div>
+        )}
+        <PrecioProducto
+          base={base}
+          precio={precio}
+          enOferta={promo != null}
+          unidadMedida={p.unidadMedida}
+          msi={msi}
+          entrega={entrega}
+        />
         <div className="mt-1.5 flex min-h-[20px] flex-wrap gap-1">
           {p.stockBajo && p.stockPublico != null && (
             <span className="gx-badge-warn text-[11px]">¡Últimas {p.stockPublico}!</span>
@@ -92,6 +117,57 @@ export function ProductoCard({ p, msi }: { p: ProductoPublicado; msi?: MsiConfig
         </div>
       </div>
     </Link>
+  );
+}
+
+/** Bloque de precio de la tarjeta: promo tachada, grande con unidad, MSI y ETA. */
+function PrecioProducto({
+  base,
+  precio,
+  enOferta,
+  unidadMedida,
+  msi,
+  entrega,
+}: {
+  base: number;
+  precio: number;
+  enOferta: boolean;
+  unidadMedida?: string | null;
+  msi?: MsiConfigPublica;
+  entrega?: EntregaConfigPublica;
+}) {
+  const { ent, cent } = partePrecio(precio);
+  const unidad = etiquetaUnidad(unidadMedida);
+  const textoEntrega = entrega ? lineaEntrega(entrega.eta, entrega.recogida) : null;
+  const mostrarMsi = msi?.habilitado && msi.meses.length > 0 && precio >= Number(msi.montoMinimo);
+  const mesesMsi = mostrarMsi
+    ? (msi?.meses.filter((m) => m >= 3).sort((a, b) => a - b)[0] ?? msi?.meses[0] ?? 0)
+    : 0;
+  return (
+    <div className="mt-2">
+      {enOferta && <span className="text-slate-400 text-xs line-through">${base.toFixed(2)}</span>}
+      <p className="flex items-baseline gap-0.5 font-black text-slate-900 text-2xl">
+        <span className="text-base">$</span>
+        {ent}
+        <sup className="font-bold text-xs">{cent}</sup>
+        {unidad && <span className="ml-1 font-normal text-slate-400 text-xs">{unidad}</span>}
+      </p>
+      {mostrarMsi && mesesMsi > 0 && (
+        <p className="mt-0.5 font-medium text-ok text-xs">
+          {mesesMsi} x ${(precio / mesesMsi).toFixed(2)} sin intereses
+        </p>
+      )}
+      {textoEntrega && (
+        <p className="mt-1 flex items-center gap-1 text-slate-500 text-xs">
+          {entrega?.eta ? (
+            <Clock size={12} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Store size={12} strokeWidth={2} aria-hidden="true" />
+          )}
+          {textoEntrega}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -181,14 +257,21 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
 export function ProductoGrid({
   items,
   msi,
+  entrega,
 }: {
   items: ProductoPublicado[];
   msi?: MsiConfigPublica;
+  entrega?: EntregaConfigPublica;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
       {items.map((p) => (
-        <ProductoCard key={p.id} p={p} {...(msi ? { msi } : {})} />
+        <ProductoCard
+          key={p.id}
+          p={p}
+          {...(msi ? { msi } : {})}
+          {...(entrega ? { entrega } : {})}
+        />
       ))}
     </div>
   );

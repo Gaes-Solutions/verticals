@@ -1,6 +1,7 @@
 "use client";
 
 import { agregar } from "@/lib/carrito-store";
+import { etiquetaUnidad } from "@/lib/etiquetas";
 import { Check, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,7 @@ export function ProductoCompra({
   stockPublico,
   stockBajo,
   envioGratis,
+  unidadMedida,
   imagenUrl,
   slugSeo,
   productoPublicadoId,
@@ -54,6 +56,7 @@ export function ProductoCompra({
   stockPublico?: number | null;
   stockBajo?: boolean;
   envioGratis?: boolean;
+  unidadMedida?: string | null;
   imagenUrl?: string;
   slugSeo?: string;
   productoPublicadoId?: string;
@@ -93,6 +96,7 @@ export function ProductoCompra({
 
   const mostrarMsi = msi.habilitado && msi.meses.length > 0 && precioNum >= Number(msi.montoMinimo);
   const mejorPlazo = mostrarMsi ? Math.max(...msi.meses) : 0;
+  const unidad = etiquetaUnidad(unidadMedida);
 
   return (
     <div className="mt-4">
@@ -100,7 +104,10 @@ export function ProductoCompra({
         {oferta && (
           <span className="text-slate-400 text-lg line-through">${precioLista.toFixed(2)}</span>
         )}
-        <p className="font-bold text-3xl text-marca">${precioNum.toFixed(2)}</p>
+        <p className="font-bold text-3xl text-marca">
+          ${precioNum.toFixed(2)}
+          {unidad && <span className="ml-1 font-normal text-slate-400 text-sm">{unidad}</span>}
+        </p>
         {oferta && oferta.descuentoPct > 0 && (
           <span className="rounded bg-danger px-2 py-0.5 font-bold text-sm text-white">
             -{oferta.descuentoPct}%
