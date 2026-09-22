@@ -238,6 +238,8 @@ export default function CheckoutPage() {
     setCuponInfo(r);
   }
   const conektaKey = process.env.NEXT_PUBLIC_CONEKTA_PUBLIC_KEY ?? "";
+  // Pagar al recoger no necesita proveedor de pagos: el cobro ocurre en el mostrador.
+  const [pagaAlRecoger, setPagaAlRecoger] = useState(false);
   const permiteDemo = process.env.NODE_ENV !== "production";
   // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
   const msiOfrecibles =
@@ -332,7 +334,8 @@ export default function CheckoutPage() {
       await consultarPedido();
       return;
     }
-    if (!cardTokenId && !permiteDemo) {
+    const alRecoger = pagaAlRecoger && modoEntrega === "pickup";
+    if (!cardTokenId && !permiteDemo && !alRecoger) {
       setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
       return;
     }
@@ -363,6 +366,7 @@ export default function CheckoutPage() {
           emailComprador: email,
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
+          ...(alRecoger ? { metodoPago: "cod" as const } : {}),
           ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
           ...(cardTokenId ? { cardTokenId } : {}),
           ...(meses ? { mesesSinIntereses: meses } : {}),
@@ -594,15 +598,49 @@ export default function CheckoutPage() {
 
           {/* ② Pago */}
           <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
-            <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
-              <p className="flex items-center gap-2 font-medium text-sm">
-                <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
-              </p>
-              <p className="mt-0.5 text-slate-500 text-xs">
-                Visa · Mastercard · AMEX
-                {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
-              </p>
-            </div>
+            {modoEntrega === "pickup" ? (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setPagaAlRecoger(false)}
+                  className={`w-full rounded-lg border p-3 text-left ${
+                    pagaAlRecoger ? "border-slate-200" : "border-marca bg-marca/5 ring-1 ring-marca"
+                  }`}
+                >
+                  <p className="flex items-center gap-2 font-medium text-sm">
+                    <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
+                  </p>
+                  <p className="mt-0.5 text-slate-500 text-xs">
+                    Visa · Mastercard · AMEX
+                    {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPagaAlRecoger(true)}
+                  className={`w-full rounded-lg border p-3 text-left ${
+                    pagaAlRecoger ? "border-marca bg-marca/5 ring-1 ring-marca" : "border-slate-200"
+                  }`}
+                >
+                  <p className="flex items-center gap-2 font-medium text-sm">
+                    <Store size={16} strokeWidth={2} /> Paga al recoger en la tienda
+                  </p>
+                  <p className="mt-0.5 text-slate-500 text-xs">
+                    Apartamos tu pedido y pagas cuando lo recojas.
+                  </p>
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+                <p className="flex items-center gap-2 font-medium text-sm">
+                  <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
+                </p>
+                <p className="mt-0.5 text-slate-500 text-xs">
+                  Visa · Mastercard · AMEX
+                  {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
+                </p>
+              </div>
+            )}
 
             {!attempt && (
               <div className="mt-3 space-y-2 text-sm text-slate-600">
@@ -633,7 +671,23 @@ export default function CheckoutPage() {
               </div>
             )}
             <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
-              {conektaKey ? (
+              {pagaAlRecoger && modoEntrega === "pickup" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => procesarPedido()}
+                    disabled={procesando}
+                    className="gx-btn-primary w-full !py-3"
+                  >
+                    {procesando
+                      ? "Apartando tu pedido…"
+                      : `Apartar y pagar al recoger · $${total.toFixed(2)}`}
+                  </button>
+                  <p className="mt-2 text-center text-slate-500 text-xs">
+                    No se te cobra nada ahora. Pagas en la tienda cuando recojas tu pedido.
+                  </p>
+                </>
+              ) : conektaKey ? (
                 <PagoTarjetaConekta
                   publicKey={conektaKey}
                   montoTotal={total}

@@ -1,7 +1,9 @@
 import type { EmailProvider } from "@gaespos/email";
 import { PERMISSIONS } from "@gaespos/permissions";
+import Decimal from "decimal.js";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { CheckoutError, confirmarPagoPedido } from "../checkout/service.js";
 import {
   MensajePedidoError,
   enviarMensajeEmpleado,
@@ -324,6 +326,70 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
     const mensajes = await listarMensajes(req.tenantPrisma, id);
     await marcarHiloLeido(req.tenantPrisma, id, "empleado");
     return mensajes;
+  });
+
+  /**
+   * Cobro en mostrador de un pedido que se paga al recoger: deja exactamente lo
+   * mismo que un pago en línea (venta, inventario y avisos), así que el corte de
+   * caja y el inventario cuadran igual por los dos caminos.
+   */
+  app.post("/:id/pago-recibido", async (req, reply) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    const { id } = idParam.parse(req.params);
+    const body = z
+      .object({
+        metodo: z.enum(["efectivo", "tarjeta", "transferencia"]),
+        referencia: z.string().trim().min(1).max(120).optional(),
+      })
+      .parse(req.body ?? {});
+    const pedido = await req.tenantPrisma.pedidoEcommerce.findUnique({ where: { id } });
+    if (!pedido) {
+      return reply
+        .code(404)
+        .send({ statusCode: 404, error: "Not Found", message: "Pedido no encontrado" });
+    }
+    if (pedido.metodoPago !== "cod") {
+      return reply.code(409).send({
+        statusCode: 409,
+        error: "Conflict",
+        message: "Este pedido no se cobra en mostrador; su pago viene del proveedor",
+      });
+    }
+    try {
+      const resultado = await confirmarPagoPedido(
+        req.tenantPrisma,
+        req.principal.userId,
+        pedido,
+        {
+          status: "confirmado",
+          montoCentavos: new Decimal(pedido.total.toString())
+            .times(100)
+            .toDecimalPlaces(0)
+            .toNumber(),
+        },
+        app.emailProviderFactory(),
+      );
+      if (resultado.statusPago === "pago_confirmado")
+        await req.tenantPrisma.pedidoEcommerce.update({
+          where: { id },
+          data: {
+            eventos: {
+              create: {
+                tipo: "pago_mostrador",
+                descripcion: `Cobrado en mostrador (${body.metodo})${body.referencia ? ` · ref ${body.referencia}` : ""}`,
+                visibleCliente: true,
+              },
+            },
+          },
+        });
+      return resultado;
+    } catch (err) {
+      if (err instanceof CheckoutError)
+        return reply
+          .code(err.statusCode)
+          .send({ statusCode: err.statusCode, error: "Error", message: err.message });
+      throw err;
+    }
   });
 
   app.post("/:id/mensajes", async (req, reply) => {

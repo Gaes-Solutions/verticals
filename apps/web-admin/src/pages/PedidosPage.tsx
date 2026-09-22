@@ -24,6 +24,7 @@ interface PedidoRow {
 }
 
 interface PedidoDetalle extends PedidoRow {
+  metodoPago: string;
   items: Array<{ nombre: string; cantidad: string; precioUnitario: string; subtotal: string }>;
   subtotal: string;
   costoEnvio: string;
@@ -383,7 +384,12 @@ function DetalleModal({
         ) : !puedeGestionar ? (
           <p className="text-sm text-slate-400">No tienes permiso para avanzar pedidos.</p>
         ) : (
-          <AvanzarSeccion pedido={pedido} etiqueta={etiqueta} onChanged={onChanged} />
+          <>
+            {pedido.metodoPago === "cod" && pedido.statusPago === "pendiente" && (
+              <CobroEnMostrador pedido={pedido} onChanged={onChanged} />
+            )}
+            <AvanzarSeccion pedido={pedido} etiqueta={etiqueta} onChanged={onChanged} />
+          </>
         )}
       </div>
     </div>
@@ -541,6 +547,74 @@ function GuiaSeccion({ pedido, onChanged }: { pedido: PedidoDetalle; onChanged: 
         </div>
       )}
       {error && <p className="mt-2 text-danger text-sm">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Pedido que se paga al recoger: al cobrarlo queda igual que un pago en línea
+ * (genera su venta y descuenta inventario), así el corte de caja cuadra.
+ */
+function CobroEnMostrador({
+  pedido,
+  onChanged,
+}: {
+  pedido: PedidoDetalle;
+  onChanged: () => void;
+}) {
+  const [metodo, setMetodo] = useState("efectivo");
+  const [referencia, setReferencia] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function cobrar() {
+    if (!puede("ecommerce.pedidos_gestionar")) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      await api(`/t/pedidos-ecommerce/${pedido.id}/pago-recibido`, {
+        body: { metodo, ...(referencia.trim() ? { referencia: referencia.trim() } : {}) },
+      });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo registrar el cobro");
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-warn/40 bg-warn/5 p-3">
+      <h3 className="mb-1 font-bold text-slate-700 text-sm">Cobrar al entregar</h3>
+      <p className="mb-2 text-slate-600 text-xs">
+        Este pedido se paga al recoger. Registra el cobro de ${pedido.total} cuando el cliente
+        pague: se genera su venta y se descuenta el inventario.
+      </p>
+      <div className="mb-2 flex flex-wrap gap-2">
+        <select
+          value={metodo}
+          onChange={(e) => setMetodo(e.target.value)}
+          className="gx-input flex-1"
+        >
+          <option value="efectivo">Efectivo</option>
+          <option value="tarjeta">Tarjeta en terminal</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+        <input
+          value={referencia}
+          onChange={(e) => setReferencia(e.target.value)}
+          placeholder="Referencia (opcional)"
+          className="gx-input flex-1"
+        />
+      </div>
+      {error && <p className="mb-2 text-danger text-sm">{error}</p>}
+      <button
+        type="button"
+        onClick={cobrar}
+        disabled={guardando}
+        className="gx-btn-primary w-full disabled:opacity-50"
+      >
+        {guardando ? "Registrando…" : `Registrar cobro de $${pedido.total}`}
+      </button>
     </div>
   );
 }

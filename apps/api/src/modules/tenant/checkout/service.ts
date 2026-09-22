@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { PedidoEcommerce } from "@gaespos/db/tenant-client";
 import type { EmailProvider } from "@gaespos/email";
 import type { PagoIntent, PaymentProvider } from "@gaespos/pagos";
 import { PERMISSIONS } from "@gaespos/permissions";
@@ -207,6 +208,12 @@ export async function iniciarCheckout(
 ): Promise<IniciarCheckoutResult> {
   const carrito = await client.carritoEcommerce.findUnique({ where: { id: input.carritoId } });
   if (!carrito) throw new CheckoutError(404, "Carrito no encontrado");
+  // Pagar al recoger solo tiene sentido si el comprador va a la tienda por su pedido.
+  if (input.metodoPago === "cod" && input.metodoEnvio !== "click_collect")
+    throw new CheckoutError(
+      422,
+      "Pagar al recoger aplica solo a pedidos que se recogen en la tienda",
+    );
   const { carritoId, idempotencyKey, requestedBy, ...paymentInput } = input;
   const key = idempotencyKey ?? `cart:${carritoId}`;
   const owner = requestedBy ?? "internal";
@@ -413,8 +420,9 @@ async function crearPedidoConIntent(
     const folioPublico = await nextFolioPublico(tx);
     const created = await tx.pedidoEcommerce.create({
       data: {
-        paymentProvider: provider.codigo,
-        paymentAccountId: input.stripeAccountId ?? null,
+        ...(input.metodoPago === "cod"
+          ? {}
+          : { paymentProvider: provider.codigo, paymentAccountId: input.stripeAccountId ?? null }),
         folioPublico,
         carritoOrigenId: carrito.id,
         ...(carrito.clienteId ? { clienteId: carrito.clienteId } : {}),
@@ -458,6 +466,23 @@ async function crearPedidoConIntent(
     await tx.checkoutAttempt.update({ where: { key: attemptKey }, data: { pedidoId: created.id } });
     return { pedido: created, total: new Decimal(snapshot.total) };
   });
+
+  // El pedido que se paga al recoger no pasa por un proveedor: espera el cobro en mostrador.
+  if (input.metodoPago === "cod") {
+    const referencia = `mostrador_${pedido.folioPublico}`;
+    await client.pedidoEcommerce.update({
+      where: { id: pedido.id },
+      data: { paymentIntentId: referencia },
+    });
+    return {
+      pedidoId: pedido.id,
+      folioPublico: pedido.folioPublico,
+      intentId: referencia,
+      intentStatus: "pendiente" as const,
+      montoCentavos: Math.round(total.times(100).toNumber()),
+      total: total.toString(),
+    };
+  }
 
   const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
   const montoCentavos = Math.round(total.times(100).toNumber());
@@ -554,7 +579,21 @@ export async function procesarWebhookPago(
     where: { paymentIntentId: evento.intentId },
   });
   if (!pedido) throw new CheckoutError(404, "Pedido no encontrado para el intent");
+  return confirmarPagoPedido(client, usuarioSistemaId, pedido, evento, emailProvider);
+}
 
+/**
+ * Asienta el pago de un pedido: genera su venta, descuenta inventario y avisa.
+ * La usa el webhook del proveedor y también el cobro en mostrador de un pedido
+ * que se paga al recoger, para que los dos caminos dejen exactamente lo mismo.
+ */
+export async function confirmarPagoPedido(
+  client: TenantClient,
+  usuarioSistemaId: string,
+  pedido: PedidoEcommerce,
+  evento: { status: "confirmado" | "fallido" | "reembolsado"; montoCentavos: number },
+  emailProvider?: EmailProvider,
+): Promise<ConfirmarPagoResult> {
   const prepared =
     evento.status === "confirmado" &&
     pedido.statusPago !== "pago_confirmado" &&

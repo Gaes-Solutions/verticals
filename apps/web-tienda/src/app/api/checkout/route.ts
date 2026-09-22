@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       emailComprador: string;
       items: Array<{ varianteId: string; cantidad: number }>;
       metodoEnvio: "paqueteria" | "click_collect";
+      metodoPago?: "cod";
       tarifaEnvioId?: string;
       sucursalPickupId?: string;
       direccionEnvio?: Record<string, unknown>;
@@ -69,7 +70,9 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.statusCode !== 404) throw err;
     }
-    if (process.env.NODE_ENV === "production" && !body.cardTokenId) {
+    // Pagar al recoger no cobra en línea: no necesita proveedor ni tarjeta.
+    const alRecoger = body.metodoPago === "cod" && body.metodoEnvio === "click_collect";
+    if (process.env.NODE_ENV === "production" && !body.cardTokenId && !alRecoger) {
       return NextResponse.json(
         { message: "El pago no está disponible. Contacta a la tienda o reintenta más tarde." },
         { status: 503 },
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
         carritoId: carrito.id,
         idempotencyKey: identity.key,
         emailComprador: body.emailComprador,
-        metodoPago: "tarjeta",
+        metodoPago: alRecoger ? "cod" : "tarjeta",
         proveedorPago: conConekta ? "conekta" : "mock",
         metodoEnvio: body.metodoEnvio,
         ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
@@ -102,7 +105,8 @@ export async function POST(req: NextRequest) {
         ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
       },
     });
-    if (!conConekta)
+    // El pedido al recoger queda esperando el cobro en el mostrador; no se confirma aquí.
+    if (!conConekta && !alRecoger)
       await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
     // El resultado del proveedor no demuestra que la venta haya quedado asentada.
     return publicResult(await api<CheckoutResult>(recoveryPath));
