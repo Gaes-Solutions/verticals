@@ -36,6 +36,13 @@ estaba vacío. Para una tienda de globos y regalos, un catálogo en gris no vend
 - **Publicación:** al publicar el catálogo y al subir o borrar una foto se
   rearma `fotosArray` del producto publicado, que es lo que lee la tienda.
 
+- **Permisos del disco:** el volumen se monta como root y el API corre con un
+  usuario sin privilegios, así que guardar una foto fallaba con permiso
+  denegado. El contenedor arranca como root solo para cederle esas carpetas al
+  usuario del servicio y baja a ese usuario antes de ejecutar el API
+  (`apps/api/docker-entrypoint.sh`); el proceso sigue sin privilegios. El
+  `chown` recursivo corre una sola vez, no en cada arranque.
+
 ## Lo que falta
 
 - No se generan miniaturas ni se recomprime: una foto de 5 MB se sirve tal cual.

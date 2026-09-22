@@ -180,6 +180,10 @@ KIOSKO_MEDIA_ROOT=/data/kiosko
 Las rutas se crean solas la primera vez que se sube un archivo. Sin estas variables el API responde
 `503` al subir una foto y lo dice en pantalla, en vez de aceptar un archivo que se perdería.
 
+El contenedor del API se encarga solo de los permisos: arranca como root, cede
+esas carpetas a su usuario de servicio y baja a ese usuario antes de ejecutar el
+API. No hace falta `RAILWAY_RUN_UID`.
+
 Dos advertencias:
 
 - El volumen es de **un** servicio. Si algún día el `api` corre con varias réplicas, hay que mover
