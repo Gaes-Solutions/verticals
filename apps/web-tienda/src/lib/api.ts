@@ -143,6 +143,11 @@ export interface TiendaConfig {
   vapidPublicKey: string | null;
   envioGratisDesde: string | null;
   politicasHtml: Record<string, string>;
+  /**
+   * Métodos de pago que el tenant ofrece ("tarjeta" | "oxxo" | "spei"), según
+   * su proveedor configurado en el API. Ausente en tiendas aún no migradas.
+   */
+  metodosPago?: string[];
 }
 
 const DEFAULT_CONFIG: TiendaConfig = {
@@ -164,6 +169,8 @@ const DEFAULT_CONFIG: TiendaConfig = {
   vapidPublicKey: null,
   envioGratisDesde: null,
   politicasHtml: {},
+  // Fallback conservador: sin config del API solo se ofrece tarjeta (flujo actual).
+  metodosPago: ["tarjeta"],
 };
 
 export async function getTiendaConfig(): Promise<TiendaConfig> {

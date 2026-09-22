@@ -277,17 +277,13 @@ export function CorteModal(props: CorteProps) {
       {cargando && <p className="text-slate-400">Cargando…</p>}
 
       {error && !resultado && (
-        <div role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div role="alert" className="mb-4 rounded-lg bg-danger-light p-3 text-sm text-danger">
           {error}
         </div>
       )}
 
       {!cargando && !resultado && !pendiente && error ? (
-        <button
-          type="button"
-          className="mb-3 min-h-10 rounded border px-3"
-          onClick={() => void load()}
-        >
+        <button type="button" className="gx-btn-secondary mb-3" onClick={() => void load()}>
           Reintentar consulta de apertura
         </button>
       ) : null}
@@ -299,7 +295,7 @@ export function CorteModal(props: CorteProps) {
         reintentarLecturaX={reintentarLecturaX}
       />
       {!validCounts ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-danger">
           El conteo debe contener cantidades enteras, sin valores negativos.
         </p>
       ) : null}
@@ -357,7 +353,7 @@ export function CorteModal(props: CorteProps) {
                 type="button"
                 onClick={close}
                 disabled={procesando}
-                className="rounded-lg border border-slate-300 px-4 py-2.5 font-medium text-slate-700 disabled:opacity-50"
+                className="gx-btn-ghost min-h-10 border border-slate-300"
               >
                 Cancelar
               </button>
@@ -365,7 +361,7 @@ export function CorteModal(props: CorteProps) {
                 type="button"
                 onClick={() => hacerCorte("X")}
                 disabled={blocked || !canRead}
-                className="flex-1 rounded-lg border border-brand py-2.5 font-semibold text-brand disabled:opacity-50"
+                className="gx-btn-secondary min-h-10 flex-1"
               >
                 Corte X (lectura)
               </button>
@@ -373,7 +369,7 @@ export function CorteModal(props: CorteProps) {
                 type="button"
                 onClick={() => hacerCorte("Z")}
                 disabled={blocked || !canRead || !canClose || sinConfirmar.cantidad > 0}
-                className="flex-1 rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+                className="gx-btn-primary min-h-10 flex-1"
               >
                 Corte Z (cierre)
               </button>
@@ -385,7 +381,7 @@ export function CorteModal(props: CorteProps) {
         <button
           type="button"
           disabled={procesando}
-          className="mt-4 min-h-10 rounded border px-4"
+          className="gx-btn-ghost mt-4 border"
           onClick={close}
         >
           Volver sin reenviar
@@ -412,7 +408,7 @@ function CortePendiente({
   const esCierre = pendiente.tipo === "Z";
   return (
     <div className="mb-4 space-y-2">
-      <p role="alert" className="text-sm text-amber-800">
+      <p role="alert" className="text-sm text-warn">
         {esCierre
           ? "El cierre de turno no se confirmó. No repitas el envío ni recargues: consúltalo primero."
           : "La lectura no se confirmó. Puedes volver a intentarla: el corte X solo consulta, no cierra la caja ni mueve dinero."}
@@ -421,7 +417,7 @@ function CortePendiente({
         <button
           type="button"
           disabled={disabled}
-          className="min-h-10 rounded border border-brand px-3 text-brand disabled:opacity-50"
+          className="gx-btn-secondary min-h-10"
           onClick={() => void recuperar()}
         >
           Consultar cierre en el servidor
@@ -430,7 +426,7 @@ function CortePendiente({
         <button
           type="button"
           disabled={disabled}
-          className="min-h-10 rounded border border-brand px-3 text-brand disabled:opacity-50"
+          className="gx-btn-secondary min-h-10"
           onClick={reintentarLecturaX}
         >
           Volver a intentar la lectura
@@ -463,18 +459,14 @@ function ResultadoCorte({
             Number(resultado.diferencia) === 0
               ? "text-slate-700"
               : Number(resultado.diferencia) > 0
-                ? "text-emerald-600"
-                : "text-red-600"
+                ? "text-ok"
+                : "text-danger"
           }`}
         >
           ${Number(resultado.diferencia).toFixed(2)}
         </span>
       </p>
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-6 w-full rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark"
-      >
+      <button type="button" onClick={onClose} className="gx-btn-primary mt-6 w-full">
         {resultado.tipo === "Z" ? "Cerrar turno" : "Listo"}
       </button>
     </div>
@@ -508,7 +500,7 @@ function DenomColumn({
             min={0}
             value={conteo[d] ?? ""}
             onChange={(e) => onChange({ ...conteo, [d]: Number(e.target.value) || 0 })}
-            className="min-h-10 w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-sm focus:border-brand focus:outline-none"
+            className="gx-input min-h-10 w-full min-w-0 px-2 py-2 text-right"
             placeholder="0"
           />
         </div>

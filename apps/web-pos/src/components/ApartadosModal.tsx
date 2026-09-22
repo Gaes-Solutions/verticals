@@ -50,11 +50,15 @@ export function ApartadosModal({
   }, [vista, cargar]);
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
+    <div className="gx-modal-overlay">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">Apartados</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button
+            type="button"
+            onClick={onClose}
+            className="gx-btn-ghost h-10 w-10 p-0 text-slate-400 hover:text-slate-600"
+          >
             <X size={20} />
           </button>
         </div>
@@ -63,8 +67,10 @@ export function ApartadosModal({
           <button
             type="button"
             onClick={() => setVista("lista")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              vista === "lista" ? "bg-brand text-white" : "bg-slate-100 text-slate-700"
+            className={`min-h-10 px-3 ${
+              vista === "lista"
+                ? "gx-btn-primary"
+                : "gx-btn bg-slate-100 font-medium text-slate-700"
             }`}
           >
             Activos
@@ -73,8 +79,10 @@ export function ApartadosModal({
             <button
               type="button"
               onClick={() => setVista("crear")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                vista === "crear" ? "bg-brand text-white" : "bg-slate-100 text-slate-700"
+              className={`min-h-10 px-3 ${
+                vista === "crear"
+                  ? "gx-btn-primary"
+                  : "gx-btn bg-slate-100 font-medium text-slate-700"
               }`}
             >
               Apartar ticket
@@ -82,7 +90,7 @@ export function ApartadosModal({
           )}
         </div>
 
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
         <div className="flex-1 overflow-y-auto">
           {vista === "crear" && cliente ? (
@@ -170,31 +178,31 @@ function CrearApartado({
           <span>${total.toFixed(2)}</span>
         </div>
       </div>
-      <label className="block text-sm font-medium text-slate-700">
+      <label className="gx-label">
         Anticipo (efectivo)
         <input
           type="number"
           step="0.01"
           value={anticipo}
           onChange={(e) => setAnticipo(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+          className="gx-input mt-1 min-h-10"
         />
       </label>
-      <label className="block text-sm font-medium text-slate-700">
+      <label className="gx-label">
         Vigencia (días)
         <input
           type="number"
           value={diasVigencia}
           onChange={(e) => setDiasVigencia(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+          className="gx-input mt-1 min-h-10"
         />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <button
         type="button"
         onClick={crear}
         disabled={guardando}
-        className="w-full rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+        className="gx-btn-primary min-h-10 w-full"
       >
         {guardando ? "Creando…" : "Crear apartado"}
       </button>
@@ -247,7 +255,7 @@ function ListaApartados({
             </div>
             <div className="text-right text-sm">
               <p className="text-slate-500">Total ${Number.parseFloat(a.total).toFixed(2)}</p>
-              <p className="font-semibold text-amber-600">Saldo ${saldoDe(a).toFixed(2)}</p>
+              <p className="font-semibold text-warn">Saldo ${saldoDe(a).toFixed(2)}</p>
             </div>
           </div>
           {abonando === a.id ? (
@@ -258,20 +266,20 @@ function ListaApartados({
                 value={monto}
                 onChange={(e) => setMonto(e.target.value)}
                 placeholder="Monto"
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-brand focus:outline-none"
+                className="gx-input"
               />
               <button
                 type="button"
                 disabled={procesando || !(Number.parseFloat(monto) > 0)}
                 onClick={() => accion(a.id, "abonos", { monto, metodo: "efectivo" })}
-                className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                className="gx-btn-primary min-h-10"
               >
                 Abonar
               </button>
               <button
                 type="button"
                 onClick={() => setAbonando(null)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600"
+                className="gx-btn-ghost min-h-10 border border-slate-300"
               >
                 ✕
               </button>
@@ -285,7 +293,7 @@ function ListaApartados({
                     setAbonando(a.id);
                     setMonto(saldoDe(a).toFixed(2));
                   }}
-                  className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700"
+                  className="gx-btn-ghost min-h-10"
                 >
                   Abonar
                 </button>
@@ -295,7 +303,7 @@ function ListaApartados({
                   type="button"
                   disabled={procesando}
                   onClick={() => accion(a.id, "liquidar")}
-                  className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                  className="gx-btn-primary min-h-10"
                 >
                   Liquidar y entregar
                 </button>
@@ -305,7 +313,7 @@ function ListaApartados({
                   type="button"
                   disabled={procesando}
                   onClick={() => accion(a.id, "cancelar", { motivo: "Cancelado en caja" })}
-                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 disabled:opacity-50"
+                  className="gx-btn-danger min-h-10"
                 >
                   Cancelar
                 </button>

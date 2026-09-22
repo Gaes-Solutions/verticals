@@ -1,4 +1,4 @@
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, getTiendaConfig } from "@/lib/api";
 import { checkoutIdentity, sameOriginRequest } from "@/lib/checkout-session";
 import { ClienteSessionError } from "@/lib/cliente";
 import { type NextRequest, NextResponse } from "next/server";
@@ -8,11 +8,17 @@ interface CheckoutResult {
   intentId: string;
   total: string;
   intentStatus: "confirmado" | "pendiente" | "requiere_accion" | "fallido";
+  referenciaPago?: string;
 }
 
 function publicResult(result: CheckoutResult) {
   return NextResponse.json(
-    { folioPublico: result.folioPublico, total: result.total, intentStatus: result.intentStatus },
+    {
+      folioPublico: result.folioPublico,
+      total: result.total,
+      intentStatus: result.intentStatus,
+      ...(result.referenciaPago ? { referenciaPago: result.referenciaPago } : {}),
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -55,7 +61,7 @@ export async function POST(req: NextRequest) {
       emailComprador: string;
       items: Array<{ varianteId: string; cantidad: number }>;
       metodoEnvio: "paqueteria" | "click_collect";
-      metodoPago?: "cod";
+      metodoPago?: "tarjeta" | "oxxo" | "spei" | "cod";
       tarifaEnvioId?: string;
       sucursalPickupId?: string;
       direccionEnvio?: Record<string, unknown>;
@@ -63,6 +69,32 @@ export async function POST(req: NextRequest) {
       cardTokenId?: string;
       mesesSinIntereses?: number;
     };
+    const metodoPago = body.metodoPago ?? "tarjeta";
+    if (!["tarjeta", "oxxo", "spei", "cod"].includes(metodoPago)) {
+      return NextResponse.json({ message: "Método de pago no soportado." }, { status: 422 });
+    }
+    // Pagar al recoger no cobra en línea: solo aplica si el pedido se recoge en tienda.
+    const alRecoger = metodoPago === "cod";
+    if (alRecoger && body.metodoEnvio !== "click_collect") {
+      return NextResponse.json(
+        { message: "Pagar al recoger aplica solo a pedidos que se recogen en la tienda." },
+        { status: 422 },
+      );
+    }
+    // OXXO/SPEI solo si el tenant los anuncia en su config pública (su proveedor
+    // es Conekta). El fallback sin config es tarjeta: nunca pasamos un método
+    // referenciado que el API vaya a tener que rechazar.
+    const referenciado = metodoPago === "oxxo" || metodoPago === "spei";
+    if (referenciado) {
+      const config = await getTiendaConfig();
+      const permitidos = config.metodosPago ?? ["tarjeta"];
+      if (!permitidos.includes(metodoPago)) {
+        return NextResponse.json(
+          { message: "Este método de pago no está disponible en esta tienda." },
+          { status: 422 },
+        );
+      }
+    }
     const identity = await checkoutIdentity(body.checkoutContext, body.idempotencyKey);
     const recoveryPath = `/checkout/intentos/${identity.key}`;
     try {
@@ -70,9 +102,12 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.statusCode !== 404) throw err;
     }
-    // Pagar al recoger no cobra en línea: no necesita proveedor ni tarjeta.
-    const alRecoger = body.metodoPago === "cod" && body.metodoEnvio === "click_collect";
-    if (process.env.NODE_ENV === "production" && !body.cardTokenId && !alRecoger) {
+    if (
+      process.env.NODE_ENV === "production" &&
+      !body.cardTokenId &&
+      !referenciado &&
+      !alRecoger
+    ) {
       return NextResponse.json(
         { message: "El pago no está disponible. Contacta a la tienda o reintenta más tarde." },
         { status: 503 },
@@ -95,8 +130,8 @@ export async function POST(req: NextRequest) {
         carritoId: carrito.id,
         idempotencyKey: identity.key,
         emailComprador: body.emailComprador,
-        metodoPago: alRecoger ? "cod" : "tarjeta",
-        proveedorPago: conConekta ? "conekta" : "mock",
+        metodoPago,
+        proveedorPago: conConekta || referenciado ? "conekta" : "mock",
         metodoEnvio: body.metodoEnvio,
         ...(body.cardTokenId ? { cardTokenId: body.cardTokenId } : {}),
         ...(body.mesesSinIntereses ? { mesesSinIntereses: body.mesesSinIntereses } : {}),
@@ -105,8 +140,9 @@ export async function POST(req: NextRequest) {
         ...(body.direccionEnvio ? { direccionEnvio: body.direccionEnvio } : {}),
       },
     });
-    // El pedido al recoger queda esperando el cobro en el mostrador; no se confirma aquí.
-    if (!conConekta && !alRecoger)
+    // Los referenciados (OXXO/SPEI) esperan el webhook del proveedor y el pedido
+    // al recoger espera el cobro en el mostrador: ninguno se confirma aquí.
+    if (!conConekta && !referenciado && !alRecoger)
       await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
     // El resultado del proveedor no demuestra que la venta haya quedado asentada.
     return publicResult(await api<CheckoutResult>(recoveryPath));

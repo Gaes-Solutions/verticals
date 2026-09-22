@@ -60,11 +60,15 @@ export function ClienteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div className="gx-modal-overlay">
+      <div className="gx-modal-panel max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">Cliente</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button
+            type="button"
+            onClick={onClose}
+            className="gx-btn-ghost h-10 w-10 p-0 text-slate-400 hover:text-slate-600"
+          >
             <X size={20} />
           </button>
         </div>
@@ -75,26 +79,26 @@ export function ClienteModal({
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Nombre"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input min-h-10"
             />
             <input
               value={rfc}
               onChange={(e) => setRfc(e.target.value)}
               placeholder="RFC (para factura, opcional)"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 uppercase focus:border-brand focus:outline-none"
+              className="gx-input min-h-10 uppercase"
             />
             <input
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
               placeholder="Teléfono (opcional)"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input min-h-10"
             />
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setModoAlta(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700"
+                className="gx-btn-ghost min-h-10 border border-slate-300"
               >
                 Volver
               </button>
@@ -102,7 +106,7 @@ export function ClienteModal({
                 type="button"
                 onClick={crearCliente}
                 disabled={guardando || !nombre.trim()}
-                className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+                className="gx-btn-primary min-h-10 flex-1"
               >
                 {guardando ? "Guardando…" : "Crear y usar"}
               </button>
@@ -114,7 +118,7 @@ export function ClienteModal({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por nombre, RFC o teléfono…"
-              className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand focus:outline-none"
+              className="gx-input mb-3 min-h-10"
             />
             <div className="mb-3 max-h-56 overflow-y-auto">
               {resultados.map((c) => (
@@ -122,7 +126,7 @@ export function ClienteModal({
                   key={c.id}
                   type="button"
                   onClick={() => onSelect(c)}
-                  className="mb-1.5 flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left hover:border-brand"
+                  className="mb-1.5 flex min-h-10 w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left hover:border-brand"
                 >
                   <span className="font-medium text-slate-800">
                     {c.nombre} {c.apellidos ?? ""}
@@ -135,7 +139,7 @@ export function ClienteModal({
               <button
                 type="button"
                 onClick={() => onSelect(null)}
-                className="flex-1 rounded-lg border border-slate-300 py-2 text-slate-700"
+                className="gx-btn-ghost min-h-10 flex-1 border border-slate-300"
               >
                 Público en general
               </button>
@@ -143,7 +147,7 @@ export function ClienteModal({
                 <button
                   type="button"
                   onClick={() => setModoAlta(true)}
-                  className="flex-1 rounded-lg bg-brand py-2 font-semibold text-white hover:bg-brand-dark"
+                  className="gx-btn-primary min-h-10 flex-1"
                 >
                   + Nuevo cliente
                 </button>

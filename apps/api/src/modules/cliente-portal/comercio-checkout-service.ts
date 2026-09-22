@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import type { TenantPrismaClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
+import {
+  llavePublicaPago,
+  metodosPagoDeProveedor,
+  tarjetaListaPara,
+} from "../../lib/metodos-pago.js";
 import { postPago } from "../tenant/checkout/routes.js";
 import {
   type IniciarCheckoutResult,
@@ -117,19 +122,12 @@ export async function configPagoMobile(app: FastifyInstance, client: TenantPrism
   } catch {
     return unavailable;
   }
-  const publicKey =
-    provider === "stripe"
-      ? (process.env.STRIPE_PUBLISHABLE_KEY ?? process.env.STRIPE_PUBLIC_KEY)
-      : process.env.CONEKTA_PUBLIC_KEY;
-  const cardReady = !!publicKey && (provider !== "stripe" || publicKey.startsWith("pk_"));
+  const cardReady = tarjetaListaPara(provider);
   return {
     proveedor: provider,
-    metodos: [
-      ...(provider === "conekta" ? ["oxxo", "spei"] : []),
-      ...(cardReady ? ["tarjeta"] : []),
-    ],
+    metodos: metodosPagoDeProveedor(provider, cardReady),
     tarjetaRequiereToken: provider === "conekta",
-    publicKey: cardReady ? publicKey : null,
+    publicKey: cardReady ? (llavePublicaPago(provider) ?? null) : null,
   };
 }
 function resultDto(result: IniciarCheckoutResult, key: string, carritoId: string) {
