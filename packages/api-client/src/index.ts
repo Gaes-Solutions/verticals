@@ -16,6 +16,15 @@ export {
   eliminarMedioPago,
 } from "./medios-pago";
 export type { MedioPagoGuardado } from "./medios-pago";
+export {
+  solicitarResetContrasena,
+  restablecerContrasena,
+} from "./password-reset";
+export type {
+  SolicitudResetInput,
+  RestablecerInput,
+  ResultadoReset,
+} from "./password-reset";
 export type {
   StaffUser,
   TenantSession,
