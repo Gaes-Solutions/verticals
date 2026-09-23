@@ -86,7 +86,11 @@ export async function guardarImagen(
 ): Promise<ImagenGuardada> {
   const clave = `tenants/${tenantId}/productos/${id}.${FORMATOS[mime].extension}`;
   const destino = rutaDeImagen(clave);
-  await mkdir(path.dirname(destino), { recursive: true, mode: 0o700 });
+  try {
+    await mkdir(path.dirname(destino), { recursive: true, mode: 0o700 });
+  } catch (error) {
+    throw traducirErrorDeVolumen(error);
+  }
   let inicio = Buffer.alloc(0);
   const espia = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
@@ -107,8 +111,24 @@ export async function guardarImagen(
     return { clave, bytes: size, mime };
   } catch (error) {
     await borrarImagen(clave).catch(() => undefined);
-    throw error;
+    throw traducirErrorDeVolumen(error);
   }
+}
+
+/**
+ * Un volumen montado que el proceso no puede escribir se ve igual que "no hay
+ * volumen" desde el panel; sin este mensaje aparece un 500 sin explicación y
+ * nadie sabe que lo que falta son los permisos del disco, no la foto.
+ */
+function traducirErrorDeVolumen(error: unknown): unknown {
+  const codigo = (error as NodeJS.ErrnoException | null)?.code;
+  if (codigo === "EACCES" || codigo === "EPERM" || codigo === "EROFS")
+    return new ImagenProductoError(
+      503,
+      "El disco de fotos no acepta escritura; revisa los permisos del volumen",
+    );
+  if (codigo === "ENOSPC") return new ImagenProductoError(507, "El disco de fotos está lleno");
+  return error;
 }
 
 /** Idempotente: una imagen que ya no está cuenta como borrada. */

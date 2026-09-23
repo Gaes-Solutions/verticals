@@ -1,6 +1,7 @@
 import { ImagePlus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, loadToken, puede } from "../lib/api.js";
+import { prepararFoto } from "../lib/imagen.js";
 
 interface Foto {
   id: string;
@@ -61,13 +62,14 @@ export function FotosDeProducto({ productoId }: { productoId: string }) {
   async function subir(archivo: File) {
     setError(null);
     if (!FORMATOS.includes(archivo.type)) return setError("Usa JPG, PNG o WebP");
-    if (archivo.size > MAX_BYTES) return setError("La foto pesa más de 5 MB");
+    if (archivo.size > MAX_BYTES * 8) return setError("La foto pesa demasiado; redúcela antes");
     setSubiendo(true);
     try {
+      const foto = await prepararFoto(archivo);
       const res = await fetch(`/api/t/productos/${productoId}/imagenes`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${loadToken()}`, "Content-Type": archivo.type },
-        body: archivo,
+        headers: { Authorization: `Bearer ${loadToken()}`, "Content-Type": foto.tipo },
+        body: foto.archivo,
       });
       if (!res.ok) {
         const cuerpo = (await res.json().catch(() => ({}))) as { message?: string };
@@ -95,7 +97,8 @@ export function FotosDeProducto({ productoId }: { productoId: string }) {
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
       <p className="font-semibold text-slate-700 text-sm">Fotos</p>
       <p className="mb-3 text-slate-500 text-xs">
-        La primera es la que se ve en la tienda en línea. JPG, PNG o WebP hasta 5 MB.
+        La primera es la que se ve en la tienda en línea. JPG, PNG o WebP; se encogen solas para que
+        la tienda cargue rápido.
       </p>
       <div className="flex flex-wrap gap-2">
         {fotos.map((foto) => (

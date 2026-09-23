@@ -1,6 +1,7 @@
 import { ImagePlus } from "lucide-react";
 import { useState } from "react";
 import { ApiError, api, loadToken, puede } from "../lib/api.js";
+import { prepararFoto } from "../lib/imagen.js";
 
 interface Resultado {
   archivo: string;
@@ -21,15 +22,43 @@ function codigoDeArchivo(nombre: string): string {
 }
 
 async function subirFoto(productoId: string, archivo: File): Promise<void> {
+  // Se encoge antes de salir: la tienda la muestra en una tarjeta, y subir
+  // megas por foto haría eterno un lote de miles.
+  const foto = await prepararFoto(archivo);
   const res = await fetch(`/api/t/productos/${productoId}/imagenes`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${loadToken()}`, "Content-Type": archivo.type },
-    body: archivo,
+    headers: { Authorization: `Bearer ${loadToken()}`, "Content-Type": foto.tipo },
+    body: foto.archivo,
     signal: AbortSignal.timeout(120_000),
   });
   if (!res.ok) {
     const cuerpo = (await res.json().catch(() => ({}))) as { message?: string };
     throw new Error(cuerpo.message ?? "No se pudo guardar la foto");
+  }
+}
+
+/** Busca el producto que corresponde al nombre del archivo y le deja la foto. */
+async function colocarFoto(archivo: File): Promise<Resultado> {
+  const codigo = codigoDeArchivo(archivo.name);
+  try {
+    if (!FORMATOS.includes(archivo.type))
+      throw new Error("Formato no admitido; usa JPG, PNG o WebP");
+    if (archivo.size > MAX_BYTES * 8) throw new Error("Pesa demasiado; reduce la foto");
+    const producto = await api<{ id: string }>(`/t/productos/buscar/${encodeURIComponent(codigo)}`);
+    await subirFoto(producto.id, archivo);
+    return { archivo: archivo.name, codigo, estado: "subida" };
+  } catch (e) {
+    const esBusqueda = e instanceof ApiError && e.status === 404;
+    return {
+      archivo: archivo.name,
+      codigo,
+      estado: esBusqueda ? "sin_coincidencia" : "error",
+      detalle: esBusqueda
+        ? "Ningún producto tiene ese código"
+        : e instanceof Error
+          ? e.message
+          : "Error al subir",
+    };
   }
 }
 
@@ -52,29 +81,7 @@ export function FotosProductosPage() {
     setAvance({ hechas: 0, total: archivos.length });
     const salida: Resultado[] = [];
     for (const [indice, archivo] of archivos.entries()) {
-      const codigo = codigoDeArchivo(archivo.name);
-      try {
-        if (!FORMATOS.includes(archivo.type))
-          throw new Error("Formato no admitido; usa JPG, PNG o WebP");
-        if (archivo.size > MAX_BYTES) throw new Error("Pesa más de 5 MB");
-        const producto = await api<{ id: string }>(
-          `/t/productos/buscar/${encodeURIComponent(codigo)}`,
-        );
-        await subirFoto(producto.id, archivo);
-        salida.push({ archivo: archivo.name, codigo, estado: "subida" });
-      } catch (e) {
-        const esBusqueda = e instanceof ApiError && e.status === 404;
-        salida.push({
-          archivo: archivo.name,
-          codigo,
-          estado: esBusqueda ? "sin_coincidencia" : "error",
-          detalle: esBusqueda
-            ? "Ningún producto tiene ese código"
-            : e instanceof Error
-              ? e.message
-              : "Error al subir",
-        });
-      }
+      salida.push(await colocarFoto(archivo));
       setAvance({ hechas: indice + 1, total: archivos.length });
       setResultados([...salida]);
     }

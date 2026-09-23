@@ -59,14 +59,16 @@ COPY --from=builder --chown=gaespos:nodejs /tmp/api-bundle ./
 COPY --from=builder --chown=gaespos:nodejs /repo/apps/api/dist ./dist
 COPY --from=builder --chown=gaespos:nodejs /repo/packages/db/src/generated ./node_modules/@gaespos/db/src/generated
 COPY --from=builder --chown=gaespos:nodejs /repo/packages/db/prisma ./node_modules/@gaespos/db/prisma
+COPY apps/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-USER gaespos
+# Sin USER: el arranque necesita root para ceder el disco persistente al
+# servicio, y el entrypoint baja al usuario gaespos antes de ejecutar el API.
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:3000/health || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 # tsx en runtime resuelve los .ts de @gaespos/* workspace packages (node-pure no strip-types desde node_modules)
 CMD ["tsx", "dist/server.js"]

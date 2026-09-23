@@ -36,9 +36,20 @@ estaba vacío. Para una tienda de globos y regalos, un catálogo en gris no vend
 - **Publicación:** al publicar el catálogo y al subir o borrar una foto se
   rearma `fotosArray` del producto publicado, que es lo que lee la tienda.
 
+- **Permisos del disco:** el volumen se monta como root y el API corre con un
+  usuario sin privilegios, así que guardar una foto fallaba con permiso
+  denegado. El contenedor arranca como root solo para cederle esas carpetas al
+  usuario del servicio y baja a ese usuario antes de ejecutar el API
+  (`apps/api/docker-entrypoint.sh`); el proceso sigue sin privilegios. El
+  `chown` recursivo corre una sola vez, no en cada arranque.
+
 ## Lo que falta
 
-- No se generan miniaturas ni se recomprime: una foto de 5 MB se sirve tal cual.
+- El panel encoge la foto antes de subirla (lado mayor 1600 px, JPEG al 82%;
+  el PNG se conserva PNG para no perder la transparencia) y se queda con el
+  original si encogerlo no ayuda o el navegador no puede procesarlo. El API la
+  guarda tal cual llega: no recomprime ni genera miniaturas, así que una foto
+  subida por otra vía puede seguir pesando megas.
 - No hay reordenar ni texto alternativo desde el panel (el modelo ya los soporta).
 - El volumen es del servicio: con varias réplicas del API habría que compartirlo
   o mover el almacén a S3.
