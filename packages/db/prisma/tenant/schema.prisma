@@ -1366,6 +1366,7 @@ model Cliente {
   loyalty               ClienteLoyalty[]
   notificaciones        Notificacion[]           @relation("NotificacionCliente")
   mediosPago            ClienteMedioPago[]
+  passwordResets        ClientePasswordReset[]
   solicitudesDevolucion SolicitudDevolucion[]
   mensajesPedido        MensajePedido[]          @relation("MensajePedidoCliente")
   preguntasProducto     PreguntaProducto[]       @relation("PreguntaProductoCliente")
@@ -1402,6 +1403,25 @@ model ClienteMedioPago {
   @@unique([clienteId, proveedorSourceId])
   @@index([clienteId, activo])
   @@map("clientes_medios_pago")
+}
+
+// Recuperación de contraseña del comprador ("olvidé mi contraseña"). El token en
+// claro viaja solo por email; en BD vive su sha256, con caducidad de 1 hora y
+// marca de un solo uso (usadoEn). Un cliente tiene a lo sumo un enlace vigente:
+// al pedir uno nuevo o al canjearlo, los pendientes anteriores quedan usados.
+model ClientePasswordReset {
+  id        String    @id @default(cuid())
+  clienteId String    @map("cliente_id")
+  tokenHash String    @map("token_hash")
+  creadoEn  DateTime  @default(now()) @map("creado_en")
+  expiraEn  DateTime  @map("expira_en")
+  usadoEn   DateTime? @map("usado_en")
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([tokenHash])
+  @@map("cliente_password_reset")
 }
 
 model ClienteDireccion {
