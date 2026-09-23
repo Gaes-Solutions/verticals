@@ -1,7 +1,7 @@
 import { useAuth } from "@/lib/auth-store";
 import { colors, radius, space } from "@/theme";
 import { Button, Icon, Input } from "@/ui";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 export default function Login() {
+  const router = useRouter();
   const { status, error, login, registro, restore, logout } = useAuth();
   const [modo, setModo] = useState<"login" | "registro">("login");
   const [tenant, setTenant] = useState("");
@@ -124,6 +125,16 @@ export default function Login() {
               <Icon name="alert-circle" size={16} color={colors.danger} />
               <Text style={s.errText}>{error}</Text>
             </View>
+          ) : null}
+          {!esRegistro ? (
+            <Pressable
+              style={s.switch}
+              onPress={() =>
+                router.push(`/recuperar-contrasena?tenant=${encodeURIComponent(tenant.trim())}`)
+              }
+            >
+              <Text style={s.switchText}>¿Olvidaste tu contraseña?</Text>
+            </Pressable>
           ) : null}
           <Pressable style={s.switch} onPress={() => setModo(esRegistro ? "login" : "registro")}>
             <Text style={s.switchText}>
