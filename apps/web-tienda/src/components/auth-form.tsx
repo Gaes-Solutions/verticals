@@ -80,6 +80,13 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
         <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
           {cargando ? "…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
         </button>
+        {modo === "login" && (
+          <p className="text-right text-sm">
+            <Link href="/cuenta/olvidar-contrasena" className="font-medium text-marca">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
+        )}
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">
         {modo === "registro" ? (
