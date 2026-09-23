@@ -42,6 +42,12 @@ import {
   listarMediosPago,
 } from "./medios-pago-service.js";
 import {
+  olvidarContrasenaSchema,
+  restablecerContrasena,
+  restablecerContrasenaSchema,
+  solicitarResetContrasena,
+} from "./password-reset-service.js";
+import {
   ClientePortalError,
   actualizarPerfilCliente,
   agregarAWishlist,
@@ -185,6 +191,35 @@ export const clienteAuthRoutes: FastifyPluginAsync = async (app) => {
           kind: "cliente",
         });
         return { accessToken, cliente: { id: c.id, nombre: c.nombre, email: c.email } };
+      } catch (err) {
+        if (handleErr(reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  // Recuperación de contraseña. /olvidar-contrasena responde siempre el mismo
+  // mensaje genérico (anti-enumeración) y manda el enlace por email; el rate
+  // limit estricto frena el abuso del envío. /restablecer-contrasena canjea el
+  // token del enlace. Ambos son públicos, como registro y login.
+  app.post(
+    "/olvidar-contrasena",
+    { config: { rateLimit: { max: 3, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = olvidarContrasenaSchema.parse(req.body);
+      const r = await solicitarResetContrasena(body, app.emailProviderFactory());
+      return reply.code(200).send({ mensaje: r.mensaje });
+    },
+  );
+
+  app.post(
+    "/restablecer-contrasena",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = restablecerContrasenaSchema.parse(req.body);
+      try {
+        const r = await restablecerContrasena(body);
+        return reply.code(200).send({ mensaje: r.mensaje });
       } catch (err) {
         if (handleErr(reply, err)) return;
         throw err;

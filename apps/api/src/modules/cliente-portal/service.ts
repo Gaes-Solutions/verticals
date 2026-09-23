@@ -14,7 +14,7 @@ export class ClientePortalError extends Error {
 }
 
 /** Resuelve el cliente Prisma de un tenant activo (valida que exista). */
-async function tenantClienteDe(tenantSlug: string): Promise<TenantPrismaClient> {
+export async function tenantClienteDe(tenantSlug: string): Promise<TenantPrismaClient> {
   const tenant = await masterPrisma.tenant.findUnique({ where: { slug: tenantSlug } });
   if (!tenant || tenant.status === "cancelled") {
     throw new ClientePortalError(401, "Tienda no disponible");
