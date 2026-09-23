@@ -50,6 +50,12 @@ export function renderPlantilla(
         html: `<h1>¡Buenas noticias!</h1><p><strong>${v("producto")}</strong> que esperabas ya tiene stock. Apúrate antes de que se agote.</p><p><a href="/producto/${v("slug")}">Ver producto</a></p>`,
         texto: `${v("producto")} ya está disponible.`,
       };
+    case "recuperar_contrasena":
+      return {
+        asunto: "Recupera tu contraseña",
+        html: `<h1>Restablece tu contraseña</h1><p>Recibimos una solicitud para restablecer la contraseña de tu cuenta. El enlace es válido por 1 hora y solo se puede usar una vez.</p><p><a href="${v("url")}">Restablecer mi contraseña</a></p><p>Si no fuiste tú, ignora este correo: tu contraseña sigue igual.</p>`,
+        texto: `Restablece tu contraseña con este enlace (válido 1 hora): ${v("url")}`,
+      };
     default:
       return { asunto: "Notificación", html: "<p>Notificación</p>", texto: "Notificación" };
   }

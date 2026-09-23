@@ -4,7 +4,8 @@ export type EmailPlantilla =
   | "pedido_listo_pickup"
   | "carrito_recovery"
   | "resena_solicitud"
-  | "stock_disponible";
+  | "stock_disponible"
+  | "recuperar_contrasena";
 
 export interface EnviarEmailInput {
   para: string;

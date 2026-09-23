@@ -20,6 +20,15 @@ describe("renderPlantilla", () => {
     });
     expect(r.html).toContain("VUELVE10");
   });
+
+  it("recuperar_contrasena incluye el enlace y su vigencia", () => {
+    const r = renderPlantilla("recuperar_contrasena", {
+      url: "https://mitienda.gaessoft.shop/cuenta/restablecer?token=abc123",
+    });
+    expect(r.asunto).toContain("contraseña");
+    expect(r.html).toContain("https://mitienda.gaessoft.shop/cuenta/restablecer?token=abc123");
+    expect(r.texto).toContain("abc123");
+  });
 });
 
 describe("MockEmailProvider", () => {
