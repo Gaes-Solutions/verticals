@@ -44,18 +44,6 @@ export const iniciarCheckoutSchema = z
       .optional(),
   })
   .superRefine((val, ctx) => {
-    // Con cobro real (stripe/conekta), tarjeta exige exactamente una fuente:
-    // el token del frontend o una tarjeta guardada. El proveedor mock conserva
-    // el comportamiento previo sin credenciales (ni token ni guardada).
-    const fuentes = Number(Boolean(val.cardTokenId)) + Number(Boolean(val.medioPagoGuardadoId));
-    if (val.metodoPago === "tarjeta" && val.proveedorPago !== "mock" && fuentes !== 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "Pago con tarjeta requiere exactamente una fuente: cardTokenId o medioPagoGuardadoId",
-        path: ["cardTokenId"],
-      });
-    }
     if (val.metodoPago !== "tarjeta" && val.medioPagoGuardadoId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -80,3 +68,23 @@ export const webhookSchema = z.object({
 
 export type IniciarCheckoutInput = z.infer<typeof iniciarCheckoutSchema>;
 export type WebhookInput = z.infer<typeof webhookSchema>;
+
+/**
+ * Con cobro real, la tarjeta exige exactamente una fuente: el token del
+ * frontend o una tarjeta guardada. No va en el esquema porque primero hay que
+ * saber si el negocio tiene proveedor configurado: si no lo tiene, lo que
+ * corresponde es decir que el pago no está disponible, no reclamar un dato que
+ * el comprador no puede dar.
+ */
+export function faltaFuenteDeTarjeta(
+  body: Pick<
+    z.infer<typeof iniciarCheckoutSchema>,
+    "metodoPago" | "proveedorPago" | "cardTokenId" | "medioPagoGuardadoId"
+  >,
+): string | null {
+  if (body.metodoPago !== "tarjeta" || body.proveedorPago === "mock") return null;
+  const fuentes = Number(Boolean(body.cardTokenId)) + Number(Boolean(body.medioPagoGuardadoId));
+  return fuentes === 1
+    ? null
+    : "Pago con tarjeta requiere exactamente una fuente: cardTokenId o medioPagoGuardadoId";
+}

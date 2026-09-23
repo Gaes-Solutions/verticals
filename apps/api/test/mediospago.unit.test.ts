@@ -3,7 +3,10 @@ import {
   enmascararMedioPago,
   esDuplicadoMedioPago,
 } from "../src/modules/cliente-portal/medios-pago-service.js";
-import { iniciarCheckoutSchema } from "../src/modules/tenant/checkout/schemas.js";
+import {
+  faltaFuenteDeTarjeta,
+  iniciarCheckoutSchema,
+} from "../src/modules/tenant/checkout/schemas.js";
 
 // Lógica pura de "Mis tarjetas" (sin DB): exclusividad token/tarjeta guardada
 // en el schema del checkout, enmascarado del DTO e idempotencia por unique.
@@ -29,10 +32,19 @@ describe("iniciarCheckoutSchema — tarjeta guardada", () => {
     expect(parse({ ...BASE, medioPagoGuardadoId: "cmp_1" }).success).toBe(true);
   });
 
+  // La regla de "una sola fuente" se aplica en la ruta, ya sabiendo que el
+  // negocio tiene proveedor de cobro: sin proveedor configurado corresponde
+  // decir que el pago no está disponible, no reclamar un dato que el comprador
+  // no puede dar.
   it("exige exactamente una fuente con proveedor real: ninguna → error", () => {
-    const r = parse(BASE);
-    expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues[0]?.message).toMatch(/exactamente una fuente/);
+    expect(parse(BASE).success).toBe(true);
+    expect(faltaFuenteDeTarjeta(BASE)).toMatch(/exactamente una fuente/);
+  });
+
+  it("con proveedor de cobro, una sola fuente basta", () => {
+    expect(faltaFuenteDeTarjeta({ ...BASE, cardTokenId: "tok_1" })).toBeNull();
+    expect(faltaFuenteDeTarjeta({ ...BASE, medioPagoGuardadoId: "cmp_1" })).toBeNull();
+    expect(faltaFuenteDeTarjeta({ ...BASE, proveedorPago: "mock" })).toBeNull();
   });
 
   it("exige exactamente una fuente con proveedor real: ambas → error", () => {

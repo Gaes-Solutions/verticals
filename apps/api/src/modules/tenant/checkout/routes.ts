@@ -4,7 +4,7 @@ import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import { dispatchPostPago } from "./post-pago-service.js";
-import { iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
+import { faltaFuenteDeTarjeta, iniciarCheckoutSchema, webhookSchema } from "./schemas.js";
 import {
   CheckoutError,
   type ConfirmarPagoResult,
@@ -186,6 +186,9 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
       const body = iniciarCheckoutSchema.parse(req.body);
       const provider = resolverProvider(app, body.proveedorPago, reply);
       if (!provider) return;
+      const sinTarjeta = faltaFuenteDeTarjeta(body);
+      if (sinTarjeta)
+        return reply.code(400).send({ statusCode: 400, error: "Bad Request", message: sinTarjeta });
       try {
         const connect = await resolverConnect(app, req.principal.tenantSlug);
         const input = {
