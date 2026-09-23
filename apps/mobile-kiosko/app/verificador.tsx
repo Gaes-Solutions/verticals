@@ -1,6 +1,7 @@
 import { accentForeground, priceColor } from "@/lib/color-contrast";
 import { money } from "@/lib/format";
 import { kioskFailure } from "@/lib/recovery";
+import { feedbackScanExito } from "@/services/feedback-scan";
 import {
   type KioskoConfig,
   type PrecioKiosko,
@@ -61,6 +62,7 @@ export default function Verificador() {
     precioSegundos = 8,
     slideSegundos = 6,
     mostrarExistencia = false,
+    sonidoBeep = true,
     contenidoReposo: contenido = "ambos",
     mensajeBienvenida = "Escanea tu producto",
   } = cfg.data ?? {};
@@ -137,6 +139,7 @@ export default function Verificador() {
       try {
         const r = await getPrecio(codigo);
         setPrecio(r);
+        if (r.encontrado) feedbackScanExito(sonidoBeep);
       } catch (error) {
         setPrecio(null);
         setFailure(kioskFailure(error));
@@ -152,7 +155,7 @@ export default function Verificador() {
         setModo("espera");
       }, precioMs);
     },
-    [failure, cfg.data, cfg.isError, precioMs, flashNotice],
+    [failure, cfg.data, cfg.isError, precioMs, sonidoBeep, flashNotice],
   );
 
   if (cfg.isLoading || (!readerMode && !permission)) {
