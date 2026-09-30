@@ -2,6 +2,7 @@ import { PermissionDeniedError } from "@gaespos/permissions";
 import type { FastifyError, FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import { ZodError } from "zod";
+import { notifyIncident, recordIncident } from "../observability/incidents.js";
 import { captureError } from "../observability/sentry.js";
 
 function isPrismaKnownRequestError(
@@ -26,7 +27,7 @@ function isNumericOverflow(err: unknown): boolean {
 }
 
 const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
-  app.setErrorHandler((err: FastifyError, req, reply) => {
+  app.setErrorHandler(async (err: FastifyError, req, reply) => {
     if (err instanceof ZodError) {
       return reply.code(400).send({
         statusCode: 400,
@@ -83,6 +84,15 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
 
     req.log.error({ err }, "Unhandled error");
     captureError(err, { method: req.method, url: req.url });
+    const incidentId = await recordIncident(app.masterPrisma, {
+      error: err,
+      route: req.url.replace(/([?&]token=)[^&]*/g, "$1[oculto]"),
+      method: req.method,
+      requestId: req.id,
+      context: { ip: req.ip, hostname: req.hostname },
+    });
+    if (incidentId)
+      await notifyIncident(app.masterPrisma, app.emailProviderFactory(), incidentId, req.log);
     return reply.code(500).send({
       statusCode: 500,
       error: "Internal Server Error",

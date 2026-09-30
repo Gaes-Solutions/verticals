@@ -198,6 +198,69 @@ model AuditLog {
   @@map("audit_log")
 }
 
+enum SystemIncidentStatus {
+  open
+  proposed
+  audited
+  resolved
+  ignored
+  @@map("system_incident_status")
+}
+
+enum SystemIncidentSeverity {
+  low
+  medium
+  high
+  critical
+  @@map("system_incident_severity")
+}
+
+model SystemIncident {
+  id             String                @id @default(cuid())
+  fingerprint    String                @unique
+  status         SystemIncidentStatus   @default(open)
+  severity       SystemIncidentSeverity @default(medium)
+  service        String
+  environment    String
+  message        String
+  stack          String?
+  route          String?
+  method         String?
+  requestId      String?               @map("request_id")
+  tenantSlug     String?               @map("tenant_slug")
+  context        Json?
+  occurrenceCount Int                  @default(1) @map("occurrence_count")
+  firstSeenAt    DateTime              @default(now()) @map("first_seen_at")
+  lastSeenAt     DateTime              @default(now()) @map("last_seen_at")
+  nextReviewAt   DateTime              @default(now()) @map("next_review_at")
+  lastNotifiedAt DateTime?             @map("last_notified_at")
+  aiSummary      String?               @map("ai_summary")
+  aiProposal     Json?                 @map("ai_proposal")
+  aiModel        String?               @map("ai_model")
+  auditDecision  String?               @map("audit_decision")
+  auditNotes     String?               @map("audit_notes")
+  resolvedAt     DateTime?             @map("resolved_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  events         SystemIncidentEvent[]
+
+  @@index([status, nextReviewAt])
+  @@index([severity, lastSeenAt])
+  @@map("system_incidents")
+}
+
+model SystemIncidentEvent {
+  id         String         @id @default(cuid())
+  incidentId String         @map("incident_id")
+  kind       String
+  payload    Json?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  incident   SystemIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@map("system_incident_events")
+}
+
 // ============================================================
 // HITO 3.5 — Programa Partners (cross-tenant, master DB)
 // Modelo 4.2 · Análisis flujo 9 Partner Contador

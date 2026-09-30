@@ -45,6 +45,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     FLOWS_RUN_INTERVAL_MIN: 360,
     RECORDATORIOS_SCHEDULER_ENABLED: false,
     RECORDATORIOS_RUN_INTERVAL_MIN: 60,
+    INCIDENT_AUDITOR_ENABLED: false,
+    INCIDENT_AUDITOR_INTERVAL_MIN: 5,
+    INCIDENT_ALERT_COOLDOWN_MIN: 30,
     PUBLIC_BASE_URL: "http://localhost:3000",
     ...overrides,
   };

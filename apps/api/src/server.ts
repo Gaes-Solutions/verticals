@@ -5,6 +5,7 @@ import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
 import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
+import { startIncidentAuditorScheduler } from "./jobs/incident-auditor-scheduler.js";
 import { startPostPagoScheduler } from "./jobs/post-pago-scheduler.js";
 import { startRecordatoriosScheduler } from "./jobs/recordatorios-scheduler.js";
 import { modulosActivos, verticalesActivas } from "./lib/verticales.js";
@@ -43,6 +44,9 @@ async function main(): Promise<void> {
   }
 
   const stopPostPagoScheduler = startPostPagoScheduler(app);
+  const stopIncidentAuditorScheduler = config.INCIDENT_AUDITOR_ENABLED
+    ? startIncidentAuditorScheduler(app, config.INCIDENT_AUDITOR_INTERVAL_MIN)
+    : undefined;
 
   let stopFlowsScheduler: (() => void) | undefined;
   if (config.FLOWS_SCHEDULER_ENABLED) {
@@ -66,6 +70,7 @@ async function main(): Promise<void> {
     app.log.info({ signal }, "shutdown signal received");
     try {
       stopPostPagoScheduler();
+      stopIncidentAuditorScheduler?.();
       stopFlowsScheduler?.();
       stopRecordatoriosScheduler?.();
       await app.close();

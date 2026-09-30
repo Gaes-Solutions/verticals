@@ -4,6 +4,7 @@ import { modulosActivos, verticalesActivas } from "./lib/verticales.js";
 import adminAuditRoutes from "./modules/admin/audit-routes.js";
 import adminBillingOpsRoutes from "./modules/admin/billing-ops-routes.js";
 import adminCatalogoRoutes from "./modules/admin/catalogo-routes.js";
+import adminIncidentsRoutes from "./modules/admin/incidents-routes.js";
 import adminMetricsRoutes from "./modules/admin/metrics-routes.js";
 import adminObservabilidadRoutes from "./modules/admin/observabilidad-routes.js";
 import adminRolesPlantillaRoutes from "./modules/admin/roles-plantilla-routes.js";
@@ -226,6 +227,7 @@ export async function buildApp(
   await app.register(adminCatalogoRoutes, { prefix: "/admin/catalogo" });
   await app.register(adminObservabilidadRoutes, { prefix: "/admin/observabilidad" });
   await app.register(adminTicketsRoutes, { prefix: "/admin/tickets" });
+  await app.register(adminIncidentsRoutes, { prefix: "/admin/incidents" });
   if (modulos.partners) await app.register(partnersRoutes, { prefix: "/partners" });
   if (modulos.partners) await app.register(partnerPortalRoutes, { prefix: "/partner" });
   if (modulos.partners) await app.register(partnersPublicRoutes);

@@ -1,5 +1,36 @@
 # 🔖 STATUS — Checkpoint vivo
 
+## Revisión de avance — 22-sep-2026
+
+Claude dejó implementado el cobro en efectivo sin internet desde el POS: cálculo
+local con el catálogo guardado, comprobante por línea, cola SQLite, ventas
+rechazadas visibles y corte protegido cuando existen cobros sin confirmar. También
+se añadió el instalador de Windows en CI, pagos OXXO/SPEI y soporte de fotos del
+catálogo. Los últimos commits (`d7d196c` y anteriores) agregan compresión previa,
+permisos de escritura y el script idempotente `scripts/prod-volumen-fotos.sh`.
+
+Validación local de esta revisión: sync-client **41 pruebas**, POS **172 pruebas**
+y build de producción correcto. El árbol de trabajo está limpio. No se ejecutó
+Railway porque requiere las credenciales y el proyecto de producción de Gaby.
+
+Pendientes concretos: ejecutar el volumen y variables de fotos en Railway, cargar
+llaves/webhooks/DNS de proveedores, probar instalador e impresión/lector en equipo
+físico, y cerrar autenticación offline de turno completo. El cobro offline actual
+queda limitado a una apertura y autorización local previamente verificadas.
+
+## Cierre de frontend — 26-sep-2026
+
+La revisión de cierre confirma typecheck correcto en `web-pos`, `web-tienda`,
+`web-admin`, `mobile-cliente`, `mobile-kiosko` y `mobile-negocio`; POS y
+sync-client mantienen sus suites verdes y el build de producción del POS termina
+correctamente. No quedan cambios de código frontend identificados en esta revisión.
+
+Quedan como validaciones externas: descargar y probar los dos APK nuevos en
+dispositivo real, configurar `RESEND_API_KEY`, confirmar el despliegue de Railway,
+probar cámara/beep/vibración/orientación y verificar impresión/lector. Las tres
+pruebas de kiosco que requieren `ffmpeg` deben ejecutarse en CI/Railway; no se
+consideran una regresión del frontend.
+
 ## Fotos del catálogo — 21-sep-2026
 
 El catálogo importado (2,049 productos) se publicó sin una sola foto porque no
@@ -1050,3 +1081,11 @@ Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
 - Demo objetivo: cajero retail completo (login → POS → multi-pago → ticket → CFDI → corte Z) en staging.
 - Hito vendible: primeros 1-2 clientes piloto retail empiezan a usar staging al cerrar 1.7.
 - **Próxima sesión empieza en**: 1.1 Schema tenant 4.6 — usuarios + roles + permisos jsonb + sucursales + cajas + vistas_guardadas; migration; seed system roles; package `permissions/`; endpoints API; tests integración.
+## Automatización de incidentes — 29-sep-2026
+
+- Implementado registro deduplicado de errores 5xx en master (`system_incidents` + eventos), redactado de secretos y huella estable.
+- Implementado correo Resend con enfriamiento y reintento en el siguiente ciclo si falla.
+- Implementado scheduler de auditoría IA y endpoints superadmin `/admin/incidents`; las propuestas requieren auditoría y no ejecutan código arbitrario.
+- Añadida sanitización por allowlist para políticas HTML de la tienda.
+- Validado `@gaespos/api` y `@gaespos/web-tienda` con typecheck.
+- Pendiente operativo: aplicar migración en Railway, configurar `INCIDENT_ALERT_EMAIL`/Resend y actualizar dependencias vulnerables reportadas por `pnpm audit` (JWT y XLSX) antes de declarar seguridad completa.

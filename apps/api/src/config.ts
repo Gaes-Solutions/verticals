@@ -36,6 +36,13 @@ const configSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   RECORDATORIOS_RUN_INTERVAL_MIN: z.coerce.number().int().positive().default(60),
+  INCIDENT_AUDITOR_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  INCIDENT_AUDITOR_INTERVAL_MIN: z.coerce.number().int().positive().default(5),
+  INCIDENT_ALERT_EMAIL: z.string().email().optional(),
+  INCIDENT_ALERT_COOLDOWN_MIN: z.coerce.number().int().positive().default(30),
   // Base pública del API para armar el link de confirmación de citas que se
   // manda al tutor (anti-no-show). En prod = dominio del API.
   PUBLIC_BASE_URL: z.string().url().default("http://localhost:3000"),

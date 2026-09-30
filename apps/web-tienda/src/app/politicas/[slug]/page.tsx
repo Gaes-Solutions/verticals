@@ -9,6 +9,22 @@ const TITULOS: Record<string, string> = {
   terminos: "Términos y condiciones",
 };
 
+/** Allowlist mínima para contenido editable; elimina scripts, eventos y URLs peligrosas. */
+function sanitizePolicyHtml(input: string): string {
+  return input
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(
+      /<\s*(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+      "",
+    )
+    .replace(/\s+on[a-z-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(
+      /\s+(?:href|src)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|[^\s>]*javascript:[^\s>]*)/gi,
+      "",
+    )
+    .replace(/<\/?(?!\/?(?:p|br|strong|em|u|ul|ol|li|h2|h3|a)(?:\s|\/?>))[^>]+>/gi, "");
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -24,7 +40,8 @@ export default async function PoliticaPage({ params }: { params: Promise<{ slug:
   const config = await getTiendaConfig().catch(() => null);
   // El servidor ya manda el texto del dueño o, si no lo capturó, el texto base.
   const texto = config?.politicasHtml?.[slug] ?? "";
-  const esHtml = /<[a-z][\s\S]*>/i.test(texto);
+  const textoSeguro = sanitizePolicyHtml(texto);
+  const esHtml = /<[a-z][\s\S]*>/i.test(textoSeguro);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -37,7 +54,7 @@ export default async function PoliticaPage({ params }: { params: Promise<{ slug:
           <div
             className="prose prose-sm max-w-none text-slate-700"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: política HTML capturada por el dueño del tenant
-            dangerouslySetInnerHTML={{ __html: texto }}
+            dangerouslySetInnerHTML={{ __html: textoSeguro }}
           />
         ) : (
           <p className="whitespace-pre-line text-slate-700 leading-relaxed">
