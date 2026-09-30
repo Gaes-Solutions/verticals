@@ -277,11 +277,17 @@ export function ImportadorPage() {
     setResumen(null);
     setNombreArchivo(file.name);
     try {
+      const nombre = file.name.toLowerCase();
+      if (!/\.(xlsx|xls|csv)$/.test(nombre)) throw new Error("Usa un archivo .xlsx, .xls o .csv");
+      if (file.size > 10 * 1024 * 1024) throw new Error("El archivo no puede superar 10 MB");
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      // Desactiva macros y fórmulas: el importador solo necesita valores y no debe
+      // evaluar contenido activo enviado dentro del libro.
+      const wb = XLSX.read(buf, { type: "array", bookVBA: false, cellFormula: false });
       const sheet = wb.Sheets[wb.SheetNames[0]!];
       if (!sheet) throw new Error("El archivo no tiene hojas");
       const crudas = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      if (crudas.length > 20_000) throw new Error("El archivo no puede superar 20,000 filas");
       // mapea encabezados de la plantilla → campos del backend
       const mapHeader = new Map(
         columnas.flatMap((c) => [c.header, ...(c.alias ?? [])].map((h) => [claveEncabezado(h), c])),
