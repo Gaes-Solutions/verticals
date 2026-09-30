@@ -1088,4 +1088,5 @@ Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
 - Implementado scheduler de auditoría IA y endpoints superadmin `/admin/incidents`; las propuestas requieren auditoría y no ejecutan código arbitrario.
 - Añadida sanitización por allowlist para políticas HTML de la tienda.
 - Validado `@gaespos/api` y `@gaespos/web-tienda` con typecheck.
-- Pendiente operativo: aplicar migración en Railway, configurar `INCIDENT_ALERT_EMAIL`/Resend y actualizar dependencias vulnerables reportadas por `pnpm audit` (JWT y XLSX) antes de declarar seguridad completa.
+- Pendiente operativo: aplicar migración en Railway, configurar `INCIDENT_ALERT_EMAIL`/Resend y sustituir `xlsx` cuando haya una opción compatible estable; mientras tanto el importador rechaza archivos grandes, macros y fórmulas.
+- Actualizado `@fastify/jwt` a 10.2.2 y Next a 15.5.24; `pnpm audit --prod` quedó sin vulnerabilidades críticas. El importador limita tamaño, filas, macros y fórmulas.
