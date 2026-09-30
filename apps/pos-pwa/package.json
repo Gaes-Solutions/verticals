@@ -15,7 +15,7 @@
     "@gaespos/sync-client": "workspace:*",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
-    "next": "^15.1.0",
+    "next": "^15.5.24",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
