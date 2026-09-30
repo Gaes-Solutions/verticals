@@ -1090,3 +1090,4 @@ Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
 - Validado `@gaespos/api` y `@gaespos/web-tienda` con typecheck.
 - Pendiente operativo: aplicar migración en Railway, configurar `INCIDENT_ALERT_EMAIL`/Resend y sustituir `xlsx` cuando haya una opción compatible estable; mientras tanto el importador rechaza archivos grandes, macros y fórmulas.
 - Actualizado `@fastify/jwt` a 10.2.2 y Next a 15.5.24; `pnpm audit --prod` quedó sin vulnerabilidades críticas. El importador limita tamaño, filas, macros y fórmulas.
+- Validación de liberación: builds de web-tienda, web-admin y web-pos en verde; typecheck de API, DB y kiosko en verde; sync-client 41/41 pruebas en verde. Los tests de integración del API requieren `DATABASE_URL_MASTER` y no se ejecutaron sin esa conexión.
