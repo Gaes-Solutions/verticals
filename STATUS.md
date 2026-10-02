@@ -1092,3 +1092,10 @@ Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
 - Actualizado `@fastify/jwt` a 10.2.2 y Next a 15.5.24; `pnpm audit --prod` quedó sin vulnerabilidades críticas. El importador limita tamaño, filas, macros y fórmulas.
 - Validación de liberación: builds de web-tienda, web-admin y web-pos en verde; typecheck de API, DB y kiosko en verde; sync-client 41/41 pruebas en verde. Los tests de integración del API requieren `DATABASE_URL_MASTER` y no se ejecutaron sin esa conexión.
 - Suite API ejecutada contra Postgres local después de aplicar la migración: 1,154/1,157 pruebas pasaron. Las 3 restantes corresponden al inspector MP4 del kiosko porque esta máquina no tiene `ffmpeg`; CI/Railway debe proveerlo mediante `KIOSKO_FFMPEG`.
+
+## E2E retail y catálogo offline — 01-oct-2026
+
+- Corregido el cliente SQLite del POS de escritorio: aceptaba solo `producto`, `variante`, `cliente` y `promocion`, aunque el servidor también materializa listas de precio, escalonados y reglas. Ahora descarga y publica el catálogo completo necesario para cobrar sin conexión.
+- Corregido el selector ambiguo de la prueba SAT del panel.
+- Suite E2E completa: **11/11 en verde** (panel, catálogo offline a 360/768/1440 px y POS: cobro, búsqueda, apertura, corte X, devolución y promoción).
+- Suite `@gaespos/sync-client`: **41/41 en verde**.

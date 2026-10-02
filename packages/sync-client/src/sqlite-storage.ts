@@ -12,6 +12,20 @@ import type {
   PendingConflict,
   QueueStats,
 } from "./types.js";
+
+// Every entity materialized by the server must be accepted by the desktop
+// client. Price rules are part of the snapshot because offline checkout uses
+// them to preserve the same total as the online checkout.
+const CATALOG_ENTITY_TYPES = new Set([
+  "producto",
+  "variante",
+  "cliente",
+  "lista_precio",
+  "lista_precio_item",
+  "precio_escalonado",
+  "regla_precio",
+  "promocion",
+]);
 export interface SqlitePort {
   execute(query: string, bindValues?: unknown[]): Promise<{ rowsAffected: number }>;
   select<T>(query: string, bindValues?: unknown[]): Promise<T>;
@@ -260,7 +274,7 @@ export class SqliteStorage implements LocalStorage {
       page.pageIndex < 0 ||
       page.pageIndex >= manifest.pageCount ||
       !Array.isArray(page.rows) ||
-      !["producto", "variante", "cliente", "promocion"].includes(page.entityType) ||
+      !CATALOG_ENTITY_TYPES.has(page.entityType) ||
       page.rows.some((row) => !row || typeof row.id !== "string" || !row.id)
     )
       throw new Error("Página de catálogo inválida");

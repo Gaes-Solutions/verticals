@@ -39,7 +39,7 @@ test("dar de alta un producto pide y guarda las claves del SAT", async ({ page }
   // Sin estas dos claves, facturar el producto responde 409 y la venta se queda
   // sin poder timbrarse. La unidad viene propuesta como pieza.
   await expect(page.getByText("Datos para facturar (SAT)")).toBeVisible();
-  await expect(page.getByLabel("Unidad")).toHaveValue("H87");
+  await expect(page.getByRole("combobox", { name: "Unidad", exact: true })).toHaveValue("H87");
   await page.getByLabel("Clave del producto").fill("50181900");
 
   await page.getByRole("button", { name: "Guardar" }).click();
