@@ -1088,7 +1088,7 @@ Sesión "haz todo lo que falta" (E1–E8), un commit ff por bloque:
 - Implementado scheduler de auditoría IA y endpoints superadmin `/admin/incidents`; las propuestas requieren auditoría y no ejecutan código arbitrario.
 - Añadida sanitización por allowlist para políticas HTML de la tienda.
 - Validado `@gaespos/api` y `@gaespos/web-tienda` con typecheck.
-- Pendiente operativo: aplicar migración en Railway, configurar `INCIDENT_ALERT_EMAIL`/Resend y sustituir `xlsx` cuando haya una opción compatible estable; mientras tanto el importador rechaza archivos grandes, macros y fórmulas.
+- Migración `20260929090000_system_incidents` aplicada en Railway producción y verificada con `prisma migrate status` (27/27 al día). Pendiente operativo: configurar `INCIDENT_ALERT_EMAIL`/Resend y sustituir `xlsx` cuando haya una opción compatible estable; mientras tanto el importador rechaza archivos grandes, macros y fórmulas.
 - Actualizado `@fastify/jwt` a 10.2.2 y Next a 15.5.24; `pnpm audit --prod` quedó sin vulnerabilidades críticas. El importador limita tamaño, filas, macros y fórmulas.
 - Validación de liberación: builds de web-tienda, web-admin y web-pos en verde; typecheck de API, DB y kiosko en verde; sync-client 41/41 pruebas en verde. Los tests de integración del API requieren `DATABASE_URL_MASTER` y no se ejecutaron sin esa conexión.
 - Suite API ejecutada contra Postgres local después de aplicar la migración: 1,154/1,157 pruebas pasaron. Las 3 restantes corresponden al inspector MP4 del kiosko porque esta máquina no tiene `ffmpeg`; CI/Railway debe proveerlo mediante `KIOSKO_FFMPEG`.
