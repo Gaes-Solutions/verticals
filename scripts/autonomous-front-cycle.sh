@@ -17,10 +17,13 @@ send_email() {
   local status="$1"
   local files="${2:-sin cambios detectados}"
   local judge="${judge_output:-El juez todavía no emitió dictamen.}"
+  local checks_detail="${checks:-No se alcanzaron las validaciones.}"
+  checks_detail="${checks_detail:0:6000}"
+  local test_steps="Abrir la pantalla indicada en Pantallas/áreas revisadas; repetir el flujo feliz y el caso de error descrito en la tarea; verificar responsive en 360, 768 y escritorio. Para reproducir en local: pnpm --filter @gaespos/web-tienda typecheck && pnpm --filter @gaespos/web-tienda build && pnpm --filter @gaespos/mobile-cliente test -- --run"
   [[ -n "${RESEND_API_KEY:-}" ]] || return 0
   local subject="[GaesPOS] Ciclo autónomo ${status}"
-  local text="Ciclo autónomo: ${status}\n\nPantallas/áreas revisadas:\n${files}\n\nQué se pidió/resolvió:\n${TASK_PROMPT}\n\nDictamen Codex:\n${judge}\n\nRama: ${branch:-no creada}"
-  local html="<h2>Ciclo autónomo: ${status}</h2><h3>Pantallas/áreas revisadas</h3><pre>${files}</pre><h3>Qué se pidió/resolvió</h3><p>${TASK_PROMPT}</p><h3>Dictamen Codex</h3><pre>${judge}</pre><p>Rama: ${branch:-no creada}</p>"
+  local text="Ciclo autónomo: ${status}\n\nPantallas/áreas revisadas:\n${files}\n\nQué se pidió/resolvió:\n${TASK_PROMPT}\n\nCómo probarlo:\n${test_steps}\n\nValidaciones ejecutadas:\n${checks_detail}\n\nDictamen Codex:\n${judge}\n\nRama: ${branch:-no creada}"
+  local html="<h2>Ciclo autónomo: ${status}</h2><h3>Pantallas/áreas revisadas</h3><pre>${files}</pre><h3>Qué se pidió/resolvió</h3><p>${TASK_PROMPT}</p><h3>Cómo probarlo</h3><p>${test_steps}</p><h3>Validaciones ejecutadas</h3><pre>${checks_detail}</pre><h3>Dictamen Codex</h3><pre>${judge}</pre><p>Rama: ${branch:-no creada}</p>"
   curl -fsS https://api.resend.com/emails \
     -H "Authorization: Bearer ${RESEND_API_KEY}" \
     -H "Content-Type: application/json" \
