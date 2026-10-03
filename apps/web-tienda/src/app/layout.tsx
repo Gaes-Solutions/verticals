@@ -41,15 +41,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="bg-slate-50 text-slate-900">
         <div className="bg-marca text-white text-xs">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-1 px-4 py-2">
-            <span className="flex items-center gap-1.5">
-              <Truck size={14} strokeWidth={2} /> Envíos a todo México
-            </span>
+            {config?.etaEnvio && (
+              <span className="flex items-center gap-1.5">
+                <Truck size={14} strokeWidth={2} /> Envío a todo México
+              </span>
+            )}
             <span className="flex items-center gap-1.5">
               <ShieldCheck size={14} strokeWidth={2} /> Compra protegida
             </span>
-            <span className="flex items-center gap-1.5">
-              <CreditCard size={14} strokeWidth={2} /> Meses sin intereses
-            </span>
+            {config?.msiHabilitado && config.msiMeses.length > 0 && (
+              <span className="flex items-center gap-1.5">
+                <CreditCard size={14} strokeWidth={2} /> Meses sin intereses
+              </span>
+            )}
           </div>
         </div>
 
