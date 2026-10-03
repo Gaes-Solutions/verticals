@@ -9,6 +9,11 @@ del repositorio y configurar las claves de los runners. Si se activa
 pruebas verdes y Codex responde `APPROVED` en la primera línea de su dictamen.
 El job requiere un runner self-hosted etiquetado `kimi-codex` con `kimi`,
 `codex` y `gh` instalados; un runner sin esas herramientas falla cerrado.
+El workflow `autonomous-watchdog.yml` revisa cada 15 minutos el heartbeat del
+ciclo. Si no hay una corrida reciente, relanza el proceso y abre una alerta;
+si la última corrida falló, abre una alerta para impedir que el problema pase
+desapercibido. La supervisión necesita que GitHub Actions siga disponible y que
+el runner self-hosted esté encendido.
 
 ## Roles
 

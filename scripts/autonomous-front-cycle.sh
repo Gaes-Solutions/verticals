@@ -25,6 +25,7 @@ EOF
 
 git diff --check
 pnpm --filter @gaespos/web-tienda typecheck
+pnpm --filter @gaespos/web-tienda build
 pnpm --filter @gaespos/mobile-cliente typecheck
 pnpm --filter @gaespos/mobile-cliente test -- --run
 

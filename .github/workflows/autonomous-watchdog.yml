@@ -1,0 +1,56 @@
+name: Autonomous cycle watchdog
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  issues: write
+  contents: read
+
+jobs:
+  watchdog:
+    if: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MAX_AGE_MINUTES: "180"
+    steps:
+      - name: Revisar heartbeat del ciclo autónomo
+        id: inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh run list --workflow autonomous-front-cycle.yml --limit 10 --json status,conclusion,createdAt,databaseId)"
+          result="$(python3 -c 'import json,sys,datetime
+          rows=json.load(sys.stdin)
+          now=datetime.datetime.now(datetime.timezone.utc)
+          age_limit=int(__import__("os").environ["MAX_AGE_MINUTES"])
+          recent=[]
+          for r in rows:
+              t=datetime.datetime.fromisoformat(r["createdAt"].replace("Z","+00:00"))
+              age=(now-t).total_seconds()/60
+              if age <= age_limit: recent.append((age,r))
+          if not recent:
+              print("stale|none"); sys.exit(0)
+          recent.sort(key=lambda x:x[0])
+          age,r=recent[0]
+          print(("healthy" if r["status"]=="completed" and r["conclusion"]=="success" else "failed")+"|"+str(r["databaseId"])+"|"+str(round(age)))' <<< "$runs")"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "$result"
+
+      - name: Relanzar si el ciclo está detenido
+        if: startsWith(steps.inspect.outputs.result, 'stale|')
+        run: |
+          gh workflow run autonomous-front-cycle.yml --ref main
+          gh issue list --state open --search "[automation] cycle watchdog" --json number --jq '.[0].number' | grep -q . || \
+            gh issue create --title "[automation] cycle watchdog" --body "El watchdog no encontró un ciclo autónomo reciente; lo relanzó automáticamente. Revisar el runner self-hosted y las credenciales de Kimi/Codex."
+
+      - name: Alertar fallo del último ciclo
+        if: startsWith(steps.inspect.outputs.result, 'failed|')
+        run: |
+          gh issue list --state open --search "[automation] failed cycle" --json number --jq '.[0].number' | grep -q . || \
+            gh issue create --title "[automation] failed cycle" --body "El último ciclo autónomo falló. El watchdog lo está vigilando; revisar los logs del workflow y corregir antes de permitir merge."
