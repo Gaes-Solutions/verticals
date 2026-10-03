@@ -1,0 +1,54 @@
+name: Autonomous storefront cycle
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: autonomous-front-cycle
+  cancel-in-progress: false
+
+jobs:
+  execute-review-merge:
+    if: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' }}
+    # Runner propio con `kimi`, `codex` y `gh` instalados. Las CLIs nunca se
+    # descargan desde el repositorio ni se reciben por entrada del usuario.
+    runs-on: [self-hosted, kimi-codex]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      KIMI_BIN: ${{ vars.KIMI_BIN || 'kimi' }}
+      CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
+      AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE || 'false' }}
+      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install agent CLIs
+        run: |
+          # Las versiones y comandos se controlan desde el runner/variables del repo.
+          # El job falla cerrado si una CLI no está instalada.
+          command -v "$KIMI_BIN"
+          command -v "$CODEX_BIN"
+
+      - name: Kimi ejecuta, Codex juzga y publica solo si aprueba
+        run: bash scripts/autonomous-front-cycle.sh

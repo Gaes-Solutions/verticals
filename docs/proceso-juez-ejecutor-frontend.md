@@ -2,6 +2,14 @@
 
 Este proceso aplica a cambios de la tienda web y de la app cliente.
 
+El workflow programado está en `.github/workflows/autonomous-front-cycle.yml`.
+Permanece apagado hasta activar `AUTONOMOUS_FRONT_ENABLED=true` en las variables
+del repositorio y configurar las claves de los runners. Si se activa
+`AUTONOMOUS_AUTO_MERGE=true`, el merge solo ocurre después de que Kimi deja
+pruebas verdes y Codex responde `APPROVED` en la primera línea de su dictamen.
+El job requiere un runner self-hosted etiquetado `kimi-codex` con `kimi`,
+`codex` y `gh` instalados; un runner sin esas herramientas falla cerrado.
+
 ## Roles
 
 - **Kimi, ejecutor:** toma una tarea aprobada, implementa el cambio en un
