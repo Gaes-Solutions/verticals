@@ -70,8 +70,8 @@ Ejecuta las pruebas relevantes y deja los cambios en el worktree.
 ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:\n$feedback}
 EOF
   )
-  if ! "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
-    feedback="Kimi falló en el intento ${attempt}; revisa el error de la ejecución y corrígelo."
+  if ! timeout --signal=TERM 10m "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
+    feedback="Kimi falló o agotó 10 minutos en el intento ${attempt}; revisa la autenticación y corrige la tarea."
     continue
   fi
   if ! checks=$( {
