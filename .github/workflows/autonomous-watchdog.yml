@@ -18,7 +18,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      INCIDENT_ALERT_EMAIL: garudele@gmail.com
+      INCIDENT_ALERT_EMAIL: gaessoft@gmail.com
       EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE || 'no-reply@gaessoft.com' }}
       MAX_AGE_MINUTES: "180"
     steps:
