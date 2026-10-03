@@ -25,6 +25,9 @@ jobs:
       AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE || 'false' }}
       KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      INCIDENT_ALERT_EMAIL: garudele@gmail.com
+      EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE || 'no-reply@gaessoft.com' }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4

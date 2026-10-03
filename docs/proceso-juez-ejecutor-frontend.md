@@ -14,6 +14,10 @@ ciclo. Si no hay una corrida reciente, relanza el proceso y abre una alerta;
 si la última corrida falló, abre una alerta para impedir que el problema pase
 desapercibido. La supervisión necesita que GitHub Actions siga disponible y que
 el runner self-hosted esté encendido.
+Cada ciclo envía a `garudele@gmail.com` el resultado, las pantallas/áreas
+afectadas, la resolución solicitada, las pruebas, el dictamen de Codex y la
+rama o PR generado. Los fallos del ciclo y los relanzamientos del watchdog
+también se notifican por Resend.
 
 ## Roles
 
