@@ -46,7 +46,7 @@ Reglas: no hagas push, no hagas deploy, no ejecutes migraciones, no modifiques s
 Ejecuta las pruebas relevantes y deja los cambios en el worktree.
 EOF
 )
-"$KIMI_BIN" --auto -p "$kimi_prompt" --output-format text
+"$KIMI_BIN" --auto "$kimi_prompt" --output-format text
 
 git diff --check
 pnpm --filter @gaespos/web-tienda typecheck
