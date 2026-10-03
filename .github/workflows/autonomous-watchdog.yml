@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runs="$(gh run list --workflow autonomous-front-cycle.yml --limit 10 --json status,conclusion,createdAt,databaseId)"
+          runs="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow autonomous-front-cycle.yml --limit 10 --json status,conclusion,createdAt,databaseId)"
           result="$(python3 -c 'import json,sys,datetime
           rows=json.load(sys.stdin)
           now=datetime.datetime.now(datetime.timezone.utc)
