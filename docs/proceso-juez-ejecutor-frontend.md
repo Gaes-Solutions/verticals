@@ -2,6 +2,11 @@
 
 Este proceso aplica a cambios de la tienda web y de la app cliente.
 
+La lista de trabajo está en `automation/front-backlog.md`. El jefe técnico
+define ahí el orden y los criterios; cada corrida toma una sola tarea. Una
+tarea aprobada se marca `[x]` al preparar el PR y la siguiente corrida toma la
+siguiente pendiente. Una tarea rechazada conserva `[ ]` y recibe otro intento.
+
 El workflow programado está en `.github/workflows/autonomous-front-cycle.yml`.
 Permanece apagado hasta activar `AUTONOMOUS_FRONT_ENABLED=true` en las variables
 del repositorio y configurar las claves de los runners. Si se activa

@@ -7,6 +7,7 @@ set -euo pipefail
 : "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"
 : "${TASK_PROMPT:=Revisa y mejora el storefront de la tienda. Trabaja solo en el frontend, conserva el aislamiento multi-tenant, agrega pruebas relevantes y no cambies secretos, migraciones ni despliegues.}"
+: "${BACKLOG_FILE:=automation/front-backlog.md}"
 
 command -v "$KIMI_BIN" >/dev/null || { echo "No existe KIMI_BIN=$KIMI_BIN" >&2; exit 2; }
 command -v "$CODEX_BIN" >/dev/null || { echo "No existe CODEX_BIN=$CODEX_BIN" >&2; exit 2; }
@@ -37,6 +38,15 @@ trap on_exit EXIT
 
 branch="automation/front-cycle-$(date -u +%Y%m%d-%H%M%S)"
 git switch -c "$branch"
+
+backlog_line=$(grep -m1 -E '^- \[ \] ST-[0-9]+ \|' "$BACKLOG_FILE" || true)
+if [[ -z "$backlog_line" ]]; then
+  echo "No hay tareas pendientes en $BACKLOG_FILE."
+  exit 0
+fi
+task_id=$(printf '%s' "$backlog_line" | sed -E 's/^- \[ \] (ST-[0-9]+) \|.*/\1/')
+task_text=$(printf '%s' "$backlog_line" | cut -d'|' -f2- | sed 's/^ //')
+TASK_PROMPT="Tarea ${task_id}: ${task_text} Implementa solo esta tarea y sus pruebas. Conserva el alcance y no adelantes tareas posteriores."
 
 judge_prompt=$(cat <<'EOF'
 Eres el juez Codex. Revisa exclusivamente el diff actual como revisor adversarial.
@@ -83,6 +93,21 @@ if [[ "$approved" != "true" ]]; then
   echo "Kimi no logró una entrega aprobada después de dos intentos." >&2
   exit 1
 fi
+
+# El avance de la cola ocurre únicamente después del dictamen APPROVED.
+python3 - "$BACKLOG_FILE" "$task_id" <<'PY'
+from pathlib import Path
+import sys
+path, task_id = Path(sys.argv[1]), sys.argv[2]
+lines = path.read_text().splitlines()
+for i, line in enumerate(lines):
+    if line.startswith(f"- [ ] {task_id} |"):
+        lines[i] = line.replace("- [ ]", "- [x]", 1)
+        break
+else:
+    raise SystemExit(f"No se encontró {task_id} en la cola")
+path.write_text("\n".join(lines) + "\n")
+PY
 
 git add -A
 git diff --cached --quiet && { echo "No hubo cambios para publicar."; exit 0; }
