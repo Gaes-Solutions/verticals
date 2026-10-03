@@ -4,7 +4,7 @@ set -euo pipefail
 : "${KIMI_BIN:=kimi}"
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
-: "${INCIDENT_ALERT_EMAIL:=garudele@gmail.com}"
+: "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"
 : "${TASK_PROMPT:=Revisa y mejora el storefront de la tienda. Trabaja solo en el frontend, conserva el aislamiento multi-tenant, agrega pruebas relevantes y no cambies secretos, migraciones ni despliegues.}"
 
@@ -38,22 +38,6 @@ trap on_exit EXIT
 branch="automation/front-cycle-$(date -u +%Y%m%d-%H%M%S)"
 git switch -c "$branch"
 
-kimi_prompt=$(cat <<EOF
-Eres el ejecutor Kimi. Implementa esta tarea en el repositorio actual:
-$TASK_PROMPT
-
-Reglas: no hagas push, no hagas deploy, no ejecutes migraciones, no modifiques secretos.
-Ejecuta las pruebas relevantes y deja los cambios en el worktree.
-EOF
-)
-"$KIMI_BIN" -p "$kimi_prompt" --output-format text
-
-git diff --check
-pnpm --filter @gaespos/web-tienda typecheck
-pnpm --filter @gaespos/web-tienda build
-pnpm --filter @gaespos/mobile-cliente typecheck
-pnpm --filter @gaespos/mobile-cliente test -- --run
-
 judge_prompt=$(cat <<'EOF'
 Eres el juez Codex. Revisa exclusivamente el diff actual como revisor adversarial.
 Verifica alcance, tenant isolation, precios, imágenes, accesibilidad, tests y regresiones.
@@ -61,11 +45,44 @@ Responde en la primera línea exactamente APPROVED o REJECTED y después enumera
 Aprueba solo si el cambio está listo para merge.
 EOF
 )
-judge_output=$("$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt)
-printf '%s\n' "$judge_output" | grep -q '^APPROVED$' || {
-  echo "Codex rechazó el cambio; no se publica ni se fusiona." >&2
+feedback=""
+approved=false
+for attempt in 1 2; do
+  kimi_prompt=$(cat <<EOF
+Eres el ejecutor Kimi. Implementa esta tarea en el repositorio actual:
+$TASK_PROMPT
+
+Reglas: no hagas push, no hagas deploy, no ejecutes migraciones, no modifiques secretos.
+Ejecuta las pruebas relevantes y deja los cambios en el worktree.
+${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:\n$feedback}
+EOF
+  )
+  if ! "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
+    feedback="Kimi falló en el intento ${attempt}; revisa el error de la ejecución y corrígelo."
+    continue
+  fi
+  if ! checks=$( {
+    git diff --check
+    pnpm --filter @gaespos/web-tienda typecheck
+    pnpm --filter @gaespos/web-tienda build
+    pnpm --filter @gaespos/mobile-cliente typecheck
+    pnpm --filter @gaespos/mobile-cliente test -- --run
+  } 2>&1 ); then
+    feedback="Las validaciones fallaron en el intento ${attempt}:\n${checks}"
+    continue
+  fi
+  judge_output=$("$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  if printf '%s\n' "$judge_output" | grep -q '^APPROVED$'; then
+    approved=true
+    break
+  fi
+  feedback="Codex rechazó el intento ${attempt}. Corrige estas observaciones:\n${judge_output}"
+done
+
+if [[ "$approved" != "true" ]]; then
+  echo "Kimi no logró una entrega aprobada después de dos intentos." >&2
   exit 1
-}
+fi
 
 git add -A
 git diff --cached --quiet && { echo "No hubo cambios para publicar."; exit 0; }

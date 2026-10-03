@@ -20,7 +20,7 @@ jobs:
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       INCIDENT_ALERT_EMAIL: gaessoft@gmail.com
       EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE || 'no-reply@gaessoft.com' }}
-      MAX_AGE_MINUTES: "180"
+      MAX_AGE_MINUTES: "300"
     steps:
       - name: Revisar heartbeat del ciclo autónomo
         id: inspect
