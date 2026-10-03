@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { NextResponse } from "next/server";
 
 /** GET /api/recovery/:codigo → items del carrito abandonado para restaurar. */
@@ -14,7 +14,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ codigo:
       }>;
     }>(`/tienda/recovery/${codigo}`);
     return NextResponse.json(carrito);
-  } catch {
-    return NextResponse.json({ message: "Carrito no disponible" }, { status: 404 });
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 404)
+      return NextResponse.json(
+        { message: "El enlace del carrito expiró o no existe." },
+        { status: 404 },
+      );
+    return NextResponse.json(
+      { message: "No se pudo recuperar el carrito; inténtalo de nuevo." },
+      { status: 503 },
+    );
   }
 }

@@ -82,15 +82,26 @@ export default function Tienda() {
               }
               style={s.product}
             >
-              {item.fotosArray[0] ? (
-                <Image source={{ uri: item.fotosArray[0] }} style={s.photo} resizeMode="contain" />
-              ) : (
-                <View style={s.photo} />
-              )}
+              <View style={s.photoWrap}>
+                {item.fotosArray[0] ? (
+                  <ImageWithFallback uri={item.fotosArray[0]} />
+                ) : (
+                  <Text style={s.noPhoto}>Sin imagen</Text>
+                )}
+                {item.enOferta && item.descuentoPct ? (
+                  <Text style={s.offer}>-{item.descuentoPct}%</Text>
+                ) : null}
+              </View>
               <Text style={s.name} numberOfLines={3}>
                 {item.tituloPublico}
               </Text>
-              <Text style={s.price}>Desde {money(item.precioPromocion ?? item.precioDesde)}</Text>
+              {item.enOferta && item.precioPromocion ? (
+                <Text style={s.oldPrice}>{money(item.precioDesde)}</Text>
+              ) : null}
+              <Text style={s.price}>
+                {item.enOferta && item.precioPromocion ? "" : "Desde "}
+                {money(item.precioPromocion ?? item.precioDesde)}
+              </Text>
               {item.stockPublico === 0 ? <Text style={s.soldOut}>Sin existencias</Text> : null}
             </Pressable>
           )}
@@ -120,6 +131,13 @@ export default function Tienda() {
     </View>
   );
 }
+function ImageWithFallback({ uri }: { uri: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Text style={s.noPhoto}>Sin imagen</Text>;
+  return (
+    <Image source={{ uri }} style={s.photo} resizeMode="contain" onError={() => setFailed(true)} />
+  );
+}
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { padding: space.lg, gap: space.md },
@@ -134,9 +152,33 @@ const s = StyleSheet.create({
     borderRadius: radius.md,
     gap: space.sm,
   },
-  photo: { width: "100%", height: 130, backgroundColor: colors.bg, borderRadius: radius.sm },
+  photoWrap: {
+    width: "100%",
+    height: 130,
+    backgroundColor: colors.bg,
+    borderRadius: radius.sm,
+    overflow: "hidden",
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photo: { width: "100%", height: "100%" },
+  noPhoto: { color: colors.faint, fontSize: 12 },
+  offer: {
+    position: "absolute",
+    left: 6,
+    top: 6,
+    backgroundColor: colors.danger,
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
   name: { fontSize: 15, color: colors.ink },
   price: { color: colors.brand, fontWeight: "800", fontSize: 16 },
+  oldPrice: { color: colors.muted, textDecorationLine: "line-through", fontSize: 12 },
   soldOut: { color: colors.warn },
   footer: { padding: space.md, gap: space.md },
 });

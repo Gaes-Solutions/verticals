@@ -51,7 +51,17 @@ function Seccion({
   );
 }
 
-function Hero({ nombre, lema }: { nombre: string; lema: string | null }) {
+function Hero({
+  nombre,
+  lema,
+  envio,
+  msi,
+}: {
+  nombre: string;
+  lema: string | null;
+  envio: boolean;
+  msi: boolean;
+}) {
   return (
     <section className="mb-10 overflow-hidden rounded-3xl bg-gradient-to-br from-marca via-brand-dark to-brand-dark px-6 py-12 text-white sm:px-12 sm:py-16">
       <p className="font-medium text-sm text-white/80">Bienvenido a {nombre}</p>
@@ -59,7 +69,9 @@ function Hero({ nombre, lema }: { nombre: string; lema: string | null }) {
         {lema ?? "Todo lo que buscas, al mejor precio."}
       </h1>
       <p className="mt-3 max-w-xl text-white/90">
-        Miles de productos · Envío a todo México · Compra protegida · Meses sin intereses.
+        Miles de productos · Compra protegida
+        {envio ? " · Envío a todo México" : ""}
+        {msi ? " · Meses sin intereses" : ""}.
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <Link
@@ -153,7 +165,12 @@ export default async function CatalogoPage({
     <div>
       {!filtrando && (
         <>
-          <Hero nombre={cfg?.nombre ?? "Tienda"} lema={cfg?.lema ?? null} />
+          <Hero
+            nombre={cfg?.nombre ?? "Tienda"}
+            lema={cfg?.lema ?? null}
+            envio={Boolean(cfg?.etaEnvio)}
+            msi={Boolean(cfg?.msiHabilitado && cfg.msiMeses.length > 0)}
+          />
           <RepetirDespensa />
           <Seccion
             icono={<Flame size={22} className="text-danger" />}

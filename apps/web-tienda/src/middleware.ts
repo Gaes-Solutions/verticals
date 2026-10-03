@@ -20,12 +20,24 @@ export async function middleware(req: NextRequest) {
         `${API_URL}/public/storefront/resolve?host=${encodeURIComponent(host)}`,
         { cache: "no-store" },
       );
-      if (res.ok) {
-        const { tenantSlug } = (await res.json()) as { tenantSlug?: string };
-        if (tenantSlug) requestHeaders.set("x-tienda-slug", tenantSlug);
+      if (!res.ok) {
+        return NextResponse.json(
+          { message: "No se pudo resolver esta tienda; inténtalo de nuevo." },
+          { status: 503 },
+        );
       }
+      const { tenantSlug } = (await res.json()) as { tenantSlug?: string };
+      if (!tenantSlug) {
+        return NextResponse.json({ message: "Tienda no encontrada." }, { status: 404 });
+      }
+      requestHeaders.set("x-tienda-slug", tenantSlug);
     } catch {
-      // resolve no disponible → el BFF usa el tenant por env (fallback)
+      // Nunca caer al tenant global: una resolución fallida no puede mostrar
+      // accidentalmente el catálogo de otra tienda.
+      return NextResponse.json(
+        { message: "No se pudo resolver esta tienda; inténtalo de nuevo." },
+        { status: 503 },
+      );
     }
   }
 

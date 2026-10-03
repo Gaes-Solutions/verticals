@@ -77,6 +77,15 @@ export default function Carrito() {
           {lines.map((line, index) => (
             <View key={line.varianteId} style={s.line}>
               <Text style={s.title}>{cart.names[line.varianteId] ?? `Artículo ${index + 1}`}</Text>
+              {quote?.items.find((item) => item.varianteId === line.varianteId) ? (
+                <Text style={s.text}>
+                  {money(
+                    quote.items.find((item) => item.varianteId === line.varianteId)
+                      ?.precioUnitario ?? 0,
+                  )}{" "}
+                  por unidad
+                </Text>
+              ) : null}
               <Quantity
                 key={`${line.varianteId}:${line.cantidad}`}
                 value={line.cantidad}

@@ -60,10 +60,7 @@ export function ProductoCard({
   const precio = promo ?? base;
 
   return (
-    <Link
-      href={`/producto/${p.slugSeo}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white transition duration-200 hover:-translate-y-1 hover:shadow-lg"
-    >
+    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white transition duration-200 hover:-translate-y-1 hover:shadow-lg">
       {p.enOferta && p.descuentoPct > 0 && (
         <span className="absolute left-2.5 top-2.5 z-10 rounded-md bg-offer px-2 py-0.5 font-bold text-offer-dark text-xs shadow">
           -{p.descuentoPct}%
@@ -74,26 +71,22 @@ export function ProductoCard({
           <Truck size={12} strokeWidth={2.5} /> FULL
         </span>
       )}
-      <div className="flex aspect-square items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        {p.fotosArray[0] ? (
-          <img
-            src={p.fotosArray[0]}
-            alt={p.tituloPublico}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <ImageOff size={40} strokeWidth={1.5} className="text-slate-300" />
-        )}
-      </div>
+      <Link href={`/producto/${p.slugSeo}`} aria-label={`Ver ${p.tituloPublico}`}>
+        <div className="flex aspect-square items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+          <ImagenProducto src={p.fotosArray[0]} alt={p.tituloPublico} />
+        </div>
+      </Link>
       <div className="flex flex-1 flex-col p-3.5">
         {p.categoriaPublica && (
           <p className="mb-1 text-[11px] text-slate-400 uppercase tracking-wide">
             {p.categoriaPublica.nombre}
           </p>
         )}
-        <h2 className="line-clamp-2 flex-1 font-medium text-slate-800 text-sm group-hover:text-marca">
-          {p.tituloPublico}
-        </h2>
+        <Link href={`/producto/${p.slugSeo}`} className="flex-1">
+          <h2 className="line-clamp-2 font-medium text-slate-800 text-sm group-hover:text-marca">
+            {p.tituloPublico}
+          </h2>
+        </Link>
         {p.ratingCuenta != null && p.ratingCuenta > 0 && p.ratingPromedio != null && (
           <div className="mt-1">
             <EstrellasProducto promedio={p.ratingPromedio} cuenta={p.ratingCuenta} />
@@ -116,7 +109,22 @@ export function ProductoCard({
           <QuickAdd p={p} precio={precio.toFixed(2)} />
         </div>
       </div>
-    </Link>
+    </article>
+  );
+}
+
+function ImagenProducto({ src, alt }: { src?: string; alt: string }) {
+  const [fallo, setFallo] = useState(false);
+  if (!src || fallo) return <ImageOff size={40} strokeWidth={1.5} className="text-slate-300" />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFallo(true)}
+      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+    />
   );
 }
 
