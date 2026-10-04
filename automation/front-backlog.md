@@ -5,7 +5,7 @@ darla por aprobada después de revisar diff, pruebas, accesibilidad, tenant,
 precios y responsive. Si falla, conserva la tarea pendiente para el siguiente
 intento.
 
-- [ ] ST-001 | Completar E2E del comprador: catálogo, búsqueda, detalle, carrito y responsive 360/768/1440 con fixture local reproducible.
+- [ ] ST-001 | Smoke E2E del catálogo: fixture local reproducible que abra `/`, compruebe el título del catálogo y descarte desborde horizontal a 360px.
 - [x] ST-002 | Galería de producto: miniaturas, cambio de imagen, zoom configurable y fallback de URL rota.
 - [x] ST-003 | Catálogo web: estados de carga, vacío, error con reintento y filtros sin perder contexto.
 - [ ] ST-004 | Carrito web: revalidar precios e inventario antes de checkout y mostrar cambios claramente.
@@ -15,3 +15,4 @@ intento.
 - [ ] ST-008 | Rendimiento storefront: lazy images, tamaños estables, errores de red y revisión de bundle.
 - [ ] ST-009 | E2E de recuperación de contraseña y carrito abandonado con estados expirado, inválido y exitoso.
 - [ ] ST-010 | Limpieza final: resolver advertencias de lint del storefront sin relajar reglas.
+- [ ] ST-011 | Completar E2E del comprador: búsqueda, detalle, carrito y responsive 360/768/1440 sobre el fixture de ST-001.
