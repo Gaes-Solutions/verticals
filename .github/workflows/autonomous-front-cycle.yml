@@ -58,8 +58,6 @@ jobs:
           if [[ -f "$HOME/.codex/config.toml" ]]; then cp "$HOME/.codex/config.toml" "$CODEX_HOME/config.toml"; fi
           chmod 700 "$CODEX_HOME"
           echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
-          timeout --signal=TERM --kill-after=10s 45s "$KIMI_BIN" -p "Responde únicamente KIMI_READY" --output-format text | grep -q KIMI_READY
-          timeout --signal=TERM --kill-after=10s 45s "$CODEX_BIN" exec --sandbox read-only --ephemeral "Responde únicamente CODEX_READY" | grep -q CODEX_READY
 
       - name: Kimi ejecuta, Codex juzga y publica solo si aprueba
         run: bash scripts/autonomous-front-cycle.sh

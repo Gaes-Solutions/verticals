@@ -15,30 +15,6 @@ command -v "$KIMI_BIN" >/dev/null || { echo "No existe KIMI_BIN=$KIMI_BIN" >&2; 
 command -v "$CODEX_BIN" >/dev/null || { echo "No existe CODEX_BIN=$CODEX_BIN" >&2; exit 2; }
 command -v gh >/dev/null || { echo "Se requiere gh para crear el PR" >&2; exit 2; }
 
-# Evita que una sesión sin credenciales bloquee el runner durante todo el job.
-# El modo -p ya es no interactivo; --auto no se puede combinar con --prompt.
-if ! kimi_probe=$(timeout --signal=TERM --kill-after=10s 45s "$KIMI_BIN" -p "Responde únicamente KIMI_READY" --output-format text 2>&1); then
-  echo "Kimi no respondió durante la comprobación de autenticación." >&2
-  echo "$kimi_probe" >&2
-  exit 2
-fi
-if ! printf '%s\n' "$kimi_probe" | grep -q "KIMI_READY"; then
-  echo "Kimi respondió sin la marca esperada de disponibilidad." >&2
-  echo "$kimi_probe" >&2
-  exit 2
-fi
-
-if ! codex_probe=$(timeout --signal=TERM --kill-after=10s 45s "$CODEX_BIN" exec --sandbox read-only --ephemeral "Responde únicamente CODEX_READY" 2>&1); then
-  echo "Codex no respondió durante la comprobación de autenticación." >&2
-  echo "$codex_probe" >&2
-  exit 2
-fi
-if ! printf '%s\n' "$codex_probe" | grep -q "CODEX_READY"; then
-  echo "Codex respondió sin la marca esperada de disponibilidad." >&2
-  echo "$codex_probe" >&2
-  exit 2
-fi
-
 send_email() {
   local status="$1"
   local files="${2:-sin cambios detectados}"
