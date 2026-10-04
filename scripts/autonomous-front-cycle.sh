@@ -4,7 +4,7 @@ set -euo pipefail
 : "${KIMI_BIN:=kimi}"
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
-: "${KIMI_TIMEOUT:=12m}"
+: "${KIMI_TIMEOUT:=20m}"
 : "${CODEX_TIMEOUT:=10m}"
 : "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"
@@ -98,8 +98,18 @@ Ejecuta las pruebas relevantes y deja los cambios en el worktree.
 ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:\n$feedback}
 EOF
   )
-  if ! timeout --signal=TERM --kill-after=30s "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
+  set +e
+  timeout --signal=TERM --kill-after=30s "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text
+  kimi_status=$?
+  set -e
+  if [[ "$kimi_status" != "0" ]]; then
     feedback="Kimi falló o agotó ${KIMI_TIMEOUT} en el intento ${attempt}; revisa la salida y corrige la tarea."
+    # Repetir una tarea que agotó todo su presupuesto solo produce otro correo
+    # rojo y descarta tiempo del runner. Los rechazos de validación sí pueden
+    # pasar al segundo intento porque ya tienen observaciones concretas.
+    if [[ "$kimi_status" == "124" || "$kimi_status" == "137" ]]; then
+      break
+    fi
     continue
   fi
   if ! checks=$(run_checks 2>&1); then

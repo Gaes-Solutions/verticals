@@ -15,7 +15,7 @@ jobs:
     # Runner propio con `kimi`, `codex` y `gh` instalados. Las CLIs nunca se
     # descargan desde el repositorio ni se reciben por entrada del usuario.
     runs-on: [self-hosted, kimi-codex]
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
       pull-requests: write
