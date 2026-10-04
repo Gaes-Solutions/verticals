@@ -107,7 +107,7 @@ EOF
     # Repetir una tarea que agotó todo su presupuesto solo produce otro correo
     # rojo y descarta tiempo del runner. Los rechazos de validación sí pueden
     # pasar al segundo intento porque ya tienen observaciones concretas.
-    if [[ "$kimi_status" == "124" || "$kimi_status" == "137" ]]; then
+    if [[ "$kimi_status" == "124" || "$kimi_status" == "137" || "$kimi_status" == "143" ]]; then
       break
     fi
     continue
