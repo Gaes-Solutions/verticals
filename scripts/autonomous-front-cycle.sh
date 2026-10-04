@@ -28,6 +28,17 @@ if ! printf '%s\n' "$kimi_probe" | grep -q "KIMI_READY"; then
   exit 2
 fi
 
+if ! codex_probe=$(timeout --signal=TERM --kill-after=10s 45s "$CODEX_BIN" exec --sandbox read-only --ephemeral "Responde únicamente CODEX_READY" 2>&1); then
+  echo "Codex no respondió durante la comprobación de autenticación." >&2
+  echo "$codex_probe" >&2
+  exit 2
+fi
+if ! printf '%s\n' "$codex_probe" | grep -q "CODEX_READY"; then
+  echo "Codex respondió sin la marca esperada de disponibilidad." >&2
+  echo "$codex_probe" >&2
+  exit 2
+fi
+
 send_email() {
   local status="$1"
   local files="${2:-sin cambios detectados}"
