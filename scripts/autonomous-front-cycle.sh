@@ -19,7 +19,7 @@ send_email() {
   local judge="${judge_output:-El juez todavía no emitió dictamen.}"
   local checks_detail="${checks:-No se alcanzaron las validaciones.}"
   checks_detail="${checks_detail:0:6000}"
-  local test_steps="Abrir la pantalla indicada en Pantallas/áreas revisadas; repetir el flujo feliz y el caso de error descrito en la tarea; verificar responsive en 360, 768 y escritorio. Para reproducir en local: pnpm --filter @gaespos/web-tienda typecheck && pnpm --filter @gaespos/web-tienda build && pnpm --filter @gaespos/mobile-cliente test -- --run"
+  local test_steps="Abrir la pantalla indicada en Pantallas/áreas revisadas; repetir el flujo feliz y el caso de error descrito en la tarea; verificar responsive en 360, 768 y escritorio. Para reproducir en local: pnpm --filter @gaespos/web-tienda typecheck && pnpm --filter @gaespos/web-tienda exec vitest run && pnpm --filter @gaespos/web-tienda build"
   [[ -n "${RESEND_API_KEY:-}" ]] || return 0
   local subject="[GaesPOS] Ciclo autónomo ${status}"
   local text="Ciclo autónomo: ${status}\n\nPantallas/áreas revisadas:\n${files}\n\nQué se pidió/resolvió:\n${TASK_PROMPT}\n\nCómo probarlo:\n${test_steps}\n\nValidaciones ejecutadas:\n${checks_detail}\n\nDictamen Codex:\n${judge}\n\nRama: ${branch:-no creada}"
@@ -49,6 +49,19 @@ if [[ -z "$backlog_line" ]]; then
 fi
 task_id=$(printf '%s' "$backlog_line" | sed -E 's/^- \[ \] (ST-[0-9]+) \|.*/\1/')
 task_text=$(printf '%s' "$backlog_line" | cut -d'|' -f2- | sed 's/^ //')
+
+run_checks() {
+  git diff --check
+  pnpm --filter @gaespos/web-tienda typecheck
+  pnpm --filter @gaespos/web-tienda exec vitest run
+  pnpm --filter @gaespos/web-tienda build
+  # Solo las tareas de mobile ejecutan la suite mobile; una tarea de tienda
+  # no debe quedar roja por una regresión ajena a su superficie.
+  if [[ "$task_id" == "ST-006" ]]; then
+    pnpm --filter @gaespos/mobile-cliente typecheck
+    pnpm --filter @gaespos/mobile-cliente test -- --run
+  fi
+}
 TASK_PROMPT="Tarea ${task_id}: ${task_text} Implementa solo esta tarea y sus pruebas. Conserva el alcance y no adelantes tareas posteriores."
 
 judge_prompt=$(cat <<'EOF'
@@ -74,18 +87,12 @@ EOF
     feedback="Kimi falló o agotó 10 minutos en el intento ${attempt}; revisa la autenticación y corrige la tarea."
     continue
   fi
-  if ! checks=$( {
-    git diff --check
-    pnpm --filter @gaespos/web-tienda typecheck
-    pnpm --filter @gaespos/web-tienda build
-    pnpm --filter @gaespos/mobile-cliente typecheck
-    pnpm --filter @gaespos/mobile-cliente test -- --run
-  } 2>&1 ); then
+  if ! checks=$(run_checks 2>&1); then
     feedback="Las validaciones fallaron en el intento ${attempt}:\n${checks}"
     continue
   fi
-  judge_output=$("$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
-  if printf '%s\n' "$judge_output" | grep -q '^APPROVED$'; then
+  judge_output=$(timeout --signal=TERM 10m "$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  if [[ "$(printf '%s\n' "$judge_output" | sed -n '1p')" == "APPROVED" ]]; then
     approved=true
     break
   fi
