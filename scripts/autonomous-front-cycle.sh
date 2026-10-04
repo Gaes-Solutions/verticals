@@ -4,6 +4,8 @@ set -euo pipefail
 : "${KIMI_BIN:=kimi}"
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
+: "${KIMI_TIMEOUT:=12m}"
+: "${CODEX_TIMEOUT:=10m}"
 : "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"
 : "${TASK_PROMPT:=Revisa y mejora el storefront de la tienda. Trabaja solo en el frontend, conserva el aislamiento multi-tenant, agrega pruebas relevantes y no cambies secretos, migraciones ni despliegues.}"
@@ -12,6 +14,19 @@ set -euo pipefail
 command -v "$KIMI_BIN" >/dev/null || { echo "No existe KIMI_BIN=$KIMI_BIN" >&2; exit 2; }
 command -v "$CODEX_BIN" >/dev/null || { echo "No existe CODEX_BIN=$CODEX_BIN" >&2; exit 2; }
 command -v gh >/dev/null || { echo "Se requiere gh para crear el PR" >&2; exit 2; }
+
+# Evita que una sesión sin credenciales bloquee el runner durante todo el job.
+# El modo -p ya es no interactivo; --auto no se puede combinar con --prompt.
+if ! kimi_probe=$(timeout --signal=TERM --kill-after=10s 45s "$KIMI_BIN" -p "Responde únicamente KIMI_READY" --output-format text 2>&1); then
+  echo "Kimi no respondió durante la comprobación de autenticación." >&2
+  echo "$kimi_probe" >&2
+  exit 2
+fi
+if ! printf '%s\n' "$kimi_probe" | grep -q "KIMI_READY"; then
+  echo "Kimi respondió sin la marca esperada de disponibilidad." >&2
+  echo "$kimi_probe" >&2
+  exit 2
+fi
 
 send_email() {
   local status="$1"
@@ -83,15 +98,15 @@ Ejecuta las pruebas relevantes y deja los cambios en el worktree.
 ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:\n$feedback}
 EOF
   )
-  if ! timeout --signal=TERM 10m "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
-    feedback="Kimi falló o agotó 10 minutos en el intento ${attempt}; revisa la autenticación y corrige la tarea."
+  if ! timeout --signal=TERM --kill-after=30s "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text; then
+    feedback="Kimi falló o agotó ${KIMI_TIMEOUT} en el intento ${attempt}; revisa la salida y corrige la tarea."
     continue
   fi
   if ! checks=$(run_checks 2>&1); then
     feedback="Las validaciones fallaron en el intento ${attempt}:\n${checks}"
     continue
   fi
-  judge_output=$(timeout --signal=TERM 10m "$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  judge_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
   if [[ "$(printf '%s\n' "$judge_output" | sed -n '1p')" == "APPROVED" ]]; then
     approved=true
     break
