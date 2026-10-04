@@ -15,6 +15,41 @@ command -v "$KIMI_BIN" >/dev/null || { echo "No existe KIMI_BIN=$KIMI_BIN" >&2; 
 command -v "$CODEX_BIN" >/dev/null || { echo "No existe CODEX_BIN=$CODEX_BIN" >&2; exit 2; }
 command -v gh >/dev/null || { echo "Se requiere gh para crear el PR" >&2; exit 2; }
 
+# Ejecuta un agente en su propio proceso y grupo. Algunos CLI crean hijos que
+# sobreviven al `timeout` de GNU y dejan el runner bloqueado; aquí el watchdog
+# termina todo el grupo y devuelve 124 de forma determinista.
+run_agent_with_timeout() {
+  local duration="$1"
+  shift
+  python3 - "$duration" "$@" <<'PY'
+import os, signal, subprocess, sys, time
+
+raw = sys.argv[1]
+cmd = sys.argv[2:]
+units = {"s": 1, "m": 60, "h": 3600}
+seconds = float(raw[:-1]) * units.get(raw[-1], 1) if raw[-1:] in units else float(raw)
+proc = subprocess.Popen(cmd, start_new_session=True)
+try:
+    code = proc.wait(timeout=seconds)
+except subprocess.TimeoutExpired:
+    print(f"Proceso agotó el límite de {raw}; terminando su grupo", file=sys.stderr)
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        code = proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        code = proc.wait()
+    sys.exit(124)
+sys.exit(code)
+PY
+}
+
 send_email() {
   local status="$1"
   local files="${2:-sin cambios detectados}"
@@ -86,7 +121,7 @@ ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:
 EOF
   )
   set +e
-  timeout --signal=TERM --kill-after=30s "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text
+  run_agent_with_timeout "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text
   kimi_status=$?
   set -e
   if [[ "$kimi_status" != "0" ]]; then
@@ -103,7 +138,7 @@ EOF
     feedback="Las validaciones fallaron en el intento ${attempt}:\n${checks}"
     continue
   fi
-  judge_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  judge_output=$(run_agent_with_timeout "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox read-only --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
   if [[ "$(printf '%s\n' "$judge_output" | sed -n '1p')" == "APPROVED" ]]; then
     approved=true
     break
