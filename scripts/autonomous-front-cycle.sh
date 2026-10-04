@@ -17,37 +17,37 @@ command -v gh >/dev/null || { echo "Se requiere gh para crear el PR" >&2; exit 2
 
 # Ejecuta un agente en su propio proceso y grupo. Algunos CLI crean hijos que
 # sobreviven al `timeout` de GNU y dejan el runner bloqueado; aquí el watchdog
-# termina todo el grupo y devuelve 124 de forma determinista.
+# mata explícitamente el PID y su grupo y devuelve 124 de forma determinista.
 run_agent_with_timeout() {
   local duration="$1"
   shift
-  python3 - "$duration" "$@" <<'PY'
-import os, signal, subprocess, sys
-
-raw = sys.argv[1]
-cmd = sys.argv[2:]
-units = {"s": 1, "m": 60, "h": 3600}
-seconds = float(raw[:-1]) * units.get(raw[-1], 1) if raw[-1:] in units else float(raw)
-proc = subprocess.Popen(cmd, start_new_session=True)
-try:
-    code = proc.wait(timeout=seconds)
-except subprocess.TimeoutExpired:
-    print(f"Proceso agotó el límite de {raw}; terminando su grupo", file=sys.stderr)
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        code = proc.wait(timeout=30)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        code = proc.wait()
-    sys.exit(124)
-sys.exit(code)
-PY
+  local raw_seconds="${duration%[smh]}"
+  local unit="${duration:${#duration}-1}"
+  local seconds="$raw_seconds"
+  [[ "$unit" == "m" ]] && seconds=$((raw_seconds * 60))
+  [[ "$unit" == "h" ]] && seconds=$((raw_seconds * 3600))
+  setsid "$@" &
+  local pid=$!
+  (
+    sleep "$seconds"
+    echo "Proceso agotó el límite de ${duration}; terminando su grupo" >&2
+    kill -TERM "$pid" 2>/dev/null || true
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    sleep 5
+    kill -KILL "$pid" 2>/dev/null || true
+    kill -KILL -- "-$pid" 2>/dev/null || true
+  ) &
+  local watchdog=$!
+  set +e
+  wait "$pid"
+  local code=$?
+  set -e
+  kill "$watchdog" 2>/dev/null || true
+  wait "$watchdog" 2>/dev/null || true
+  if [[ "$code" != "0" ]]; then
+    return 124
+  fi
+  return 0
 }
 
 send_email() {
