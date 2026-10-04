@@ -1,9 +1,11 @@
+import { EstadoError } from "@/components/estado-error";
 import { BarraFiltros, PanelFiltros } from "@/components/filtros";
 import { Paginacion } from "@/components/paginacion";
 import { type EntregaConfigPublica, ProductoGrid } from "@/components/producto-card";
 import { RepetirDespensa } from "@/components/repetir-despensa";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { ApiError, type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
+import { hayFiltrosActivos, queryCatalogo } from "@/lib/catalogo-query";
 import { Flame, PackageSearch, Sparkles, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -97,33 +99,20 @@ export default async function CatalogoPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const { q, cat, orden, precioMin, precioMax, soloOfertas, soloDisponibles } = sp;
-  const filtrando = Boolean(
-    q || cat || orden || precioMin || precioMax || soloOfertas || soloDisponibles || sp.page,
-  );
-
-  const pageActual = Math.max(1, Number(sp.page) || 1);
-  const qs = new URLSearchParams({ pageSize: "24", page: String(pageActual) });
-  if (q) qs.set("q", q);
-  if (cat) qs.set("categoriaPublicaId", cat);
-  if (orden) qs.set("orden", orden);
-  if (precioMin) qs.set("precioMin", precioMin);
-  if (precioMax) qs.set("precioMax", precioMax);
-  if (soloOfertas) qs.set("soloOfertas", soloOfertas);
-  if (soloDisponibles) qs.set("soloDisponibles", soloDisponibles);
+  const filtrando = hayFiltrosActivos(sp);
 
   const tienda = await getTiendaConfig();
   if (!tienda.abierta) return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
 
   let data: CatalogoResponse;
-  let categorias: Awaited<ReturnType<typeof getCategorias>>;
+  let categorias: Awaited<ReturnType<typeof getCategorias>> = [];
   let cfg: Awaited<ReturnType<typeof getTiendaConfig>> | null = null;
   let ofertas: CatalogoResponse["items"] = [];
   let novedades: CatalogoResponse["items"] = [];
   let populares: CatalogoResponse["items"] = [];
   try {
     [data, categorias, cfg] = await Promise.all([
-      api<CatalogoResponse>(`/tienda/catalogo?${qs.toString()}`, {
+      api<CatalogoResponse>(`/tienda/catalogo?${queryCatalogo(sp)}`, {
         revalidate: filtrando ? undefined : 60,
       }),
       getCategorias(),
@@ -141,16 +130,28 @@ export default async function CatalogoPage({
     if (err instanceof ApiError && err.code === "STORE_UNAVAILABLE") {
       return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
     }
+    // Error con reintento: conservamos el shell (incluidos los filtros activos
+    // en la URL) para que el usuario ajuste filtros o reintente sin perder contexto.
+    const detalle = err instanceof Error ? err.message : "Error desconocido. Inténtalo de nuevo.";
     return (
-      <div className="rounded border border-danger/40 bg-danger-light p-6 text-danger">
-        <h1 className="font-bold">No se pudo cargar el catálogo</h1>
-        <p className="mt-2 text-sm">{err instanceof Error ? err.message : "Error desconocido"}</p>
+      <div className="lg:flex lg:gap-6">
+        <aside className="hidden w-60 shrink-0 lg:block">
+          <div className="gx-card sticky top-32 !p-4">
+            <PanelFiltros categorias={categorias} />
+          </div>
+        </aside>
+        <div className="min-w-0 flex-1">
+          <EstadoError
+            titulo="No se pudo cargar el catálogo"
+            descripcion={`${detalle} Revisa tu conexión o inténtalo de nuevo.`}
+          />
+        </div>
       </div>
     );
   }
 
-  const catActiva = categorias.find((c) => c.id === cat);
-  const titulo = q ? `Resultados para "${q}"` : (catActiva?.nombre ?? "Todo el catálogo");
+  const catActiva = categorias.find((c) => c.id === sp.cat);
+  const titulo = sp.q ? `Resultados para "${sp.q}"` : (catActiva?.nombre ?? "Todo el catálogo");
   const msiCfg = {
     habilitado: tienda.msiHabilitado,
     meses: tienda.msiMeses,
@@ -221,7 +222,20 @@ export default async function CatalogoPage({
             <div className="gx-card py-16 text-center">
               <PackageSearch size={48} strokeWidth={1.5} className="mx-auto text-slate-300" />
               <p className="mt-3 font-medium text-slate-700">No encontramos productos</p>
-              <p className="mt-1 text-slate-400 text-sm">Prueba con otros filtros o términos.</p>
+              {filtrando ? (
+                <>
+                  <p className="mt-1 text-slate-400 text-sm">
+                    Prueba con otros filtros o términos de búsqueda.
+                  </p>
+                  <Link href="/" className="gx-btn-primary mt-6">
+                    Limpiar filtros y ver todo
+                  </Link>
+                </>
+              ) : (
+                <p className="mt-1 text-slate-400 text-sm">
+                  Vuelve pronto, estamos agregando productos nuevos.
+                </p>
+              )}
             </div>
           ) : (
             <>

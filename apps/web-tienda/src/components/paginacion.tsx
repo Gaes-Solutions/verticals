@@ -1,3 +1,4 @@
+import { hrefPagina } from "@/lib/catalogo-query";
 import Link from "next/link";
 
 /** Paginación del catálogo. Conserva los filtros actuales (sp) y cambia `page`. */
@@ -15,15 +16,7 @@ export function Paginacion({
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
   if (totalPaginas <= 1) return null;
 
-  const href = (p: number) => {
-    const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(sp)) {
-      if (v && k !== "page") q.set(k, v);
-    }
-    if (p > 1) q.set("page", String(p));
-    const s = q.toString();
-    return s ? `/?${s}` : "/";
-  };
+  const href = (p: number) => hrefPagina(sp, p);
 
   // Ventana de páginas alrededor de la actual.
   const desde = Math.max(1, page - 2);

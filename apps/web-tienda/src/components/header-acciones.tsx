@@ -1,16 +1,25 @@
 "use client";
 
 import { leerCarrito } from "@/lib/carrito-store";
+import { construirParamsFiltros } from "@/lib/catalogo-query";
 import { Search, ShoppingCart, User } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 
 /** Buscador + cuenta + carrito con contador. Vive en el header (cliente por el contador). */
 export function HeaderAcciones() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [q, setQ] = useState("");
   const [count, setCount] = useState(0);
+
+  // El campo refleja el término activo en la URL: al volver de un detalle o
+  // navegar atrás/adelante no queda un texto viejo distinto al resultado.
+  const qUrl = searchParams.get("q") ?? "";
+  useEffect(() => {
+    setQ(qUrl);
+  }, [qUrl]);
 
   useEffect(() => {
     const refresh = () => setCount(leerCarrito().reduce((acc, i) => acc + i.cantidad, 0));
@@ -21,7 +30,11 @@ export function HeaderAcciones() {
 
   function buscar(e: FormEvent) {
     e.preventDefault();
-    router.push(q.trim() ? `/?q=${encodeURIComponent(q.trim())}` : "/");
+    // Buscar no pierde el contexto: conserva categoría, precio, ofertas, etc.
+    // y solo reemplaza el término (reiniciando la paginación).
+    const termino = q.trim();
+    const qs = construirParamsFiltros(searchParams, { q: termino || null });
+    router.push(qs ? `/?${qs}` : "/");
   }
 
   return (

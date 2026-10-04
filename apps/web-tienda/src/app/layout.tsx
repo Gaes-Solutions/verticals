@@ -5,6 +5,7 @@ import { getCategorias, getTiendaConfig } from "@/lib/api";
 import { CreditCard, Flame, ShieldCheck, Store, Truck } from "lucide-react";
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import "./globals.css";
 
 /**
@@ -68,7 +69,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </span>
               <span className="hidden whitespace-nowrap sm:inline">{nombre}</span>
             </Link>
-            <HeaderAcciones />
+            <Suspense fallback={<div className="h-10 flex-1" aria-hidden="true" />}>
+              <HeaderAcciones />
+            </Suspense>
           </div>
           {navCategorias.length > 0 && (
             <nav className="border-slate-100 border-t bg-white">
