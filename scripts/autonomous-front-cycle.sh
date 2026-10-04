@@ -22,7 +22,7 @@ run_agent_with_timeout() {
   local duration="$1"
   shift
   python3 - "$duration" "$@" <<'PY'
-import os, signal, subprocess, sys, time
+import os, signal, subprocess, sys
 
 raw = sys.argv[1]
 cmd = sys.argv[2:]
