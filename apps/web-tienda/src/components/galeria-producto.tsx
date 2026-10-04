@@ -3,6 +3,22 @@
 import { ImageOff } from "lucide-react";
 import { useState } from "react";
 
+function Imagen({ src, alt, className }: { src: string; alt: string; className: string }) {
+  const [fallo, setFallo] = useState(false);
+  if (fallo)
+    return <ImageOff aria-label={`${alt} no disponible`} className="m-auto text-slate-300" />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFallo(true)}
+      className={className}
+    />
+  );
+}
+
 export function GaleriaProducto({
   fotos,
   alt,
@@ -34,7 +50,7 @@ export function GaleriaProducto({
           zoom ? "cursor-zoom-in" : "cursor-default"
         }`}
       >
-        <img src={principal} alt={alt} className="h-full w-full object-cover" />
+        <Imagen src={principal} alt={alt} className="h-full w-full object-cover" />
       </button>
 
       {fotos.length > 1 && (
@@ -48,17 +64,25 @@ export function GaleriaProducto({
                 i === activa ? "border-marca" : "border-transparent"
               }`}
             >
-              <img src={f} alt={`${alt} ${i + 1}`} className="h-full w-full object-cover" />
+              <Imagen src={f} alt={`${alt} ${i + 1}`} className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
       )}
 
       {lightbox && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: backdrop del lightbox — el cierre con teclado lo da el botón "Cerrar" debajo (patrón overlay + control explícito)
-        <div className="gx-modal-overlay cursor-zoom-out" onClick={() => setLightbox(false)}>
+        <div
+          className="gx-modal-overlay cursor-zoom-out"
+          role="presentation"
+          onClick={() => setLightbox(false)}
+          onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
+        >
           <div className="gx-modal-panel !max-w-3xl bg-transparent p-2 text-center shadow-none">
-            <img src={principal} alt={alt} className="mx-auto max-h-[80vh] max-w-full rounded-lg" />
+            <Imagen
+              src={principal}
+              alt={alt}
+              className="mx-auto max-h-[80vh] max-w-full rounded-lg"
+            />
             <button
               type="button"
               onClick={() => setLightbox(false)}
