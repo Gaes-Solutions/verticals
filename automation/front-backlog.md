@@ -7,7 +7,7 @@ intento.
 
 - [ ] ST-001 | Completar E2E del comprador: catálogo, búsqueda, detalle, carrito y responsive 360/768/1440 con fixture local reproducible.
 - [x] ST-002 | Galería de producto: miniaturas, cambio de imagen, zoom configurable y fallback de URL rota.
-- [ ] ST-003 | Catálogo web: estados de carga, vacío, error con reintento y filtros sin perder contexto.
+- [x] ST-003 | Catálogo web: estados de carga, vacío, error con reintento y filtros sin perder contexto.
 - [ ] ST-004 | Carrito web: revalidar precios e inventario antes de checkout y mostrar cambios claramente.
 - [ ] ST-005 | Checkout: evitar doble envío, conservar datos al volver atrás y cubrir pago pendiente/reintento.
 - [ ] ST-006 | Móvil cliente: filtros, búsqueda, imagen fallback, precio promocional y carrito con resumen completo.
