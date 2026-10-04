@@ -52,6 +52,14 @@ jobs:
           # El job falla cerrado si una CLI no está instalada.
           command -v "$KIMI_BIN"
           command -v "$CODEX_BIN"
+          # El runner es dedicado; evita que una sesión Kimi huérfana de una
+          # cancelación anterior bloquee el siguiente ciclo no interactivo.
+          stale_kimi=$(pgrep -u "$(id -u)" -f 'kimi-code/bin/kimi' || true)
+          if [[ -n "$stale_kimi" ]]; then
+            kill $stale_kimi 2>/dev/null || true
+            sleep 2
+            kill -9 $stale_kimi 2>/dev/null || true
+          fi
           CODEX_HOME="$GITHUB_WORKSPACE/.codex-runner"
           mkdir -p "$CODEX_HOME"
           if [[ -f "$HOME/.codex/auth.json" ]]; then cp "$HOME/.codex/auth.json" "$CODEX_HOME/auth.json"; fi
