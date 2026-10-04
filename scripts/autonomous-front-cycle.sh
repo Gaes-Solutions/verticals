@@ -4,7 +4,7 @@ set -euo pipefail
 : "${KIMI_BIN:=kimi}"
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
-: "${KIMI_TIMEOUT:=20m}"
+: "${KIMI_TIMEOUT:=8m}"
 : "${CODEX_TIMEOUT:=10m}"
 : "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"

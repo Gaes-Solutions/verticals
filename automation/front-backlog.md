@@ -5,7 +5,7 @@ darla por aprobada después de revisar diff, pruebas, accesibilidad, tenant,
 precios y responsive. Si falla, conserva la tarea pendiente para el siguiente
 intento.
 
-- [ ] ST-001 | Smoke E2E del catálogo: fixture local reproducible que abra `/`, compruebe el título del catálogo y descarte desborde horizontal a 360px.
+- [ ] ST-001 | Prueba Vitest del catálogo: verifica que una tarjeta publicada muestra su título y enlace de detalle. No agregues E2E ni fixtures externos.
 - [x] ST-002 | Galería de producto: miniaturas, cambio de imagen, zoom configurable y fallback de URL rota.
 - [x] ST-003 | Catálogo web: estados de carga, vacío, error con reintento y filtros sin perder contexto.
 - [ ] ST-004 | Carrito web: revalidar precios e inventario antes de checkout y mostrar cambios claramente.
