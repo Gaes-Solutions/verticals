@@ -121,8 +121,18 @@ ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:
 EOF
   )
   set +e
-  run_agent_with_timeout "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text
+  kimi_output_file=$(mktemp)
+  run_agent_with_timeout "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text >"$kimi_output_file" 2>&1
   kimi_status=$?
+  cat "$kimi_output_file"
+  # Kimi puede dejar un proceso hijo de su servidor abierto después de
+  # completar la edición; el watchdog devuelve 124 aunque el worktree ya
+  # contiene una entrega completa. Solo continuamos en ese caso si existe un
+  # diff real; las validaciones y Codex siguen siendo obligatorios.
+  if [[ "$kimi_status" == "124" ]] && ! git diff --quiet; then
+    echo "Kimi dejó cambios antes de cerrar su proceso; continúo con validaciones." >&2
+    kimi_status=0
+  fi
   set -e
   if [[ "$kimi_status" != "0" ]]; then
     feedback="Kimi falló o agotó ${KIMI_TIMEOUT} en el intento ${attempt}; revisa la salida y corrige la tarea."
