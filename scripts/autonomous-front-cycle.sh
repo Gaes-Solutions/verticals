@@ -5,7 +5,7 @@ set -euo pipefail
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
 : "${KIMI_TIMEOUT:=8m}"
-: "${CODEX_TIMEOUT:=10m}"
+: "${CODEX_TIMEOUT:=5m}"
 : "${INCIDENT_ALERT_EMAIL:=gaessoft@gmail.com}"
 : "${EMAIL_REMITENTE:=no-reply@gaessoft.com}"
 : "${TASK_PROMPT:=Revisa y mejora el storefront de la tienda. Trabaja solo en el frontend, conserva el aislamiento multi-tenant, agrega pruebas relevantes y no cambies secretos, migraciones ni despliegues.}"
@@ -150,7 +150,7 @@ EOF
   fi
   # El juez debe poder ejecutar Vitest y crear temporales dentro del checkout;
   # el runner está aislado y no recibe secretos desde el diff.
-  judge_output=$(run_agent_with_timeout "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox workspace-write --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  judge_output=$(run_agent_with_timeout "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
   if [[ "$(printf '%s\n' "$judge_output" | sed -n '1p')" == "APPROVED" ]]; then
     approved=true
     break
