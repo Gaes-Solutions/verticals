@@ -155,7 +155,8 @@ EOF
   # El juez debe poder ejecutar Vitest y crear temporales dentro del checkout;
   # el runner está aislado y no recibe secretos desde el diff.
   judge_output=$(run_agent_with_timeout "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
-  if [[ "$(printf '%s\n' "$judge_output" | sed -n '1p')" == "APPROVED" ]]; then
+  judge_decision=$(printf '%s\n' "$judge_output" | sed -n '/^APPROVED$/p;/^REJECTED$/p' | sed -n '1p')
+  if [[ "$judge_decision" == "APPROVED" ]]; then
     approved=true
     break
   fi
