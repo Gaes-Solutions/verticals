@@ -179,6 +179,12 @@ if [[ "$approved" != "true" ]]; then
 fi
 
 # El avance de la cola ocurre únicamente después del dictamen APPROVED.
+# El estado/cache de Codex vive temporalmente dentro del checkout del runner.
+# Nunca debe entrar en una rama de producto ni en el lint del PR.
+if [[ "${CODEX_HOME:-}" == "$PWD/.codex-runner" ]]; then
+  rm -rf "$CODEX_HOME"
+fi
+
 python3 - "$BACKLOG_FILE" "$task_id" <<'PY'
 from pathlib import Path
 import sys
