@@ -102,8 +102,12 @@ run_checks() {
 TASK_PROMPT="Tarea ${task_id}: ${task_text} Implementa solo esta tarea y sus pruebas. Conserva el alcance y no adelantes tareas posteriores."
 
 judge_prompt=$(cat <<'EOF'
-Eres el juez Codex. Revisa exclusivamente el diff actual como revisor adversarial.
-Verifica alcance, tenant isolation, precios, imágenes, accesibilidad, tests y regresiones.
+Eres el juez Codex. Revisa solo los archivos cambiados por esta tarea.
+Primero ejecuta `git status --short` y `git diff --stat`; lee únicamente esos archivos.
+No ejecutes pruebas, builds, lint ni explores node_modules: el ejecutor ya dejó las
+validaciones en verde. No recorras el repositorio completo.
+Verifica alcance, tenant isolation, precios, imágenes, accesibilidad y regresiones
+visibles en el diff.
 Responde en la primera línea exactamente APPROVED o REJECTED y después enumera evidencia y correcciones.
 Aprueba solo si el cambio está listo para merge.
 EOF
