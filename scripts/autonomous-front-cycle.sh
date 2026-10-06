@@ -200,11 +200,20 @@ git diff --cached --quiet && { echo "No hubo cambios para publicar."; exit 0; }
 # puede bloquear una entrega aprobada por problemas ajenos a la tarea.
 git -c core.hooksPath=/dev/null commit -m "chore(automation): apply approved storefront cycle"
 git push --set-upstream origin "$branch"
-pr_url=$(gh pr create --base main --head "$branch" --title "Automated storefront cycle" --body-file /tmp/codex-judge.txt)
-echo "PR creado: $pr_url"
+if pr_url=$(gh pr create --base main --head "$branch" --title "Automated storefront cycle" --body-file /tmp/codex-judge.txt 2>&1); then
+  echo "PR creado: $pr_url"
+else
+  # Algunas organizaciones bloquean createPullRequest para GITHUB_TOKEN aun
+  # con pull-requests: write. La entrega aprobada ya quedó publicada; deja el
+  # enlace manual en el correo y no convierte ese permiso externo en fallo.
+  pr_url="https://github.com/${GH_REPO:-Gaes-Solutions/verticals}/compare/main...${branch}?expand=1"
+  echo "No se pudo crear el PR automáticamente; rama publicada: $pr_url" >&2
+fi
 
-if [[ "$AUTO_MERGE" == "true" ]]; then
+if [[ "$AUTO_MERGE" == "true" && "$pr_url" == https://github.com/*/pull/* ]]; then
   gh pr merge "$pr_url" --squash --auto --delete-branch
+elif [[ "$AUTO_MERGE" == "true" ]]; then
+  echo "AUTO_MERGE quedó omitido porque no existe un PR creado por el token."
 else
   echo "AUTO_MERGE no está activo; el PR queda esperando revisión humana."
 fi
