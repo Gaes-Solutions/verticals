@@ -154,7 +154,17 @@ EOF
   fi
   # El juez debe poder ejecutar Vitest y crear temporales dentro del checkout;
   # el runner está aislado y no recibe secretos desde el diff.
-  judge_output=$(run_agent_with_timeout "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral "$judge_prompt" 2>&1 | tee /tmp/codex-judge.txt || true)
+  # Codex no necesita el watchdog de Kimi: su CLI ya respeta timeout y el
+  # envoltorio anterior podía dejar el proceso de espera vivo después de que
+  # el juez terminara. Usa timeout directo para que la etapa cierre siempre.
+  set +e
+  judge_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral "$judge_prompt" 2>&1)
+  judge_status=$?
+  set -e
+  printf '%s\n' "$judge_output" | tee /tmp/codex-judge.txt
+  if [[ "$judge_status" != "0" && "$judge_status" != "124" ]]; then
+    echo "Codex terminó con código $judge_status; se tratará como rechazo." >&2
+  fi
   judge_decision=$(printf '%s\n' "$judge_output" | sed -n '/^APPROVED$/p;/^REJECTED$/p' | sed -n '1p')
   if [[ "$judge_decision" == "APPROVED" ]]; then
     approved=true
