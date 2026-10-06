@@ -1,0 +1,153 @@
+# Modo autónomo: Codex no pide aprobación, pero queda contenido por el sandbox.
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+service_tier = "default"
+
+[sandbox_workspace_write]
+# Permite escribir en el workspace y dar acceso a red a los comandos.
+network_access = true
+
+[projects."/home/gaby-pc-ubuntu"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/use-only-the-slack-connector-for"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/realtime-voice-chat"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/hola-necesito-que-me-ayudes-a"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/https-chatgpt-com-s-cx-6aa05602999c81918f5ecab63ed87830"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documentos/GaesSoft/gaespos"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/hatch-pet-home-gaby-pc-ubuntu"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/google-drive-plugin-google-drive-openai"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/linear-plugin-linear-openai-curated-remote"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/crea-una-tarea-programada-llamada-resumen"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/realtime-voice-chat-2"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/realtime-voice-chat-3"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/realtime-voice-chat-4"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-08/realtime-voice-chat-5"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat-2"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat-3"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat-4"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat-5"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/Documents/Codex/2026-09-09/realtime-voice-chat-6"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/proyectos/derma-gestion"]
+trust_level = "trusted"
+
+[projects."/home/gaby-pc-ubuntu/gaespos-actions-runner/_work/verticals/verticals"]
+trust_level = "trusted"
+
+[tui]
+screen_reader_detection_done = true
+
+[tui.model_availability_nux]
+"gpt-5.5" = 1
+gpt-6-astra = 4
+"gpt-6.1-sol" = 4
+
+[desktop]
+followUpQueueMode = "steer"
+conversationDetailMode = "STEPS_PROSE"
+ambient-suggestions-enabled = true
+external-agent-import-sync-item-types = "all"
+external-agent-import-sync-enabled = true
+avatar-overlay-mascot-width-px = 224
+browser-show-full-url = true
+git-create-pull-request-as-draft = false
+
+[marketplaces.openai-bundled]
+source_type = "local"
+source = "/home/gaby-pc-ubuntu/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+source_type = "local"
+source = "/home/gaby-pc-ubuntu/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[plugins."codex-app-tools@openai-bundled"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."unified-computer-use@openai-bundled"]
+enabled = true
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."sites@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
+
+[mcp_servers.node_repl]
+args = []
+command = "/usr/lib/chatgpt/resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/usr/lib/chatgpt/resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/usr/lib/chatgpt/resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/home/gaby-pc-ubuntu/.codex:/usr/lib/chatgpt/resources/cua_node/lib/node_modules"
+CODEX_HOME = "/home/gaby-pc-ubuntu/.codex"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+BROWSER_USE_TINYSKY_ENABLED = "1"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = ""
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = ""
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.901.51231"
+NODE_REPL_TRUSTED_SERVICES = '{"browser":"/home/gaby-pc-ubuntu/.codex/plugins/cache/openai-bundled/browser/26.901.51231/scripts/browser-service.mjs"}'
+CODEX_CLI_PATH = "/usr/lib/chatgpt/resources/codex"
