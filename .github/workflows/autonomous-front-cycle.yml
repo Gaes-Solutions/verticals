@@ -15,7 +15,7 @@ jobs:
     # Runner propio con `kimi`, `codex` y `gh` instalados. Las CLIs nunca se
     # descargan desde el repositorio ni se reciben por entrada del usuario.
     runs-on: [self-hosted, kimi-codex]
-    timeout-minutes: 30
+    timeout-minutes: 25
     permissions:
       contents: write
       pull-requests: write
@@ -52,6 +52,20 @@ jobs:
           # El job falla cerrado si una CLI no está instalada.
           command -v "$KIMI_BIN"
           command -v "$CODEX_BIN"
+          # El runner es dedicado; evita que una sesión Kimi huérfana de una
+          # cancelación anterior bloquee el siguiente ciclo no interactivo.
+          stale_kimi=$(pgrep -u "$(id -u)" -f 'kimi-code/bin/kimi' || true)
+          if [[ -n "$stale_kimi" ]]; then
+            kill $stale_kimi 2>/dev/null || true
+            sleep 2
+            kill -9 $stale_kimi 2>/dev/null || true
+          fi
+          CODEX_HOME="$GITHUB_WORKSPACE/.codex-runner"
+          mkdir -p "$CODEX_HOME"
+          if [[ -f "$HOME/.codex/auth.json" ]]; then cp "$HOME/.codex/auth.json" "$CODEX_HOME/auth.json"; fi
+          if [[ -f "$HOME/.codex/config.toml" ]]; then cp "$HOME/.codex/config.toml" "$CODEX_HOME/config.toml"; fi
+          chmod 700 "$CODEX_HOME"
+          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
 
       - name: Kimi ejecuta, Codex juzga y publica solo si aprueba
-        run: bash scripts/autonomous-front-cycle.sh
+        run: timeout --signal=TERM --kill-after=30s 20m bash scripts/autonomous-front-cycle.sh

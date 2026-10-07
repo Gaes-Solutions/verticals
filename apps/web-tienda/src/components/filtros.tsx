@@ -1,9 +1,10 @@
 "use client";
 
 import type { CategoriaPublica } from "@/lib/api";
+import { construirParamsFiltros } from "@/lib/catalogo-query";
 import { SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const ORDENES = [
   { value: "relevancia", label: "Más relevantes" },
@@ -18,13 +19,10 @@ function useParams() {
   const pathname = usePathname();
   const params = useSearchParams();
   function setParam(entries: Record<string, string | null>) {
-    const next = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(entries)) {
-      if (v) next.set(k, v);
-      else next.delete(k);
-    }
-    next.delete("page");
-    router.push(`${pathname}?${next.toString()}`);
+    // Conserva el contexto (filtros previos) y reinicia la paginación; sin
+    // scroll para que el usuario no pierda la posición del panel de filtros.
+    const qs = construirParamsFiltros(params, entries);
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
   return { params, setParam };
 }
@@ -52,11 +50,23 @@ export function PanelFiltros({
   const cat = params.get("cat");
   const soloOfertas = params.get("soloOfertas") === "true";
   const soloDisponibles = params.get("soloDisponibles") === "true";
+  // Los inputs reflejan siempre la URL: al quitar un chip, limpiar filtros o
+  // navegar atrás/adelante, el valor tecleado sin aplicar no puede quedarse viejo.
+  const precioMinUrl = params.get("precioMin") ?? "";
+  const precioMaxUrl = params.get("precioMax") ?? "";
+  useEffect(() => {
+    setMin(precioMinUrl);
+    setMax(precioMaxUrl);
+  }, [precioMinUrl, precioMaxUrl]);
 
   function nav(entries: Record<string, string | null>) {
     setParam(entries);
     onNavigate?.();
   }
+
+  const hayFiltrosQueLimpiar = Boolean(
+    cat || precioMinUrl || precioMaxUrl || soloOfertas || soloDisponibles || params.get("q"),
+  );
 
   return (
     <div className="text-sm">
@@ -86,7 +96,13 @@ export function PanelFiltros({
       </Seccion>
 
       <Seccion titulo="Precio">
-        <div className="flex items-center gap-2">
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            nav({ precioMin: min || null, precioMax: max || null });
+          }}
+        >
           <input
             type="number"
             inputMode="numeric"
@@ -104,14 +120,10 @@ export function PanelFiltros({
             placeholder="Máx"
             className="gx-input"
           />
-          <button
-            type="button"
-            onClick={() => nav({ precioMin: min || null, precioMax: max || null })}
-            className="gx-btn-primary shrink-0"
-          >
+          <button type="submit" className="gx-btn-primary shrink-0">
             OK
           </button>
-        </div>
+        </form>
       </Seccion>
 
       <Seccion titulo="Ofertas y disponibilidad">
@@ -135,22 +147,24 @@ export function PanelFiltros({
         </label>
       </Seccion>
 
-      <button
-        type="button"
-        onClick={() =>
-          nav({
-            cat: null,
-            precioMin: null,
-            precioMax: null,
-            soloOfertas: null,
-            soloDisponibles: null,
-            q: null,
-          })
-        }
-        className="gx-btn-secondary mt-4 w-full"
-      >
-        Limpiar filtros
-      </button>
+      {hayFiltrosQueLimpiar && (
+        <button
+          type="button"
+          onClick={() =>
+            nav({
+              cat: null,
+              precioMin: null,
+              precioMax: null,
+              soloOfertas: null,
+              soloDisponibles: null,
+              q: null,
+            })
+          }
+          className="gx-btn-secondary mt-4 w-full"
+        >
+          Limpiar filtros
+        </button>
+      )}
     </div>
   );
 }
