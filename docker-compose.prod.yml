@@ -1,10 +1,10 @@
-# Stack productivo de GaesSoft POS — referencia para Coolify (staging)
+# Stack productivo de GaesSoft POS.
 #
 # En Coolify se crean cada servicio por separado desde su UI (Postgres,
 # Redis, Application). Este archivo sirve como referencia exacta de la
 # configuración esperada (env vars, volúmenes, healthchecks, networks).
 #
-# Para correr fuera de Coolify (testing en una VM cruda):
+# Para correr producción fuera de Coolify (solo después de configurar secretos):
 #   1. cp .env.example .env.prod  (rellenar secrets reales)
 #   2. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 #   3. docker compose -f docker-compose.prod.yml exec api pnpm gaes-migrate master
@@ -93,6 +93,14 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:soporte@gaespos.mx}
       FLOWS_SCHEDULER_ENABLED: ${FLOWS_SCHEDULER_ENABLED:-false}
       FLOWS_RUN_INTERVAL_MIN: ${FLOWS_RUN_INTERVAL_MIN:-360}
+      # Dominio y almacenamiento persistente de la tienda.
+      STOREFRONT_APEX: ${STOREFRONT_APEX:?required}
+      STOREFRONT_CNAME_TARGET: ${STOREFRONT_CNAME_TARGET:-stores.gaessoft.mx}
+      PRODUCTOS_MEDIA_ROOT: ${PRODUCTOS_MEDIA_ROOT:-/data/productos}
+      KIOSKO_MEDIA_ROOT: ${KIOSKO_MEDIA_ROOT:-/data/kiosko}
+    volumes:
+      - productos-media:/data/productos
+      - kiosko-media:/data/kiosko
     ports:
       - "${API_PORT:-3000}:3000"
     healthcheck:
@@ -164,6 +172,10 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
+    driver: local
+  productos-media:
+    driver: local
+  kiosko-media:
     driver: local
 
 networks:

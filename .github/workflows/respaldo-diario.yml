@@ -37,6 +37,14 @@ jobs:
             sh -c 'pg_dump -Fc --no-owner --no-privileges "$PGURL"' > respaldo.dump
           ls -lh respaldo.dump
 
+      - name: Validar integridad del respaldo
+        run: |
+          # pg_restore --list lee el catálogo del archivo sin modificar la base.
+          # Si falla, el flujo termina y no se guarda un respaldo inutilizable.
+          pg_restore --list respaldo.dump >/tmp/gaespos-backup-catalog.txt
+          test -s /tmp/gaespos-backup-catalog.txt
+          echo "Catálogo del respaldo válido ($(wc -l </tmp/gaespos-backup-catalog.txt) objetos)"
+
       - name: Cifrar
         env:
           FRASE: ${{ secrets.BACKUP_PASSPHRASE }}
