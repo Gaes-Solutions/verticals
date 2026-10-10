@@ -17,10 +17,16 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY .npmrc ./
 COPY apps/web-pos/package.json ./apps/web-pos/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/pricing/package.json ./packages/pricing/
+COPY packages/sync-client/package.json ./packages/sync-client/
+COPY packages/sync/package.json ./packages/sync/
 
 RUN pnpm install --frozen-lockfile --filter "@gaespos/web-pos..."
 
 COPY packages/ui ./packages/ui
+COPY packages/pricing ./packages/pricing
+COPY packages/sync-client ./packages/sync-client
+COPY packages/sync ./packages/sync
 COPY apps/web-pos ./apps/web-pos
 
 RUN pnpm --filter @gaespos/web-pos build
