@@ -60,7 +60,7 @@ export function ProductoCard({
   const precio = promo ?? base;
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_2px_10px_rgb(15_23_42/0.04)] transition duration-200 hover:-translate-y-1 hover:border-marca/20 hover:shadow-xl hover:shadow-slate-900/10">
       {p.enOferta && p.descuentoPct > 0 && (
         <span className="absolute left-2.5 top-2.5 z-10 rounded-md bg-offer px-2 py-0.5 font-bold text-offer-dark text-xs shadow">
           -{p.descuentoPct}%
@@ -72,11 +72,11 @@ export function ProductoCard({
         </span>
       )}
       <Link href={`/producto/${p.slugSeo}`} aria-label={`Ver ${p.tituloPublico}`}>
-        <div className="flex aspect-square items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
           <ImagenProducto src={p.fotosArray[0]} alt={p.tituloPublico} />
         </div>
       </Link>
-      <div className="flex flex-1 flex-col p-3.5">
+      <div className="flex flex-1 flex-col p-4">
         {p.categoriaPublica && (
           <p className="mb-1 text-[11px] text-slate-400 uppercase tracking-wide">
             {p.categoriaPublica.nombre}

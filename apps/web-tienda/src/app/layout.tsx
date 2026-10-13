@@ -40,8 +40,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="es-MX">
       <body className="bg-slate-50 text-slate-900">
-        <div className="bg-marca text-white text-xs">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-1 px-4 py-2">
+        <div className="bg-gradient-to-r from-brand-dark via-marca to-brand-dark text-white text-xs">
+          <div className="tienda-shell flex min-h-8 flex-wrap items-center justify-center gap-x-5 gap-y-1 py-2">
             {config?.etaEnvio && (
               <span className="flex items-center gap-1.5">
                 <Truck size={14} strokeWidth={2} /> Envío a todo México
@@ -58,13 +58,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </div>
 
-        <header className="sticky top-0 z-40 border-b bg-white/95 shadow-sm backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-6">
+        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_4px_20px_rgb(15_23_42/0.06)] backdrop-blur-xl">
+          <div className="tienda-shell flex items-center gap-3 py-3 sm:gap-6">
             <Link
               href="/"
               className="flex items-center gap-2 font-bold text-lg text-marca sm:text-xl"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-marca text-white">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-marca to-brand-dark text-white shadow-md shadow-marca/20">
                 <Store size={20} strokeWidth={2} />
               </span>
               <span className="hidden whitespace-nowrap sm:inline">{nombre}</span>
@@ -75,7 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
           {navCategorias.length > 0 && (
             <nav className="border-slate-100 border-t bg-white">
-              <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="tienda-shell flex items-center gap-1 overflow-x-auto py-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <Link
                   href="/?soloOfertas=true"
                   className="flex shrink-0 items-center gap-1 rounded-full bg-danger-light px-3 py-1 font-semibold text-danger hover:bg-danger-light/70"
@@ -96,7 +96,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           )}
         </header>
 
-        <main className="mx-auto min-h-[60vh] max-w-6xl px-4 py-6 sm:py-8">{children}</main>
+        <main className="tienda-shell min-h-[60vh] py-6 sm:py-10">{children}</main>
 
         <FooterTienda nombre={nombre} />
         <SwRegister />

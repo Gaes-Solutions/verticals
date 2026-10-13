@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, House, LocateFixed, MapPin, Pencil, Plus, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 export interface Direccion {
@@ -179,8 +180,13 @@ export function DireccionesCuenta() {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-bold text-lg">Mis direcciones</h2>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="tienda-section-title">Mis direcciones</h2>
+          <p className="mt-1 text-slate-500 text-sm">
+            Guarda tus ubicaciones para comprar más rápido.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -188,28 +194,48 @@ export function DireccionesCuenta() {
             setForm({ ...VACIA });
             setAbierto(true);
           }}
-          className="gx-btn-primary"
+          className="gx-btn-primary shrink-0 shadow-sm shadow-marca/20"
         >
-          + Agregar
+          <Plus size={16} strokeWidth={2.5} /> Agregar
         </button>
       </div>
 
       {dirs.length === 0 ? (
-        <p className="text-slate-500 text-sm">Aún no guardas direcciones.</p>
+        <div className="tienda-surface flex flex-col items-center px-6 py-12 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-marca/10 text-marca">
+            <MapPin size={26} />
+          </span>
+          <p className="mt-4 font-semibold text-slate-800">Aún no tienes direcciones guardadas</p>
+          <p className="mt-1 max-w-sm text-slate-500 text-sm">
+            Agrega tu domicilio y en tus próximas compras solo tendrás que seleccionarlo.
+          </p>
+        </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {dirs.map((d) => (
-            <div key={d.id} className="gx-card !p-4 text-sm">
+            <div
+              key={d.id}
+              className="tienda-surface group !p-5 text-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            >
               <div className="flex items-center justify-between">
-                <span className="font-medium">{d.etiqueta}</span>
-                {d.isDefaultEnvio && <span className="gx-badge-info">Predeterminada</span>}
+                <span className="flex items-center gap-2 font-semibold text-slate-800">
+                  <House size={16} className="text-marca" />
+                  {d.etiqueta}
+                </span>
+                {d.isDefaultEnvio && (
+                  <span className="gx-badge-ok">
+                    <Check size={12} className="mr-1 inline" />
+                    Predeterminada
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-slate-600">
                 {d.calle} {d.numeroExterior}, {d.colonia}, {d.municipio}, {d.estado} CP{" "}
                 {d.codigoPostal}
               </p>
-              <div className="mt-3 flex gap-2">
-                <button type="button" onClick={() => editar(d)} className="gx-btn-ghost">
+              <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
+                <button type="button" onClick={() => editar(d)} className="gx-btn-ghost !px-3">
+                  <Pencil size={14} />
                   Editar
                 </button>
                 {confirmandoId === d.id ? (
@@ -232,20 +258,39 @@ export function DireccionesCuenta() {
       )}
 
       {abierto && (
-        <div className="gx-modal-overlay">
-          <form onSubmit={guardar} className="gx-modal-panel space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg">{editId ? "Editar" : "Nueva"} dirección</h3>
+        <div className="gx-modal-overlay backdrop-blur-sm">
+          <form
+            onSubmit={guardar}
+            className="gx-modal-panel space-y-4 !max-w-2xl !rounded-2xl !p-0"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <h3 className="font-bold text-lg">{editId ? "Editar" : "Nueva"} dirección</h3>
+                <p className="mt-0.5 text-slate-500 text-xs">
+                  Encuentra tu domicilio y revisa los datos antes de guardar.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setAbierto(false)}
-                className="gx-btn-ghost !px-2"
+                className="gx-btn-ghost !h-9 !w-9 !rounded-full !p-0"
+                aria-label="Cerrar"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-              <p className="text-sm font-semibold">Encuentra tu dirección en el mapa</p>
+            <div className="mx-6 rounded-2xl border border-marca/15 bg-gradient-to-br from-marca/5 to-slate-50 p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-marca text-white">
+                  <MapPin size={17} />
+                </span>
+                <div>
+                  <p className="font-semibold text-sm">Encuentra tu dirección</p>
+                  <p className="mt-0.5 text-slate-500 text-xs">
+                    Busca una calle o usa la ubicación de tu dispositivo.
+                  </p>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <input
                   value={busquedaMapa}
@@ -257,13 +302,13 @@ export function DireccionesCuenta() {
                     }
                   }}
                   placeholder="Calle, ciudad y estado"
-                  className="gx-input flex-1"
+                  className="gx-input flex-1 !rounded-xl !bg-white"
                   aria-label="Buscar dirección en el mapa"
                 />
                 <button
                   type="button"
                   onClick={buscarEnMapa}
-                  className="gx-btn-ghost"
+                  className="gx-btn-secondary !rounded-xl !px-3"
                   disabled={cargandoMapa}
                 >
                   Buscar
@@ -272,16 +317,16 @@ export function DireccionesCuenta() {
               <button
                 type="button"
                 onClick={usarUbicacion}
-                className="gx-btn-ghost w-full"
+                className="gx-btn-ghost w-full !rounded-xl !border !border-slate-200 !bg-white"
                 disabled={cargandoMapa}
               >
-                {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
+                <LocateFixed size={16} /> {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
               </button>
               {mapa && (
                 <iframe
                   title="Ubicación seleccionada"
                   src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapa.lon - 0.005}%2C${mapa.lat - 0.005}%2C${mapa.lon + 0.005}%2C${mapa.lat + 0.005}&layer=mapnik&marker=${mapa.lat}%2C${mapa.lon}`}
-                  className="h-44 w-full rounded-lg border-0"
+                  className="h-48 w-full rounded-xl border border-slate-200 shadow-sm"
                   loading="lazy"
                 />
               )}
@@ -290,29 +335,31 @@ export function DireccionesCuenta() {
                 Puedes corregir cualquier campo antes de guardar.
               </p>
             </div>
-            {(
-              [
-                ["etiqueta", "Etiqueta (Casa, Oficina…)"],
-                ["calle", "Calle"],
-                ["numeroExterior", "Número"],
-                ["colonia", "Colonia"],
-                ["municipio", "Ciudad / Municipio"],
-                ["estado", "Estado"],
-                ["codigoPostal", "Código postal"],
-                ["referencias", "Referencias (opcional)"],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="block">
-                <span className="gx-label">{label}</span>
-                <input
-                  value={form[key] as string}
-                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                  required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
-                  className="gx-input"
-                />
-              </label>
-            ))}
-            <label className="flex items-center gap-2 text-sm">
+            <div className="grid gap-3 px-6 sm:grid-cols-2">
+              {(
+                [
+                  ["etiqueta", "Etiqueta (Casa, Oficina…)"],
+                  ["calle", "Calle"],
+                  ["numeroExterior", "Número"],
+                  ["colonia", "Colonia"],
+                  ["municipio", "Ciudad / Municipio"],
+                  ["estado", "Estado"],
+                  ["codigoPostal", "Código postal"],
+                  ["referencias", "Referencias (opcional)"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="block">
+                  <span className="gx-label">{label}</span>
+                  <input
+                    value={form[key] as string}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
+                    className="gx-input !rounded-xl"
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="mx-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
               <input
                 type="checkbox"
                 checked={form.isDefaultEnvio}
@@ -320,10 +367,15 @@ export function DireccionesCuenta() {
               />
               Usar como predeterminada
             </label>
-            {error && <p className="text-danger text-sm">{error}</p>}
-            <button type="submit" className="gx-btn-primary w-full">
-              Guardar
-            </button>
+            {error && <p className="mx-6 text-danger text-sm">{error}</p>}
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button type="button" onClick={() => setAbierto(false)} className="gx-btn-ghost">
+                Cancelar
+              </button>
+              <button type="submit" className="gx-btn-primary min-w-32">
+                <Check size={16} /> Guardar dirección
+              </button>
+            </div>
           </form>
         </div>
       )}

@@ -44,12 +44,12 @@ export function HeaderAcciones() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar productos…"
-          className="w-full rounded-full border border-slate-200 bg-slate-50 py-2 pr-10 pl-4 text-sm outline-none focus:border-marca focus:bg-white"
+          className="w-full rounded-full border border-slate-200 bg-slate-100/80 py-2.5 pr-11 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-marca focus:bg-white focus:ring-4 focus:ring-marca/10"
         />
         <button
           type="submit"
           aria-label="Buscar"
-          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-10 w-10 items-center justify-center rounded-full bg-marca text-white"
+          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-marca text-white shadow-sm transition hover:bg-brand-dark"
         >
           <Search size={16} strokeWidth={2.5} />
         </button>
@@ -57,7 +57,7 @@ export function HeaderAcciones() {
 
       <Link
         href="/cuenta"
-        className="flex items-center gap-1.5 text-slate-600 text-sm hover:text-marca"
+        className="flex items-center gap-1.5 rounded-full px-2 py-2 text-slate-600 text-sm transition hover:bg-marca/10 hover:text-marca"
       >
         <User size={20} strokeWidth={1.75} />
         <span className="hidden md:inline">Mi cuenta</span>
@@ -66,7 +66,7 @@ export function HeaderAcciones() {
       <Link
         href="/carrito"
         aria-label="Carrito"
-        className="relative flex items-center gap-1.5 text-slate-600 hover:text-marca"
+        className="relative flex items-center gap-1.5 rounded-full px-2 py-2 text-slate-600 transition hover:bg-marca/10 hover:text-marca"
       >
         <ShoppingCart size={22} strokeWidth={1.75} />
         {count > 0 && (

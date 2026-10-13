@@ -10,4 +10,16 @@
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+  background-image: radial-gradient(circle at 0% 0%, rgb(204 251 241 / 0.32), transparent 28rem),
+    radial-gradient(circle at 100% 8%, rgb(241 245 249 / 0.85), transparent 24rem);
+}
+
+/* La tienda usa superficies suaves y profundidad ligera, como un marketplace. */
+::selection { @apply bg-marca/20 text-marca-dark; }
+
+@layer components {
+  .tienda-shell { @apply mx-auto max-w-7xl px-4 sm:px-6; }
+  .tienda-section-title { @apply flex items-center gap-3 font-bold text-slate-900 text-xl tracking-tight; }
+  .tienda-section-title::before { content: ""; @apply h-6 w-1 rounded-full bg-marca; }
+  .tienda-surface { @apply rounded-2xl border border-white/80 bg-white shadow-[0_8px_30px_rgb(15_23_42/0.05)]; }
 }

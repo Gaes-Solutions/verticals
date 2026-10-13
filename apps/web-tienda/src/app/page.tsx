@@ -38,7 +38,7 @@ function Seccion({
   return (
     <section className="mb-10">
       <div className="mb-4 flex items-end justify-between">
-        <h2 className="flex items-center gap-2 font-bold text-slate-900 text-xl">
+        <h2 className="tienda-section-title">
           {icono}
           {titulo}
         </h2>
@@ -65,8 +65,10 @@ function Hero({
   msi: boolean;
 }) {
   return (
-    <section className="mb-10 overflow-hidden rounded-3xl bg-gradient-to-br from-marca via-brand-dark to-brand-dark px-6 py-12 text-white sm:px-12 sm:py-16">
-      <p className="font-medium text-sm text-white/80">Bienvenido a {nombre}</p>
+    <section className="relative isolate mb-12 overflow-hidden rounded-[2rem] bg-gradient-to-br from-marca via-brand-dark to-slate-950 px-6 py-12 text-white shadow-xl shadow-marca/10 sm:px-12 sm:py-16">
+      <div className="pointer-events-none absolute -right-20 -top-28 -z-10 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 left-1/3 -z-10 h-96 w-96 rounded-full bg-teal-300/10 blur-3xl" />
+      <p className="font-semibold text-sm text-teal-100">Bienvenido a {nombre}</p>
       <h1 className="mt-2 max-w-2xl font-bold text-3xl leading-tight sm:text-5xl">
         {lema ?? "Todo lo que buscas, al mejor precio."}
       </h1>
@@ -78,13 +80,13 @@ function Hero({
       <div className="mt-6 flex flex-wrap gap-3">
         <Link
           href="/?soloOfertas=true"
-          className="flex items-center gap-1.5 rounded-full bg-white px-6 py-3 font-semibold text-marca text-sm shadow-lg transition hover:scale-105"
+          className="flex items-center gap-1.5 rounded-full bg-white px-6 py-3 font-semibold text-marca text-sm shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           <Flame size={16} strokeWidth={2.25} /> Ver ofertas
         </Link>
         <Link
           href="/?orden=populares"
-          className="rounded-full bg-white/15 px-6 py-3 font-semibold text-sm ring-1 ring-white/40 backdrop-blur transition hover:bg-white/25"
+          className="rounded-full bg-white/10 px-6 py-3 font-semibold text-sm ring-1 ring-white/30 backdrop-blur transition hover:bg-white/20"
         >
           Más vendidos
         </Link>
@@ -207,7 +209,7 @@ export default async function CatalogoPage({
         <span className="mx-1.5">›</span>
         <span className="text-slate-600">{titulo}</span>
       </nav>
-      <h1 className="mb-4 font-bold text-2xl text-slate-900">{titulo}</h1>
+      <h1 className="mb-5 font-bold text-2xl tracking-tight text-slate-900">{titulo}</h1>
 
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-60 shrink-0 lg:block">
