@@ -1,5 +1,6 @@
 "use client";
 
+import { type ResultadoMapa, camposDireccionMapa } from "@/lib/direccion-mapa";
 import { Check, House, LocateFixed, MapPin, Pencil, Plus, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
@@ -39,6 +40,7 @@ export function DireccionesCuenta() {
   const [busquedaMapa, setBusquedaMapa] = useState("");
   const [mapa, setMapa] = useState<{ lat: number; lon: number } | null>(null);
   const [cargandoMapa, setCargandoMapa] = useState(false);
+  const [avisoMapa, setAvisoMapa] = useState<string | null>(null);
   const [errorMapa, setErrorMapa] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
@@ -65,28 +67,44 @@ export function DireccionesCuenta() {
     });
     setMapa(null);
     setBusquedaMapa("");
+    setErrorMapa(null);
+    setAvisoMapa(null);
     setAbierto(true);
   }
 
-  function aplicarResultadoMapa(item: {
-    lat: string;
-    lon: string;
-    address?: Record<string, string | undefined>;
-    display_name?: string;
-  }) {
-    const address = item.address ?? {};
+  function aplicarResultadoMapa(item: ResultadoMapa) {
     setMapa({ lat: Number(item.lat), lon: Number(item.lon) });
+    const campos = camposDireccionMapa(item);
     setForm((actual) => ({
       ...actual,
-      calle: [address.road, address.pedestrian].find(Boolean) ?? actual.calle,
-      numeroExterior: address.house_number ?? actual.numeroExterior,
-      colonia: address.neighbourhood ?? address.suburb ?? address.city_district ?? actual.colonia,
-      municipio: address.city ?? address.town ?? address.municipality ?? actual.municipio,
-      estado: address.state ?? actual.estado,
-      codigoPostal: address.postcode ?? actual.codigoPostal,
-      referencias: actual.referencias || item.display_name || "",
+      ...campos,
     }));
     setBusquedaMapa(item.display_name ?? "");
+    const faltantes = Object.entries(campos)
+      .filter(([, valor]) => !valor)
+      .map(
+        ([key]) =>
+          ({
+            calle: "calle",
+            numeroExterior: "número exterior",
+            colonia: "colonia",
+            municipio: "municipio",
+            estado: "estado",
+            codigoPostal: "código postal",
+          })[key as keyof typeof campos],
+      );
+    setAvisoMapa(
+      faltantes.length
+        ? `Completamos los datos disponibles. Revisa la dirección y agrega: ${faltantes.join(", ")}.`
+        : "Dirección completada. Revisa los datos antes de guardar.",
+    );
+  }
+
+  async function consultarMapa(url: string) {
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+    const resultado = await res.json();
+    if (!res.ok) throw new Error(resultado.message || "No pudimos consultar el mapa.");
+    aplicarResultadoMapa(resultado as ResultadoMapa);
   }
 
   async function buscarEnMapa() {
@@ -94,24 +112,15 @@ export function DireccionesCuenta() {
     if (!consulta) return;
     setCargandoMapa(true);
     setErrorMapa(null);
+    setAvisoMapa(null);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=mx&limit=1&q=${encodeURIComponent(consulta)}`,
-        { headers: { Accept: "application/json" } },
+      await consultarMapa(`/api/cuenta/ubicacion?q=${encodeURIComponent(consulta)}`);
+    } catch (err) {
+      setErrorMapa(
+        err instanceof Error
+          ? err.message
+          : "No pudimos consultar el mapa. Puedes llenar los campos manualmente.",
       );
-      const resultados = (await res.json()) as Array<{
-        lat: string;
-        lon: string;
-        address?: Record<string, string | undefined>;
-        display_name?: string;
-      }>;
-      if (!res.ok || resultados.length === 0) {
-        setErrorMapa("No encontramos esa dirección. Prueba con calle, ciudad y estado.");
-        return;
-      }
-      aplicarResultadoMapa(resultados[0]);
-    } catch {
-      setErrorMapa("No pudimos consultar el mapa. Puedes llenar los campos manualmente.");
     } finally {
       setCargandoMapa(false);
     }
@@ -124,32 +133,38 @@ export function DireccionesCuenta() {
     }
     setCargandoMapa(true);
     setErrorMapa(null);
+    setAvisoMapa(null);
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
+        setMapa({ lat: coords.latitude, lon: coords.longitude });
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${coords.latitude}&lon=${coords.longitude}`,
-            { headers: { Accept: "application/json" } },
+          await consultarMapa(
+            `/api/cuenta/ubicacion?lat=${coords.latitude}&lon=${coords.longitude}`,
           );
-          const resultado = (await res.json()) as {
-            lat: string;
-            lon: string;
-            address?: Record<string, string | undefined>;
-            display_name?: string;
-          };
-          if (!res.ok || !resultado.address) throw new Error("reverse geocoding failed");
-          aplicarResultadoMapa(resultado);
-        } catch {
-          setErrorMapa("No pudimos leer la dirección de tu ubicación.");
+          if (coords.accuracy > 100)
+            setAvisoMapa(
+              (aviso) =>
+                `${aviso ?? ""} Tu ubicación es aproximada; confirma que sea tu domicilio.`,
+            );
+        } catch (err) {
+          setErrorMapa(
+            err instanceof Error ? err.message : "No pudimos leer la dirección de tu ubicación.",
+          );
         } finally {
           setCargandoMapa(false);
         }
       },
-      () => {
-        setErrorMapa("Permite la ubicación en tu navegador para usar este botón.");
+      (err) => {
+        setErrorMapa(
+          err.code === 1
+            ? "Permite el acceso a ubicación en la configuración de este sitio y vuelve a intentarlo."
+            : err.code === 3
+              ? "Tu dispositivo tardó en obtener la ubicación. Vuelve a intentar o busca tu calle."
+              : "No pudimos obtener tu ubicación. Activa la ubicación del dispositivo o busca tu calle.",
+        );
         setCargandoMapa(false);
       },
-      { enableHighAccuracy: true, timeout: 10_000 },
+      { enableHighAccuracy: false, timeout: 20_000, maximumAge: 60_000 },
     );
   }
 
@@ -192,6 +207,10 @@ export function DireccionesCuenta() {
           onClick={() => {
             setEditId(null);
             setForm({ ...VACIA });
+            setMapa(null);
+            setBusquedaMapa("");
+            setErrorMapa(null);
+            setAvisoMapa(null);
             setAbierto(true);
           }}
           className="gx-btn-primary shrink-0 shadow-sm shadow-marca/20"
@@ -330,9 +349,19 @@ export function DireccionesCuenta() {
                   loading="lazy"
                 />
               )}
+              {avisoMapa && <output className="block text-sm text-marca">{avisoMapa}</output>}
               {errorMapa && <p className="text-danger text-xs">{errorMapa}</p>}
               <p className="text-xs text-slate-500">
-                Puedes corregir cualquier campo antes de guardar.
+                Puedes corregir cualquier campo antes de guardar. Datos del mapa:{" "}
+                <a
+                  href="https://www.openstreetmap.org/copyright"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  © OpenStreetMap
+                </a>
+                .
               </p>
             </div>
             <div className="grid gap-3 px-6 sm:grid-cols-2">

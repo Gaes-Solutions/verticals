@@ -832,3 +832,15 @@ body {
     scroll-snap-align: start;
   }
 }
+.store-image-dialog {
+  width: min(1000px, calc(100vw - 24px));
+  max-height: 95dvh;
+  padding: 0;
+  border: 1px solid #e0e7e2;
+  border-radius: 14px;
+  color: #23392e;
+}
+.store-image-dialog::backdrop {
+  background: rgb(9 27 20 / 0.75);
+  backdrop-filter: blur(4px);
+}
