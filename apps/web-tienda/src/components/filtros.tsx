@@ -29,8 +29,8 @@ function useParams() {
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="border-slate-100 border-b py-4 first:pt-0">
-      <h3 className="mb-2.5 font-semibold text-slate-800 text-sm">{titulo}</h3>
+    <div className="border-slate-100 border-b py-5 first:pt-0">
+      <h3 className="mb-2.5 font-semibold text-slate-900 text-sm tracking-tight">{titulo}</h3>
       {children}
     </div>
   );
@@ -198,7 +198,7 @@ export function BarraFiltros({
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-4 flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm">
         <button type="button" onClick={() => setOpen(true)} className="gx-btn-secondary lg:hidden">
           <SlidersHorizontal size={16} strokeWidth={2} /> Filtros
           {chips.length > 0 && (
@@ -219,7 +219,7 @@ export function BarraFiltros({
             onChange={(e) =>
               setParam({ orden: e.target.value === "relevancia" ? null : e.target.value })
             }
-            className="gx-input !w-auto"
+            className="gx-input !w-auto !rounded-xl !bg-white"
           >
             {ORDENES.map((o) => (
               <option key={o.value} value={o.value}>

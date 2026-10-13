@@ -6,7 +6,7 @@ import { RepetirDespensa } from "@/components/repetir-despensa";
 import { TiendaCerrada } from "@/components/tienda-cerrada";
 import { ApiError, type CatalogoResponse, api, getCategorias, getTiendaConfig } from "@/lib/api";
 import { hayFiltrosActivos, queryCatalogo } from "@/lib/catalogo-query";
-import { Flame, PackageSearch, Sparkles, TrendingUp } from "lucide-react";
+import { BadgeCheck, Flame, PackageSearch, Sparkles, TrendingUp, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -174,6 +174,35 @@ export default async function CatalogoPage({
             envio={Boolean(cfg?.etaEnvio)}
             msi={Boolean(cfg?.msiHabilitado && cfg.msiMeses.length > 0)}
           />
+          <div className="-mt-5 mb-10 grid grid-cols-1 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-marca/10 text-marca">
+                <BadgeCheck size={18} />
+              </span>
+              <div>
+                <p className="font-semibold text-sm">Compra protegida</p>
+                <p className="text-slate-500 text-xs">Tus datos están seguros</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-marca/10 text-marca">
+                <Truck size={18} />
+              </span>
+              <div>
+                <p className="font-semibold text-sm">Entrega confiable</p>
+                <p className="text-slate-500 text-xs">Recibe en la puerta de tu casa</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-marca/10 text-marca">
+                <Sparkles size={18} />
+              </span>
+              <div>
+                <p className="font-semibold text-sm">Productos seleccionados</p>
+                <p className="text-slate-500 text-xs">Calidad para cada compra</p>
+              </div>
+            </div>
+          </div>
           <RepetirDespensa />
           <Seccion
             icono={<Flame size={22} className="text-danger" />}

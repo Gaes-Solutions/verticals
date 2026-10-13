@@ -8,7 +8,7 @@ import {
   leerCarrito,
   quitar,
 } from "@/lib/carrito-store";
-import { ImageOff } from "lucide-react";
+import { CheckCircle2, ImageOff, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -44,7 +44,15 @@ export default function CarritoPage() {
 
   return (
     <div className="mx-auto max-w-5xl pb-28 lg:pb-0">
-      <h1 className="mb-6 font-bold text-2xl">Tu carrito</h1>
+      <div className="mb-6 flex items-end justify-between gap-3">
+        <div>
+          <p className="mb-1 font-semibold text-marca text-sm">Revisa tu compra</p>
+          <h1 className="font-bold text-2xl tracking-tight">Tu carrito</h1>
+        </div>
+        <p className="hidden text-slate-500 text-sm sm:block">
+          {items.length} {items.length === 1 ? "producto" : "productos"}
+        </p>
+      </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="min-w-0">
@@ -112,7 +120,7 @@ export default function CarritoPage() {
                       onClick={() => quitar(i.varianteId)}
                       className="gx-btn-ghost !px-2 text-danger"
                     >
-                      Quitar
+                      <Trash2 size={14} /> Quitar
                     </button>
                   </div>
                 </div>
@@ -125,12 +133,25 @@ export default function CarritoPage() {
 
         {/* Resumen: sticky en desktop, barra fija en móvil */}
         <aside className="mt-6 lg:sticky lg:top-32 lg:mt-0">
-          <div className="gx-card hidden !p-4 lg:block">
+          <div className="tienda-surface hidden !p-5 lg:block">
+            <div className="mb-4 flex items-center gap-2 rounded-xl bg-ok-light px-3 py-2 text-ok text-xs">
+              <ShieldCheck size={16} /> Compra protegida
+            </div>
             <div className="flex justify-between font-bold text-lg">
               <span>Total</span>
               <span>${total.toFixed(2)}</span>
             </div>
             <p className="mt-1 text-slate-500 text-xs">Subtotal sin costo de envío.</p>
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-xs text-slate-500">
+              <p className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-ok" />
+                Pago seguro
+              </p>
+              <p className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-ok" />
+                Confirmación inmediata
+              </p>
+            </div>
             <Link href="/checkout" className="gx-btn-primary mt-4 w-full !py-3">
               Continuar compra →
             </Link>
