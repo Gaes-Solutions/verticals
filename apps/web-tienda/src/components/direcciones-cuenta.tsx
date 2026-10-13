@@ -35,6 +35,10 @@ export function DireccionesCuenta() {
   const [abierto, setAbierto] = useState(false);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busquedaMapa, setBusquedaMapa] = useState("");
+  const [mapa, setMapa] = useState<{ lat: number; lon: number } | null>(null);
+  const [cargandoMapa, setCargandoMapa] = useState(false);
+  const [errorMapa, setErrorMapa] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const r = (await fetch("/api/cuenta/direcciones").then((x) => x.json())) as Direccion[];
@@ -58,7 +62,94 @@ export function DireccionesCuenta() {
       referencias: d.referencias ?? "",
       isDefaultEnvio: d.isDefaultEnvio,
     });
+    setMapa(null);
+    setBusquedaMapa("");
     setAbierto(true);
+  }
+
+  function aplicarResultadoMapa(item: {
+    lat: string;
+    lon: string;
+    address?: Record<string, string | undefined>;
+    display_name?: string;
+  }) {
+    const address = item.address ?? {};
+    setMapa({ lat: Number(item.lat), lon: Number(item.lon) });
+    setForm((actual) => ({
+      ...actual,
+      calle: [address.road, address.pedestrian].find(Boolean) ?? actual.calle,
+      numeroExterior: address.house_number ?? actual.numeroExterior,
+      colonia: address.neighbourhood ?? address.suburb ?? address.city_district ?? actual.colonia,
+      municipio: address.city ?? address.town ?? address.municipality ?? actual.municipio,
+      estado: address.state ?? actual.estado,
+      codigoPostal: address.postcode ?? actual.codigoPostal,
+      referencias: actual.referencias || item.display_name || "",
+    }));
+    setBusquedaMapa(item.display_name ?? "");
+  }
+
+  async function buscarEnMapa() {
+    const consulta = busquedaMapa.trim();
+    if (!consulta) return;
+    setCargandoMapa(true);
+    setErrorMapa(null);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=mx&limit=1&q=${encodeURIComponent(consulta)}`,
+        { headers: { Accept: "application/json" } },
+      );
+      const resultados = (await res.json()) as Array<{
+        lat: string;
+        lon: string;
+        address?: Record<string, string | undefined>;
+        display_name?: string;
+      }>;
+      if (!res.ok || resultados.length === 0) {
+        setErrorMapa("No encontramos esa dirección. Prueba con calle, ciudad y estado.");
+        return;
+      }
+      aplicarResultadoMapa(resultados[0]);
+    } catch {
+      setErrorMapa("No pudimos consultar el mapa. Puedes llenar los campos manualmente.");
+    } finally {
+      setCargandoMapa(false);
+    }
+  }
+
+  function usarUbicacion() {
+    if (!navigator.geolocation) {
+      setErrorMapa("Tu dispositivo no permite obtener la ubicación.");
+      return;
+    }
+    setCargandoMapa(true);
+    setErrorMapa(null);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&lat=${coords.latitude}&lon=${coords.longitude}`,
+            { headers: { Accept: "application/json" } },
+          );
+          const resultado = (await res.json()) as {
+            lat: string;
+            lon: string;
+            address?: Record<string, string | undefined>;
+            display_name?: string;
+          };
+          if (!res.ok || !resultado.address) throw new Error("reverse geocoding failed");
+          aplicarResultadoMapa(resultado);
+        } catch {
+          setErrorMapa("No pudimos leer la dirección de tu ubicación.");
+        } finally {
+          setCargandoMapa(false);
+        }
+      },
+      () => {
+        setErrorMapa("Permite la ubicación en tu navegador para usar este botón.");
+        setCargandoMapa(false);
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
   }
 
   async function guardar(e: FormEvent) {
@@ -152,6 +243,52 @@ export function DireccionesCuenta() {
               >
                 ✕
               </button>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <p className="text-sm font-semibold">Encuentra tu dirección en el mapa</p>
+              <div className="flex gap-2">
+                <input
+                  value={busquedaMapa}
+                  onChange={(e) => setBusquedaMapa(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      buscarEnMapa();
+                    }
+                  }}
+                  placeholder="Calle, ciudad y estado"
+                  className="gx-input flex-1"
+                  aria-label="Buscar dirección en el mapa"
+                />
+                <button
+                  type="button"
+                  onClick={buscarEnMapa}
+                  className="gx-btn-ghost"
+                  disabled={cargandoMapa}
+                >
+                  Buscar
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={usarUbicacion}
+                className="gx-btn-ghost w-full"
+                disabled={cargandoMapa}
+              >
+                {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
+              </button>
+              {mapa && (
+                <iframe
+                  title="Ubicación seleccionada"
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapa.lon - 0.005}%2C${mapa.lat - 0.005}%2C${mapa.lon + 0.005}%2C${mapa.lat + 0.005}&layer=mapnik&marker=${mapa.lat}%2C${mapa.lon}`}
+                  className="h-44 w-full rounded-lg border-0"
+                  loading="lazy"
+                />
+              )}
+              {errorMapa && <p className="text-danger text-xs">{errorMapa}</p>}
+              <p className="text-xs text-slate-500">
+                Puedes corregir cualquier campo antes de guardar.
+              </p>
             </div>
             {(
               [
