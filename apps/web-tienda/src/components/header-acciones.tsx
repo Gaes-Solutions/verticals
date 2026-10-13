@@ -2,7 +2,7 @@
 
 import { leerCarrito } from "@/lib/carrito-store";
 import { construirParamsFiltros } from "@/lib/catalogo-query";
-import { Search, ShoppingCart, User } from "lucide-react";
+import { Package, Search, ShoppingCart, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
@@ -38,43 +38,53 @@ export function HeaderAcciones() {
   }
 
   return (
-    <div className="flex flex-1 items-center gap-3 sm:gap-5">
-      <form onSubmit={buscar} className="relative flex-1">
+    <div className="store-header-actions">
+      <form onSubmit={buscar} className="store-search">
+        <label htmlFor="store-search" className="sr-only">
+          Buscar en la tienda
+        </label>
         <input
+          id="store-search"
+          type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar productos…"
-          className="w-full rounded-full border border-slate-200 bg-slate-100/80 py-2.5 pr-11 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-marca focus:bg-white focus:ring-4 focus:ring-marca/10"
+          placeholder="¿Qué estás buscando hoy?"
+          autoComplete="off"
         />
-        <button
-          type="submit"
-          aria-label="Buscar"
-          className="-translate-y-1/2 absolute top-1/2 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-marca text-white shadow-sm transition hover:bg-brand-dark"
-        >
-          <Search size={16} strokeWidth={2.5} />
+        <button type="submit" aria-label="Buscar productos">
+          <Search size={23} />
         </button>
       </form>
-
-      <Link
-        href="/cuenta"
-        className="flex items-center gap-1.5 rounded-full px-2 py-2 text-slate-600 text-sm transition hover:bg-marca/10 hover:text-marca"
-      >
-        <User size={20} strokeWidth={1.75} />
-        <span className="hidden md:inline">Mi cuenta</span>
-      </Link>
-
-      <Link
-        href="/carrito"
-        aria-label="Carrito"
-        className="relative flex items-center gap-1.5 rounded-full px-2 py-2 text-slate-600 transition hover:bg-marca/10 hover:text-marca"
-      >
-        <ShoppingCart size={22} strokeWidth={1.75} />
-        {count > 0 && (
-          <span className="-right-2 -top-2 absolute flex h-5 min-w-5 items-center justify-center rounded-full bg-marca px-1 font-bold text-[11px] text-white">
-            {count}
+      <div className="store-header-links">
+        <Link href="/cuenta" className="store-header-link">
+          <User size={23} />
+          <span>
+            <small>Bienvenido</small>
+            <strong>Mi cuenta</strong>
           </span>
-        )}
-      </Link>
+        </Link>
+        <Link href="/seguimiento" className="store-header-link store-orders">
+          <Package size={23} />
+          <span>
+            <small>Sigue tu compra</small>
+            <strong>Mis pedidos</strong>
+          </span>
+        </Link>
+        <Link
+          href="/carrito"
+          className="store-header-link store-cart"
+          aria-label={`Carrito, ${count} productos`}
+        >
+          <span className="relative">
+            <ShoppingCart size={27} />
+            <b className="store-cart-count">{count}</b>
+          </span>
+          <span>
+            <small>Tu compra</small>
+            <strong>Carrito</strong>
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }

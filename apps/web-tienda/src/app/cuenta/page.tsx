@@ -16,6 +16,7 @@ import {
   clienteApi,
   getClienteToken,
 } from "@/lib/cliente";
+import { ArrowRight, Heart, MapPin, Package, UserRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -48,8 +49,9 @@ export default async function CuentaPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="store-account-welcome mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
+          <p className="store-kicker">TU ESPACIO PERSONAL</p>
           <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
           <p className="text-sm text-slate-500">{me.email}</p>
         </div>
@@ -59,11 +61,40 @@ export default async function CuentaPage() {
         </div>
       </div>
 
+      <nav className="store-account-nav" aria-label="Secciones de mi cuenta">
+        {[
+          { href: "#pedidos", icon: Package, title: "Mis pedidos", text: "Consulta tus compras" },
+          {
+            href: "#direcciones",
+            icon: MapPin,
+            title: "Mis direcciones",
+            text: "Prepara tu próxima entrega",
+          },
+          { href: "#perfil", icon: UserRound, title: "Mi perfil", text: "Actualiza tus datos" },
+          {
+            href: "#favoritos",
+            icon: Heart,
+            title: "Mis favoritos",
+            text: "Lo que te gusta, a mano",
+          },
+        ].map(({ href, icon: Icon, title, text }) => (
+          <Link key={href} href={href}>
+            <Icon size={24} strokeWidth={1.5} />
+            <span>
+              <strong>{title}</strong>
+              <small>{text}</small>
+            </span>
+            <ArrowRight size={17} />
+          </Link>
+        ))}
+      </nav>
       <div className="mb-6">
         <PwaPush />
       </div>
 
-      <h2 className="mb-3 text-lg font-bold">Mi perfil</h2>
+      <h2 id="perfil" className="mb-3 scroll-mt-44 text-lg font-bold">
+        Mi perfil
+      </h2>
       <div className="mb-10">
         <PerfilCuenta
           me={{
@@ -75,7 +106,9 @@ export default async function CuentaPage() {
         />
       </div>
 
-      <h2 className="mb-4 text-lg font-bold">Mis pedidos</h2>
+      <h2 id="pedidos" className="mb-4 scroll-mt-44 text-lg font-bold">
+        Mis pedidos
+      </h2>
       {pedidos.length === 0 ? (
         <div className="gx-card p-8 text-center">
           <p className="text-slate-500">Aún no tienes pedidos.</p>
@@ -119,7 +152,7 @@ export default async function CuentaPage() {
         </div>
       )}
 
-      <div className="mt-10">
+      <div id="direcciones" className="mt-10 scroll-mt-44">
         <DireccionesCuenta />
       </div>
 
@@ -130,7 +163,9 @@ export default async function CuentaPage() {
       <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>
       <ResenasCuenta inicial={resenables} />
 
-      <h2 className="mt-10 mb-4 text-lg font-bold">Mi lista de deseos</h2>
+      <h2 id="favoritos" className="mt-10 mb-4 scroll-mt-44 text-lg font-bold">
+        Mi lista de deseos
+      </h2>
       <WishlistCuenta inicial={wishlist} />
     </div>
   );

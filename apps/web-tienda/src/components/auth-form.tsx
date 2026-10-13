@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRight, Eye, EyeOff, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +10,7 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
@@ -39,72 +41,107 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
   }
 
   return (
-    <div className="mx-auto max-w-sm">
-      <h1 className="mb-6 text-2xl font-bold">
-        {modo === "registro" ? "Crear cuenta" : "Iniciar sesión"}
-      </h1>
-      <form onSubmit={submit} className="space-y-3">
-        {modo === "registro" && (
+    <div className="store-auth">
+      <aside className="store-auth-story">
+        <ShoppingBag size={42} strokeWidth={1.3} />
+        <p className="store-eyebrow">TU ESPACIO EN LA TIENDA</p>
+        <h2>
+          Tus favoritos. <br />
+          Tus pedidos. <br />
+          Todo contigo.
+        </h2>
+        <p>Guarda tus direcciones, consulta tus compras y retoma lo que te gusta cuando quieras.</p>
+        <Link href="/">
+          Seguir explorando <ArrowRight size={17} />
+        </Link>
+      </aside>
+      <div className="store-auth-form">
+        <p className="store-kicker">{modo === "registro" ? "EMPECEMOS" : "QUÉ BUENO VERTE"}</p>
+        <h1 className="mb-6 text-2xl font-bold">
+          {modo === "registro" ? "Crear cuenta" : "Iniciar sesión"}
+        </h1>
+        <form onSubmit={submit} className="space-y-5">
+          {modo === "registro" && (
+            <label className="block">
+              <span className="gx-label">Tu nombre</span>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                required
+                autoComplete="name"
+                className="gx-input"
+              />
+            </label>
+          )}
           <label className="block">
-            <span className="gx-label">Tu nombre</span>
+            <span className="gx-label">Correo</span>
             <input
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+              autoComplete="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               className="gx-input"
             />
           </label>
-        )}
-        <label className="block">
-          <span className="gx-label">Correo</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="gx-input"
-          />
-        </label>
-        <label className="block">
-          <span className="gx-label">Contraseña (mín. 8)</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            className="gx-input"
-          />
-        </label>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
-          {cargando ? "…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
-        </button>
-        {modo === "login" && (
-          <p className="text-right text-sm">
-            <Link href="/cuenta/olvidar-contrasena" className="font-medium text-marca">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </p>
-        )}
-      </form>
-      <p className="mt-4 text-center text-sm text-slate-500">
-        {modo === "registro" ? (
-          <>
-            ¿Ya tienes cuenta?{" "}
-            <Link href="/cuenta/login" className="font-medium text-marca">
-              Inicia sesión
-            </Link>
-          </>
-        ) : (
-          <>
-            ¿No tienes cuenta?{" "}
-            <Link href="/cuenta/registro" className="font-medium text-marca">
-              Regístrate
-            </Link>
-          </>
-        )}
-      </p>
+          <div>
+            <label htmlFor="account-password" className="gx-label">
+              Contraseña
+            </label>
+            <span className="relative block">
+              <input
+                id="account-password"
+                type={mostrarPassword ? "text" : "password"}
+                autoComplete={modo === "registro" ? "new-password" : "current-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                className="gx-input !pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarPassword(!mostrarPassword)}
+                aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                className="absolute right-3 top-3 text-slate-500"
+              >
+                {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
+            {modo === "registro" && (
+              <span className="mt-1 block text-xs text-slate-500">Usa al menos 8 caracteres.</span>
+            )}
+          </div>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
+            {cargando ? "Procesando…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
+          </button>
+          {modo === "login" && (
+            <p className="text-right text-sm">
+              <Link href="/cuenta/olvidar-contrasena" className="font-medium text-marca">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </p>
+          )}
+        </form>
+        <p className="mt-4 text-center text-sm text-slate-500">
+          {modo === "registro" ? (
+            <>
+              ¿Ya tienes cuenta?{" "}
+              <Link href="/cuenta/login" className="font-medium text-marca">
+                Inicia sesión
+              </Link>
+            </>
+          ) : (
+            <>
+              ¿No tienes cuenta?{" "}
+              <Link href="/cuenta/registro" className="font-medium text-marca">
+                Regístrate
+              </Link>
+            </>
+          )}
+        </p>
+      </div>
     </div>
   );
 }

@@ -60,7 +60,7 @@ export function ProductoCard({
   const precio = promo ?? base;
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_2px_10px_rgb(15_23_42/0.04)] transition duration-200 hover:-translate-y-1 hover:border-marca/20 hover:shadow-xl hover:shadow-slate-900/10">
+    <article className="store-product-card group relative flex flex-col overflow-hidden">
       {p.enOferta && p.descuentoPct > 0 && (
         <span className="absolute left-2.5 top-2.5 z-10 rounded-md bg-offer px-2 py-0.5 font-bold text-offer-dark text-xs shadow">
           -{p.descuentoPct}%
@@ -68,11 +68,11 @@ export function ProductoCard({
       )}
       {p.envioGratis && (
         <span className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-ok px-2 py-0.5 font-bold text-white text-xs shadow">
-          <Truck size={12} strokeWidth={2.5} /> FULL
+          <Truck size={12} strokeWidth={2.5} /> Envío gratis
         </span>
       )}
       <Link href={`/producto/${p.slugSeo}`} aria-label={`Ver ${p.tituloPublico}`}>
-        <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="store-product-image flex aspect-square items-center justify-center overflow-hidden">
           <ImagenProducto src={p.fotosArray[0]} alt={p.tituloPublico} />
         </div>
       </Link>
@@ -123,7 +123,7 @@ function ImagenProducto({ src, alt }: { src?: string; alt: string }) {
       loading="lazy"
       decoding="async"
       onError={() => setFallo(true)}
-      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+      className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105"
     />
   );
 }
@@ -220,7 +220,7 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
           alTocar(e);
           agregar({ ...linea, cantidad: 1 });
         }}
-        className="gx-btn-primary w-full !py-2.5 disabled:cursor-not-allowed disabled:opacity-40"
+        className="store-add-button w-full disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Plus size={16} strokeWidth={2.5} /> Agregar
       </button>
@@ -272,7 +272,7 @@ export function ProductoGrid({
   entrega?: EntregaConfigPublica;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
       {items.map((p) => (
         <ProductoCard
           key={p.id}

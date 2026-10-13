@@ -9,14 +9,17 @@ const POLITICAS = [
 ];
 
 /** Footer de la tienda: confianza (pagos, políticas) + navegación. */
-export function FooterTienda({ nombre }: { nombre: string }) {
+export function FooterTienda({
+  nombre,
+  metodosPago = [],
+}: { nombre: string; metodosPago?: string[] }) {
   return (
-    <footer className="mt-16 border-t bg-white">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 md:grid-cols-4">
+    <footer className="store-footer mt-12 border-t bg-white">
+      <div className="tienda-shell grid gap-8 py-10 sm:grid-cols-2 md:grid-cols-4">
         <div>
           <p className="font-bold text-marca">{nombre}</p>
           <p className="mt-2 text-slate-500 text-sm">
-            Tu tienda en línea con compra protegida y envíos a todo México.
+            Explora nuestros productos y consulta las opciones de entrega al finalizar tu compra.
           </p>
         </div>
         <div>
@@ -57,17 +60,26 @@ export function FooterTienda({ nombre }: { nombre: string }) {
           </ul>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-slate-800 text-sm">Pago seguro</p>
+          <p className="mb-2 font-semibold text-slate-800 text-sm">Tu compra</p>
           <div className="flex flex-wrap items-center gap-2 text-slate-500">
-            <span title="Tarjetas" className="rounded-md border border-slate-200 p-1.5">
-              <CreditCard size={18} strokeWidth={1.75} />
-            </span>
-            <span title="OXXO" className="rounded-md border border-slate-200 p-1.5">
-              <Store size={18} strokeWidth={1.75} />
-            </span>
-            <span title="Transferencia" className="rounded-md border border-slate-200 p-1.5">
-              <Banknote size={18} strokeWidth={1.75} />
-            </span>
+            {metodosPago.includes("tarjeta") && (
+              <span title="Tarjetas" className="rounded-md border border-slate-200 p-1.5">
+                <CreditCard size={18} strokeWidth={1.75} />
+              </span>
+            )}
+            {metodosPago.includes("oxxo") && (
+              <span title="OXXO" className="rounded-md border border-slate-200 p-1.5">
+                <Store size={18} strokeWidth={1.75} />
+              </span>
+            )}
+            {metodosPago.includes("spei") && (
+              <span title="Transferencia" className="rounded-md border border-slate-200 p-1.5">
+                <Banknote size={18} strokeWidth={1.75} />
+              </span>
+            )}
+            {metodosPago.length === 0 && (
+              <span className="text-sm">Consulta las opciones al finalizar tu pedido.</span>
+            )}
           </div>
           <p className="mt-3 flex items-center gap-1.5 text-slate-400 text-xs">
             <Lock size={13} strokeWidth={2} /> Tus datos viajan cifrados.
@@ -75,7 +87,7 @@ export function FooterTienda({ nombre }: { nombre: string }) {
         </div>
       </div>
       <div className="border-t py-4 text-center text-slate-400 text-xs">
-        © {nombre} · Powered by GaesSoft POS
+        © {new Date().getFullYear()} {nombre} · Tu tienda en línea
       </div>
     </footer>
   );
