@@ -184,8 +184,10 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
         req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
       }
       const body = iniciarCheckoutSchema.parse(req.body);
-      const provider = resolverProvider(app, body.proveedorPago, reply);
-      if (!provider) return;
+      // Cash at pickup never constructs an online provider or enables mock payments.
+      const provider =
+        body.metodoPago === "cod" ? null : resolverProvider(app, body.proveedorPago, reply);
+      if (!provider && body.metodoPago !== "cod") return;
       const sinTarjeta = faltaFuenteDeTarjeta(body);
       if (sinTarjeta)
         return reply.code(400).send({ statusCode: 400, error: "Bad Request", message: sinTarjeta });

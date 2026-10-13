@@ -52,6 +52,8 @@ function publicResult(result: CheckoutResult) {
       folioPublico: result.folioPublico,
       total: result.total,
       intentStatus: result.intentStatus,
+      pagoAlRecoger:
+        result.intentStatus === "pendiente" && result.intentId.startsWith("mostrador_"),
       ...(result.referenciaPago ? { referenciaPago: result.referenciaPago } : {}),
     },
     { headers: { "Cache-Control": "no-store" } },

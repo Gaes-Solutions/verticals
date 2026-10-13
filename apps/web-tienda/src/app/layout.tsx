@@ -1,3 +1,4 @@
+import { CarritoFlotante } from "@/components/carrito-flotante";
 import { FooterTienda } from "@/components/footer-tienda";
 import { HeaderAcciones } from "@/components/header-acciones";
 import { SwRegister } from "@/components/sw-register";
@@ -84,6 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main className="tienda-shell min-h-[60vh] py-6 sm:py-10">{children}</main>
 
         <FooterTienda nombre={nombre} metodosPago={config?.metodosPago} />
+        <CarritoFlotante />
         <SwRegister />
       </body>
     </html>

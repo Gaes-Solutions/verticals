@@ -3,9 +3,10 @@
 import type { ProductoPublicado } from "@/lib/api";
 import { actualizarCantidad, agregar, leerCarrito } from "@/lib/carrito-store";
 import { ariaCalificacion, estrellasDe, etiquetaUnidad, lineaEntrega } from "@/lib/etiquetas";
-import { Clock, ImageOff, Plus, Store, Truck } from "lucide-react";
+import { Clock, ImageOff, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { type MouseEvent, useEffect, useState } from "react";
+import { BotonAgregar } from "./boton-agregar";
 
 /** MSI configurable del tenant (viene de getTiendaConfig). */
 export interface MsiConfigPublica {
@@ -211,19 +212,16 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
     e.stopPropagation();
   }
 
+  if (p.producto.variantes.length > 1)
+    return (
+      <Link href={`/producto/${p.slugSeo}`} className="store-add-button w-full">
+        Elegir opciones →
+      </Link>
+    );
+
   if (cant === 0) {
     return (
-      <button
-        type="button"
-        disabled={sinStock}
-        onClick={(e) => {
-          alTocar(e);
-          agregar({ ...linea, cantidad: 1 });
-        }}
-        className="store-add-button w-full disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <Plus size={16} strokeWidth={2.5} /> Agregar
-      </button>
+      <BotonAgregar disabled={sinStock} onAgregar={() => agregar({ ...linea, cantidad: 1 })} />
     );
   }
 
@@ -250,11 +248,12 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
       <button
         type="button"
         aria-label="Agregar uno"
+        disabled={p.stockPublico != null && cant >= p.stockPublico}
         onClick={(e) => {
           alTocar(e);
           actualizarCantidad(variante.id, cant + 1);
         }}
-        className="flex h-10 w-10 items-center justify-center rounded-r-lg font-bold text-lg text-marca transition hover:bg-marca/20"
+        className="flex h-10 w-10 items-center justify-center rounded-r-lg font-bold text-lg text-marca transition hover:bg-marca/20 disabled:opacity-30"
       >
         +
       </button>

@@ -205,9 +205,13 @@ async function claimCheckoutAttempt(
 
 export async function iniciarCheckout(
   client: TenantClient,
-  provider: PaymentProvider,
+  provider: PaymentProvider | null,
   input: IniciarCheckoutInput,
 ): Promise<IniciarCheckoutResult> {
+  if (!provider && input.metodoPago !== "cod")
+    throw new CheckoutError(503, "El pago en línea no está disponible");
+  if (input.metodoPago === "cod" && (input.cardTokenId || input.medioPagoGuardadoId))
+    throw new CheckoutError(422, "Pagar al recoger no requiere datos de tarjeta");
   const carrito = await client.carritoEcommerce.findUnique({ where: { id: input.carritoId } });
   if (!carrito) throw new CheckoutError(404, "Carrito no encontrado");
   // Pagar al recoger solo tiene sentido si el comprador va a la tienda por su pedido.
@@ -224,7 +228,7 @@ export async function iniciarCheckout(
     .update(
       canonicalJson({
         ...paymentInput,
-        provider: provider.codigo,
+        provider: input.metodoPago === "cod" ? "mostrador" : provider?.codigo,
         items: carrito.items,
         total: carrito.total.toString(),
         moneda: carrito.moneda,
@@ -273,7 +277,7 @@ export async function iniciarCheckout(
 
 async function iniciarCheckoutClaimed(
   client: TenantClient,
-  provider: PaymentProvider,
+  provider: PaymentProvider | null,
   input: IniciarCheckoutInput,
   carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
   attemptKey: string,
@@ -424,7 +428,7 @@ async function validatePublicStore(
 
 async function crearPedidoConIntent(
   client: TenantClient,
-  provider: PaymentProvider,
+  provider: PaymentProvider | null,
   input: IniciarCheckoutInput,
   carrito: NonNullable<Awaited<ReturnType<TenantClient["carritoEcommerce"]["findUnique"]>>>,
   params: CrearPedidoParams,
@@ -437,9 +441,10 @@ async function crearPedidoConIntent(
   }
   // Se resuelve ANTES de crear el pedido: si la tarjeta guardada no aplica,
   // falla sin dejar pedido huérfano.
-  const medioGuardado = input.medioPagoGuardadoId
-    ? await resolverMedioGuardado(client, provider, input, carrito)
-    : null;
+  const medioGuardado =
+    input.medioPagoGuardadoId && provider
+      ? await resolverMedioGuardado(client, provider, input, carrito)
+      : null;
   const { pedido, total } = await client.$transaction(async (tx) => {
     if (input.requirePublicStore)
       await validatePublicStore(tx, carrito.items as unknown as CarritoItem[]);
@@ -462,7 +467,10 @@ async function crearPedidoConIntent(
       data: {
         ...(input.metodoPago === "cod"
           ? {}
-          : { paymentProvider: provider.codigo, paymentAccountId: input.stripeAccountId ?? null }),
+          : {
+              paymentProvider: provider?.codigo ?? null,
+              paymentAccountId: input.stripeAccountId ?? null,
+            }),
         folioPublico,
         carritoOrigenId: carrito.id,
         ...(carrito.clienteId ? { clienteId: carrito.clienteId } : {}),
@@ -524,6 +532,7 @@ async function crearPedidoConIntent(
     };
   }
 
+  if (!provider) throw new CheckoutError(503, "El pago en línea no está disponible");
   const nombreComprador = (input.direccionEnvio as { nombre?: string } | undefined)?.nombre;
   const montoCentavos = Math.round(total.times(100).toNumber());
   // Tarjeta guardada: cobro con la fuente del proveedor, no con token de un solo uso.

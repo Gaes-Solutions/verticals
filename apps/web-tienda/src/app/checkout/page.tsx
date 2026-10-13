@@ -69,6 +69,7 @@ interface PagoPendiente {
 const PAGO_PENDIENTE_KEY = "gaespos_pago_pendiente_v1";
 
 interface RespuestaCheckout {
+  pagoAlRecoger?: boolean;
   message?: string;
   intentStatus?: string;
   folioPublico?: string;
@@ -394,7 +395,8 @@ export default function CheckoutPage() {
       marcarPendiente(pendiente);
       return;
     }
-    if (data.intentStatus !== "confirmado" || !data.folioPublico) {
+    const reservadoParaRecoger = data.pagoAlRecoger === true && data.intentStatus === "pendiente";
+    if ((!reservadoParaRecoger && data.intentStatus !== "confirmado") || !data.folioPublico) {
       manejarNoConfirmado(data);
       return;
     }
@@ -416,7 +418,7 @@ export default function CheckoutPage() {
     }
     await completeAttempt(current, vaciar);
     router.push(
-      `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}`,
+      `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}${reservadoParaRecoger ? "&recogida=1" : ""}`,
     );
   }
 
@@ -601,7 +603,10 @@ export default function CheckoutPage() {
               {pickups.length > 0 && (
                 <BotonEntrega
                   activo={modoEntrega === "pickup"}
-                  onClick={() => setModoEntrega("pickup")}
+                  onClick={() => {
+                    setModoEntrega("pickup");
+                    if (pickups.length === 1 && pickups[0]) setSucursalId(pickups[0].sucursalId);
+                  }}
                   label={
                     <>
                       <Store size={16} strokeWidth={2} /> Recoger en tienda
@@ -806,16 +811,20 @@ export default function CheckoutPage() {
                   );
                 })}
               </div>
-            ) : (
+            ) : opcionesPago[0] ? (
               <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
                 <p className="flex items-center gap-2 font-medium text-sm">
-                  <CreditCard size={16} strokeWidth={2} /> Tarjeta de crédito o débito
+                  {opcionesPago[0].icon} {opcionesPago[0].titulo}
                 </p>
-                <p className="mt-0.5 text-slate-500 text-xs">
-                  Visa · Mastercard · AMEX
-                  {maxMsi > 0 && ` · hasta ${maxMsi} meses sin intereses`}
-                </p>
+                <p className="mt-0.5 text-slate-500 text-xs">{opcionesPago[0].descripcion}</p>
               </div>
+            ) : (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Esta tienda todavía no tiene pagos en línea configurados.{" "}
+                {pickups.length > 0
+                  ? "Elige recoger en tienda para pagar al recibir tu pedido."
+                  : "Tu carrito se conserva para continuar cuando la tienda habilite el pago."}
+              </p>
             )}
 
             {!attempt && (

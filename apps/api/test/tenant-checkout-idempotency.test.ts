@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getTenantClient } from "@gaespos/db";
-import { type CrearIntentInput, MockPaymentProvider } from "@gaespos/pagos";
+import { type CrearIntentInput, MockPaymentProvider, PagoError } from "@gaespos/pagos";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
@@ -14,6 +14,8 @@ let otherTenantToken: string;
 let branchId: string;
 let variantId: string;
 let calls = 0;
+let rejectOnlineProvider = false;
+let providerConstructions = 0;
 let ambiguous = false;
 let gate: Promise<void> | undefined;
 let entered: (() => void) | undefined;
@@ -61,7 +63,17 @@ function input(carritoId: string, key = randomUUID()) {
 }
 
 beforeAll(async () => {
-  app = await buildTestApp({}, { pagoProviderFactory: () => provider });
+  app = await buildTestApp(
+    {},
+    {
+      pagoProviderFactory: () => {
+        providerConstructions++;
+        if (rejectOnlineProvider)
+          throw new PagoError("Online provider unavailable in production", "PROVIDER_UNAVAILABLE");
+        return provider;
+      },
+    },
+  );
   for (const tenant of [TENANT, OTHER]) await createTestTenant(tenant);
   for (const [tenant, email] of [
     [TENANT, "owner-idem@test.local"],
@@ -96,6 +108,49 @@ afterAll(async () => {
 });
 
 describe("checkout attempts", () => {
+  it("reserves cash-at-pickup without constructing an online provider or marking it paid", async () => {
+    const payload = { ...input(await cart()), metodoPago: "cod" };
+    const before = providerConstructions;
+    rejectOnlineProvider = true;
+    try {
+      const first = await start(payload);
+      expect(first.statusCode).toBe(201);
+      expect(first.json()).toMatchObject({ intentStatus: "pendiente" });
+      expect(providerConstructions).toBe(before);
+      const replay = await start(payload);
+      expect(replay.statusCode).toBe(201);
+      expect(replay.json()).toEqual(first.json());
+      const saved = await getTenantClient(TENANT).pedidoEcommerce.findUniqueOrThrow({
+        where: { id: first.json().pedidoId },
+      });
+      expect(saved.statusPago).toBe("pendiente");
+      expect(saved.paymentProvider).toBeNull();
+      expect(saved.ventaIdGenerada).toBeNull();
+      expect(
+        await getTenantClient(TENANT).pedidoEcommerce.count({
+          where: { carritoOrigenId: payload.carritoId },
+        }),
+      ).toBe(1);
+      const online = await start(input(await cart()));
+      expect(online.statusCode).toBe(503);
+      expect(providerConstructions).toBe(before + 1);
+      const wrongDelivery = await start({
+        ...payload,
+        idempotencyKey: randomUUID(),
+        metodoEnvio: "paqueteria",
+      });
+      expect(wrongDelivery.statusCode).toBe(422);
+      const cardOnPickup = await start({
+        ...payload,
+        idempotencyKey: randomUUID(),
+        cardTokenId: "token_test",
+      });
+      expect(cardOnPickup.statusCode).toBe(422);
+    } finally {
+      rejectOnlineProvider = false;
+    }
+  });
+
   it("replays a completed initiation without calling the provider or reserving the coupon again", async () => {
     const prisma = getTenantClient(TENANT);
     await prisma.cuponTenant.create({

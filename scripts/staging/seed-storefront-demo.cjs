@@ -18,6 +18,12 @@ async function main() {
           activa: true,
         },
       });
+    // A demo checkout can finish by paying at pickup, without payment API keys.
+    await db.configPickupSucursal.upsert({
+      where: { sucursalId: suc.id },
+      create: { sucursalId: suc.id, activa: true, tiempoPreparacionPromedioMin: 60 },
+      update: {},
+    });
     const cats = [
       ["hogar", "Hogar y decoración"],
       ["cocina", "Cocina"],

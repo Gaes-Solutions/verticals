@@ -34,6 +34,7 @@ export function agregar(linea: CarritoLineaLocal): void {
     items.push(linea);
   }
   guardarCarrito(items);
+  window.dispatchEvent(new CustomEvent<CarritoLineaLocal>("carrito-agregado", { detail: linea }));
 }
 
 export function actualizarCantidad(varianteId: string, cantidad: number): void {
