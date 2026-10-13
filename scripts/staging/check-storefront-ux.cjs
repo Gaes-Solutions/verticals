@@ -46,6 +46,7 @@ require("node:fs").mkdirSync("/tmp/gaes-design", { recursive: true });
   await p.reload({ waitUntil: "networkidle" });
   assert.equal(await units(), 2);
   console.log("PASS tap, cambiar cantidad y recuperar carrito al recargar");
+  const subtotalMostrado = (await cart()).reduce((n, i) => n + Number(i.precio) * i.cantidad, 0);
   await p.getByRole("link", { name: "Ver mi compra", exact: true }).click();
   await p.getByRole("heading", { name: "Tu carrito", exact: true }).waitFor();
   assert.equal(await p.getByRole("link", { name: "Ver mi compra", exact: true }).count(), 0);
@@ -72,6 +73,8 @@ require("node:fs").mkdirSync("/tmp/gaes-design", { recursive: true });
   assert.equal(res.status(), 200, JSON.stringify(data));
   assert.equal(data.pagoAlRecoger, true);
   assert.equal(data.intentStatus, "pendiente");
+  assert.equal(Number(data.total), subtotalMostrado, "El pedido debe respetar el precio publicado");
+  console.log("PASS precio de oferta coincide con el total del pedido sin envío");
   await p.waitForURL("**/gracias?*", { timeout: 20000 });
   await p.getByRole("heading", { name: "Tu pedido quedó registrado", exact: true }).waitFor();
   await p

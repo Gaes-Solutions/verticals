@@ -25,6 +25,7 @@ export class PreviewError extends Error {
 async function loadLineasContext(
   client: TenantClient,
   input: PreviewInput,
+  preciosPublicos: ReadonlyMap<string, string>,
 ): Promise<LineaPrecioInput[]> {
   const varianteIds = input.lineas.map((l) => l.varianteId);
   const variantes = await client.productoVariante.findMany({
@@ -56,12 +57,14 @@ async function loadLineasContext(
       productoId: variante.producto.id,
       categoriaId: variante.producto.categoriaId,
       cantidad: linea.cantidad,
-      precioBase: variante.precioBase.toString(),
-      preciosEscalonados: variante.preciosEscalonados.map((e) => ({
-        cantidadMinima: e.cantidadMinima.toString(),
-        cantidadMaxima: e.cantidadMaxima === null ? null : e.cantidadMaxima.toString(),
-        precioUnitario: e.precioUnitario.toString(),
-      })),
+      precioBase: preciosPublicos.get(variante.id) ?? variante.precioBase.toString(),
+      preciosEscalonados: (preciosPublicos.has(variante.id) ? [] : variante.preciosEscalonados).map(
+        (e) => ({
+          cantidadMinima: e.cantidadMinima.toString(),
+          cantidadMaxima: e.cantidadMaxima === null ? null : e.cantidadMaxima.toString(),
+          precioUnitario: e.precioUnitario.toString(),
+        }),
+      ),
       listaPrecioItem: item ?? null,
       permiteDescuento: variante.producto.permiteDescuento,
     };
@@ -171,10 +174,11 @@ export async function calcularPreview(
   client: TenantClient,
   usuarioId: string,
   input: PreviewInput,
+  preciosPublicos: ReadonlyMap<string, string> = new Map(),
 ): Promise<TicketCalculado> {
   if (input.lineas.some((l) => !cantidadVentaValida(l.cantidad)))
     throw new PreviewError(400, QUANTITY_ERROR);
-  const lineas = await loadLineasContext(client, input);
+  const lineas = await loadLineasContext(client, input, preciosPublicos);
   const reglas = await loadReglasVigentes(client);
   const cupon = await loadCupon(client, input.cuponCodigo);
 

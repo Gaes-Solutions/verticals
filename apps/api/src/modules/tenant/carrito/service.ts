@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import type { FastifyRequest } from "fastify";
 import { calcularPreview } from "../listas-precios/preview-service.js";
 
@@ -41,11 +42,39 @@ export async function calcularCarrito(
   items: CarritoItemInput[],
 ): Promise<CarritoCalculado> {
   if (items.length === 0) throw new CarritoError(400, "Carrito vacío");
+  // Published storefront prices are server data, never values supplied by the buyer.
+  const publicados = await client.productoPublicado.findMany({
+    where: {
+      isPublicado: true,
+      producto: { variantes: { some: { id: { in: items.map((i) => i.varianteId) } } } },
+    },
+    select: {
+      precioPublicoOverride: true,
+      precioPromocion: true,
+      promocionVigenteHasta: true,
+      producto: { select: { variantes: { select: { id: true } } } },
+    },
+  });
+  const preciosPublicos = new Map<string, string>();
+  const ahora = new Date();
+  for (const p of publicados) {
+    const promoVigente =
+      p.precioPromocion?.gt(0) &&
+      (p.promocionVigenteHasta == null || p.promocionVigenteHasta > ahora);
+    const precio = promoVigente ? p.precioPromocion : p.precioPublicoOverride;
+    if (precio != null && new Decimal(precio.toString()).gte(0))
+      for (const v of p.producto.variantes) preciosPublicos.set(v.id, precio.toString());
+  }
   let ticket: Awaited<ReturnType<typeof calcularPreview>>;
   try {
-    ticket = await calcularPreview(client, usuarioId, {
-      lineas: items.map((i) => ({ varianteId: i.varianteId, cantidad: String(i.cantidad) })),
-    });
+    ticket = await calcularPreview(
+      client,
+      usuarioId,
+      {
+        lineas: items.map((i) => ({ varianteId: i.varianteId, cantidad: String(i.cantidad) })),
+      },
+      preciosPublicos,
+    );
   } catch (err) {
     throw new CarritoError(400, err instanceof Error ? err.message : "Error calculando carrito");
   }

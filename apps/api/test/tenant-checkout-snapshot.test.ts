@@ -172,6 +172,43 @@ afterAll(async () => {
 });
 
 describe("frozen checkout agreement", () => {
+  it("honors published offers in the cart and frozen order; expired offers use the public price", async () => {
+    const published = await prisma().productoPublicado.create({
+      data: {
+        productoId: productId,
+        tituloPublico: "Oferta verificada",
+        slugSeo: `offer-${randomUUID()}`,
+        precioPublicoOverride: "90",
+        precioPromocion: "80",
+        promocionVigenteHasta: new Date(Date.now() + 60000),
+      },
+    });
+    try {
+      const response = await begin();
+      expect(response.statusCode).toBe(201);
+      expect(response.json().total).toBe("80.00");
+      const order = await prisma().pedidoEcommerce.findUniqueOrThrow({
+        where: { id: response.json().pedidoId },
+      });
+      expect(order.total.toString()).toBe("80");
+      await prisma().productoPublicado.update({
+        where: { id: published.id },
+        data: { promocionVigenteHasta: new Date(0) },
+      });
+      const expired = await begin();
+      expect(expired.statusCode).toBe(201);
+      expect(expired.json().total).toBe("90.00");
+      await prisma().productoPublicado.update({
+        where: { id: published.id },
+        data: { isPublicado: false },
+      });
+      const fallback = await begin();
+      expect(fallback.statusCode).toBe(201);
+      expect(fallback.json().total).toBe("100.00");
+    } finally {
+      await prisma().productoPublicado.delete({ where: { id: published.id } });
+    }
+  });
   it("preserves price, coupon, tax and product identity after catalog changes and includes shipping", async () => {
     const response = await begin(true, "SNAP10");
     expect(response.statusCode).toBe(201);
