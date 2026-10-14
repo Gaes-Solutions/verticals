@@ -6,10 +6,17 @@ import { colors } from "@/theme";
 import { Icon, type IconName } from "@/ui";
 import { CartFeedback } from "@/ui/CartFeedback";
 import { Tabs } from "expo-router";
-import { View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function AppLayout() {
   useCartSync();
+  const insets = useSafeAreaInsets();
+  const { fontScale, width } = useWindowDimensions();
+  const labelLines = Math.max(
+    2,
+    Math.ceil((9 * 11 * 0.7 * fontScale) / Math.max(24, width / 6 - 14)),
+  );
   // Sin sesión NO se manda al login: el catálogo se mira como en cualquier
   // tienda en línea. Las pestañas de lo personal se esconden hasta que entre,
   // y cada una invita a entrar si se llega por otro camino.
@@ -35,8 +42,31 @@ export default function AppLayout() {
           tabBarInactiveTintColor: colors.faint,
           headerStyle: { backgroundColor: colors.card },
           headerTitleStyle: { color: colors.ink, fontWeight: "800" },
-          tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.card, paddingTop: 6 },
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+          // Reserve two full text lines and the Android/iOS navigation inset.
+          // The default 49px bar clips labels with our padding or enlarged text.
+          tabBarStyle: {
+            borderTopColor: colors.line,
+            backgroundColor: colors.card,
+            height: 40 + 14 * labelLines * fontScale + insets.bottom,
+            paddingTop: 6,
+            paddingBottom: Math.max(insets.bottom, 6),
+          },
+          tabBarLabelPosition: "below-icon",
+          tabBarHideOnKeyboard: true,
+          tabBarLabel: ({ children, color }) => (
+            <Text
+              style={{
+                color,
+                fontSize: 11,
+                lineHeight: 14,
+                fontWeight: "600",
+                textAlign: "center",
+                paddingHorizontal: 2,
+              }}
+            >
+              {children}
+            </Text>
+          ),
         }}
       >
         <Tabs.Screen

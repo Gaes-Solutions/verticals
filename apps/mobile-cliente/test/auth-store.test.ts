@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   values: new Map<string, string>(),
   deletes: vi.fn(),
   authenticate: vi.fn(),
+  hardware: vi.fn(),
+  enrolled: vi.fn(),
+  write: vi.fn(),
   handler: vi.fn(),
 }));
 vi.mock("../src/config", () => ({
@@ -22,6 +25,7 @@ vi.mock("../src/lib/storage", () => ({
   secureStorage: {
     get: async (key: string) => mocks.values.get(key) ?? null,
     set: async (key: string, value: string) => {
+      await mocks.write(key, value);
       mocks.values.set(key, value);
     },
     delete: async (key: string) => {
@@ -31,8 +35,8 @@ vi.mock("../src/lib/storage", () => ({
   },
 }));
 vi.mock("expo-local-authentication", () => ({
-  hasHardwareAsync: async () => true,
-  isEnrolledAsync: async () => true,
+  hasHardwareAsync: mocks.hardware,
+  isEnrolledAsync: mocks.enrolled,
   authenticateAsync: mocks.authenticate,
 }));
 import { useAuth } from "../src/lib/auth-store";
@@ -44,7 +48,10 @@ beforeEach(async () => {
   mocks.get.mockReset();
   mocks.post.mockReset();
   mocks.deletes.mockClear();
-  mocks.authenticate.mockResolvedValue({ success: true });
+  mocks.authenticate.mockReset().mockResolvedValue({ success: true });
+  mocks.hardware.mockReset().mockResolvedValue(true);
+  mocks.enrolled.mockReset().mockResolvedValue(true);
+  mocks.write.mockReset().mockResolvedValue(undefined);
   mocks.values.set("token", "stored-token");
   mocks.values.set("tenant", "shop-a");
 });
@@ -177,6 +184,58 @@ describe("customer account boundaries", () => {
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
     expect(mocks.values.get("token")).toBe("new-token");
+    expect(mocks.values.get("biometry")).toBeUndefined();
+  });
+});
+
+describe("biometric settings after fresh login", () => {
+  async function login() {
+    mocks.post.mockResolvedValue({
+      accessToken: "new-token",
+      cliente: { id: "b", nombre: "Bea", email: "b@example.test" },
+    });
+    await useAuth.getState().login("shop-b", "b@example.test", "password");
+  }
+  it("detects enrolled hardware immediately without requiring a restart", async () => {
+    await login();
+    expect(useAuth.getState().biometriaDisponible).toBe(true);
+    expect(await useAuth.getState().setBiometria(true)).toBe(true);
+    expect(mocks.values.get("biometry")).toBe("1");
+  });
+  it("refreshes after fingerprint enrollment without signing out", async () => {
+    mocks.enrolled.mockResolvedValue(false);
+    await login();
+    expect(useAuth.getState().biometriaDisponible).toBe(false);
+    expect(await useAuth.getState().setBiometria(true)).toBe(false);
+    expect(mocks.authenticate).not.toHaveBeenCalled();
+    mocks.enrolled.mockResolvedValue(true);
+    await useAuth.getState().refreshBiometria();
+    expect(useAuth.getState().biometriaDisponible).toBe(true);
+  });
+  it("cancellation and storage failure never enable biometrics", async () => {
+    await login();
+    mocks.authenticate.mockResolvedValue({ success: false });
+    expect(await useAuth.getState().setBiometria(true)).toBe(false);
+    expect(mocks.values.get("biometry")).toBeUndefined();
+    mocks.authenticate.mockResolvedValue({ success: true });
+    mocks.write.mockRejectedValue(new Error("storage unavailable"));
+    expect(await useAuth.getState().setBiometria(true)).toBe(false);
+    expect(useAuth.getState().biometriaActiva).toBe(false);
+  });
+  it("cannot save biometric settings after logout during the prompt", async () => {
+    await login();
+    let resolve!: (value: unknown) => void;
+    mocks.authenticate.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const pending = useAuth.getState().setBiometria(true);
+    await vi.waitFor(() => expect(mocks.authenticate).toHaveBeenCalled());
+    await useAuth.getState().logout();
+    resolve({ success: true });
+    expect(await pending).toBe(false);
+    expect(useAuth.getState().status).toBe("signedOut");
     expect(mocks.values.get("biometry")).toBeUndefined();
   });
 });

@@ -17,6 +17,7 @@ interface AuthState {
   error: string | null;
   biometriaActiva: boolean;
   biometriaDisponible: boolean;
+  refreshBiometria: () => Promise<void>;
   restore: () => Promise<void>;
   setBiometria: (on: boolean) => Promise<boolean>;
   login: (tenantSlug: string, email: string, password: string) => Promise<void>;
@@ -90,10 +91,12 @@ const signedOut = {
   user: null,
   tenantSlug: null,
   biometriaActiva: false,
+  biometriaDisponible: false,
 };
 
 export const useAuth = create<AuthState>((set, get) => {
   let operation = 0;
+  let biometryBusy = false;
   let writes: Promise<void> = Promise.resolve();
   const serialize = (action: () => Promise<void>) => {
     writes = writes.catch(() => undefined).then(action);
@@ -114,8 +117,10 @@ export const useAuth = create<AuthState>((set, get) => {
       if (attempt !== operation) return;
       await persistSession(session.accessToken, slug);
     });
-    if (attempt === operation) marcarSesion(slug);
+    if (attempt !== operation) return;
+    marcarSesion(slug);
     set({ status: "signedIn", user: session.cliente, tenantSlug: slug, biometriaActiva: false });
+    await get().refreshBiometria();
   };
 
   const restoreFailed = async (error: unknown, attempt: number) => {
@@ -174,26 +179,46 @@ export const useAuth = create<AuthState>((set, get) => {
       }
     },
 
+    refreshBiometria: async () => {
+      const attempt = operation;
+      if (get().status !== "signedIn") return;
+      try {
+        const disponible =
+          (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync());
+        if (attempt === operation) set({ biometriaDisponible: disponible });
+      } catch {
+        if (attempt === operation) set({ biometriaDisponible: false });
+      }
+    },
+
     setBiometria: async (on) => {
       const attempt = operation;
-      if (get().status !== "signedIn") return false;
-      const disponible =
-        (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync());
-      if (on && !disponible) return false;
-      if (on) {
-        const r = await LocalAuth.authenticateAsync({
-          promptMessage: "Confirma tu huella / Face ID",
-          cancelLabel: "Cancelar",
+      if (get().status !== "signedIn" || biometryBusy) return false;
+      biometryBusy = true;
+      try {
+        const disponible =
+          (await LocalAuth.hasHardwareAsync()) && (await LocalAuth.isEnrolledAsync());
+        if (on && !disponible) return false;
+        if (attempt !== operation) return false;
+        if (on) {
+          const r = await LocalAuth.authenticateAsync({
+            promptMessage: "Confirma tu huella / Face ID",
+            cancelLabel: "Cancelar",
+          });
+          if (!r.success) return false;
+        }
+        if (attempt !== operation) return false;
+        await serialize(async () => {
+          if (attempt === operation) await secureStorage.set(BIOMETRIA_KEY, on ? "1" : "0");
         });
-        if (!r.success) return false;
+        if (attempt !== operation) return false;
+        set({ biometriaActiva: on, biometriaDisponible: disponible });
+        return true;
+      } catch {
+        return false;
+      } finally {
+        biometryBusy = false;
       }
-      if (attempt !== operation) return false;
-      await serialize(async () => {
-        if (attempt === operation) await secureStorage.set(BIOMETRIA_KEY, on ? "1" : "0");
-      });
-      if (attempt !== operation) return false;
-      set({ biometriaActiva: on, biometriaDisponible: disponible });
-      return true;
     },
 
     login: async (tenantSlug, email, password) => {

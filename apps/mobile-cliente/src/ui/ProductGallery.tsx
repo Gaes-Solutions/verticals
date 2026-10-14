@@ -111,26 +111,37 @@ function ZoomPhoto({ uri, label }: { uri?: string; label: string }) {
   const scale = useRef(new Animated.Value(1)).current;
   const x = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(0)).current;
-  const current = useRef({ scale: 1, x: 0, y: 0 });
+  const rotation = useRef(new Animated.Value(0)).current;
+  const current = useRef({ scale: 1, x: 0, y: 0, angle: 0 });
   const initial = useRef({ scale: 1, x: 0, y: 0, distance: 0 });
   const size = useRef({ width: viewport.width, height: viewport.height * 0.6 });
   const [zoom, setZoom] = useState(1);
   const apply = useCallback(
-    (next: number, dx = current.current.x, dy = current.current.y) => {
+    (
+      next: number,
+      dx = current.current.x,
+      dy = current.current.y,
+      angle = current.current.angle,
+    ) => {
       const v = Math.max(1, Math.min(3, next));
-      const maxX = (size.current.width * (v - 1)) / 2;
-      const maxY = (size.current.height * (v - 1)) / 2;
+      const { width, height } = size.current;
+      const sideways = angle % 180 !== 0;
+      const fit = sideways ? Math.min(width / height, height / width) : 1;
+      const maxX = Math.max(0, ((sideways ? height : width) * v * fit - width) / 2);
+      const maxY = Math.max(0, ((sideways ? width : height) * v * fit - height) / 2);
       current.current = {
         scale: v,
+        angle,
         x: Math.max(-maxX, Math.min(maxX, dx)),
         y: Math.max(-maxY, Math.min(maxY, dy)),
       };
-      scale.setValue(v);
+      scale.setValue(v * fit);
+      rotation.setValue(angle);
       x.setValue(current.current.x);
       y.setValue(current.current.y);
       setZoom(v);
     },
-    [scale, x, y],
+    [scale, x, y, rotation],
   );
   const responder = useMemo(
     () =>
@@ -169,10 +180,26 @@ function ZoomPhoto({ uri, label }: { uri?: string; label: string }) {
         style={s.canvas}
         onLayout={(e) => {
           size.current = e.nativeEvent.layout;
+          apply(current.current.scale);
         }}
       >
         <Animated.View
-          style={[s.imageLayer, { transform: [{ translateX: x }, { translateY: y }, { scale }] }]}
+          style={[
+            s.imageLayer,
+            {
+              transform: [
+                { translateX: x },
+                { translateY: y },
+                {
+                  rotate: rotation.interpolate({
+                    inputRange: [0, 360],
+                    outputRange: ["0deg", "360deg"],
+                  }),
+                },
+                { scale },
+              ],
+            },
+          ]}
         >
           <ProductPhoto uri={uri} label={label} style={s.full} />
         </Animated.View>
@@ -192,8 +219,8 @@ function ZoomPhoto({ uri, label }: { uri?: string; label: string }) {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Restablecer zoom"
-          onPress={() => apply(1, 0, 0)}
+          accessibilityLabel="Restablecer imagen"
+          onPress={() => apply(1, 0, 0, 0)}
           style={s.reset}
         >
           <Text style={s.resetText}>{Math.round(zoom * 100)}% · Restablecer</Text>
@@ -208,6 +235,15 @@ function ZoomPhoto({ uri, label }: { uri?: string; label: string }) {
           <Icon name="add" />
         </Pressable>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Girar imagen 90 grados"
+        onPress={() => apply(current.current.scale, 0, 0, (current.current.angle + 90) % 360)}
+        style={s.rotateButton}
+      >
+        <Icon name="refresh-outline" size={20} color={colors.brand} />
+        <Text style={s.resetText}>Girar foto</Text>
+      </Pressable>
     </View>
   );
 }
@@ -248,7 +284,21 @@ const s = StyleSheet.create({
   canvas: { flex: 1, overflow: "hidden", backgroundColor: "#f3f5f0" },
   imageLayer: { width: "100%", height: "100%" },
   full: { width: "100%", height: "100%" },
-  zoomControls: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  zoomControls: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  rotateButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    minHeight: 48,
+  },
   reset: { padding: 12 },
   resetText: { color: colors.brand, fontSize: 13, fontWeight: "700" },
   paging: {

@@ -3,8 +3,18 @@ import { getPerfil } from "@/services/cliente";
 import { colors, shadow, space } from "@/theme";
 import { Button, Card, EntraParaVer, Icon, type IconName } from "@/ui";
 import { useQuery } from "@tanstack/react-query";
-import { router } from "expo-router";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  AppState,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 
 export default function Cuenta() {
   const conSesion = useAuth((sel) => sel.status) === "signedIn";
@@ -19,8 +29,25 @@ export default function Cuenta() {
   return <CuentaConSesion />;
 }
 function CuentaConSesion() {
-  const { user, tenantSlug, logout, biometriaActiva, biometriaDisponible, setBiometria } =
-    useAuth();
+  const {
+    user,
+    tenantSlug,
+    logout,
+    biometriaActiva,
+    biometriaDisponible,
+    setBiometria,
+    refreshBiometria,
+  } = useAuth();
+  const [bioBusy, setBioBusy] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      void refreshBiometria();
+      const subscription = AppState.addEventListener("change", (state) => {
+        if (state === "active") void refreshBiometria();
+      });
+      return () => subscription.remove();
+    }, [refreshBiometria]),
+  );
   const q = useQuery({ queryKey: ["perfil", tenantSlug, user?.id], queryFn: getPerfil });
   const p = q.data;
   const nombre = [p?.nombre, p?.apellidos].filter(Boolean).join(" ") || user?.nombre || "Cliente";
@@ -41,16 +68,27 @@ function CuentaConSesion() {
             <Text style={s.bioTitle}>Entrar con huella / Face ID</Text>
             <Text style={s.bioSub}>
               {biometriaDisponible
-                ? "Desbloquea la app con tu biometría."
+                ? bioBusy
+                  ? "Verificando…"
+                  : "Desbloquea tu sesión guardada con tu biometría."
                 : "Configura tu huella en los ajustes del teléfono."}
             </Text>
           </View>
           <Switch
             value={biometriaActiva}
-            disabled={!biometriaDisponible}
+            disabled={bioBusy || (!biometriaDisponible && !biometriaActiva)}
             onValueChange={async (v) => {
-              const ok = await setBiometria(v);
-              if (!ok && v) Alert.alert("No se pudo activar", "Verifica tu huella/Face ID.");
+              setBioBusy(true);
+              try {
+                const ok = await setBiometria(v);
+                if (!ok)
+                  Alert.alert(
+                    "Sin cambios",
+                    "No se cambió esta opción. Puedes volver a intentarlo.",
+                  );
+              } finally {
+                setBioBusy(false);
+              }
             }}
             trackColor={{ true: colors.brand, false: colors.line }}
           />

@@ -8,6 +8,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  RotateCw,
   X,
 } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
@@ -36,6 +37,8 @@ export function GaleriaProducto({
   const [activa, setActiva] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   const [escala, setEscala] = useState(1);
+  const [angulo, setAngulo] = useState(0);
+  const [tamano, setTamano] = useState({ width: 1, height: 1 });
   const dialog = useRef<HTMLDialogElement>(null);
   const visor = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -59,6 +62,7 @@ export function GaleriaProducto({
   function seleccionar(indice: number) {
     setActiva(indice);
     cambiarEscala(1);
+    setAngulo(0);
     if (visor.current) visor.current.scrollTo(0, 0);
   }
 
@@ -68,10 +72,15 @@ export function GaleriaProducto({
       return;
     }
     dialog.current?.showModal();
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setTamano({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    if (visor.current) observer.observe(visor.current);
     const anterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = anterior;
+      observer.disconnect();
     };
   }, [lightbox]);
 
@@ -116,6 +125,7 @@ export function GaleriaProducto({
         onClick={() => {
           if (zoom) {
             cambiarEscala(1);
+            setAngulo(0);
             setLightbox(true);
           }
         }}
@@ -185,16 +195,32 @@ export function GaleriaProducto({
           onPointerCancel={terminar}
           style={{ cursor: escala > 1 ? "grab" : "zoom-in" }}
         >
-          <div style={{ width: `${escala * 100}%`, height: `${escala * 100}%` }}>
-            <Imagen
-              key={principal}
-              src={principal}
-              alt={alt}
-              className="h-full w-full select-none object-contain p-3"
-            />
+          <div
+            style={{
+              width: `${escala * 100}%`,
+              height: `${escala * 100}%`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                transform: `rotate(${angulo}deg) scale(${angulo % 180 ? Math.min(tamano.width / tamano.height, tamano.height / tamano.width) : 1})`,
+              }}
+            >
+              <Imagen
+                key={principal}
+                src={principal}
+                alt={alt}
+                className="h-full w-full select-none object-contain p-3"
+              />
+            </div>
           </div>
         </div>
-        <div className="flex items-center justify-center gap-3 border-t p-3">
+        <div className="flex flex-wrap items-center justify-center gap-3 border-t p-3">
           {fotos.length > 1 && (
             <button
               type="button"
@@ -228,14 +254,26 @@ export function GaleriaProducto({
           </button>
           <button
             type="button"
-            aria-label="Restablecer zoom"
+            aria-label="Restablecer imagen"
             onClick={() => {
               cambiarEscala(1);
+              setAngulo(0);
               visor.current?.scrollTo(0, 0);
             }}
             className="rounded-full p-2 hover:bg-slate-100"
           >
             <RotateCcw size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Girar imagen 90 grados"
+            onClick={() => {
+              setAngulo((value) => (value + 90) % 360);
+              visor.current?.scrollTo(0, 0);
+            }}
+            className="flex min-h-11 items-center gap-2 rounded-full px-3 py-2 hover:bg-slate-100"
+          >
+            <RotateCw size={18} /> <span className="text-sm">Girar foto</span>
           </button>
           {fotos.length > 1 && (
             <button

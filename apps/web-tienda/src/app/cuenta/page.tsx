@@ -50,10 +50,21 @@ export default async function CuentaPage() {
   return (
     <div>
       <div className="store-account-welcome relative mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="store-kicker">TU ESPACIO PERSONAL</p>
-          <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
-          <p className="text-sm text-slate-500">{me.email}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div
+            aria-hidden="true"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-marca text-2xl font-bold text-white shadow-sm"
+          >
+            {(me.nombre?.trim()[0] ?? "?").toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="store-kicker">TU ESPACIO PERSONAL</p>
+            <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
+            <p className="break-all text-sm text-slate-500">{me.email}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {pedidos.length} pedidos · {wishlist.length} favoritos
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <NotificacionesCliente />
@@ -117,39 +128,66 @@ export default async function CuentaPage() {
           </Link>
         </div>
       ) : (
-        <div className="gx-table-wrap">
-          <table className="gx-table">
-            <thead>
-              <tr>
-                <th className="gx-th">Pedido</th>
-                <th className="gx-th">Fecha</th>
-                <th className="gx-th">Estado</th>
-                <th className="gx-th text-right">Total</th>
-                <th className="gx-th" />
-              </tr>
-            </thead>
-            <tbody>
-              {pedidos.map((p) => (
-                <tr key={p.id}>
-                  <td className="gx-td font-medium">{p.folioPublico}</td>
-                  <td className="gx-td text-slate-500">
+        <>
+          <div className="grid gap-3 sm:hidden">
+            {pedidos.map((p) => (
+              <Link
+                key={p.id}
+                href={`/cuenta/pedidos/${p.folioPublico}`}
+                className="gx-card flex items-center justify-between gap-4 p-4"
+              >
+                <div className="min-w-0">
+                  <p className="break-words font-semibold">Pedido {p.folioPublico}</p>
+                  <p className="mt-1 text-xs text-slate-500">
                     {new Date(p.createdAt).toLocaleDateString("es-MX")}
-                  </td>
-                  <td className="gx-td">{p.statusLabel ?? p.statusPedido}</td>
-                  <td className="gx-td text-right font-semibold">${Number(p.total).toFixed(2)}</td>
-                  <td className="gx-td text-right">
-                    <Link
-                      href={`/cuenta/pedidos/${p.folioPublico}`}
-                      className="font-medium text-marca hover:underline"
-                    >
-                      Ver detalle
-                    </Link>
-                  </td>
+                  </p>
+                  <p className="mt-2 text-sm text-marca">{p.statusLabel ?? p.statusPedido}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-bold">${Number(p.total).toFixed(2)}</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-xs text-marca">
+                    Ver detalle <ArrowRight size={14} />
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <div className="gx-table-wrap hidden sm:block">
+            <table className="gx-table">
+              <thead>
+                <tr>
+                  <th className="gx-th">Pedido</th>
+                  <th className="gx-th">Fecha</th>
+                  <th className="gx-th">Estado</th>
+                  <th className="gx-th text-right">Total</th>
+                  <th className="gx-th" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pedidos.map((p) => (
+                  <tr key={p.id}>
+                    <td className="gx-td font-medium">{p.folioPublico}</td>
+                    <td className="gx-td text-slate-500">
+                      {new Date(p.createdAt).toLocaleDateString("es-MX")}
+                    </td>
+                    <td className="gx-td">{p.statusLabel ?? p.statusPedido}</td>
+                    <td className="gx-td text-right font-semibold">
+                      ${Number(p.total).toFixed(2)}
+                    </td>
+                    <td className="gx-td text-right">
+                      <Link
+                        href={`/cuenta/pedidos/${p.folioPublico}`}
+                        className="font-medium text-marca hover:underline"
+                      >
+                        Ver detalle
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div id="direcciones" className="mt-10 scroll-mt-44">
