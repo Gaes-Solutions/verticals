@@ -62,6 +62,8 @@ export default function AppLayout() {
                 fontWeight: "600",
                 textAlign: "center",
                 paddingHorizontal: 2,
+                width: "100%",
+                flexShrink: 1,
               }}
             >
               {children}
