@@ -13,9 +13,10 @@ export default function AppLayout() {
   useCartSync();
   const insets = useSafeAreaInsets();
   const { fontScale, width } = useWindowDimensions();
+  const labelScale = Math.min(fontScale, 1.4);
   const labelLines = Math.max(
     2,
-    Math.ceil((9 * 11 * 0.7 * fontScale) / Math.max(24, width / 6 - 14)),
+    Math.ceil((9 * 11 * 0.7 * labelScale) / Math.max(24, width / 6 - 14)),
   );
   // Sin sesión NO se manda al login: el catálogo se mira como en cualquier
   // tienda en línea. Las pestañas de lo personal se esconden hasta que entre,
@@ -47,7 +48,7 @@ export default function AppLayout() {
           tabBarStyle: {
             borderTopColor: colors.line,
             backgroundColor: colors.card,
-            height: 40 + 14 * labelLines * fontScale + insets.bottom,
+            height: 40 + 14 * labelLines * labelScale + insets.bottom,
             paddingTop: 6,
             paddingBottom: Math.max(insets.bottom, 6),
           },
@@ -55,6 +56,7 @@ export default function AppLayout() {
           tabBarHideOnKeyboard: true,
           tabBarLabel: ({ children, color }) => (
             <Text
+              maxFontSizeMultiplier={1.4}
               style={{
                 color,
                 fontSize: 11,
