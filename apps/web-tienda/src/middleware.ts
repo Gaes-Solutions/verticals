@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { resolverHostTienda } from "./lib/storefront-host";
 
 const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
@@ -16,20 +17,20 @@ export async function middleware(req: NextRequest) {
   const esLocal = !host || host === "localhost" || host.startsWith("127.");
   if (!esLocal) {
     try {
-      const res = await fetch(
-        `${API_URL}/public/storefront/resolve?host=${encodeURIComponent(host)}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) {
-        return NextResponse.json(
-          { message: "No se pudo resolver esta tienda; inténtalo de nuevo." },
-          { status: 503 },
+      const tenantSlug = await resolverHostTienda(host, async () => {
+        const res = await fetch(
+          `${API_URL}/public/storefront/resolve?host=${encodeURIComponent(host)}`,
+          { cache: "no-store", signal: AbortSignal.timeout(8_000) },
         );
-      }
-      const { tenantSlug } = (await res.json()) as { tenantSlug?: string };
-      if (!tenantSlug) {
-        return NextResponse.json({ message: "Tienda no encontrada." }, { status: 404 });
-      }
+        if (!res.ok) {
+          throw new Error("Store resolution unavailable");
+        }
+        const { tenantSlug } = (await res.json()) as { tenantSlug?: string };
+        if (!tenantSlug) {
+          throw new Error("Store not found");
+        }
+        return tenantSlug;
+      });
       requestHeaders.set("x-tienda-slug", tenantSlug);
     } catch {
       // Nunca caer al tenant global: una resolución fallida no puede mostrar
