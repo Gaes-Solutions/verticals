@@ -193,3 +193,35 @@ describe("server restore and autosave", () => {
     });
   });
 });
+
+describe("undo without mixing accounts or losing other articles", () => {
+  it("undoes only the latest addition, including after the server saves it", () => {
+    useCart.getState().begin(owner);
+    useCart.getState().hydrate(owner, useCart.getState().revision, snapshot);
+    useCart.getState().add(owner, "v-b", 2, "B");
+    const revision = useCart.getState().revision;
+    useCart.getState().saved(owner, revision, snapshot);
+    expect(useCart.getState().undo(owner)).toBe(true);
+    expect(useCart.getState().lines).toEqual([{ varianteId: "v-a", cantidad: 1 }]);
+    expect(useCart.getState().sync).toBe("dirty");
+    expect(useCart.getState().quote).toBeNull();
+    expect(useCart.getState().undo(owner)).toBe(false);
+  });
+  it("restores a removed line and its previous quantity", () => {
+    useCart.getState().add(owner, "v-a", 1.5, "A");
+    useCart.getState().change(owner, "v-a", 0);
+    expect(useCart.getState().undo(owner)).toBe(true);
+    expect(useCart.getState().lines).toEqual([{ varianteId: "v-a", cantidad: 1.5 }]);
+  });
+  it("does not undo a different account or an expired action", () => {
+    vi.useFakeTimers();
+    useCart.getState().add(owner, "v-a", 1);
+    expect(useCart.getState().undo(accountCartKey("shop-a", "customer-b"))).toBe(false);
+    vi.advanceTimersByTime(10001);
+    expect(useCart.getState().undo(owner)).toBe(false);
+    vi.useRealTimers();
+    useCart.getState().begin(accountCartKey("shop-b", "customer-a"));
+    expect(useCart.getState().lastEdit).toBeNull();
+    expect(useCart.getState().undo(owner)).toBe(false);
+  });
+});

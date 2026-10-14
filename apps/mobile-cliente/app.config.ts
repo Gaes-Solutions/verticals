@@ -1,9 +1,11 @@
 import type { ExpoConfig } from "expo/config";
 
+const staging = process.env.EXPO_PUBLIC_APP_VARIANT === "staging";
+
 const config: ExpoConfig = {
-  name: "GaesSoft Tienda",
+  name: staging ? "Gaesland · Pruebas" : "GaesSoft Tienda",
   slug: "gaessoft-cliente",
-  scheme: "gaessoft-cliente",
+  scheme: staging ? "gaessoft-cliente-staging" : "gaessoft-cliente",
   owner: "gaes-soft",
   version: "0.1.0",
   orientation: "portrait",
@@ -11,11 +13,11 @@ const config: ExpoConfig = {
   newArchEnabled: true,
   icon: "./assets/icon.png",
   ios: {
-    bundleIdentifier: "com.gaessoft.cliente",
+    bundleIdentifier: staging ? "com.gaessoft.cliente.staging" : "com.gaessoft.cliente",
     supportsTablet: true,
   },
   android: {
-    package: "com.gaessoft.cliente",
+    package: staging ? "com.gaessoft.cliente.staging" : "com.gaessoft.cliente",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#0f766e",

@@ -26,10 +26,14 @@ export default function AppLayout() {
         tabBarInactiveTintColor: colors.faint,
         headerStyle: { backgroundColor: colors.card },
         headerTitleStyle: { color: colors.ink, fontWeight: "800" },
-        tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.card },
+        tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.card, paddingTop: 6 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
-      <Tabs.Screen name="tienda" options={{ title: "Tienda", tabBarIcon: tab("storefront") }} />
+      <Tabs.Screen
+        name="tienda"
+        options={{ title: "Tienda", headerShown: false, tabBarIcon: tab("storefront") }}
+      />
       <Tabs.Screen name="producto" options={{ ...hidden, title: "Artículo" }} />
       <Tabs.Screen name="checkout" options={{ ...hidden, title: "Entrega y pago" }} />
       <Tabs.Screen name="carrito" options={{ ...hidden, title: "Carrito" }} />

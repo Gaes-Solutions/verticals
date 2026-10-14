@@ -14,7 +14,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
       <Slot />
     </QueryClientProvider>
   );

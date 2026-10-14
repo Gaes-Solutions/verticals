@@ -16,10 +16,18 @@ export default function Notificaciones() {
         texto="Te avisamos cuando tu pedido cambie de estado o haya una promoción."
       />
     );
+  return <NotificacionesConSesion />;
+}
+function NotificacionesConSesion() {
   const { tenantSlug, user } = useAuth();
   const queryKey = ["notificaciones", tenantSlug, user?.id];
   const qc = useQueryClient();
-  const q = useQuery({ queryKey, retry: false, queryFn: listNotificaciones });
+  const q = useQuery({
+    queryKey,
+    retry: false,
+    queryFn: listNotificaciones,
+    refetchInterval: 45_000,
+  });
   const invalidar = () => qc.invalidateQueries({ queryKey });
   const leerUna = useMutation({ mutationFn: marcarLeida, onSuccess: invalidar });
   const leerTodas = useMutation({ mutationFn: marcarTodasLeidas, onSuccess: invalidar });

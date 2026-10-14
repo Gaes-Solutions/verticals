@@ -15,6 +15,6 @@ export default function Index() {
   }
   // Sin sesión NO se manda al login: se abre la tienda, como cualquier tienda
   // en línea. El login solo aparece si todavía no sabemos de qué tienda es.
-  if (status === "signedIn") return <Redirect href="/(app)" />;
+  if (status === "signedIn") return <Redirect href="/(app)/tienda" />;
   return <Redirect href={tiendaActual() ? "/(app)/tienda" : "/login"} />;
 }

@@ -5,7 +5,7 @@ import { initiateCheckout, recoverCheckout, useCheckout } from "@/lib/checkout-s
 import { money } from "@/lib/format";
 import { deliveryOptions, paymentConfig } from "@/services/checkout";
 import { listDirecciones } from "@/services/cliente";
-import { colors, radius, space } from "@/theme";
+import { colors, commerce, radius, space } from "@/theme";
 import { Button, CommerceError, EmptyState, EntraParaVer, Input } from "@/ui";
 import { CardPayment } from "@/ui/payments/CardPayment";
 import { useQuery } from "@tanstack/react-query";
@@ -150,6 +150,16 @@ function CheckoutScreen({ owner, name }: { owner: string; name: string }) {
         variant="ghost"
         onPress={() => router.push("/(app)/carrito")}
       />
+      <View style={s.welcome}>
+        <Text style={s.kicker}>UN PASO MÁS CERCA</Text>
+        <Text style={s.pageTitle}>Tu compra, a tu manera</Text>
+        <Text style={s.text}>Elige cómo recibirla y revisa el pago antes de confirmar.</Text>
+        <View style={s.steps}>
+          <Text style={s.stepDone}>✓ Carrito</Text>
+          <Text style={s.stepActive}>2 · Entrega</Text>
+          <Text style={s.stepPending}>3 · Pago</Text>
+        </View>
+      </View>
       <AttemptStatus owner={owner} />
       {checkout.owner === owner &&
         checkout.attempt?.paymentProvider === "stripe" &&
@@ -271,6 +281,11 @@ function PaymentChoices({ form }: { form: ReturnType<typeof useCheckoutForm> }) 
   );
   return (
     <View style={s.row}>
+      {!form.config.isFetching && !form.config.isError && methods.length === 0 ? (
+        <Text accessibilityRole="alert" style={s.text}>
+          Esta tienda todavía no tiene pagos en línea disponibles. Tu carrito se conserva.
+        </Text>
+      ) : null}
       {methods.map((method) => (
         <Button
           key={method}
@@ -436,6 +451,28 @@ function AttemptStatus({ owner }: { owner: string }) {
   );
 }
 const s = StyleSheet.create({
+  welcome: { gap: 10, marginBottom: 8 },
+  kicker: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "700" },
+  pageTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    color: commerce.forest,
+    letterSpacing: -0.5,
+    fontWeight: "800",
+  },
+  steps: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: commerce.sage,
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    marginTop: 4,
+  },
+  stepDone: { color: colors.brand, fontSize: 12, fontWeight: "600" },
+  stepActive: { color: commerce.forest, fontSize: 12, fontWeight: "800" },
+  stepPending: { color: colors.muted, fontSize: 12 },
   root: { flex: 1, backgroundColor: colors.bg },
   content: { padding: space.lg, width: "100%", maxWidth: 800, alignSelf: "center", gap: space.md },
   card: { backgroundColor: colors.card, borderRadius: radius.md, padding: space.lg, gap: space.md },

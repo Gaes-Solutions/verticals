@@ -8,7 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "corepack": true,
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -28,6 +30,16 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://app.angaes.com/api"
+      }
+    },
+    "gaesland-staging": {
+      "extends": "preview",
+      "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://verticals-staging.up.railway.app",
+        "EXPO_PUBLIC_TIENDA": "gaesland",
+        "EXPO_PUBLIC_APP_VARIANT": "staging"
       }
     }
   },

@@ -34,3 +34,6 @@ export const shadow = {
     elevation: 2,
   },
 } as const;
+
+/** Storefront surfaces share the web store’s green and gold identity. */
+export const commerce = { forest: "#103e34", gold: "#e5bc66", sage: "#eaf1ea" } as const;

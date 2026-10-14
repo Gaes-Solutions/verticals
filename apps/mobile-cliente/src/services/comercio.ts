@@ -13,6 +13,8 @@ export interface StoreProduct {
   enOferta: boolean;
   descuentoPct: number | null;
   stockPublico: number | null;
+  stockPorVariante?: Record<string, number> | null;
+  categoriaPublica?: { id: string; nombre: string; slugSeo: string } | null;
   variantes: { id: string; nombreVariante: string | null; precioBase: string }[];
 }
 export interface ServerCart {

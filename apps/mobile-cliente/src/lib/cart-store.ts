@@ -27,7 +27,17 @@ export function replaceQuantity(lines: CartLine[], variant: string, quantity: nu
   if (rest.length >= 100) throw new Error("El carrito admite hasta 100 artículos diferentes.");
   return [...rest, { varianteId: variant, cantidad: quantity }];
 }
+interface CartEdit {
+  owner: string;
+  scopeVersion: number;
+  revision: number;
+  variant: string;
+  before: number;
+  expiresAt: number;
+}
 interface CartState {
+  lastEdit: CartEdit | null;
+  undo: (owner: string) => boolean;
   owner: string | null;
   lines: CartLine[];
   cartId: string | null;
@@ -53,6 +63,23 @@ interface CartState {
 }
 export const useCart = create<CartState>((set, get) => ({
   owner: null,
+  lastEdit: null,
+  undo: (owner) => {
+    const current = get();
+    const edit = current.lastEdit;
+    if (
+      !edit ||
+      current.owner !== owner ||
+      edit.owner !== owner ||
+      edit.scopeVersion !== current.scopeVersion ||
+      edit.revision !== current.revision ||
+      Date.now() > edit.expiresAt
+    )
+      return false;
+    current.change(owner, edit.variant, edit.before);
+    set({ lastEdit: null });
+    return true;
+  },
   lines: [],
   cartId: null,
   coupon: "",
@@ -61,6 +88,7 @@ export const useCart = create<CartState>((set, get) => ({
     if (normalized.length > 80) throw new Error("El cupón admite hasta 80 caracteres.");
     set({
       coupon: normalized,
+      lastEdit: null,
       revision: get().revision + 1,
       sync: "dirty",
       syncError: null,
@@ -80,6 +108,7 @@ export const useCart = create<CartState>((set, get) => ({
     set({
       owner,
       scopeVersion: get().scopeVersion + 1,
+      lastEdit: null,
       lines: [],
       names: {},
       cartId: null,
@@ -137,6 +166,16 @@ export const useCart = create<CartState>((set, get) => ({
       names: same ? current.names : {},
       coupon: same ? current.coupon : "",
       lines: replaceQuantity(same ? current.lines : [], variant, quantity),
+      lastEdit: {
+        owner,
+        scopeVersion: current.scopeVersion,
+        revision: current.revision + 1,
+        variant,
+        before: same
+          ? (current.lines.find((line) => line.varianteId === variant)?.cantidad ?? 0)
+          : 0,
+        expiresAt: Date.now() + 10000,
+      },
       cartId: same ? current.cartId : null,
       revision: current.revision + 1,
       sync: "dirty",
@@ -158,6 +197,7 @@ export const useCart = create<CartState>((set, get) => ({
     set({
       owner: null,
       scopeVersion: get().scopeVersion + 1,
+      lastEdit: null,
       lines: [],
       cartId: null,
       coupon: "",
