@@ -50,9 +50,9 @@ function ProductDetails({ product }: { product: StoreProduct }) {
         pathname: "/login",
         params: { next: "/(app)/producto", slug: product.slugSeo },
       });
-      return;
+      return false;
     }
-    if (!ready || !selected || !allowed) return;
+    if (!ready || !selected || !allowed) return false;
     try {
       cart.add(
         owner,
@@ -61,8 +61,10 @@ function ProductDetails({ product }: { product: StoreProduct }) {
         `${product.tituloPublico}${selected.nombreVariante ? ` · ${selected.nombreVariante}` : ""}`,
       );
       setError("");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo agregar. Inténtalo de nuevo.");
+      return false;
     }
   };
   const adjust = (delta: number) => {
@@ -216,7 +218,11 @@ function ProductDetails({ product }: { product: StoreProduct }) {
             />
           </View>
         ) : null}
-        <SwipeAddButton onAdd={add} disabled={!allowed || (status === "signedIn" && !ready)} />
+        <SwipeAddButton
+          inCart={already}
+          onAdd={add}
+          disabled={!allowed || (status === "signedIn" && !ready)}
+        />
         {!selected && product.variantes.length > 1 ? (
           <Text style={s.note}>Selecciona una presentación para agregar.</Text>
         ) : null}

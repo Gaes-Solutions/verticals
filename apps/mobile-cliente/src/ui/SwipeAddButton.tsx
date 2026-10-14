@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { swipeComplete, swipeIntent } from "../lib/swipe";
 import { colors, radius } from "../theme";
@@ -9,13 +9,34 @@ export function SwipeAddButton({
   onAdd,
   disabled = false,
   compact = false,
+  inCart = 0,
 }: {
-  onAdd: () => void;
+  onAdd: () => boolean;
   disabled?: boolean;
   compact?: boolean;
+  inCart?: number;
 }) {
-  const latest = useRef({ onAdd, disabled });
-  latest.current = { onAdd, disabled };
+  const [success, setSuccess] = useState(false);
+  const previousQuantity = useRef(inCart);
+  useEffect(() => {
+    if (inCart < previousQuantity.current) setSuccess(false);
+    previousQuantity.current = inCart;
+  }, [inCart]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const confirmAdd = useCallback(() => {
+    if (!onAdd()) return;
+    setSuccess(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setSuccess(false), 1800);
+  }, [onAdd]);
+  const latest = useRef({ onAdd: confirmAdd, disabled });
+  latest.current = { onAdd: confirmAdd, disabled };
   const width = useRef(250);
   const cancelled = useRef(false);
   const suppressTap = useRef(false);
@@ -62,7 +83,7 @@ export function SwipeAddButton({
       onLayout={(e) => {
         width.current = e.nativeEvent.layout.width;
       }}
-      style={[s.root, compact && s.compact, disabled && s.disabled]}
+      style={[s.root, compact && s.compact, success && s.success, disabled && s.disabled]}
     >
       <Animated.View
         pointerEvents="none"
@@ -108,19 +129,19 @@ export function SwipeAddButton({
           reset();
         }}
         onPress={() => {
-          if (!suppressTap.current && !cancelled.current) onAdd();
+          if (!suppressTap.current && !cancelled.current) confirmAdd();
           cancelled.current = false;
         }}
         style={({ pressed }) => [s.button, compact && s.compactButton, pressed && s.pressed]}
       >
         <Icon
-          name={dragging ? "arrow-forward" : "add"}
+          name={success ? "checkmark" : dragging ? "arrow-forward" : "add"}
           size={compact ? 18 : 22}
           color={colors.white}
         />
         <View style={s.words}>
           <Text style={[s.label, compact && s.compactLabel]}>
-            {compact ? "Toca o desliza →" : "Agregar al carrito"}
+            {success ? "Agregado" : compact ? "Toca o desliza →" : "Agregar al carrito"}
           </Text>
           {!compact && <Text style={s.hint}>Toca o desliza a la derecha →</Text>}
         </View>
@@ -135,6 +156,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.brand,
     minHeight: 58,
   },
+  success: { backgroundColor: "#145b48" },
   compact: { minHeight: 52, borderRadius: 10 },
   fill: { position: "absolute", top: 0, bottom: 0, left: 0, backgroundColor: "#145b48" },
   button: {

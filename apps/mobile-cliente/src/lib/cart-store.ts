@@ -27,16 +27,19 @@ export function replaceQuantity(lines: CartLine[], variant: string, quantity: nu
   if (rest.length >= 100) throw new Error("El carrito admite hasta 100 artículos diferentes.");
   return [...rest, { varianteId: variant, cantidad: quantity }];
 }
-interface CartEdit {
+export interface CartEdit {
   owner: string;
   scopeVersion: number;
   revision: number;
   variant: string;
   before: number;
+  after: number;
   expiresAt: number;
 }
 interface CartState {
   lastEdit: CartEdit | null;
+  notice: (CartEdit & { kind: "change" | "undo" }) | null;
+  dismissNotice: () => void;
   undo: (owner: string) => boolean;
   owner: string | null;
   lines: CartLine[];
@@ -64,6 +67,8 @@ interface CartState {
 export const useCart = create<CartState>((set, get) => ({
   owner: null,
   lastEdit: null,
+  notice: null,
+  dismissNotice: () => set({ notice: null }),
   undo: (owner) => {
     const current = get();
     const edit = current.lastEdit;
@@ -77,7 +82,8 @@ export const useCart = create<CartState>((set, get) => ({
     )
       return false;
     current.change(owner, edit.variant, edit.before);
-    set({ lastEdit: null });
+    const notice = get().notice;
+    set({ lastEdit: null, notice: notice ? { ...notice, kind: "undo" } : null });
     return true;
   },
   lines: [],
@@ -89,6 +95,7 @@ export const useCart = create<CartState>((set, get) => ({
     set({
       coupon: normalized,
       lastEdit: null,
+      notice: null,
       revision: get().revision + 1,
       sync: "dirty",
       syncError: null,
@@ -109,6 +116,7 @@ export const useCart = create<CartState>((set, get) => ({
       owner,
       scopeVersion: get().scopeVersion + 1,
       lastEdit: null,
+      notice: null,
       lines: [],
       names: {},
       cartId: null,
@@ -157,25 +165,34 @@ export const useCart = create<CartState>((set, get) => ({
     if (get().owner === owner)
       set({ ready: true, busy: false, sync: "error", syncError: message, quote: null });
   },
-  retry: () => set({ sync: "dirty", syncError: null, quote: null }),
+  retry: () => {
+    const notice = get().notice;
+    set({
+      sync: "dirty",
+      syncError: null,
+      quote: null,
+      notice: notice ? { ...notice, expiresAt: Date.now() + 10000 } : null,
+    });
+  },
   change: (owner, variant, quantity) => {
     const current = get();
     const same = current.owner === owner;
+    const edit: CartEdit = {
+      owner,
+      scopeVersion: current.scopeVersion,
+      revision: current.revision + 1,
+      variant,
+      after: quantity,
+      before: same ? (current.lines.find((line) => line.varianteId === variant)?.cantidad ?? 0) : 0,
+      expiresAt: Date.now() + 10000,
+    };
     set({
       owner,
       names: same ? current.names : {},
       coupon: same ? current.coupon : "",
       lines: replaceQuantity(same ? current.lines : [], variant, quantity),
-      lastEdit: {
-        owner,
-        scopeVersion: current.scopeVersion,
-        revision: current.revision + 1,
-        variant,
-        before: same
-          ? (current.lines.find((line) => line.varianteId === variant)?.cantidad ?? 0)
-          : 0,
-        expiresAt: Date.now() + 10000,
-      },
+      lastEdit: edit,
+      notice: { ...edit, kind: "change" },
       cartId: same ? current.cartId : null,
       revision: current.revision + 1,
       sync: "dirty",
@@ -198,6 +215,7 @@ export const useCart = create<CartState>((set, get) => ({
       owner: null,
       scopeVersion: get().scopeVersion + 1,
       lastEdit: null,
+      notice: null,
       lines: [],
       cartId: null,
       coupon: "",

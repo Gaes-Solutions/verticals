@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth-store";
+import { cartCount } from "@/lib/cart-feedback";
 import { accountCartKey, useCart } from "@/lib/cart-store";
 import { checkoutBlocksCart, useCheckout } from "@/lib/checkout-store";
 import { money } from "@/lib/format";
@@ -7,6 +8,7 @@ import { tiendaActual } from "@/lib/tienda";
 import { type StoreProduct, listStoreProducts, storeConfig } from "@/services/comercio";
 import { colors, commerce, space } from "@/theme";
 import { Button, CommerceError, EmptyState, Icon, Loading } from "@/ui";
+import { CartButton } from "@/ui/CartButton";
 import { CartDock } from "@/ui/CartDock";
 import { ProductPhoto } from "@/ui/ProductPhoto";
 import { SwipeAddButton } from "@/ui/SwipeAddButton";
@@ -57,24 +59,26 @@ export default function Tienda() {
   const add = (item: StoreProduct) => {
     if (status !== "signedIn") {
       router.push({ pathname: "/login", params: { next: "/(app)/producto", slug: item.slugSeo } });
-      return;
+      return false;
     }
     const v = item.variantes[0];
     if (item.variantes.length !== 1 || !v) {
       open(item);
-      return;
+      return false;
     }
-    if (!ready) return;
+    if (!ready) return false;
     const already = cart.lines.find((l) => l.varianteId === v.id)?.cantidad ?? 0;
     if (!canAddQuantity(item, v.id, 1, already)) {
       setError("Ya tienes la cantidad disponible de este artículo en el carrito.");
-      return;
+      return false;
     }
     try {
       cart.add(owner, v.id, 1, item.tituloPublico);
       setError("");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo agregar. Inténtalo de nuevo.");
+      return false;
     }
   };
   const header = (
@@ -95,14 +99,7 @@ export default function Tienda() {
         >
           <Icon name="person-outline" color={commerce.forest} />
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ver carrito"
-          onPress={() => router.push("/(app)/carrito")}
-          style={s.headerButton}
-        >
-          <Icon name="bag-handle-outline" color={commerce.forest} />
-        </Pressable>
+        <CartButton />
       </View>
       <View style={s.search}>
         <Icon name="search-outline" color={colors.muted} size={20} />
@@ -239,6 +236,17 @@ export default function Tienda() {
                   ) : null}
                   {money(item.precioPromocion ?? item.precioDesde)}
                 </Text>
+                {cart.owner === owner &&
+                cart.lines.some((line) => item.variantes.some((v) => v.id === line.varianteId)) ? (
+                  <Text style={s.inCart}>
+                    ✓ En tu carrito:{" "}
+                    {cartCount(
+                      cart.lines.filter((line) =>
+                        item.variantes.some((v) => v.id === line.varianteId),
+                      ),
+                    )}
+                  </Text>
+                ) : null}
                 <Text style={s.availability}>
                   {item.stockPublico === 0
                     ? "Agotado por ahora"
@@ -252,6 +260,15 @@ export default function Tienda() {
               {item.variantes.length === 1 ? (
                 <SwipeAddButton
                   compact
+                  inCart={
+                    cart.owner === owner
+                      ? cartCount(
+                          cart.lines.filter((line) =>
+                            item.variantes.some((v) => v.id === line.varianteId),
+                          ),
+                        )
+                      : 0
+                  }
                   disabled={item.stockPublico === 0 || (status === "signedIn" && !ready)}
                   onAdd={() => add(item)}
                 />
@@ -405,6 +422,7 @@ const s = StyleSheet.create({
   price: { color: commerce.forest, fontWeight: "800", fontSize: 20, letterSpacing: -0.5 },
   fromPrice: { fontSize: 11, fontWeight: "400" },
   oldPrice: { color: colors.muted, textDecorationLine: "line-through", fontSize: 11, height: 16 },
+  inCart: { color: colors.brand, fontSize: 11, fontWeight: "700", marginTop: 3 },
   availability: { color: colors.muted, fontSize: 10, lineHeight: 14 },
   addWrap: { padding: 10, paddingTop: 0, marginTop: "auto" },
   footer: { padding: space.lg, gap: 12, alignItems: "center" },
