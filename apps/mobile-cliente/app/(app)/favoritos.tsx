@@ -16,6 +16,9 @@ export default function Favoritos() {
         texto="Guarda lo que te gusta para encontrarlo rápido la próxima vez."
       />
     );
+  return <FavoritosConSesion />;
+}
+function FavoritosConSesion() {
   const { tenantSlug, user } = useAuth();
   const queryKey = ["wishlist", tenantSlug, user?.id];
   const qc = useQueryClient();

@@ -16,9 +16,12 @@ export default function Cuenta() {
         texto="Tus datos, direcciones y forma de entrar a la app."
       />
     );
+  return <CuentaConSesion />;
+}
+function CuentaConSesion() {
   const { user, tenantSlug, logout, biometriaActiva, biometriaDisponible, setBiometria } =
     useAuth();
-  const q = useQuery({ queryKey: ["perfil"], queryFn: getPerfil });
+  const q = useQuery({ queryKey: ["perfil", tenantSlug, user?.id], queryFn: getPerfil });
   const p = q.data;
   const nombre = [p?.nombre, p?.apellidos].filter(Boolean).join(" ") || user?.nombre || "Cliente";
 

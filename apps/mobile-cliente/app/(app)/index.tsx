@@ -24,6 +24,9 @@ export default function Pedidos() {
         texto="Aquí verás lo que has comprado y en dónde viene cada pedido."
       />
     );
+  return <PedidosConSesion />;
+}
+function PedidosConSesion() {
   const { tenantSlug, user } = useAuth();
   const queryKey = ["pedidos", tenantSlug, user?.id];
   const [folio, setFolio] = useState<string | null>(null);
