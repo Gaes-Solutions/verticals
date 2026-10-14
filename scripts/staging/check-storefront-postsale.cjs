@@ -135,6 +135,8 @@ require("node:fs").mkdirSync("/tmp/gaes-design", { recursive: true });
     console.log("Esperando aviso nuevo por actualización de la campana, sin recargar…");
     await page.getByText("QA aviso nuevo", { exact: true }).waitFor({ timeout: 60000 });
     assert.equal(await bell.innerText(), "1");
+    const noticeBounds = await page.getByText("QA aviso nuevo", { exact: true }).boundingBox();
+    assert.ok(noticeBounds && noticeBounds.x >= 0 && noticeBounds.x + noticeBounds.width <= 390);
     await page.getByText("QA aviso nuevo", { exact: true }).click();
     await page.waitForFunction(() => {
       const b = document.querySelector('button[aria-label="Notificaciones"]');

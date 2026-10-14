@@ -105,7 +105,7 @@ export function NotificacionesCliente() {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="sm:relative">
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}

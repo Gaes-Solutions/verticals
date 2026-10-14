@@ -49,7 +49,7 @@ export default async function CuentaPage() {
 
   return (
     <div>
-      <div className="store-account-welcome mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="store-account-welcome relative mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="store-kicker">TU ESPACIO PERSONAL</p>
           <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
