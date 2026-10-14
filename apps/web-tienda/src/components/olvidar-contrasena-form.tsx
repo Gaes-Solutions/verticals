@@ -49,6 +49,9 @@ export function OlvidarContrasenaForm() {
             Inicia sesión
           </Link>
         </p>
+        <button type="button" onClick={() => setEnviado(false)} className="gx-btn-secondary mt-4">
+          Corregir correo
+        </button>
       </div>
     );
   }
@@ -64,15 +67,20 @@ export function OlvidarContrasenaForm() {
           <span className="gx-label">Correo</span>
           <input
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             className="gx-input"
           />
         </label>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
         <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
-          {cargando ? "…" : "Enviar enlace"}
+          {cargando ? "Enviando enlace…" : "Enviar enlace"}
         </button>
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">

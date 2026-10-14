@@ -164,7 +164,15 @@ export default async function PedidoDetallePage({
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
-        {cancelable && <CancelarPedido folio={pedido.folioPublico} />}
+        {cancelable &&
+          (pedido.cancelacionAutomatica === false ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              Hay un pago en proceso o confirmado. Contacta a la tienda para cancelar y verificar el
+              reembolso.
+            </p>
+          ) : (
+            <CancelarPedido folio={pedido.folioPublico} />
+          ))}
         {facturable && <FacturaPedido folio={pedido.folioPublico} />}
       </div>
 

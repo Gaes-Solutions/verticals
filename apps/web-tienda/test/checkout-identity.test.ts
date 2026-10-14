@@ -127,11 +127,28 @@ describe("checkout BFF: propiedad y reintentos", () => {
       expect(api).toHaveBeenCalledTimes(1);
     },
   );
-  it("GET 404 es ambiguo y nunca crea otro intento", async () => {
+  it("GET 404 permite corregir el mismo intento, sin crear pedido ni iniciar un cobro", async () => {
+    const response = await GET(recovery());
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: "ATTEMPT_NOT_FOUND", safeToRetry: true });
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(api).toHaveBeenCalledWith(
+      `/checkout/intentos/${checkoutKey(secret, "tienda-a", "guest", publicKey)}`,
+    );
+  });
+  it("GET sin respuesta del servidor conserva la incertidumbre y no permite reiniciar", async () => {
+    vi.mocked(api).mockReset().mockRejectedValue(new Error("network failure"));
     const response = await GET(recovery());
     expect(response.status).toBe(503);
-    expect((await response.json()).code).toBe("CHECKOUT_UNCERTAIN");
-    expect(api).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({ code: "CHECKOUT_UNCERTAIN" });
+    expect(await (await GET(recovery())).json()).not.toHaveProperty("safeToRetry");
+  });
+  it("solo identifica como pago al recoger un resultado pendiente del servidor", async () => {
+    vi.mocked(api)
+      .mockReset()
+      .mockResolvedValue({ ...result, intentId: "mostrador_ORDER1", intentStatus: "pendiente" });
+    const response = await GET(recovery());
+    expect(await response.json()).toMatchObject({ pagoAlRecoger: true, intentStatus: "pendiente" });
   });
   it("GET pendiente no se anuncia pagado y no expone secretos de proveedor", async () => {
     vi.mocked(api)

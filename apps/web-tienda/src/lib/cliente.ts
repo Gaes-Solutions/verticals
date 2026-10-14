@@ -126,6 +126,8 @@ export interface HitoPedido {
 
 export interface PedidoDetalleCliente {
   folioPublico: string;
+  statusPago: string;
+  cancelacionAutomatica: boolean;
   statusPedido: string;
   statusLabel: string;
   metodoEnvio: string;

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DialogoTienda } from "./dialogo-tienda";
 
 interface ItemPedido {
   varianteId: string;
@@ -57,6 +58,16 @@ export function SolicitarDevolucion({
   if (!devolible) return null;
 
   async function enviar() {
+    if (enviando) return;
+    if (
+      items.some((it) => {
+        const n = cantidades[it.varianteId] ?? 0;
+        return !Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > it.cantidad;
+      })
+    ) {
+      setError("Revisa las cantidades: usa números enteros sin superar lo comprado.");
+      return;
+    }
     const seleccion = items
       .map((it) => ({ ...it, cantidad: cantidades[it.varianteId] ?? 0 }))
       .filter((it) => it.cantidad > 0);
@@ -66,31 +77,39 @@ export function SolicitarDevolucion({
     }
     setEnviando(true);
     setError(null);
-    const res = await fetch(`/api/cuenta/pedidos/${folio}/devoluciones`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        motivo,
-        descripcion: descripcion || undefined,
-        items: seleccion.map((it) => ({
-          varianteId: it.varianteId,
-          nombre: it.nombre,
-          cantidad: it.cantidad,
-        })),
-      }),
-    });
-    setEnviando(false);
-    if (res.status === 401) {
-      router.push("/cuenta/login");
-      return;
+    try {
+      const res = await fetch(`/api/cuenta/pedidos/${folio}/devoluciones`, {
+        method: "POST",
+        signal: AbortSignal.timeout(20000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          motivo,
+          descripcion: descripcion || undefined,
+          items: seleccion.map((it) => ({
+            varianteId: it.varianteId,
+            nombre: it.nombre,
+            cantidad: it.cantidad,
+          })),
+        }),
+      });
+      if (res.status === 401) {
+        setError("Tu sesión venció. Inicia sesión en otra pestaña; conservamos tus datos aquí.");
+        return;
+      }
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(data.message ?? "No se pudo enviar la solicitud");
+        return;
+      }
+      setAbierto(false);
+      router.refresh();
+    } catch {
+      setError(
+        "No pudimos confirmar la solicitud. Consulta el pedido antes de volver a enviarla; conservamos tus datos.",
+      );
+    } finally {
+      setEnviando(false);
     }
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { message?: string };
-      setError(data.message ?? "No se pudo enviar la solicitud");
-      return;
-    }
-    setAbierto(false);
-    router.refresh();
   }
 
   return (
@@ -100,79 +119,74 @@ export function SolicitarDevolucion({
       </button>
 
       {abierto && (
-        <div className="gx-modal-overlay">
-          <div className="gx-modal-panel">
-            <div className="mb-3 flex items-start justify-between">
-              <h2 className="font-bold text-lg">Solicitar devolución</h2>
-              <button
-                type="button"
-                onClick={() => setAbierto(false)}
-                className="gx-btn-ghost !px-2"
-              >
-                ✕
-              </button>
-            </div>
-
-            <label className="mb-4 block">
-              <span className="gx-label">Motivo</span>
-              <select
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                className="gx-input"
-              >
-                {MOTIVOS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <p className="mb-2 font-medium text-slate-700 text-sm">¿Qué artículos devuelves?</p>
-            <div className="mb-4 space-y-2">
-              {items.map((it) => (
-                <div
-                  key={it.varianteId}
-                  className="flex items-center justify-between gap-2 text-sm"
-                >
-                  <span className="flex-1">{it.nombre}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={it.cantidad}
-                    value={cantidades[it.varianteId] ?? 0}
-                    onChange={(e) =>
-                      setCantidades((c) => ({
-                        ...c,
-                        [it.varianteId]: Math.max(0, Math.min(it.cantidad, Number(e.target.value))),
-                      }))
-                    }
-                    className="gx-input w-16 !px-2 text-center"
-                  />
-                  <span className="text-slate-400">/ {it.cantidad}</span>
-                </div>
+        <DialogoTienda
+          titulo="Solicitar devolución"
+          bloqueado={enviando}
+          onCerrar={() => setAbierto(false)}
+        >
+          <p className="mb-4 text-sm text-slate-600">
+            La tienda revisará tu solicitud. Enviarla todavía no confirma un reembolso.
+          </p>
+          <label className="mb-4 block">
+            <span className="gx-label">Motivo</span>
+            <select value={motivo} onChange={(e) => setMotivo(e.target.value)} className="gx-input">
+              {MOTIVOS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
               ))}
-            </div>
+            </select>
+          </label>
 
-            <textarea
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Cuéntanos qué pasó (opcional)"
-              rows={3}
-              className="gx-input mb-4"
-            />
-
-            {error && <p className="mb-3 text-danger text-sm">{error}</p>}
-            <button
-              type="button"
-              onClick={enviar}
-              disabled={enviando}
-              className="gx-btn-primary w-full"
-            >
-              {enviando ? "Enviando…" : "Enviar solicitud"}
-            </button>
+          <p className="mb-2 font-medium text-slate-700 text-sm">¿Qué artículos devuelves?</p>
+          <div className="mb-4 space-y-2">
+            {items.map((it) => (
+              <div key={it.varianteId} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex-1">{it.nombre}</span>
+                <input
+                  type="number"
+                  aria-label={`Cantidad a devolver de ${it.nombre}`}
+                  step={1}
+                  min={0}
+                  max={it.cantidad}
+                  value={cantidades[it.varianteId] ?? 0}
+                  onChange={(e) =>
+                    setCantidades((c) => ({
+                      ...c,
+                      [it.varianteId]: Math.max(0, Math.min(it.cantidad, Number(e.target.value))),
+                    }))
+                  }
+                  className="gx-input w-16 !px-2 text-center"
+                />
+                <span className="text-slate-400">/ {it.cantidad}</span>
+              </div>
+            ))}
           </div>
-        </div>
+
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            aria-label="Detalle de la devolución"
+            maxLength={1000}
+            placeholder="Cuéntanos qué pasó (opcional)"
+            rows={3}
+            className="gx-input mb-4"
+          />
+
+          {error && (
+            <p role="alert" className="mb-3 text-danger text-sm">
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={enviar}
+            disabled={enviando}
+            className="gx-btn-primary w-full"
+          >
+            {enviando ? "Enviando…" : "Enviar solicitud"}
+          </button>
+        </DialogoTienda>
       )}
     </>
   );

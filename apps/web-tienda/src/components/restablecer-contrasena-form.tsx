@@ -46,10 +46,12 @@ export function RestablecerContrasenaForm() {
     }
   }
 
-  if (!token) {
+  if (!/^[a-f0-9]{64}$/.test(token)) {
     return (
       <div className="mx-auto max-w-sm text-center">
-        <h1 className="mb-4 text-2xl font-bold">Enlace incompleto</h1>
+        <h1 className="mb-4 text-2xl font-bold">
+          {token ? "Enlace inválido" : "Enlace incompleto"}
+        </h1>
         <p className="text-slate-600">
           Este enlace no trae el código de restablecimiento. Usa el botón del correo que recibiste o
           pide uno nuevo.
@@ -81,6 +83,7 @@ export function RestablecerContrasenaForm() {
           <span className="gx-label">Nueva contraseña (mín. 8)</span>
           <input
             type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -92,6 +95,7 @@ export function RestablecerContrasenaForm() {
           <span className="gx-label">Confirma tu nueva contraseña</span>
           <input
             type="password"
+            autoComplete="new-password"
             value={confirmar}
             onChange={(e) => setConfirmar(e.target.value)}
             required
@@ -101,7 +105,9 @@ export function RestablecerContrasenaForm() {
         </label>
         {error && (
           <div>
-            <p className="text-sm text-danger">{error}</p>
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
             <p className="mt-1 text-sm">
               <Link href="/cuenta/olvidar-contrasena" className="font-medium text-marca">
                 Pedir un nuevo enlace
@@ -110,7 +116,7 @@ export function RestablecerContrasenaForm() {
           </div>
         )}
         <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
-          {cargando ? "…" : "Guardar contraseña"}
+          {cargando ? "Guardando contraseña…" : "Guardar contraseña"}
         </button>
       </form>
     </div>

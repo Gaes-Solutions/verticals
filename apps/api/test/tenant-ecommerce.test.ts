@@ -855,6 +855,30 @@ describe("devolución desde la tienda (solicitud → aprobación) + mensajería"
     return { authorization: `Bearer ${clienteToken}` };
   }
 
+  it.each(["ajeno", "excesivo", "duplicado"])(
+    "rechaza artículos de devolución %s antes de guardar la solicitud",
+    async (caso) => {
+      const item = { varianteId, nombre: "Playera GaesSoft", cantidad: 1 };
+      const items =
+        caso === "ajeno"
+          ? [{ ...item, varianteId: "no-comprado" }]
+          : caso === "excesivo"
+            ? [{ ...item, cantidad: 100000 }]
+            : [item, item];
+      const response = await app.inject({
+        method: "POST",
+        url: `/cliente-portal/pedidos/${pedidoFolio}/devoluciones`,
+        headers: clienteAuth(),
+        payload: { motivo: "defectuoso", items },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(
+        await getTenantClient(TENANT_SLUG).solicitudDevolucion.count({
+          where: { pedidoEcommerceId: pedidoId },
+        }),
+      ).toBe(0);
+    },
+  );
   it("cliente solicita devolución de 1 unidad", async () => {
     const res = await app.inject({
       method: "POST",

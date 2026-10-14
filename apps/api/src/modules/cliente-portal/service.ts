@@ -220,6 +220,10 @@ export async function getPedidoClienteDetalle(
 
   return {
     folioPublico: pedido.folioPublico,
+    statusPago: pedido.statusPago,
+    cancelacionAutomatica:
+      pedido.statusPago !== "pago_confirmado" &&
+      (!pedido.paymentProvider || pedido.paymentProvider === "mock"),
     statusPedido: pedido.statusPedido,
     statusLabel: labelDe(etiquetas, pedido.statusPedido),
     metodoEnvio: pedido.metodoEnvio,

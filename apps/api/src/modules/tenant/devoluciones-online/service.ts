@@ -83,6 +83,29 @@ export async function solicitarDevolucion(
   if (!input.items.length) {
     throw new DevolucionOnlineError(422, "Selecciona al menos un artículo a devolver");
   }
+  const vendidas = await client.ventaLinea.findMany({
+    where: { ventaId: pedido.ventaIdGenerada },
+    select: { varianteId: true, cantidad: true },
+  });
+  const limites = new Map<string, number>();
+  for (const linea of vendidas)
+    limites.set(linea.varianteId, (limites.get(linea.varianteId) ?? 0) + Number(linea.cantidad));
+  const seleccionadas = new Set<string>();
+  for (const item of input.items) {
+    const maximo = limites.get(item.varianteId);
+    if (
+      seleccionadas.has(item.varianteId) ||
+      maximo == null ||
+      !Number.isInteger(item.cantidad) ||
+      item.cantidad <= 0 ||
+      item.cantidad > maximo
+    )
+      throw new DevolucionOnlineError(
+        422,
+        "Revisa los artículos y cantidades: solo puedes devolver lo comprado en este pedido.",
+      );
+    seleccionadas.add(item.varianteId);
+  }
   // No permitir una nueva solicitud si ya hay una abierta para el pedido.
   const abierta = await client.solicitudDevolucion.findFirst({
     where: { pedidoEcommerceId: pedido.id, estado: { in: ["solicitada", "aprobada"] } },

@@ -12,13 +12,19 @@ export function NotificacionesCliente() {
   const [items, setItems] = useState<NotificacionCliente[]>([]);
   const [noLeidas, setNoLeidas] = useState(0);
   const [abierto, setAbierto] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [marcandoTodas, setMarcandoTodas] = useState(false);
+  const pendientes = useRef(new Set<string>());
+  const revision = useRef(0);
   const ref = useRef<HTMLDivElement>(null);
 
   const cargar = useCallback(async () => {
     try {
+      const version = revision.current;
       const res = await fetch("/api/cuenta/notificaciones", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { items: NotificacionCliente[]; noLeidas: number };
+      if (version !== revision.current) return;
       setItems(data.items ?? []);
       setNoLeidas(data.noLeidas ?? 0);
     } catch {
@@ -44,21 +50,58 @@ export function NotificacionesCliente() {
       if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
     }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAbierto(false);
+        ref.current?.querySelector("button")?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, [abierto]);
 
   async function marcar(n: NotificacionCliente) {
-    if (!n.leida) {
-      await fetch(`/api/cuenta/notificaciones/${n.id}/leer`, { method: "POST" }).catch(() => {});
-      setNoLeidas((c) => Math.max(0, c - 1));
-      setItems((arr) => arr.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
+    if (!n.leida && !marcandoTodas && !pendientes.current.has(n.id)) {
+      pendientes.current.add(n.id);
+      setError(null);
+      try {
+        const res = await fetch(`/api/cuenta/notificaciones/${n.id}/leer`, {
+          method: "POST",
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) throw new Error("No pudimos marcar el aviso como leído. Reintenta.");
+        revision.current += 1;
+        setNoLeidas((c) => Math.max(0, c - 1));
+        setItems((arr) => arr.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
+      } catch {
+        setError("No pudimos marcar el aviso como leído. Reintenta.");
+      } finally {
+        pendientes.current.delete(n.id);
+      }
     }
   }
 
   async function marcarTodas() {
-    await fetch("/api/cuenta/notificaciones/leer-todas", { method: "POST" }).catch(() => {});
-    setItems((arr) => arr.map((x) => ({ ...x, leida: true })));
-    setNoLeidas(0);
+    if (marcandoTodas || pendientes.current.size > 0) return;
+    setMarcandoTodas(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/cuenta/notificaciones/leer-todas", {
+        method: "POST",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error("No pudimos marcar los avisos como leídos. Reintenta.");
+      revision.current += 1;
+      setItems((arr) => arr.map((x) => ({ ...x, leida: true })));
+      setNoLeidas(0);
+    } catch {
+      setError("No pudimos marcar los avisos como leídos. Reintenta.");
+    } finally {
+      setMarcandoTodas(false);
+    }
   }
 
   return (
@@ -67,6 +110,7 @@ export function NotificacionesCliente() {
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-label="Notificaciones"
+        aria-expanded={abierto}
         className="relative flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
       >
         <Bell size={20} strokeWidth={1.75} />
@@ -82,11 +126,21 @@ export function NotificacionesCliente() {
           <div className="flex items-center justify-between border-b px-4 py-2">
             <span className="font-semibold text-slate-700 text-sm">Notificaciones</span>
             {noLeidas > 0 && (
-              <button type="button" onClick={marcarTodas} className="gx-btn-ghost !px-2 text-marca">
-                Marcar todas
+              <button
+                type="button"
+                disabled={marcandoTodas}
+                onClick={marcarTodas}
+                className="gx-btn-ghost !px-2 text-marca"
+              >
+                {marcandoTodas ? "Guardando…" : "Marcar todas"}
               </button>
             )}
           </div>
+          {error && (
+            <p role="alert" className="px-4 py-2 text-sm text-danger">
+              {error}
+            </p>
+          )}
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
               <p className="px-4 py-8 text-center text-slate-400 text-sm">Sin notificaciones</p>

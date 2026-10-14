@@ -9,7 +9,7 @@ export function BotonAgregar({
   onAgregar,
 }: { disabled?: boolean; onAgregar: () => void }) {
   const [avance, setAvance] = useState(0);
-  const inicio = useRef<{ x: number; y: number; umbral: number } | null>(null);
+  const inicio = useRef<{ x: number; y: number; umbral: number; pointerId: number } | null>(null);
   const omitirClick = useRef(false);
   return (
     <button
@@ -21,17 +21,25 @@ export function BotonAgregar({
       style={{ touchAction: "pan-y" }}
       onPointerDown={(e) => {
         if (disabled) return;
+        if (!e.isPrimary) {
+          inicio.current = null;
+          setAvance(0);
+          omitirClick.current = true;
+          return;
+        }
+        if (e.button !== 0) return;
         omitirClick.current = false;
         inicio.current = {
           x: e.clientX,
           y: e.clientY,
           umbral: Math.min(65, e.currentTarget.clientWidth * 0.4),
+          pointerId: e.pointerId,
         };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         const start = inicio.current;
-        if (!start) return;
+        if (!start || start.pointerId !== e.pointerId) return;
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
         if (Math.abs(dx) > Math.abs(dy))
@@ -39,17 +47,25 @@ export function BotonAgregar({
       }}
       onPointerUp={(e) => {
         const start = inicio.current;
+        if (!start || start.pointerId !== e.pointerId) return;
         inicio.current = null;
         setAvance(0);
-        if (!start) return;
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
         if (Math.abs(dx) > 12 || Math.abs(dy) > 12) omitirClick.current = true;
         if (dx >= start.umbral && Math.abs(dx) > Math.abs(dy) && !disabled) onAgregar();
       }}
-      onPointerCancel={() => {
+      onPointerCancel={(e) => {
+        if (inicio.current?.pointerId !== e.pointerId) return;
         inicio.current = null;
         setAvance(0);
+        omitirClick.current = true;
+      }}
+      onLostPointerCapture={(e) => {
+        if (inicio.current?.pointerId !== e.pointerId) return;
+        inicio.current = null;
+        setAvance(0);
+        omitirClick.current = true;
       }}
       onClick={(e) => {
         if (omitirClick.current && e.detail !== 0) {

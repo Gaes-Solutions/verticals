@@ -1,7 +1,5 @@
-import type { FiscalProvider } from "@gaespos/fiscal";
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyRequest } from "fastify";
-import { procesarDevolucion } from "../devoluciones/service.js";
 import { notificarUsuariosConPermiso } from "../notificaciones/service.js";
 
 type TenantClient = FastifyRequest["tenantPrisma"];
@@ -20,13 +18,11 @@ export class CancelacionError extends Error {
 const ESTADOS_CANCELABLES = ["recibido", "pago_confirmado", "preparando", "listo_pickup"] as const;
 
 /**
- * Cancela un pedido a petición del cliente (si la tienda lo permite y aún no se
- * envió). Si ya estaba pagado, repone stock + reembolsa reusando el módulo de
- * devoluciones del POS sobre la venta generada.
+ * Cancela pedidos sin cobro a petición del cliente. Los pagos en proceso o
+ * confirmados requieren gestión de la tienda y verificación de la pasarela.
  */
 export async function cancelarPedidoCliente(
   client: TenantClient,
-  fiscalProvider: FiscalProvider,
   clienteId: string,
   folio: string,
   motivo: string,
@@ -39,75 +35,63 @@ export async function cancelarPedidoCliente(
       folioPublico: true,
       statusPedido: true,
       statusPago: true,
-      ventaIdGenerada: true,
+      paymentProvider: true,
     },
   });
   if (!pedido || pedido.clienteId !== clienteId) {
     throw new CancelacionError(404, "Pedido no encontrado");
   }
-  if (!ESTADOS_CANCELABLES.includes(pedido.statusPedido as (typeof ESTADOS_CANCELABLES)[number])) {
+  if (pedido.statusPedido === "cancelado")
+    return { folioPublico: pedido.folioPublico, reembolsado: pedido.statusPago === "reembolsado" };
+  if (!ESTADOS_CANCELABLES.includes(pedido.statusPedido as (typeof ESTADOS_CANCELABLES)[number]))
     throw new CancelacionError(409, "Este pedido ya no se puede cancelar (ya fue enviado).");
-  }
-
-  let reembolsado = false;
-  // Pagado → reponer stock + reembolso total sobre la venta ligada.
-  if (pedido.statusPago === "pago_confirmado" && pedido.ventaIdGenerada) {
-    const venta = await client.venta.findUnique({
-      where: { id: pedido.ventaIdGenerada },
-      include: { lineas: { select: { id: true, cantidad: true } } },
+  // A POS return is a ledger operation; it does not refund Stripe/Conekta.
+  // Until a verified provider refund exists, never label a paid order refunded.
+  if (
+    pedido.statusPago === "pago_confirmado" ||
+    (pedido.paymentProvider && pedido.paymentProvider !== "mock")
+  )
+    throw new CancelacionError(
+      409,
+      "Hay un pago en proceso o confirmado. Contacta a la tienda para cancelar y verificar el reembolso.",
+    );
+  await client.$transaction(async (tx) => {
+    const changed = await tx.pedidoEcommerce.updateMany({
+      where: {
+        id: pedido.id,
+        clienteId,
+        statusPedido: { in: [...ESTADOS_CANCELABLES] },
+        statusPago: { not: "pago_confirmado" },
+        OR: [{ paymentProvider: null }, { paymentProvider: "mock" }],
+      },
+      data: { statusPedido: "cancelado", canceladoAt: new Date(), canceladoMotivo: motivo },
     });
-    if (venta && venta.lineas.length > 0) {
-      const usuarioSistemaId = await sistemaUsuarioId(client);
-      await procesarDevolucion(client, fiscalProvider, usuarioSistemaId, pedido.ventaIdGenerada, {
-        motivo: "cambio_opinion",
-        metodoReembolso: "tarjeta_misma",
-        notas: `Cancelación del cliente · ${pedido.folioPublico}`,
-        lineas: venta.lineas.map((l) => ({
-          ventaLineaId: l.id,
-          cantidadDevuelta: l.cantidad.toString(),
-        })),
-      });
-      reembolsado = true;
-    }
-  }
-
-  await client.pedidoEcommerce.update({
-    where: { id: pedido.id },
-    data: {
-      statusPedido: "cancelado",
-      canceladoAt: new Date(),
-      canceladoMotivo: motivo,
-      ...(reembolsado ? { statusPago: "reembolsado" } : {}),
-      eventos: {
-        create: {
-          tipo: "estado_cancelado",
-          descripcion: reembolsado
-            ? `Cancelado por el cliente. Reembolso en proceso. Motivo: ${motivo}`
-            : `Cancelado por el cliente. Motivo: ${motivo}`,
-          visibleCliente: true,
+    if (changed.count !== 1)
+      throw new CancelacionError(
+        409,
+        "El estado del pedido cambió. Consúltalo antes de continuar.",
+      );
+    await tx.pedidoEcommerce.update({
+      where: { id: pedido.id },
+      data: {
+        eventos: {
+          create: {
+            tipo: "estado_cancelado",
+            descripcion: `Cancelado por el cliente. Motivo: ${motivo}`,
+            visibleCliente: true,
+          },
         },
       },
-    },
+    });
   });
 
   await notificarUsuariosConPermiso(client, PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR, {
     tipo: "pedido_cancelado_cliente",
     titulo: `Pedido cancelado · ${pedido.folioPublico}`,
-    cuerpo: `El cliente canceló su pedido.${reembolsado ? " Se repuso stock y se reembolsó." : ""}`,
+    cuerpo: "El cliente canceló su pedido sin cobro.",
     link: "/pedidos",
     metadata: { folio: pedido.folioPublico },
   });
 
-  return { folioPublico: pedido.folioPublico, reembolsado };
-}
-
-/** Primer usuario activo del tenant (procesador de la devolución de la cancelación). */
-async function sistemaUsuarioId(client: TenantClient): Promise<string> {
-  const u = await client.usuario.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  if (!u) throw new CancelacionError(500, "No hay un usuario para procesar el reembolso");
-  return u.id;
+  return { folioPublico: pedido.folioPublico, reembolsado: false };
 }

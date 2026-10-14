@@ -465,9 +465,8 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
         message: "Esta tienda no permite cancelar en línea; contáctala.",
       });
     }
-    const provider = app.fiscalProviderFactory({ apiKey: "", ambiente: "sandbox" });
     try {
-      return await cancelarPedidoCliente(client, provider, clienteId, folio, motivo);
+      return await cancelarPedidoCliente(client, clienteId, folio, motivo);
     } catch (err) {
       if (err instanceof CancelacionError) {
         return reply
