@@ -120,7 +120,7 @@ export function SwipeAddButton({
         />
         <View style={s.words}>
           <Text style={[s.label, compact && s.compactLabel]}>
-            {compact ? "Agregar" : "Agregar al carrito"}
+            {compact ? "Toca o desliza →" : "Agregar al carrito"}
           </Text>
           {!compact && <Text style={s.hint}>Toca o desliza a la derecha →</Text>}
         </View>
@@ -135,7 +135,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.brand,
     minHeight: 58,
   },
-  compact: { minHeight: 44, borderRadius: 10 },
+  compact: { minHeight: 52, borderRadius: 10 },
   fill: { position: "absolute", top: 0, bottom: 0, left: 0, backgroundColor: "#145b48" },
   button: {
     minHeight: 58,
@@ -146,10 +146,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  compactButton: { minHeight: 44, paddingHorizontal: 8, paddingVertical: 8 },
+  compactButton: { minHeight: 52, paddingHorizontal: 8, paddingVertical: 8 },
   words: { flexShrink: 1 },
   label: { color: colors.white, fontSize: 16, fontWeight: "800" },
-  compactLabel: { fontSize: 13 },
+  compactLabel: { fontSize: 12, lineHeight: 16, textAlign: "center" },
   hint: { color: colors.onBrandMuted, fontSize: 12, marginTop: 2 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.45 },

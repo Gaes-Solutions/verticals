@@ -1,4 +1,5 @@
 import { authApi } from "@/lib/api";
+import { tiendaActual, tiendaFija } from "@/lib/tienda";
 import { colors, radius, space } from "@/theme";
 import { Button, Icon, Input } from "@/ui";
 import { ApiError, NetworkError, solicitarResetContrasena } from "@gaespos/api-client";
@@ -11,7 +12,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 export default function RecuperarContrasena() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tenant?: string }>();
-  const [tenant, setTenant] = useState(params.tenant ?? "");
+  const fixedStore = tiendaFija();
+  const [tenant, setTenant] = useState(() => fixedStore ?? params.tenant ?? tiendaActual() ?? "");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function RecuperarContrasena() {
     setBusy(true);
     try {
       await solicitarResetContrasena(authApi, {
-        tenantSlug: tenant.trim(),
+        tenantSlug: fixedStore ?? tenant.trim(),
         email: email.trim(),
       });
       setEnviado(true);
@@ -70,15 +72,17 @@ export default function RecuperarContrasena() {
             </>
           ) : (
             <>
-              <Input
-                label="Tienda"
-                icon="storefront"
-                value={tenant}
-                onChangeText={setTenant}
-                placeholder="mi-tienda"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              {!fixedStore ? (
+                <Input
+                  label="Tienda"
+                  icon="storefront"
+                  value={tenant}
+                  onChangeText={setTenant}
+                  placeholder="mi-tienda"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              ) : null}
               <Input
                 label="Correo"
                 icon="mail"
@@ -91,7 +95,13 @@ export default function RecuperarContrasena() {
                 returnKeyType="done"
                 onSubmitEditing={enviar}
               />
-              <Button label="Enviar enlace" icon="send" busy={busy} onPress={enviar} />
+              <Button
+                label="Enviar enlace"
+                icon="send"
+                busy={busy}
+                disabled={!email.trim() || !(fixedStore ?? tenant.trim())}
+                onPress={enviar}
+              />
               {error ? (
                 <View style={s.err}>
                   <Icon name="alert-circle" size={16} color={colors.danger} />

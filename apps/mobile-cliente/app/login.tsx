@@ -1,7 +1,9 @@
 import { useAuth } from "@/lib/auth-store";
+import { loginDestination } from "@/lib/login-return";
+import { tiendaActual, tiendaFija } from "@/lib/tienda";
 import { colors, radius, space } from "@/theme";
 import { Button, Icon, Input } from "@/ui";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -15,35 +17,42 @@ import {
 
 export default function Login() {
   const router = useRouter();
+  const { next, slug } = useLocalSearchParams<{ next?: string; slug?: string }>();
+  const fixedStore = tiendaFija();
   const { status, error, login, registro, restore, logout } = useAuth();
   const [modo, setModo] = useState<"login" | "registro">("login");
-  const [tenant, setTenant] = useState("");
+  const [tenant, setTenant] = useState(() => tiendaActual() ?? "");
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (status === "signedIn") return <Redirect href="/(app)" />;
+  if (status === "signedIn") return <Redirect href={loginDestination(next, slug)} />;
+  const selectedStore = fixedStore ?? tenant.trim();
   const esRegistro = modo === "registro";
 
   const run = async (fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(true);
-    await fn();
-    setBusy(false);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
   };
   const enviar = () =>
     esRegistro
       ? run(() =>
           registro({
-            tenantSlug: tenant.trim(),
+            tenantSlug: selectedStore,
             nombre: nombre.trim(),
             email: email.trim(),
             password,
             ...(telefono.trim() ? { telefono: telefono.trim() } : {}),
           }),
         )
-      : run(() => login(tenant.trim(), email.trim(), password));
+      : run(() => login(selectedStore, email.trim(), password));
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -51,9 +60,12 @@ export default function Login() {
         <View style={s.logo}>
           <Icon name="bag-handle" size={34} color={colors.white} />
         </View>
-        <Text style={s.brand}>GaesSoft</Text>
+        <Text style={s.brand}>{fixedStore === "gaesland" ? "Gaesland" : "GaesSoft"}</Text>
         <Text style={s.sub}>{esRegistro ? "Crea tu cuenta" : "Tu cuenta y pedidos"}</Text>
 
+        {next === "/(app)/producto" ? (
+          <Text style={s.sub}>Tu artículo te espera. Entra para guardarlo en tu carrito.</Text>
+        ) : null}
         <View style={s.card}>
           {status === "unverified" ? (
             <>
@@ -66,15 +78,17 @@ export default function Login() {
               />
             </>
           ) : null}
-          <Input
-            label="Tienda"
-            icon="storefront"
-            value={tenant}
-            onChangeText={setTenant}
-            placeholder="mi-tienda"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          {!fixedStore ? (
+            <Input
+              label="Tienda"
+              icon="storefront"
+              value={tenant}
+              onChangeText={setTenant}
+              placeholder="mi-tienda"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          ) : null}
           {esRegistro ? (
             <>
               <Input
@@ -115,6 +129,9 @@ export default function Login() {
             onSubmitEditing={enviar}
           />
           <Button
+            disabled={
+              !selectedStore || !email.trim() || !password || (esRegistro && !nombre.trim())
+            }
             label={esRegistro ? "Crear cuenta" : "Entrar"}
             icon="log-in"
             busy={busy}
@@ -130,7 +147,7 @@ export default function Login() {
             <Pressable
               style={s.switch}
               onPress={() =>
-                router.push(`/recuperar-contrasena?tenant=${encodeURIComponent(tenant.trim())}`)
+                router.push(`/recuperar-contrasena?tenant=${encodeURIComponent(selectedStore)}`)
               }
             >
               <Text style={s.switchText}>¿Olvidaste tu contraseña?</Text>

@@ -6,7 +6,7 @@
  * `expo-constants`, que no existe fuera del teléfono y rompería a cualquier
  * prueba que solo quiera saber en qué tienda estamos.
  */
-const TIENDA_FIJA = process.env.EXPO_PUBLIC_TIENDA ?? null;
+const TIENDA_FIJA = process.env.EXPO_PUBLIC_TIENDA?.trim() || null;
 const TIENDA_KEY = "gaessoft_cliente_tienda";
 
 /**
@@ -52,4 +52,9 @@ export function tiendaActual(): string | null {
 
 export function haySesion(): boolean {
   return sesion !== null;
+}
+
+/** Branded builds never ask the shopper to choose a different store. */
+export function tiendaFija(): string | null {
+  return TIENDA_FIJA;
 }

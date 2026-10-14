@@ -56,7 +56,7 @@ export default function Tienda() {
     router.push({ pathname: "/(app)/producto", params: { slug: item.slugSeo } });
   const add = (item: StoreProduct) => {
     if (status !== "signedIn") {
-      router.push("/login");
+      router.push({ pathname: "/login", params: { next: "/(app)/producto", slug: item.slugSeo } });
       return;
     }
     const v = item.variantes[0];

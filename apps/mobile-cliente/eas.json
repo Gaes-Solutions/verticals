@@ -41,6 +41,13 @@
         "EXPO_PUBLIC_TIENDA": "gaesland",
         "EXPO_PUBLIC_APP_VARIANT": "staging"
       }
+    },
+    "gaesland-staging-phone": {
+      "extends": "gaesland-staging",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a"
+      }
     }
   },
   "submit": {

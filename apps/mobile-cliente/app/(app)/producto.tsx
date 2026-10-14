@@ -46,7 +46,10 @@ function ProductDetails({ product }: { product: StoreProduct }) {
   const allowed = canAddQuantity(product, variant, quantity, already);
   const add = () => {
     if (status !== "signedIn") {
-      router.push("/login");
+      router.push({
+        pathname: "/login",
+        params: { next: "/(app)/producto", slug: product.slugSeo },
+      });
       return;
     }
     if (!ready || !selected || !allowed) return;
