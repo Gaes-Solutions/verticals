@@ -39,6 +39,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     REFRESH_TOKEN_TTL_DAYS: 30,
     CORS_ORIGIN: "http://localhost:5173",
     RATE_LIMIT_MAX: 100000,
+    STOREFRONT_READ_RATE_LIMIT_MAX: 100000,
     RATE_LIMIT_WINDOW: "1 minute",
     TRUST_PROXY_HOPS: 1,
     FLOWS_SCHEDULER_ENABLED: false,

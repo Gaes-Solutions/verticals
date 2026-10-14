@@ -19,6 +19,7 @@ const configSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  STOREFRONT_READ_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1000),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
   // Número EXACTO de proxies de confianza frente al API (Railway = 1). Fastify lo
   // pasa a proxy-addr para tomar solo el último salto de X-Forwarded-For como
