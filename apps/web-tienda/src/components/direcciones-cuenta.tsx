@@ -37,6 +37,7 @@ export function DireccionesCuenta() {
   const [abierto, setAbierto] = useState(false);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
   const [busquedaMapa, setBusquedaMapa] = useState("");
   const [mapa, setMapa] = useState<{ lat: number; lon: number } | null>(null);
   const [cargandoMapa, setCargandoMapa] = useState(false);
@@ -44,8 +45,15 @@ export function DireccionesCuenta() {
   const [errorMapa, setErrorMapa] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
-    const r = (await fetch("/api/cuenta/direcciones").then((x) => x.json())) as Direccion[];
-    setDirs(Array.isArray(r) ? r : []);
+    try {
+      const res = await fetch("/api/cuenta/direcciones", { cache: "no-store" });
+      if (!res.ok) throw new Error("No pudimos cargar tus direcciones. Reintenta.");
+      const r = await res.json();
+      if (!Array.isArray(r)) throw new Error("No pudimos cargar tus direcciones. Reintenta.");
+      setDirs(r as Direccion[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No hay conexión. Tus datos se conservan.");
+    }
   }, []);
 
   useEffect(() => {
@@ -170,31 +178,67 @@ export function DireccionesCuenta() {
 
   async function guardar(e: FormEvent) {
     e.preventDefault();
+    if (guardando) return;
     setError(null);
+    setGuardando(true);
     const url = editId ? `/api/cuenta/direcciones/${editId}` : "/api/cuenta/direcciones";
-    const res = await fetch(url, {
-      method: editId ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (!res.ok) {
-      setError("Revisa los datos (CP de 5 dígitos, estado y calle).");
-      return;
+    try {
+      const res = await fetch(url, {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(
+          res.status === 401
+            ? "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a guardar; tus campos permanecen aquí."
+            : (data.message ?? "Revisa los datos (CP de 5 dígitos, estado y calle)."),
+        );
+        return;
+      }
+      setAbierto(false);
+      setEditId(null);
+      setForm({ ...VACIA });
+      await cargar();
+    } catch {
+      setError(
+        "No pudimos confirmar que se guardó. Tus campos se conservan; revisa la lista antes de reintentar.",
+      );
+    } finally {
+      setGuardando(false);
     }
-    setAbierto(false);
-    setEditId(null);
-    setForm({ ...VACIA });
-    cargar();
   }
 
   async function borrar(id: string) {
-    await fetch(`/api/cuenta/direcciones/${id}`, { method: "DELETE" });
-    setConfirmandoId(null);
-    cargar();
+    setError(null);
+    try {
+      const res = await fetch(`/api/cuenta/direcciones/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No pudimos eliminar la dirección. Reintenta.");
+      setConfirmandoId(null);
+      await cargar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No hay conexión. La dirección se conserva.");
+    }
   }
 
   return (
     <div>
+      {!abierto && error && (
+        <div role="alert" className="mb-4 rounded-lg bg-danger-light p-3 text-sm text-danger">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              cargar();
+            }}
+            className="mt-2 underline"
+          >
+            Volver a cargar direcciones
+          </button>
+        </div>
+      )}
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="tienda-section-title">Mis direcciones</h2>
@@ -396,13 +440,21 @@ export function DireccionesCuenta() {
               />
               Usar como predeterminada
             </label>
-            {error && <p className="mx-6 text-danger text-sm">{error}</p>}
+            {error && (
+              <p role="alert" className="mx-6 text-danger text-sm">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
               <button type="button" onClick={() => setAbierto(false)} className="gx-btn-ghost">
                 Cancelar
               </button>
-              <button type="submit" className="gx-btn-primary min-w-32">
-                <Check size={16} /> Guardar dirección
+              <button
+                type="submit"
+                disabled={guardando}
+                className="gx-btn-primary min-w-32 disabled:opacity-50"
+              >
+                <Check size={16} /> {guardando ? "Guardando…" : "Guardar dirección"}
               </button>
             </div>
           </form>

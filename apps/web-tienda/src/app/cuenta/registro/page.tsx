@@ -1,5 +1,7 @@
 import { AuthForm } from "@/components/auth-form";
 
-export default function RegistroPage() {
-  return <AuthForm modo="registro" />;
+export default async function RegistroPage({
+  searchParams,
+}: { searchParams: Promise<{ next?: string }> }) {
+  return <AuthForm modo="registro" destino={(await searchParams).next} />;
 }

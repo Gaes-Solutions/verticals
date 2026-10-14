@@ -63,7 +63,10 @@ function loadProducts(client: TenantPrismaClient, filter: { ids?: string[]; slug
 
 type Product = Awaited<ReturnType<typeof loadProducts>>[number];
 type Enrichment = Awaited<ReturnType<typeof enriquecerDetalle>>;
-function productDto(product: Product, enrichment: Enrichment) {
+function productDto(
+  product: Product,
+  enrichment: Omit<Enrichment, "stockPorVariante"> & Partial<Pick<Enrichment, "stockPorVariante">>,
+) {
   return {
     id: product.id,
     slugSeo: product.slugSeo,
@@ -76,6 +79,7 @@ function productDto(product: Product, enrichment: Enrichment) {
     enOferta: enrichment.enOferta,
     descuentoPct: enrichment.descuentoPct,
     stockPublico: enrichment.stockPublico,
+    stockPorVariante: enrichment.stockPorVariante ?? null,
     stockBajo: enrichment.stockBajo,
     envioGratis: enrichment.envioGratis,
     variantes: product.producto.variantes.map((v) => ({

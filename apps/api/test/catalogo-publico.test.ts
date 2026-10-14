@@ -1,6 +1,7 @@
 import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { enriquecerDetalle } from "../src/modules/tenant/carrito/catalogo-service.js";
 import { buildTestApp, cleanupTestTenants, createTestTenant } from "./helpers.js";
 
 /**
@@ -68,6 +69,47 @@ afterAll(async () => {
 });
 
 describe("catálogo público", () => {
+  it("reports sold-out variants separately, subtracts reservations and respects private inventory", async () => {
+    const db = getTenantClient(ABIERTA);
+    const product = await db.producto.create({
+      data: {
+        skuPadre: "VARIANT-STOCK-QA",
+        nombre: "Opciones QA",
+        variantes: {
+          create: [
+            { sku: "VARIANT-STOCK-ZERO", precioBase: 100 },
+            { sku: "VARIANT-STOCK-AVAILABLE", precioBase: 120 },
+          ],
+        },
+      },
+      include: { variantes: true },
+    });
+    const empty = product.variantes.find((v) => v.sku === "VARIANT-STOCK-ZERO")!;
+    const available = product.variantes.find((v) => v.sku === "VARIANT-STOCK-AVAILABLE")!;
+    const branch = await db.sucursal.findFirstOrThrow();
+    await db.inventarioSucursal.create({
+      data: { varianteId: available.id, sucursalId: branch.id, stockActual: 5, stockReservado: 2 },
+    });
+    const published = await db.productoPublicado.create({
+      data: { productoId: product.id, tituloPublico: "Opciones QA", slugSeo: "stock-qa" },
+      include: { producto: { include: { variantes: true } } },
+    });
+    const config = {
+      mostrarInventarioPublico: true,
+      bufferInventarioPublico: 1,
+      envioGratisDesde: null,
+      mostrarRatingProducto: false,
+    };
+    const visible = await enriquecerDetalle(db, config, published);
+    expect(visible.stockPorVariante).toEqual({ [empty.id]: 0, [available.id]: 2 });
+    const hidden = await enriquecerDetalle(
+      db,
+      { ...config, mostrarInventarioPublico: false },
+      published,
+    );
+    expect(hidden.stockPorVariante).toBeNull();
+    expect(hidden.stockPublico).toBeNull();
+  });
   it("encendida pero sin productos publicados tampoco se muestra", async () => {
     const res = await app.inject({ method: "GET", url: `/public/tiendas/${VACIA}/catalogo` });
     expect(res.statusCode).toBe(404);

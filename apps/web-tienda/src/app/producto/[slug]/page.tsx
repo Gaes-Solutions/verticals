@@ -26,6 +26,7 @@ interface ProductoDetalle {
   precioPublicoOverride: string | null;
   categoriaPublica: { nombre: string; slugSeo: string } | null;
   producto: {
+    tipoVenta: string;
     unidadMedida?: string | null;
     variantes: Array<{
       id: string;
@@ -49,6 +50,7 @@ interface ProductoDetalle {
   enOferta: boolean;
   descuentoPct: number;
   stockPublico: number | null;
+  stockPorVariante: Record<string, number> | null;
   stockBajo: boolean;
   envioGratis: boolean;
   // Rating agregado sobre todas las reseñas aprobadas (puede no venir en caché).
@@ -261,6 +263,8 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             </div>
           )}
           <ProductoCompra
+            tipoVenta={prod.producto.tipoVenta}
+            stockPorVariante={prod.stockPorVariante}
             variantes={prod.producto.variantes}
             precioOverride={prod.precioPublicoOverride}
             titulo={prod.tituloPublico}

@@ -84,6 +84,16 @@ export async function GET(req: NextRequest) {
     );
     return publicResult(await api<CheckoutResult>(`/checkout/intentos/${identity.key}`));
   } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 404)
+      return NextResponse.json(
+        {
+          code: "ATTEMPT_NOT_FOUND",
+          safeToRetry: true,
+          message:
+            "No hay un pedido registrado para este intento. Revisa tus datos para continuar.",
+        },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
+      );
     return checkoutError(err);
   }
 }

@@ -165,7 +165,7 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       where: { slugSeo: slug },
       include: {
         categoriaPublica: true,
-        producto: { include: { variantes: true } },
+        producto: { include: { variantes: { where: { isActive: true, archivedAt: null } } } },
         resenas: { where: { estado: "aprobada" }, orderBy: { createdAt: "desc" }, take: 20 },
         preguntas: {
           where: { estado: "publicada" },
@@ -175,7 +175,14 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         },
       },
     });
-    if (!prod || !prod.isPublicado) {
+    if (
+      !prod ||
+      !prod.isPublicado ||
+      !prod.producto.isActive ||
+      !prod.producto.isVisiblePublico ||
+      prod.producto.archivedAt ||
+      prod.producto.variantes.length === 0
+    ) {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });

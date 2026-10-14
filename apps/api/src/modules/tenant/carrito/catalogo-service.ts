@@ -343,7 +343,7 @@ export async function enriquecerDetalle(
     | "ratingPromedio"
     | "ratingCuenta"
     | "unidadMedida"
-  >
+  > & { stockPorVariante: Record<string, number> | null }
 > {
   const crudo = {
     id: prod.id,
@@ -356,6 +356,22 @@ export async function enriquecerDetalle(
     producto: prod.producto,
   } as ProductoCrudo;
   const stock = await stockPorProducto(prisma, [crudo], config.bufferInventarioPublico);
+  let stockPorVariante: Record<string, number> | null = null;
+  if (config.mostrarInventarioPublico) {
+    stockPorVariante = Object.fromEntries(prod.producto.variantes.map((v) => [v.id, 0]));
+    const filas = await prisma.inventarioSucursal.groupBy({
+      by: ["varianteId"],
+      where: { varianteId: { in: prod.producto.variantes.map((v) => v.id) } },
+      _sum: { stockActual: true, stockReservado: true },
+    });
+    for (const f of filas)
+      stockPorVariante[f.varianteId] = Math.max(
+        0,
+        Number(f._sum.stockActual ?? 0) -
+          Number(f._sum.stockReservado ?? 0) -
+          config.bufferInventarioPublico,
+      );
+  }
   // Rating sobre TODAS las reseñas aprobadas (las que el detalle trae capeadas
   // en 20 solo alimentan la lista; la cuenta del badge sale del agregado real).
   const ratings = new Map<string, RatingAgregado>();
@@ -368,6 +384,7 @@ export async function enriquecerDetalle(
   }
   const e = enriquecer(crudo, config, stock, ratings, new Date());
   return {
+    stockPorVariante,
     precioDesde: e.precioDesde,
     precioPromocion: e.precioPromocion,
     enOferta: e.enOferta,

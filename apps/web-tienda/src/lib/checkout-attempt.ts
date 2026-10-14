@@ -63,3 +63,15 @@ export function completeAttempt(attempt: CheckoutAttempt, clearCart: () => void)
     localStorage.removeItem(KEY);
   });
 }
+
+/** Reuse the same key only when the server explicitly found no attempt. */
+export function recuperarIntentoSinPedido(attempt: CheckoutAttempt): Promise<CheckoutAttempt> {
+  return exclusive(() => {
+    const current = readAttempt();
+    if (!current || current.context !== attempt.context || current.key !== attempt.key)
+      throw new Error("La compra cambió. Recarga antes de continuar.");
+    const next = { ...current, submitted: false };
+    localStorage.setItem(KEY, JSON.stringify(next));
+    return next;
+  });
+}

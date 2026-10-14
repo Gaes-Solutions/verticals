@@ -1,11 +1,15 @@
 "use client";
 
+import { destinoTrasLogin } from "@/lib/auth-return";
 import { ArrowRight, Eye, EyeOff, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function AuthForm({ modo }: { modo: "login" | "registro" }) {
+export function AuthForm({
+  modo,
+  destino,
+}: { modo: "login" | "registro"; destino?: string | undefined }) {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -13,6 +17,8 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  const siguiente = destinoTrasLogin(destino);
+  const retorno = siguiente === "/cuenta" ? "" : `?next=${encodeURIComponent(siguiente)}`;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,7 +37,7 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
         setError(d.message ?? "No se pudo continuar");
         return;
       }
-      router.push("/cuenta");
+      router.push(siguiente);
       router.refresh();
     } catch {
       setError("Error de conexión");
@@ -60,6 +66,12 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
         <h1 className="mb-6 text-2xl font-bold">
           {modo === "registro" ? "Crear cuenta" : "Iniciar sesión"}
         </h1>
+        {siguiente === "/checkout" && (
+          <p className="mb-5 text-sm text-slate-600">
+            Inicia sesión para retomar tu compra. Conservamos tu carrito y los datos de este
+            formulario durante 30 minutos en esta pestaña.
+          </p>
+        )}
         <form onSubmit={submit} className="space-y-5">
           {modo === "registro" && (
             <label className="block">
@@ -112,7 +124,11 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
               <span className="mt-1 block text-xs text-slate-500">Usa al menos 8 caracteres.</span>
             )}
           </div>
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
           <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
             {cargando ? "Procesando…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
           </button>
@@ -128,14 +144,14 @@ export function AuthForm({ modo }: { modo: "login" | "registro" }) {
           {modo === "registro" ? (
             <>
               ¿Ya tienes cuenta?{" "}
-              <Link href="/cuenta/login" className="font-medium text-marca">
+              <Link href={`/cuenta/login${retorno}`} className="font-medium text-marca">
                 Inicia sesión
               </Link>
             </>
           ) : (
             <>
               ¿No tienes cuenta?{" "}
-              <Link href="/cuenta/registro" className="font-medium text-marca">
+              <Link href={`/cuenta/registro${retorno}`} className="font-medium text-marca">
                 Regístrate
               </Link>
             </>

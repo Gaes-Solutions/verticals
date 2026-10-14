@@ -7,13 +7,19 @@ import {
   type CheckoutAttempt,
   completeAttempt,
   prepareAttempt,
+  recuperarIntentoSinPedido,
   submitAttempt,
 } from "@/lib/checkout-attempt";
+import {
+  borrarBorradorCompra,
+  guardarBorradorCompra,
+  leerBorradorCompra,
+} from "@/lib/checkout-draft";
 import type { MedioPagoGuardado } from "@/lib/cliente";
 import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 interface OpcionEnvio {
   tarifaId: string;
@@ -69,6 +75,8 @@ interface PagoPendiente {
 const PAGO_PENDIENTE_KEY = "gaespos_pago_pendiente_v1";
 
 interface RespuestaCheckout {
+  code?: string;
+  safeToRetry?: boolean;
   pagoAlRecoger?: boolean;
   message?: string;
   intentStatus?: string;
@@ -162,6 +170,59 @@ export default function CheckoutPage() {
   const [medioPagoSel, setMedioPagoSel] = useState("");
   const [guardarTarjeta, setGuardarTarjeta] = useState(false);
   const [sesionCliente, setSesionCliente] = useState(false);
+  const [requiereSesion, setRequiereSesion] = useState(false);
+  const [borradorListo, setBorradorListo] = useState(false);
+  const borradorRestaurado = useRef(false);
+  const entregaInicial = useRef(false);
+  useEffect(() => {
+    const actualizar = () => setItems(leerCarrito());
+    actualizar();
+    window.addEventListener("carrito-actualizado", actualizar);
+    window.addEventListener("storage", actualizar);
+    return () => {
+      window.removeEventListener("carrito-actualizado", actualizar);
+      window.removeEventListener("storage", actualizar);
+    };
+  }, []);
+  useEffect(() => {
+    if (!error) return;
+    const target = document.getElementById(
+      requiereSesion ? "checkout-session-notice" : "checkout-error",
+    );
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.focus({ preventScroll: true });
+  }, [error, requiereSesion]);
+
+  useEffect(() => {
+    const draft = leerBorradorCompra();
+    if (draft) {
+      borradorRestaurado.current = true;
+      setEmail(draft.email);
+      setNombre(draft.nombre);
+      setCalle(draft.calle);
+      setNumero(draft.numero);
+      setColonia(draft.colonia);
+      setCiudad(draft.ciudad);
+      setEstado(draft.estado);
+      setCp(draft.cp);
+      setModoEntrega(draft.modoEntrega);
+    }
+    setBorradorListo(true);
+  }, []);
+  useEffect(() => {
+    if (borradorListo)
+      guardarBorradorCompra({
+        email,
+        nombre,
+        calle,
+        numero,
+        colonia,
+        ciudad,
+        estado,
+        cp,
+        modoEntrega,
+      });
+  }, [borradorListo, email, nombre, calle, numero, colonia, ciudad, estado, cp, modoEntrega]);
 
   function marcarPendiente(p: PagoPendiente) {
     setPagoPendiente(p);
@@ -185,39 +246,47 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     setItems(leerCarrito());
-    fetch("/api/tienda-config").then(async (res) => {
-      if (res.ok) setConfig((await res.json()) as TiendaConfig);
-    });
+    fetch("/api/tienda-config")
+      .then(async (res) => {
+        if (res.ok) setConfig((await res.json()) as TiendaConfig);
+      })
+      .catch(() => {});
     // prefill con la sesión del cliente si está logueado
-    fetch("/api/cuenta/me").then(async (res) => {
-      if (!res.ok) return;
-      setSesionCliente(true);
-      const me = (await res.json()) as { nombre: string; email: string | null };
-      setEmail((prev) => prev || (me.email ?? ""));
-      setNombre((prev) => prev || me.nombre);
-    });
+    fetch("/api/cuenta/me")
+      .then(async (res) => {
+        if (!res.ok) return;
+        setSesionCliente(true);
+        const me = (await res.json()) as { nombre: string; email: string | null };
+        setEmail((prev) => prev || (me.email ?? ""));
+        setNombre((prev) => prev || me.nombre);
+      })
+      .catch(() => {});
     // tarjetas guardadas ("Mis tarjetas"): [] para invitado; con al menos una,
     // la primera queda pre-seleccionada para pagar en 1 toque.
-    fetch("/api/cuenta/medios-pago").then(async (res) => {
-      if (!res.ok) return;
-      const medios = (await res.json()) as MedioPagoGuardado[];
-      if (!Array.isArray(medios) || medios.length === 0) return;
-      setMediosPago(medios);
-      setMedioPagoSel(medios[0]?.id ?? "");
-    });
+    fetch("/api/cuenta/medios-pago")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const medios = (await res.json()) as MedioPagoGuardado[];
+        if (!Array.isArray(medios) || medios.length === 0) return;
+        setMediosPago(medios);
+        setMedioPagoSel(medios[0]?.id ?? "");
+      })
+      .catch(() => {});
     // direcciones guardadas (checkout rápido): la predeterminada queda pre-seleccionada
-    fetch("/api/cuenta/direcciones").then(async (res) => {
-      if (!res.ok) return;
-      const dirs = (await res.json()) as DireccionGuardada[];
-      if (!Array.isArray(dirs) || dirs.length === 0) return;
-      setDirecciones(dirs);
-      const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
-      if (def) {
-        setDireccionId(def.id);
-        setModoDir("guardada");
-        usarDireccion(def);
-      }
-    });
+    fetch("/api/cuenta/direcciones")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const dirs = (await res.json()) as DireccionGuardada[];
+        if (!Array.isArray(dirs) || dirs.length === 0) return;
+        setDirecciones(dirs);
+        const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
+        if (def && !borradorRestaurado.current) {
+          setDireccionId(def.id);
+          setModoDir("guardada");
+          usarDireccion(def);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -225,10 +294,17 @@ export default function CheckoutPage() {
     fetch("/api/checkout/session", { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json()) as { context?: string; message?: string };
+        if (response.status === 401 || response.status === 403) {
+          if (active) setRequiereSesion(true);
+          throw new Error("Inicia sesión para retomar tu compra sin perder el carrito.");
+        }
         if (!response.ok || !data.context)
           throw new Error(data.message ?? "No se pudo preparar la compra.");
         const next = await prepareAttempt(data.context);
-        if (active) setAttempt(next);
+        if (active) {
+          setAttempt(next);
+          setRequiereSesion(false);
+        }
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "No se pudo preparar la compra.");
@@ -248,6 +324,12 @@ export default function CheckoutPage() {
   }
 
   const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
+  useEffect(() => {
+    if (!config || pickupSubtotal == null || entregaInicial.current) return;
+    entregaInicial.current = true;
+    if (!borradorRestaurado.current && config.metodosPago?.length === 0 && pickups.length > 0)
+      setModoEntrega("pickup");
+  }, [config, pickupSubtotal, pickups]);
 
   const entregaKey = JSON.stringify([cp, estado.trim(), subtotal]);
 
@@ -265,6 +347,7 @@ export default function CheckoutPage() {
         if (!Array.isArray(cot.pickup)) throw new Error("Cotización inválida");
         if (controller.signal.aborted) return;
         setPickups(cot.pickup);
+        if (cot.pickup.length === 1) setSucursalId(cot.pickup[0]?.sucursalId ?? "");
         setPickupSubtotal(subtotal);
       })
       .catch(() => {
@@ -386,6 +469,15 @@ export default function CheckoutPage() {
 
   async function handleCheckoutResponse(response: Response, current: CheckoutAttempt) {
     const data = (await response.json()) as RespuestaCheckout;
+    if (response.status === 401 || response.status === 403) {
+      setRequiereSesion(true);
+      throw new Error("Inicia sesión para verificar y retomar este mismo intento de compra.");
+    }
+    if (response.status === 404 && data.code === "ATTEMPT_NOT_FOUND" && data.safeToRetry === true) {
+      setAttempt(await recuperarIntentoSinPedido(current));
+      setError(data.message ?? "Revisa tus datos y continúa con el mismo intento.");
+      return;
+    }
     if (!response.ok)
       throw new Error(data.message ?? "Estamos verificando el pago. No vuelvas a pagar.");
     // Pago referenciado (OXXO/SPEI): NO es error; el pedido queda apartado
@@ -417,6 +509,7 @@ export default function CheckoutPage() {
       }).catch(() => {});
     }
     await completeAttempt(current, vaciar);
+    borrarBorradorCompra();
     router.push(
       `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}${reservadoParaRecoger ? "&recogida=1" : ""}`,
     );
@@ -529,7 +622,8 @@ export default function CheckoutPage() {
     );
   }
 
-  const pagoDeshabilitado = !entregaLista || !attempt || attempt.submitted || procesando;
+  const pagoDeshabilitado =
+    requiereSesion || !entregaLista || !attempt || attempt.submitted || procesando;
   const maxMsi = msiOfrecibles.length > 0 ? Math.max(...msiOfrecibles) : 0;
   // Métodos que el tenant ofrece (los anuncia el API según su proveedor). El
   // método activo siempre pertenece a la lista: si la config aún no carga, solo
@@ -580,6 +674,23 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
       <h1 className="mb-6 font-bold text-2xl">Finalizar compra</h1>
+      {requiereSesion && (
+        <div
+          id="checkout-session-notice"
+          tabIndex={-1}
+          role="alert"
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+        >
+          <p className="font-semibold">Retoma tu compra</p>
+          <p className="mt-1">
+            Tu sesión venció. Conservamos el carrito y los datos de esta pestaña durante 30 minutos.
+            Si ya intentaste pagar, verificaremos ese mismo intento.
+          </p>
+          <Link href="/cuenta/login?next=%2Fcheckout" className="gx-btn-primary mt-3">
+            Iniciar sesión y continuar
+          </Link>
+        </div>
+      )}
 
       <div className="lg:grid lg:grid-cols-[1fr_340px] lg:items-start lg:gap-6">
         <div className="min-w-0">
@@ -827,7 +938,7 @@ export default function CheckoutPage() {
               </p>
             )}
 
-            {!attempt && (
+            {!attempt && !requiereSesion && (
               <div className="mt-3 space-y-2 text-sm text-slate-600">
                 <p>Preparando sesión segura de compra…</p>
                 <button
@@ -1114,7 +1225,12 @@ export default function CheckoutPage() {
               </output>
             )}
             {error && (
-              <p role="alert" className="mt-2 rounded bg-danger-light p-2 text-sm text-danger">
+              <p
+                id="checkout-error"
+                tabIndex={-1}
+                role="alert"
+                className="mt-2 rounded bg-danger-light p-2 text-sm text-danger"
+              >
                 {error}
               </p>
             )}
@@ -1417,6 +1533,7 @@ function BotonEntrega({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={activo}
       className={activo ? "gx-btn-primary flex-1" : "gx-btn-secondary flex-1"}
     >
       {label}
@@ -1444,7 +1561,29 @@ function Campo({
         type={type}
         value={value}
         required={required}
-        onChange={(e) => onChange(e.target.value)}
+        autoComplete={
+          (
+            {
+              Email: "email",
+              "Nombre completo": "name",
+              Calle: "address-line1",
+              Número: "address-line2",
+              Ciudad: "address-level2",
+              Estado: "address-level1",
+              "Código postal": "postal-code",
+            } as Record<string, string>
+          )[label]
+        }
+        inputMode={label === "Código postal" ? "numeric" : type === "email" ? "email" : undefined}
+        maxLength={label === "Código postal" ? 5 : undefined}
+        pattern={label === "Código postal" ? "[0-9]{5}" : undefined}
+        onChange={(e) =>
+          onChange(
+            label === "Código postal"
+              ? e.target.value.replace(/\D/g, "").slice(0, 5)
+              : e.target.value,
+          )
+        }
         className="gx-input"
       />
     </label>

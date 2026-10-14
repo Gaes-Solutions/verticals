@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ accion:
     sameSite: "lax",
     path: "/",
     secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 12, // el access token vive ~15min; la cookie 12h re-loguea suave
+    maxAge: 60 * 60 * 12, // Cookie lifetime does not extend the server's access token.
   });
   return res;
 }

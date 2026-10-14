@@ -91,6 +91,29 @@ async function main() {
           update: {},
           create: { varianteId: v.id, sucursalId: suc.id, stockActual: 25 },
         });
+        // Exercise option selection and sold-out states using demo data only.
+        if (slug === "maceta") {
+          await tx.productoVariante.updateMany({
+            where: { id: v.id, nombreVariante: null },
+            data: { nombreVariante: "Tamaño original" },
+          });
+          const grande = await tx.productoVariante.upsert({
+            where: { sku: `${sku}-grande` },
+            update: {},
+            create: {
+              sku: `${sku}-grande`,
+              productoId: p.id,
+              nombreVariante: "Tamaño grande",
+              precioBase: 349,
+              imagenUrl: img,
+            },
+          });
+          await tx.inventarioSucursal.upsert({
+            where: { varianteId_sucursalId: { varianteId: grande.id, sucursalId: suc.id } },
+            update: {},
+            create: { varianteId: grande.id, sucursalId: suc.id, stockActual: 0 },
+          });
+        }
         await tx.productoPublicado.upsert({
           where: { productoId: p.id },
           update: {},
