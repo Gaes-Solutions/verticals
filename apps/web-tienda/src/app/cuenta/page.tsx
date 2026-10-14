@@ -50,14 +50,14 @@ export default async function CuentaPage() {
   return (
     <div>
       <div className="store-account-welcome relative mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
+        <div className="flex w-full min-w-0 items-center gap-4 sm:w-auto sm:flex-1">
           <div
             aria-hidden="true"
             className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-marca text-2xl font-bold text-white shadow-sm"
           >
             {(me.nombre?.trim()[0] ?? "?").toUpperCase()}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="store-kicker">TU ESPACIO PERSONAL</p>
             <h1 className="text-2xl font-bold">Hola, {me.nombre}</h1>
             <p className="break-all text-sm text-slate-500">{me.email}</p>
