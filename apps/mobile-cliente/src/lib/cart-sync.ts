@@ -31,10 +31,56 @@ export async function saveRemoteCart(owner: string): Promise<void> {
   useCart.setState({ busy: true, sync: "saving", syncError: null, quote: null });
   try {
     const result = lines.length
-      ? await calculateCart(lines, cart.coupon)
-      : await abandonCart().then(() => null);
+      ? await calculateCart(lines, cart.coupon, cart.remoteVersion)
+      : await abandonCart(cart.remoteVersion).then(() => null);
     if (current()) useCart.getState().saved(owner, revision, result);
   } catch (error) {
-    if (current()) useCart.getState().failed(owner, commerceError(error));
+    if (current() && error instanceof ApiError && error.code === "CART_CHANGED") {
+      try {
+        const remote = await getActiveCart().catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        });
+        if (current()) {
+          useCart.getState().hydrate(owner, useCart.getState().revision, remote);
+          useCart
+            .getState()
+            .failed(
+              owner,
+              "El carrito cambió en otro dispositivo. Lo actualizamos; revisa los artículos y vuelve a aplicar tu cambio.",
+            );
+        }
+      } catch {
+        if (current()) useCart.getState().failed(owner, commerceError(error));
+      }
+    } else if (current()) useCart.getState().failed(owner, commerceError(error));
+  }
+}
+
+/** Refresh only a clean cart. An arriving response cannot undo a newer local edit. */
+export async function refreshRemoteCart(
+  owner: string,
+  canApply: () => boolean = () => true,
+): Promise<void> {
+  const before = useCart.getState();
+  if (before.owner !== owner || !before.ready || before.busy || before.sync !== "saved") return;
+  const { revision, scopeVersion } = before;
+  try {
+    const remote = await getActiveCart().catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    });
+    const state = useCart.getState();
+    if (
+      state.owner === owner &&
+      state.scopeVersion === scopeVersion &&
+      state.revision === revision &&
+      state.sync === "saved" &&
+      !state.busy &&
+      canApply()
+    )
+      state.hydrate(owner, revision, remote);
+  } catch {
+    /* Transient background failures must not clear a saved cart. */
   }
 }

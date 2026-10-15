@@ -17,6 +17,7 @@ export interface DeliveryOptions {
 }
 export interface CheckoutInput {
   carritoId: string;
+  expectedCartVersion?: string;
   idempotencyKey: string;
   metodoPago: "oxxo" | "spei" | "tarjeta";
   cardTokenId?: string;

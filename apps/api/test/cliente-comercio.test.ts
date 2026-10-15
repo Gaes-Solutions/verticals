@@ -429,3 +429,74 @@ describe("serialización de carrito móvil", () => {
     ).toBe(1);
   });
 });
+
+describe("carrito compartido entre dispositivos", () => {
+  it("rechaza una escritura y un vaciado con versión anterior sin perder el carrito actual", async () => {
+    const initial = await app.inject({
+      method: "POST",
+      url: `${prefix}/carrito`,
+      headers: headers(),
+      payload: { items: [{ varianteId: variant, cantidad: 1 }] },
+    });
+    expect(initial.statusCode).toBe(200);
+    const version = initial.json().version;
+    expect(version).toEqual(expect.any(String));
+    const responses = await Promise.all(
+      [2, 3].map((cantidad) =>
+        app.inject({
+          method: "POST",
+          url: `${prefix}/carrito`,
+          headers: headers(),
+          payload: { expectedVersion: version, items: [{ varianteId: variant, cantidad }] },
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    expect(responses.find((response) => response.statusCode === 409)?.json().code).toBe(
+      "CART_CHANGED",
+    );
+    const saved = responses.find((response) => response.statusCode === 200)?.json();
+    const staleDelete = await app.inject({
+      method: "POST",
+      url: `${prefix}/carrito`,
+      headers: headers(),
+      payload: { expectedVersion: version, items: [] },
+    });
+    expect(staleDelete.statusCode).toBe(409);
+    expect(
+      (await app.inject({ method: "GET", url: `${prefix}/carrito`, headers: headers() })).json(),
+    ).toEqual(saved);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: `${prefix}/carrito`,
+          headers: headers(),
+          payload: { expectedVersion: saved.version, items: [] },
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (await app.inject({ method: "GET", url: `${prefix}/carrito`, headers: headers() }))
+        .statusCode,
+    ).toBe(404);
+  });
+  it("dos dispositivos que parten de carrito vacío crean solo uno y no se sobrescriben", async () => {
+    const results = await Promise.all(
+      [1, 4].map((cantidad) =>
+        app.inject({
+          method: "POST",
+          url: `${prefix}/carrito`,
+          headers: headers(),
+          payload: { expectedVersion: null, items: [{ varianteId: variant, cantidad }] },
+        }),
+      ),
+    );
+    expect(results.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    expect(
+      await getTenantClient(A).carritoEcommerce.count({
+        where: { clienteId: clienteA, canal: "mobile", status: "activo" },
+      }),
+    ).toBe(1);
+  });
+});

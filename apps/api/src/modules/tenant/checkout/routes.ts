@@ -119,6 +119,7 @@ function buildCheckoutInput(
 ): IniciarCheckoutInput {
   return {
     carritoId: body.carritoId,
+    expectedCartVersion: body.expectedCartVersion,
     ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
     tenantSlug,
     emailComprador: body.emailComprador,

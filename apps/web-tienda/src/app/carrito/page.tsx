@@ -76,23 +76,23 @@ export default function CarritoPage() {
                     <ImageOff size={24} strokeWidth={1.5} className="text-slate-300" />
                   )}
                 </div>
-                <div className="flex flex-1 flex-col justify-between">
+                <div className="flex min-w-0 flex-1 flex-col justify-between">
                   <div className="flex items-start justify-between gap-2">
                     {i.slugSeo ? (
                       <Link
                         href={`/producto/${i.slugSeo}`}
-                        className="font-medium hover:text-marca"
+                        className="min-w-0 break-words font-medium hover:text-marca"
                       >
                         {i.titulo}
                       </Link>
                     ) : (
-                      <p className="font-medium">{i.titulo}</p>
+                      <p className="min-w-0 break-words font-medium">{i.titulo}</p>
                     )}
                     <span className="whitespace-nowrap font-bold">
                       ${(Number(i.precio) * i.cantidad).toFixed(2)}
                     </span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -111,7 +111,7 @@ export default function CarritoPage() {
                       >
                         +
                       </button>
-                      <span className="ml-1 text-slate-400 text-xs">
+                      <span className="ml-1 hidden text-slate-400 text-xs sm:inline">
                         ${Number(i.precio).toFixed(2)} c/u
                       </span>
                     </div>

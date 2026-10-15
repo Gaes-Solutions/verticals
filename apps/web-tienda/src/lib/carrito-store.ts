@@ -9,20 +9,55 @@ export interface CarritoLineaLocal {
   slugSeo?: string;
 }
 
-const KEY = "gaespos_carrito";
+let KEY = "gaespos_carrito";
+let remoteVersion: string | null = null;
+export const carritoVersion = () => remoteVersion;
+export function fijarCarritoVersion(version: string | null) {
+  remoteVersion = version;
+}
+let onEdit: (() => void) | null = null;
+export function configurarCarrito(owner: string | null, edit: (() => void) | null): void {
+  KEY = owner ? `gaespos_carrito_cuenta:${owner}` : "gaespos_carrito";
+  onEdit = edit;
+  window.dispatchEvent(new Event("carrito-actualizado"));
+}
+export function recibirCarrito(items: CarritoLineaLocal[]): void {
+  const serialized = JSON.stringify(items);
+  if (localStorage.getItem(KEY) !== serialized) localStorage.setItem(KEY, serialized);
+  window.dispatchEvent(new Event("carrito-actualizado"));
+}
 
-export function leerCarrito(): CarritoLineaLocal[] {
-  if (typeof window === "undefined") return [];
+export function leerLineasGuardadas(raw: string | null): CarritoLineaLocal[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    const value: unknown = JSON.parse(raw ?? "[]");
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter(
+        (item): item is CarritoLineaLocal =>
+          item &&
+          typeof item.varianteId === "string" &&
+          typeof item.titulo === "string" &&
+          typeof item.precio === "string" &&
+          Number.isFinite(Number(item.precio)) &&
+          Number(item.precio) >= 0 &&
+          typeof item.cantidad === "number" &&
+          Number.isFinite(item.cantidad) &&
+          item.cantidad > 0 &&
+          item.cantidad <= 100000,
+      )
+      .slice(0, 100);
   } catch {
     return [];
   }
 }
+export function leerCarrito(): CarritoLineaLocal[] {
+  if (typeof window === "undefined") return [];
+  return leerLineasGuardadas(localStorage.getItem(KEY));
+}
 
 export function guardarCarrito(items: CarritoLineaLocal[]): void {
-  localStorage.setItem(KEY, JSON.stringify(items));
-  window.dispatchEvent(new Event("carrito-actualizado"));
+  recibirCarrito(items);
+  onEdit?.();
 }
 
 export function agregar(linea: CarritoLineaLocal): void {
@@ -55,7 +90,8 @@ export function quitar(varianteId: string): void {
 }
 
 export function vaciar(): void {
-  guardarCarrito([]);
+  recibirCarrito([]);
+  window.dispatchEvent(new Event("carrito-finalizado"));
 }
 
 export function sessionId(): string {

@@ -17,3 +17,13 @@ Incluye catálogo, detalle, categorías, configuración pública y carrito. Excl
 ## Alternativa descartada
 
 Reutilizar el token de servicio `/t/*` dentro de la app expondría privilegios del negocio. Duplicar el motor de precios en móvil produciría importes inconsistentes y permitiría manipulaciones.
+
+## Actualización 2026-10-14: carrito compartido web y Android
+
+La web autenticada usa también `/cliente-portal/comercio/carrito` mediante su BFF y la cookie HttpOnly del comprador. `mobile` permanece como valor histórico del canal de almacenamiento del carrito compartido. Los visitantes conservan su carrito local separado. Los artículos locales anteriores se ofrecen para importar explícitamente; no se adjudican automáticamente a una cuenta al iniciar sesión.
+
+GET y POST incluyen una versión opaca basada en id y updatedAt. Los nuevos clientes envían `expectedVersion` (null si comprobaron que no existe carrito); el servidor la verifica bajo el bloqueo por cliente antes de reemplazar o vaciar. Un conflicto devuelve `409 CART_CHANGED`, conserva la escritura ganadora y obliga a revisar los artículos. Por compatibilidad los APK anteriores pueden seguir usando POST sin versión y DELETE; para protección de concurrencia completa hay que actualizar el APK. POST con líneas vacías abandona el carrito y responde 204.
+
+Ambas interfaces consultan cambios en segundo plano mientras están activas y el carrito está guardado. Android consulta también al regresar al primer plano. Las respuestas tardías no reemplazan ediciones locales posteriores ni cambian el carrito de otra sesión. Checkout envía la versión que el comprador revisó y la comprueba bajo el bloqueo de carrito antes de registrar un intento o llamar al proveedor; la recuperación de un intento ya registrado mantiene sus reglas de idempotencia.
+
+La verificación cubre escrituras simultáneas, vaciado con versión anterior, aislamiento de cuentas, reintentos de checkout y un recorrido de navegador contra la API real sin pedidos ni cobros. No sustituye una prueba física del APK instalado.

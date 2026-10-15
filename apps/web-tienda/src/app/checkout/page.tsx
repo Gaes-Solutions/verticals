@@ -2,7 +2,7 @@
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
-import { type CarritoLineaLocal, leerCarrito, vaciar } from "@/lib/carrito-store";
+import { type CarritoLineaLocal, carritoVersion, leerCarrito, vaciar } from "@/lib/carrito-store";
 import {
   type CheckoutAttempt,
   completeAttempt,
@@ -574,6 +574,7 @@ export default function CheckoutPage() {
           checkoutContext: current.context,
           idempotencyKey: current.key,
           emailComprador: email,
+          expectedCartVersion: carritoVersion(),
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
           metodoPago: metodo,

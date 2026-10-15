@@ -49,6 +49,7 @@ async function nextFolioPublico(
 
 export interface IniciarCheckoutInput {
   carritoId: string;
+  expectedCartVersion?: string | undefined;
   idempotencyKey?: string | undefined;
   requestedBy?: string | undefined;
   requirePublicStore?: boolean | undefined;
@@ -172,6 +173,7 @@ async function claimCheckoutAttempt(
   carritoId: string,
   owner: string,
   cartUpdatedAt: Date,
+  expectedCartVersion?: string,
 ): Promise<CheckoutAttempt | null> {
   try {
     return await client.$transaction(async (tx) => {
@@ -183,7 +185,11 @@ async function claimCheckoutAttempt(
       const current = await tx.carritoEcommerce.findUnique({ where: { id: carritoId } });
       if (!current || current.status !== "activo")
         throw new CheckoutError(409, "El carrito ya no está activo", { code: "CART_UNAVAILABLE" });
-      if (current.updatedAt.getTime() !== cartUpdatedAt.getTime())
+      if (
+        current.updatedAt.getTime() !== cartUpdatedAt.getTime() ||
+        (expectedCartVersion !== undefined &&
+          expectedCartVersion !== `${current.id}:${current.updatedAt.toISOString()}`)
+      )
         throw new CheckoutError(409, "El carrito cambió. Revisa los artículos antes de pagar.", {
           code: "CART_CHANGED",
         });
@@ -245,6 +251,7 @@ export async function iniciarCheckout(
     carritoId,
     owner,
     carrito.updatedAt,
+    input.expectedCartVersion,
   );
   if (existing) return replayAttempt(existing);
   let providerStarted = false;

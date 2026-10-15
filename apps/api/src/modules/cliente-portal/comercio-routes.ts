@@ -27,7 +27,8 @@ const itemSchema = z
   .strict();
 const cartSchema = z
   .object({
-    items: z.array(itemSchema).min(1).max(100),
+    items: z.array(itemSchema).max(100),
+    expectedVersion: z.string().min(1).max(200).nullable().optional(),
     cuponCodigo: z.string().trim().min(1).max(80).optional(),
   })
   .strict()
@@ -45,9 +46,11 @@ async function respond<T>(reply: FastifyReply, task: () => Promise<T>) {
     return await task();
   } catch (error) {
     if (!(error instanceof ComercioError)) throw error;
-    return reply
-      .code(error.statusCode)
-      .send({ statusCode: error.statusCode, message: error.message });
+    return reply.code(error.statusCode).send({
+      statusCode: error.statusCode,
+      message: error.message,
+      ...(error.code ? { code: error.code } : {}),
+    });
   }
 }
 
@@ -70,9 +73,10 @@ const comercioRoutes: FastifyPluginAsync = async (app) => {
   );
   app.get("/config", (req, reply) => respond(reply, () => configComercio(context(req).client)));
   app.post("/carrito", (req, reply) =>
-    respond(reply, () => {
+    respond(reply, async () => {
       const { client, clienteId } = context(req);
-      return guardarCarritoComercio(client, clienteId, cartSchema.parse(req.body));
+      const cart = await guardarCarritoComercio(client, clienteId, cartSchema.parse(req.body));
+      return cart ?? reply.code(204).send();
     }),
   );
   app.get("/carrito", (req, reply) =>

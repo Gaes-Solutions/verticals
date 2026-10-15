@@ -18,6 +18,7 @@ import { ComercioError } from "./comercio-service.js";
 
 export interface MobileCheckoutInput {
   carritoId: string;
+  expectedCartVersion?: string | undefined;
   idempotencyKey: string;
   metodoPago: "oxxo" | "spei" | "tarjeta";
   cardTokenId?: string | undefined;
@@ -238,6 +239,7 @@ export async function checkoutMobile(
     connect?.stripeAccountStatus === "enabled" ? connect.stripeAccountId : null;
   const result = await iniciarCheckout(client, app.pagoProviderFactory(config.proveedor), {
     carritoId: cart.id,
+    expectedCartVersion: input.expectedCartVersion,
     idempotencyKey: key,
     requestedBy: owner(clienteId),
     tenantSlug: tenant,

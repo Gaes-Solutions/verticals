@@ -354,3 +354,21 @@ describe("checkout attempts", () => {
     });
   });
 });
+
+it("rejects a checkout based on a stale cross-device cart before calling the provider", async () => {
+  const id = await cart();
+  const current = await getTenantClient(TENANT).carritoEcommerce.findUniqueOrThrow({
+    where: { id },
+  });
+  const version = `${id}:${current.updatedAt.toISOString()}`;
+  await getTenantClient(TENANT).carritoEcommerce.update({
+    where: { id },
+    data: { updatedAt: new Date(current.updatedAt.getTime() + 1000) },
+  });
+  const before = calls;
+  const response = await start({ ...input(id), expectedCartVersion: version });
+  expect(response.statusCode).toBe(409);
+  expect(response.json().code).toBe("CART_CHANGED");
+  expect(calls).toBe(before);
+  expect(await getTenantClient(TENANT).checkoutAttempt.count({ where: { carritoId: id } })).toBe(0);
+});

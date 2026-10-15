@@ -1,8 +1,10 @@
 import { CarritoFlotante } from "@/components/carrito-flotante";
+import { CarritoSincronizado } from "@/components/carrito-sincronizado";
 import { FooterTienda } from "@/components/footer-tienda";
 import { HeaderAcciones } from "@/components/header-acciones";
 import { SwRegister } from "@/components/sw-register";
 import { getCategorias, getTiendaConfig } from "@/lib/api";
+import { getClienteSession } from "@/lib/cliente";
 import { Flame, Store } from "lucide-react";
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
@@ -35,6 +37,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     getTiendaConfig().catch(() => null),
     getCategorias().catch(() => []),
   ]);
+  const session = await getClienteSession().catch(() => null);
+  const cartOwner = session
+    ? JSON.stringify([session.cliente.tenantSlug, session.cliente.id])
+    : null;
   const nombre = config?.nombre ?? "Tienda";
   const navCategorias = categorias.slice(0, 8);
 
@@ -82,6 +88,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </nav>
         </header>
 
+        <CarritoSincronizado owner={cartOwner} />
         <main className="tienda-shell min-h-[60vh] py-6 sm:py-10">{children}</main>
 
         <FooterTienda nombre={nombre} metodosPago={config?.metodosPago} />

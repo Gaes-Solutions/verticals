@@ -165,3 +165,15 @@ describe("safe checkout attempts", () => {
     expect(useCheckout.getState()).toMatchObject({ owner: null, attempt: null });
   });
 });
+
+it("unlocks a stale cart rejected before payment and keeps ambiguous errors locked", async () => {
+  await recoverCheckout("owner");
+  remote.submit.mockRejectedValue(new ApiError(409, "changed", "CART_CHANGED"));
+  await initiateCheckout("owner", input);
+  expect(useCheckout.getState()).toMatchObject({ submitted: false, prepared: null, busy: false });
+  expect(checkoutBlocksCart(useCheckout.getState(), "owner")).toBe(false);
+  expect(useCheckout.getState().error).toContain("No se realizó el pago");
+  remote.submit.mockRejectedValue(new NetworkError());
+  await initiateCheckout("owner", input);
+  expect(checkoutBlocksCart(useCheckout.getState(), "owner")).toBe(true);
+});

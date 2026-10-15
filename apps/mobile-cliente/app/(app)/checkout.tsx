@@ -93,6 +93,7 @@ function useCheckoutForm({ owner, name }: { owner: string; name: string }) {
     if (payment === "tarjeta" && config.data?.tarjetaRequiereToken && !cardTokenId) return;
     void initiateCheckout(owner, {
       carritoId: cart.cartId,
+      ...(cart.remoteVersion ? { expectedCartVersion: cart.remoteVersion } : {}),
       metodoPago: payment,
       ...(cardTokenId ? { cardTokenId } : {}),
       metodoEnvio: mode,

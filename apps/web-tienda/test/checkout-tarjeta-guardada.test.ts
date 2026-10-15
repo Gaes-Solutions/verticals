@@ -66,7 +66,19 @@ function mockApiFlujo(finalStatus = "confirmado") {
 }
 
 function mockGuardadoExitoso() {
-  return vi.fn().mockResolvedValue(new Response(JSON.stringify(MEDIO_NUEVO), { status: 201 }));
+  return vi
+    .fn()
+    .mockImplementation(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.includes("/comercio/carrito")
+              ? { id: "cart_1", version: "shared-version" }
+              : MEDIO_NUEVO,
+          ),
+          { status: 200 },
+        ),
+    );
 }
 
 beforeEach(() => {
@@ -183,6 +195,7 @@ describe("POST /api/checkout — tarjeta guardada y guardar tarjeta", () => {
       context: "ctx",
     } as never);
     mockApiFlujo();
+    vi.stubGlobal("fetch", mockGuardadoExitoso());
     const res = await POST(request({ ...BASE_BODY, medioPagoGuardadoId: "cmp_1" }));
     expect(res.status).toBe(200);
     const iniciar = vi

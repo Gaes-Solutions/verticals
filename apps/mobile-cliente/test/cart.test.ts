@@ -11,6 +11,7 @@ import { restoreRemoteCart, saveRemoteCart } from "../src/lib/cart-sync";
 const owner = accountCartKey("shop-a", "customer-a");
 const snapshot = {
   id: "cart-a",
+  version: "cart-a:2026-10-14T00:00:00.000Z",
   canal: "mobile" as const,
   moneda: "MXN",
   status: "activo",
@@ -159,7 +160,11 @@ describe("server restore and autosave", () => {
     useCart.getState().setCoupon(" SAVE10 ");
     remote.save.mockResolvedValue({ ...snapshot, cuponCodigo: "SAVE10" });
     await saveRemoteCart(owner);
-    expect(remote.save).toHaveBeenCalledWith([{ varianteId: "v-a", cantidad: 1 }], "SAVE10");
+    expect(remote.save).toHaveBeenCalledWith(
+      [{ varianteId: "v-a", cantidad: 1 }],
+      "SAVE10",
+      snapshot.version,
+    );
     expect(useCart.getState().quote?.total).toBe("10");
     useCart.getState().clear();
     expect(useCart.getState().coupon).toBe("");
@@ -224,4 +229,67 @@ describe("undo without mixing accounts or losing other articles", () => {
     expect(useCart.getState().lastEdit).toBeNull();
     expect(useCart.getState().undo(owner)).toBe(false);
   });
+});
+
+describe("cross-device refresh", () => {
+  it("updates a clean cart and invalidates the old delivery revision", async () => {
+    const { refreshRemoteCart } = await import("../src/lib/cart-sync");
+    remote.get.mockResolvedValue(snapshot);
+    await restoreRemoteCart(owner);
+    const revision = useCart.getState().revision;
+    remote.get.mockResolvedValue({
+      ...snapshot,
+      version: "updated",
+      items: [{ ...snapshot.items[0], cantidad: "3" }],
+    });
+    await refreshRemoteCart(owner);
+    expect(useCart.getState().lines[0]?.cantidad).toBe(3);
+    expect(useCart.getState().revision).toBe(revision + 1);
+    expect(useCart.getState().remoteVersion).toBe("updated");
+  });
+  it("does not replace pending edits with a late background refresh", async () => {
+    const { refreshRemoteCart } = await import("../src/lib/cart-sync");
+    remote.get.mockResolvedValue(snapshot);
+    await restoreRemoteCart(owner);
+    let resolve!: (value: typeof snapshot) => void;
+    remote.get.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const refreshing = refreshRemoteCart(owner);
+    useCart.getState().change(owner, "v-a", 5);
+    resolve(snapshot);
+    await refreshing;
+    expect(useCart.getState().lines[0]?.cantidad).toBe(5);
+    expect(useCart.getState().sync).toBe("dirty");
+  });
+  it("loads the winning cart on a version conflict and explains that the change must be reapplied", async () => {
+    remote.get.mockResolvedValue(snapshot);
+    await restoreRemoteCart(owner);
+    useCart.getState().change(owner, "v-a", 5);
+    remote.save.mockRejectedValue(new ApiError(409, "changed", "CART_CHANGED"));
+    remote.get.mockResolvedValue({
+      ...snapshot,
+      version: "winner",
+      items: [{ ...snapshot.items[0], cantidad: "2" }],
+    });
+    await saveRemoteCart(owner);
+    expect(useCart.getState()).toMatchObject({
+      busy: false,
+      sync: "error",
+      remoteVersion: "winner",
+      lines: [{ varianteId: "v-a", cantidad: 2 }],
+    });
+    expect(useCart.getState().syncError).toContain("otro dispositivo");
+  });
+});
+
+it("does not apply a response after checkout acquires the cart", async () => {
+  const { refreshRemoteCart } = await import("../src/lib/cart-sync");
+  remote.get.mockResolvedValue(snapshot);
+  await restoreRemoteCart(owner);
+  remote.get.mockResolvedValue({ ...snapshot, version: "new", items: [] });
+  await refreshRemoteCart(owner, () => false);
+  expect(useCart.getState().lines[0]?.cantidad).toBe(1);
 });

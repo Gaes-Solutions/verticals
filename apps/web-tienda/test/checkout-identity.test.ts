@@ -62,7 +62,10 @@ beforeEach(() => {
     .mockResolvedValueOnce(result)
     .mockResolvedValue(result);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe("checkout BFF: propiedad y reintentos", () => {
   it("liga cliente validado y usa UUID privado estable, no cliente/email del body", async () => {
@@ -75,18 +78,31 @@ describe("checkout BFF: propiedad y reintentos", () => {
         email: "verified@example.test",
       },
     });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ id: "cart1", version: "shared-version" })));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.mocked(api).mockReset().mockRejectedValueOnce(new ApiError(404)).mockResolvedValue(result);
     const context = checkoutDigest(secret, "context", "tienda-a", "verified-client");
-    expect((await POST(request({ ...body, checkoutContext: context }))).status).toBe(200);
-    expect(api).toHaveBeenNthCalledWith(2, "/tienda", {
-      body: {
-        clienteId: "verified-client",
-        canal: "web",
-        items: body.items,
-        emailAnonimo: body.emailComprador,
-      },
-    });
-    expect(api).toHaveBeenNthCalledWith(3, "/checkout/tienda/iniciar", {
+    expect(
+      (
+        await POST(
+          request({ ...body, checkoutContext: context, expectedCartVersion: "reviewed-version" }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/cliente-portal/comercio/carrito"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private" }),
+        body: JSON.stringify({ items: body.items, expectedVersion: "reviewed-version" }),
+      }),
+    );
+    expect(api).not.toHaveBeenCalledWith("/tienda", expect.anything());
+    expect(api).toHaveBeenNthCalledWith(2, "/checkout/tienda/iniciar", {
       body: expect.objectContaining({
+        carritoId: "cart1",
+        expectedCartVersion: "shared-version",
         idempotencyKey: checkoutKey(secret, "tienda-a", "verified-client", publicKey),
       }),
     });

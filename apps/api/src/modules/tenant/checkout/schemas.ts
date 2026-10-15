@@ -15,6 +15,7 @@ const direccionSchema = z.object({
 export const iniciarCheckoutSchema = z
   .object({
     carritoId: z.string().min(1),
+    expectedCartVersion: z.string().min(1).max(200).optional(),
     idempotencyKey: z.string().uuid().optional(),
     emailComprador: z.string().email(),
     metodoPago: z.enum(["tarjeta", "oxxo", "spei", "transferencia", "cod"]).default("tarjeta"),

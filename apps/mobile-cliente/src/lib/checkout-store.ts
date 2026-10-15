@@ -119,7 +119,16 @@ export async function initiateCheckout(
     if (!current()) return;
     useCheckout.setState({ attempt, outcome: paymentOutcome(attempt, "submission") });
   } catch (error) {
-    if (current()) useCheckout.setState({ error: checkoutFailure(error) });
+    if (current() && error instanceof ApiError && error.code === "CART_CHANGED") {
+      // This code is emitted before claiming an attempt or calling the provider.
+      useCheckout.setState({ submitted: false, prepared: null, attempt: null, outcome: null });
+      await restoreRemoteCart(owner);
+      if (current())
+        useCheckout.setState({
+          error:
+            "El carrito cambió en otro dispositivo. No se realizó el pago; revisa la selección actualizada antes de continuar.",
+        });
+    } else if (current()) useCheckout.setState({ error: checkoutFailure(error) });
   } finally {
     if (current()) useCheckout.setState({ busy: false });
   }

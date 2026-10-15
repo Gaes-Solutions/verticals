@@ -44,6 +44,7 @@ interface CartState {
   owner: string | null;
   lines: CartLine[];
   cartId: string | null;
+  remoteVersion: string | null;
   coupon: string;
   setCoupon: (coupon: string) => void;
   names: Record<string, string>;
@@ -88,6 +89,7 @@ export const useCart = create<CartState>((set, get) => ({
   },
   lines: [],
   cartId: null,
+  remoteVersion: null,
   coupon: "",
   setCoupon: (coupon) => {
     const normalized = coupon.trim();
@@ -120,6 +122,7 @@ export const useCart = create<CartState>((set, get) => ({
       lines: [],
       names: {},
       cartId: null,
+      remoteVersion: null,
       coupon: "",
       revision: get().revision + 1,
       ready: false,
@@ -136,11 +139,14 @@ export const useCart = create<CartState>((set, get) => ({
       set({ ready: true });
       return;
     }
+    const changedRemotely = current.ready && current.remoteVersion !== (cart?.version ?? null);
     set({
+      ...(changedRemotely ? { revision: current.revision + 1, lastEdit: null, notice: null } : {}),
       ready: true,
       sync: "saved",
       syncError: null,
       cartId: cart?.id ?? null,
+      remoteVersion: cart?.version ?? null,
       coupon: cart?.cuponCodigo ?? "",
       lines:
         cart?.items.map((line) => ({
@@ -154,7 +160,12 @@ export const useCart = create<CartState>((set, get) => ({
   saved: (owner, revision, cart) => {
     const current = get();
     if (current.owner !== owner) return;
-    set({ busy: false, syncError: null, cartId: cart?.id ?? null });
+    set({
+      busy: false,
+      syncError: null,
+      cartId: cart?.id ?? null,
+      remoteVersion: cart?.version ?? null,
+    });
     if (current.revision !== revision) {
       set({ sync: "dirty", quote: null });
       return;
@@ -218,6 +229,7 @@ export const useCart = create<CartState>((set, get) => ({
       notice: null,
       lines: [],
       cartId: null,
+      remoteVersion: null,
       coupon: "",
       names: {},
       revision: get().revision + 1,

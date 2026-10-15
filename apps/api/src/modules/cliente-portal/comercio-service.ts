@@ -14,6 +14,7 @@ export class ComercioError extends Error {
   constructor(
     public readonly statusCode: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "ComercioError";
@@ -145,8 +146,11 @@ export async function configComercio(client: TenantPrismaClient) {
   };
 }
 
+// "mobile" is the legacy storage channel for the authenticated account cart.
+// Web and Android now use this same service; guest web carts remain separate.
 const cartSelect = {
   id: true,
+  updatedAt: true,
   canal: true,
   moneda: true,
   status: true,
@@ -164,6 +168,7 @@ const cartLineSchema = z.object({
 });
 function cartDto(cart: {
   id: string;
+  updatedAt: Date;
   canal: string;
   moneda: string;
   status: string;
@@ -176,6 +181,7 @@ function cartDto(cart: {
   if (!parsed.success) throw new ComercioError(409, "Recalcula el carrito para continuar");
   return {
     id: cart.id,
+    version: `${cart.id}:${cart.updatedAt.toISOString()}`,
     canal: cart.canal,
     moneda: cart.moneda,
     status: cart.status,
@@ -218,8 +224,16 @@ export async function hayPagoPorVerificar(
 export async function guardarCarritoComercio(
   client: TenantPrismaClient,
   clienteId: string,
-  input: { items: CarritoItemInput[]; cuponCodigo?: string | undefined },
+  input: {
+    items: CarritoItemInput[];
+    cuponCodigo?: string | undefined;
+    expectedVersion?: string | null | undefined;
+  },
 ) {
+  if (!input.items.length) {
+    await vaciarCarritoComercio(client, clienteId, input.expectedVersion);
+    return null;
+  }
   const ids = input.items.map((line) => line.varianteId);
   const active = await client.productoVariante.count({
     where: {
@@ -254,13 +268,15 @@ export async function guardarCarritoComercio(
     const previous = await tx.carritoEcommerce.findFirst({
       where: { clienteId, canal: "mobile", status: "activo" },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: { id: true },
+      select: { id: true, updatedAt: true },
     });
+    comprobarVersion(previous, input.expectedVersion);
     const data = {
       items: calculated.items as object,
       subtotal: calculated.subtotal,
       total: calculated.total,
       cuponCodigo: input.cuponCodigo ?? null,
+      updatedAt: new Date(Math.max(Date.now(), (previous?.updatedAt.getTime() ?? 0) + 1)),
     };
     if (previous) {
       await tx.$queryRaw`SELECT id FROM carritos_ecommerce WHERE id = ${previous.id} FOR UPDATE`;
@@ -300,14 +316,34 @@ export async function leerCarritoComercio(
   return cartDto(cart);
 }
 
-export async function vaciarCarritoComercio(client: TenantPrismaClient, clienteId: string) {
+function comprobarVersion(
+  cart: { id: string; updatedAt: Date } | null,
+  expected: string | null | undefined,
+) {
+  if (
+    expected !== undefined &&
+    expected !== (cart ? `${cart.id}:${cart.updatedAt.toISOString()}` : null)
+  )
+    throw new ComercioError(
+      409,
+      "El carrito cambió en otro dispositivo. Actualízalo antes de continuar.",
+      "CART_CHANGED",
+    );
+}
+
+export async function vaciarCarritoComercio(
+  client: TenantPrismaClient,
+  clienteId: string,
+  expectedVersion?: string | null,
+) {
   await client.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM clientes WHERE id = ${clienteId} FOR UPDATE`;
     const active = await tx.carritoEcommerce.findMany({
       where: { clienteId, canal: "mobile", status: "activo" },
-      select: { id: true },
-      orderBy: { id: "asc" },
+      select: { id: true, updatedAt: true },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     });
+    comprobarVersion(active[0] ?? null, expectedVersion);
     for (const cart of active)
       await tx.$queryRaw`SELECT id FROM carritos_ecommerce WHERE id = ${cart.id} FOR UPDATE`;
     if (

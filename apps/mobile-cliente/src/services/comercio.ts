@@ -19,6 +19,7 @@ export interface StoreProduct {
 }
 export interface ServerCart {
   id: string;
+  version?: string;
   canal: "mobile";
   moneda: string;
   status: string;
@@ -72,11 +73,11 @@ export const getStoreProduct = (slug: string) => {
     api.get<StoreProduct>(path, { signal, ...(auth ? {} : { auth: false }) }),
   );
 };
-export const calculateCart = (items: CartLine[], coupon = "") =>
+export const calculateCart = (items: CartLine[], coupon = "", expectedVersion?: string | null) =>
   bounded((signal) =>
     api.post<ServerCart>(
       `${prefix}/carrito`,
-      { items, ...(coupon ? { cuponCodigo: coupon } : {}) },
+      { items, expectedVersion, ...(coupon ? { cuponCodigo: coupon } : {}) },
       { signal },
     ),
   );
@@ -86,8 +87,10 @@ export const getStoreCart = (id: string) =>
   );
 export const getActiveCart = () =>
   bounded((signal) => api.get<ServerCart>(`${prefix}/carrito`, { signal }));
-export const abandonCart = () =>
-  bounded((signal) => api.del<void>(`${prefix}/carrito`, { signal }));
+export const abandonCart = (expectedVersion?: string | null) =>
+  bounded((signal) =>
+    api.post<void>(`${prefix}/carrito`, { items: [], expectedVersion }, { signal }),
+  );
 
 export const storeConfig = () => {
   const { path, auth } = catalogo(haySesion() ? "/config" : "");

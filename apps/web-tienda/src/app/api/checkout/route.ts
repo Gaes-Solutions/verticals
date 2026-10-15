@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
       checkoutContext: string;
+      expectedCartVersion?: string | null;
       idempotencyKey: string;
       emailComprador: string;
       items: Array<{ varianteId: string; cantidad: number }>;
@@ -203,20 +204,48 @@ export async function POST(req: NextRequest) {
     }
     const conConekta =
       Boolean(body.cardTokenId) || Boolean(body.medioPagoGuardadoId) || Boolean(medioNuevo);
-    const carrito = await api<{ id: string }>("/tienda", {
-      body: {
-        ...(identity.session
-          ? { clienteId: identity.session.cliente.id }
-          : { sessionIdAnonimo: identity.anonymousCart }),
-        canal: "web",
-        items: body.items,
-        emailAnonimo: body.emailComprador,
-        ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
-      },
-    });
+    let carrito: { id: string; version?: string };
+    if (identity.session) {
+      const saved = await fetch(`${API_URL}/cliente-portal/comercio/carrito`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${identity.session.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: body.items,
+          expectedVersion: body.expectedCartVersion ?? null,
+          ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!saved.ok)
+        return NextResponse.json(
+          {
+            message:
+              saved.status === 409
+                ? "El carrito cambió o tiene un pago por verificar. Regresa al carrito y actualízalo antes de continuar."
+                : "No pudimos guardar tu carrito. Revisa tu selección.",
+          },
+          { status: saved.status },
+        );
+      carrito = await saved.json();
+    } else {
+      carrito = await api<{ id: string }>("/tienda", {
+        body: {
+          sessionIdAnonimo: identity.anonymousCart,
+          canal: "web",
+          items: body.items,
+          emailAnonimo: body.emailComprador,
+          ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
+        },
+      });
+    }
     const checkout = await api<CheckoutResult>("/checkout/tienda/iniciar", {
       body: {
         carritoId: carrito.id,
+        ...(carrito.version ? { expectedCartVersion: carrito.version } : {}),
         idempotencyKey: identity.key,
         emailComprador: body.emailComprador,
         metodoPago,

@@ -30,6 +30,7 @@ const address = z
 const inputSchema = z
   .object({
     carritoId: id,
+    expectedCartVersion: z.string().min(1).max(200).optional(),
     idempotencyKey: z.string().uuid(),
     metodoPago: z.enum(["oxxo", "spei", "tarjeta"]),
     cardTokenId: z.string().min(5).max(200).optional(),
