@@ -1,6 +1,7 @@
 import type { PlatformPermission } from "@gaespos/permissions";
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
+import { ScreenBoundary } from "./components/ScreenBoundary.js";
 import { api, loadToken, setPlatformAccess, setToken } from "./lib/api.js";
 import { AuditPage } from "./pages/AuditPage.js";
 import { CatalogoPage } from "./pages/CatalogoPage.js";
@@ -234,21 +235,23 @@ export function App() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
-        {activeSection === "dashboard" && <DashboardPage />}
-        {activeSection === "clientes" && <ClientesPage />}
-        {activeSection === "roles" && <RolesPredefinidosPage />}
-        {activeSection === "uso" && <UsoHoyPage />}
-        {activeSection === "cobranza" && <CobranzaPage />}
-        {activeSection === "facturas" && <FacturasPage />}
-        {activeSection === "suscripciones" && <SuscripcionesPage />}
-        {activeSection === "partners" && <PartnersPage />}
-        {activeSection === "catalogo" && <CatalogoPage />}
-        {activeSection === "observabilidad" && <ObservabilidadPage />}
-        {activeSection === "soporte" && <TicketsPage />}
-        {activeSection === "marketplace" && <MarketplacePage />}
-        {activeSection === "audit" && <AuditPage />}
-        {activeSection === "equipo" && session.role === "superadmin" && <EquipoPage />}
+      <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-4 md:p-6">
+        <ScreenBoundary key={activeSection}>
+          {activeSection === "dashboard" && <DashboardPage />}
+          {activeSection === "clientes" && <ClientesPage />}
+          {activeSection === "roles" && <RolesPredefinidosPage />}
+          {activeSection === "uso" && <UsoHoyPage />}
+          {activeSection === "cobranza" && <CobranzaPage />}
+          {activeSection === "facturas" && <FacturasPage />}
+          {activeSection === "suscripciones" && <SuscripcionesPage />}
+          {activeSection === "partners" && <PartnersPage />}
+          {activeSection === "catalogo" && <CatalogoPage />}
+          {activeSection === "observabilidad" && <ObservabilidadPage />}
+          {activeSection === "soporte" && <TicketsPage />}
+          {activeSection === "marketplace" && <MarketplacePage />}
+          {activeSection === "audit" && <AuditPage />}
+          {activeSection === "equipo" && session.role === "superadmin" && <EquipoPage />}
+        </ScreenBoundary>
       </main>
     </div>
   );

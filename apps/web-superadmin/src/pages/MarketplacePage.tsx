@@ -49,9 +49,14 @@ export function MarketplacePage() {
   useEffect(() => cargar(), [cargar]);
 
   async function validar(id: string, aprobar: boolean) {
+    const motivoRechazo = aprobar ? undefined : window.prompt("Motivo del rechazo:");
+    if (!aprobar && motivoRechazo === null) return;
+    if (!aprobar && !motivoRechazo?.trim()) {
+      setMsg("Escribe el motivo del rechazo.");
+      return;
+    }
     setBusy(id);
     setMsg(null);
-    const motivoRechazo = aprobar ? undefined : window.prompt("Motivo del rechazo:") || "No cumple";
     try {
       await api(`/marketplace/admin/perfiles/${id}/validar`, {
         method: "POST",

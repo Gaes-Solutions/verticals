@@ -156,7 +156,13 @@ export function TicketsPage() {
             {items.map((t) => (
               <tr key={t.id} className="hover:bg-slate-50">
                 <td className="gx-td font-medium">
-                  {t.subject}
+                  <button
+                    type="button"
+                    onClick={() => setAbierto(t.id)}
+                    className="text-left text-brand hover:underline"
+                  >
+                    {t.subject}
+                  </button>
                   <span className="ml-2 text-slate-400 text-xs">{t._count.messages} msj</span>
                 </td>
                 <td className="gx-td text-slate-500">{t.tenant?.name ?? "—"}</td>
@@ -455,14 +461,14 @@ function TicketDetalleModal({
                         : "bg-white"
                   }`}
                 >
-                  <div className="mb-1 flex items-center justify-between text-xs">
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-1 break-all text-xs">
                     <span className="font-semibold text-slate-600">
                       {m.authorEmail}
                       {m.internalNote && <span className="ml-2 text-amber-700">nota interna</span>}
                     </span>
                     <span className="text-slate-400">{fechaHora(m.createdAt)}</span>
                   </div>
-                  <p className="whitespace-pre-wrap text-slate-700">{m.body}</p>
+                  <p className="whitespace-pre-wrap break-words text-slate-700">{m.body}</p>
                 </div>
               ))}
             </div>
@@ -475,7 +481,7 @@ function TicketDetalleModal({
               className="gx-input mb-2"
             />
             {err && <p className="mb-2 text-danger text-sm">{err}</p>}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <label className="flex items-center gap-2 text-slate-600 text-sm">
                 <input type="checkbox" checked={nota} onChange={(e) => setNota(e.target.checked)} />
                 Nota interna (no visible al cliente)

@@ -79,24 +79,50 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
   const token = opts.token !== undefined ? opts.token : opts.auth === false ? null : loadToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
-    headers,
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) {
+  const startedAt = performance.now();
+  const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      signal: controller.signal,
+      method,
+      headers,
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    });
     if (res.status === 403) window.dispatchEvent(new Event("platform-access-refresh"));
-    // token de sesión vencido → cerrar sesión y volver al login.
+    // Authentication failures must clear the session even if a proxy returns HTML.
     if (res.status === 401 && opts.token === undefined && opts.auth !== false && loadToken()) {
       setToken(null);
       window.location.reload();
     }
-    const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
-    throw new ApiError(res.status, message);
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      throw new ApiError(
+        res.ok ? 502 : res.status,
+        "El servidor no devolvió una respuesta válida.",
+      );
+    }
+    if (!res.ok) {
+      const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
+      throw new ApiError(res.status, message);
+    }
+    return data as T;
+  } catch (error) {
+    if (
+      method === "GET" &&
+      path !== "/auth/me" &&
+      !(error instanceof ApiError && error.status === 401)
+    ) {
+      window.dispatchEvent(new CustomEvent("platform-load-error", { detail: { startedAt } }));
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data as T;
 }
 
 // ── Flujo de autenticación (password → TOTP) ────────────────────────────────

@@ -96,7 +96,7 @@ export function ClientesPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-bold text-2xl text-slate-800">Clientes</h1>
           <p className="text-slate-500 text-sm">Negocios dados de alta en la plataforma.</p>
@@ -126,7 +126,9 @@ export function ClientesPage() {
             {tenants.length === 0 ? (
               <tr>
                 <td className="gx-td text-slate-400" colSpan={puedeGestionar ? 6 : 5}>
-                  Aún no hay clientes. Crea el primero con “+ Crear cliente”.
+                  {puedePlataforma("tenants.manage")
+                    ? "Aún no hay clientes. Crea el primero con “+ Crear cliente”."
+                    : "Aún no hay clientes registrados."}
                 </td>
               </tr>
             ) : (
