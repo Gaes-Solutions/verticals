@@ -35,6 +35,7 @@ import {
   eliminarDireccion,
   listarDirecciones,
 } from "./direcciones-service.js";
+import { LocationError, locationInput, lookupLocation } from "./location.js";
 import {
   MedioPagoError,
   agregarMedioPago,
@@ -231,6 +232,20 @@ export const clienteAuthRoutes: FastifyPluginAsync = async (app) => {
 /** Portal de la cuenta del cliente (autenticado como cliente). */
 export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateCliente);
+  app.post(
+    "/ubicacion",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      clienteCtx(req);
+      const body = locationInput.parse(req.body);
+      try {
+        return reply.header("Cache-Control", "no-store").send(await lookupLocation(body));
+      } catch (e) {
+        if (e instanceof LocationError) return reply.code(e.status).send({ message: e.message });
+        throw e;
+      }
+    },
+  );
 
   app.get("/me", async (req) => {
     const { clienteId, tenantSlug } = clienteCtx(req);

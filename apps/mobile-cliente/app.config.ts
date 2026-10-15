@@ -26,6 +26,15 @@ const config: ExpoConfig = {
   plugins: [
     ["@stripe/stripe-react-native", { enableGooglePay: false }],
     "expo-router",
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "Permite usar tu ubicación para completar tu dirección de entrega.",
+        isAndroidBackgroundLocationEnabled: false,
+        isAndroidForegroundServiceEnabled: false,
+      },
+    ],
     "expo-secure-store",
     [
       "expo-splash-screen",

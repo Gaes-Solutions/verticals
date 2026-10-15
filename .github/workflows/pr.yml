@@ -93,6 +93,9 @@ jobs:
       - name: Install isolated media decoder
         run: sudo apt-get update && sudo apt-get install -y ffmpeg bubblewrap util-linux
 
+      - name: Install Chromium for WebAuthn verification
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Test
         run: pnpm test
 

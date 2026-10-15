@@ -18,10 +18,12 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY .npmrc ./
 COPY apps/web-tienda/package.json ./apps/web-tienda/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/api-client/package.json ./packages/api-client/
 
 RUN pnpm install --frozen-lockfile --filter "@gaespos/web-tienda..."
 
 COPY packages/ui ./packages/ui
+COPY packages/api-client ./packages/api-client
 COPY apps/web-tienda ./apps/web-tienda
 
 # NEXT_PUBLIC_* vars are inlined at build time; Railway passes service variables as build args.

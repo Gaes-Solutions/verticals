@@ -1291,8 +1291,25 @@ model WebauthnCredential {
   @@map("webauthn_credentials")
 }
 
-// Registro de challenges WebAuthn ya consumidos: garantiza uso único del
-// challenge (evita replay de la aserción durante su TTL). La fila existe = usado.
+// Customer credentials are isolated from staff credentials and scoped to a store origin.
+model ClientePasskey {
+  id           String    @id @default(cuid())
+  tenantSlug   String    @map("tenant_slug")
+  clienteId    String    @map("cliente_id")
+  rpId         String    @map("rp_id")
+  credentialId String    @unique @map("credential_id")
+  publicKey    String    @map("public_key")
+  counter      BigInt    @default(0)
+  transports   String?
+  deviceName   String    @map("device_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+
+  @@index([tenantSlug, clienteId, rpId])
+  @@map("cliente_passkeys")
+}
+
+// Registro de challenges consumidos: evita reutilizar una verificación durante su TTL.
 model WebauthnUsedChallenge {
   id        String   @id
   expiresAt DateTime @map("expires_at")

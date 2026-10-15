@@ -5,6 +5,7 @@ import { ArrowRight, Eye, EyeOff, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PasskeyLogin } from "./customer-passkeys";
 
 export function AuthForm({
   modo,
@@ -17,11 +18,13 @@ export function AuthForm({
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const siguiente = destinoTrasLogin(destino);
   const retorno = siguiente === "/cuenta" ? "" : `?next=${encodeURIComponent(siguiente)}`;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (cargando || passkeyBusy) return;
     setError(null);
     setCargando(true);
     try {
@@ -129,7 +132,11 @@ export function AuthForm({
               {error}
             </p>
           )}
-          <button type="submit" disabled={cargando} className="gx-btn-primary w-full">
+          <button
+            type="submit"
+            disabled={cargando || passkeyBusy}
+            className="gx-btn-primary w-full"
+          >
             {cargando ? "Procesando…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
           </button>
           {modo === "login" && (
@@ -140,6 +147,9 @@ export function AuthForm({
             </p>
           )}
         </form>
+        {modo === "login" && (
+          <PasskeyLogin destino={destino} disabled={cargando} onBusyChange={setPasskeyBusy} />
+        )}
         <p className="mt-4 text-center text-sm text-slate-500">
           {modo === "registro" ? (
             <>

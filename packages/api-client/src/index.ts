@@ -33,3 +33,5 @@ export type {
   ClienteSession,
   LoginCredentials,
 } from "./types";
+
+export { camposDireccionMapa, type ResultadoMapa } from "./address-map";

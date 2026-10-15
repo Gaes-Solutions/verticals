@@ -1,3 +1,4 @@
+import { CustomerPasskeys } from "@/components/customer-passkeys";
 import { DireccionesCuenta } from "@/components/direcciones-cuenta";
 import { EstadoError } from "@/components/estado-error";
 import { LogoutBoton } from "@/components/logout-boton";
@@ -116,6 +117,8 @@ export default async function CuentaPage() {
           }}
         />
       </div>
+
+      <CustomerPasskeys />
 
       <h2 id="pedidos" className="mb-4 scroll-mt-44 text-lg font-bold">
         Mis pedidos

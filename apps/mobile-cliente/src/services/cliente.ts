@@ -114,6 +114,8 @@ export interface DireccionInput {
 export const listDirecciones = () => api.get<Direccion[]>("/cliente-portal/direcciones");
 export const crearDireccion = (input: DireccionInput) =>
   api.post<Direccion>("/cliente-portal/direcciones", input);
+export const actualizarDireccion = (id: string, input: DireccionInput) =>
+  api.put<{ ok: boolean }>(`/cliente-portal/direcciones/${encodeURIComponent(id)}`, input);
 export const eliminarDireccion = (id: string) => api.del<void>(`/cliente-portal/direcciones/${id}`);
 
 // ---- Wishlist ----
@@ -135,4 +137,18 @@ export const actualizarPerfil = (input: {
   nombre: string;
   apellidos?: string;
   telefono?: string;
-}) => api.put<PerfilCliente>("/cliente-portal/me", input);
+}) => boundedAccount((signal) => api.put<{ ok: boolean }>("/cliente-portal/me", input, { signal }));
+
+async function boundedAccount<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    return await run(controller.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+export const cambiarPassword = (input: { actual: string; nueva: string }) =>
+  boundedAccount((signal) =>
+    api.post<{ ok: boolean }>("/cliente-portal/cambiar-password", input, { signal }),
+  );

@@ -195,6 +195,9 @@ importers:
       expo-local-authentication:
         specifier: ~16.0.4
         version: 16.0.5(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
+      expo-location:
+        specifier: ~18.1.6
+        version: 18.1.6(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))
       expo-router:
         specifier: ~5.1.11
         version: 5.1.11(d855f673f6c06d290ef66978e4fe05c5)
@@ -461,7 +464,7 @@ importers:
         version: 19.2.3(@types/react@19.2.15)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@6.4.3(@types/node@22.19.17)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.7.0(vite@6.4.3(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3))
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.12)
@@ -476,7 +479,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.0.5
-        version: 6.4.3(@types/node@22.19.17)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3)
+        version: 6.4.3(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3)
 
   apps/web-b2b:
     dependencies:
@@ -809,6 +812,12 @@ importers:
 
   apps/web-tienda:
     dependencies:
+      '@gaespos/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@simplewebauthn/browser':
+        specifier: ^13.3.0
+        version: 13.3.0
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.2.6)
@@ -4665,6 +4674,11 @@ packages:
 
   expo-local-authentication@16.0.5:
     resolution: {integrity: sha512-JzrUssLBB5tr06ffbZJC074fru2mw6He3ALtwlRnrmL7svMJS0zvm6e5Gx5CSxfHf1DgneBVBnyRlmtWxQzY9Q==}
+    peerDependencies:
+      expo: '*'
+
+  expo-location@18.1.6:
+    resolution: {integrity: sha512-l5dQQ2FYkrBgNzaZN1BvSmdhhcztFOUucu2kEfDBMV4wSIuTIt/CKsho+F3RnAiWgvui1wb1WTTf80E8zq48hA==}
     peerDependencies:
       expo: '*'
 
@@ -10090,18 +10104,6 @@ snapshots:
       '@urql/core': 5.2.0
       wonka: 6.3.6
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.19.17)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3))':
-    dependencies:
-      '@babel/core': 7.29.7
-      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
-      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
-      '@rolldown/pluginutils': 1.0.0-beta.27
-      '@types/babel__core': 7.20.5
-      react-refresh: 0.17.0
-      vite: 6.4.3(@types/node@22.19.17)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3)
-    transitivePeerDependencies:
-      - supports-color
-
   '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3))':
     dependencies:
       '@babel/core': 7.29.7
@@ -11218,6 +11220,10 @@ snapshots:
     dependencies:
       expo: 53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
       invariant: 2.2.4
+
+  expo-location@18.1.6(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)):
+    dependencies:
+      expo: 53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)
 
   expo-manifests@0.16.6(expo@53.0.27(@babel/core@7.29.7)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0)))(react-native-webview@13.13.5(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react-native@0.79.6(@babel/core@7.29.7)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0)):
     dependencies:
@@ -13678,23 +13684,6 @@ snapshots:
       fsevents: 2.3.3
       lightningcss: 1.27.0
       terser: 5.49.2
-
-  vite@6.4.3(@types/node@22.19.17)(jiti@1.21.7)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3):
-    dependencies:
-      esbuild: 0.25.12
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
-      postcss: 8.5.12
-      rollup: 4.60.2
-      tinyglobby: 0.2.16
-    optionalDependencies:
-      '@types/node': 22.19.17
-      fsevents: 2.3.3
-      jiti: 1.21.7
-      lightningcss: 1.27.0
-      terser: 5.49.2
-      tsx: 4.21.0
-      yaml: 2.8.3
 
   vite@6.4.3(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.21.0)(yaml@2.8.3):
     dependencies:

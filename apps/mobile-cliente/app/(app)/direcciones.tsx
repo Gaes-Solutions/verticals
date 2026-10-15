@@ -1,30 +1,60 @@
 import { useAuth } from "@/lib/auth-store";
 import {
+  type Direccion,
   type DireccionInput,
+  actualizarDireccion,
   crearDireccion,
   eliminarDireccion,
   listDirecciones,
 } from "@/services/cliente";
 import { colors, radius, shadow, space } from "@/theme";
-import { Badge, Button, CommerceError, EmptyState, Icon, Input, Loading, Screen } from "@/ui";
+import {
+  Badge,
+  Button,
+  CommerceError,
+  EmptyState,
+  EntraParaVer,
+  Icon,
+  Input,
+  Loading,
+  Screen,
+} from "@/ui";
+import { AddressMap } from "@/ui/AddressMap";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Direcciones() {
+  const { status, user, tenantSlug } = useAuth();
+  if (status !== "signedIn" || !user)
+    return (
+      <EntraParaVer
+        icono="location"
+        titulo="Mis direcciones"
+        texto="Guarda tus direcciones para comprar más rápido."
+      />
+    );
+  return <DireccionesConSesion key={`${tenantSlug}:${user.id}`} />;
+}
+function DireccionesConSesion() {
   const { tenantSlug, user } = useAuth();
   const queryKey = ["direcciones", tenantSlug, user?.id];
   const qc = useQueryClient();
   const [nueva, setNueva] = useState(false);
+  const [editing, setEditing] = useState<Direccion | null>(null);
   const q = useQuery({ queryKey, retry: false, queryFn: listDirecciones });
   const borrar = useMutation({
     mutationFn: (id: string) => eliminarDireccion(id),
@@ -62,7 +92,13 @@ export default function Direcciones() {
                 }}
               />
             ) : null}
-            <Pressable style={s.nuevaBtn} onPress={() => setNueva(true)}>
+            <Pressable
+              style={s.nuevaBtn}
+              onPress={() => {
+                setEditing(null);
+                setNueva(true);
+              }}
+            >
               <Icon name="add-circle" size={22} color={colors.brand} />
               <Text style={s.nuevaText}>Agregar dirección</Text>
             </Pressable>
@@ -88,46 +124,76 @@ export default function Direcciones() {
                 {item.estado} · CP {item.codigoPostal}
               </Text>
             </View>
-            <Icon
-              name="trash-outline"
-              size={22}
-              color={colors.danger}
-              onPress={() =>
-                Alert.alert("Eliminar", `¿Borrar "${item.etiqueta}"?`, [
-                  { text: "No" },
-                  { text: "Sí", style: "destructive", onPress: () => borrar.mutate(item.id) },
-                ])
-              }
-            />
+            <View style={{ gap: 12 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Editar dirección ${item.etiqueta}`}
+                onPress={() => {
+                  setEditing(item);
+                  setNueva(true);
+                }}
+                style={{ padding: 10 }}
+              >
+                <Icon name="create-outline" color={colors.brand} />
+              </Pressable>
+              <Icon
+                name="trash-outline"
+                size={22}
+                color={colors.danger}
+                onPress={() =>
+                  Alert.alert("Eliminar", `¿Borrar "${item.etiqueta}"?`, [
+                    { text: "No" },
+                    { text: "Sí", style: "destructive", onPress: () => borrar.mutate(item.id) },
+                  ])
+                }
+              />
+            </View>
           </View>
         )}
       />
-      <NuevaModal
-        visible={nueva}
-        onClose={() => setNueva(false)}
-        onDone={() => {
-          setNueva(false);
-          void qc.invalidateQueries({ queryKey });
-        }}
-      />
+      {nueva && (
+        <NuevaModal
+          key={editing?.id ?? "new"}
+          initial={editing}
+          visible={nueva}
+          onClose={() => setNueva(false)}
+          onDone={() => {
+            setNueva(false);
+            void qc.invalidateQueries({ queryKey });
+          }}
+        />
+      )}
     </View>
   );
 }
 
 function NuevaModal({
+  initial,
   visible,
   onClose,
   onDone,
-}: { visible: boolean; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState<DireccionInput>({
-    etiqueta: "",
-    calle: "",
-    estado: "",
-    codigoPostal: "",
-  });
+}: { initial: Direccion | null; visible: boolean; onClose: () => void; onDone: () => void }) {
+  const [f, setF] = useState<DireccionInput>(
+    initial
+      ? {
+          etiqueta: initial.etiqueta,
+          calle: initial.calle,
+          numeroExterior: initial.numeroExterior ?? "",
+          colonia: initial.colonia ?? "",
+          municipio: initial.municipio ?? "",
+          estado: initial.estado,
+          codigoPostal: initial.codigoPostal,
+          referencias: initial.referencias ?? "",
+          isDefaultEnvio: initial.isDefaultEnvio,
+        }
+      : { etiqueta: "", calle: "", estado: "", codigoPostal: "", isDefaultEnvio: false },
+  );
   const set = (k: keyof DireccionInput) => (v: string) => setF((p) => ({ ...p, [k]: v }));
   const m = useMutation({
-    mutationFn: () => crearDireccion(f),
+    mutationFn: async () => {
+      if (initial) await actualizarDireccion(initial.id, f);
+      else await crearDireccion(f);
+    },
     onSuccess: () => {
       setF({ etiqueta: "", calle: "", estado: "", codigoPostal: "" });
       onDone();
@@ -137,79 +203,122 @@ function NuevaModal({
     f.etiqueta.trim() && f.calle.trim() && f.estado.trim() && /^\d{5}$/.test(f.codigoPostal);
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={s.modalRoot}>
-        <View style={s.modalHead}>
-          <Text style={s.modalTitle}>Nueva dirección</Text>
-          <Pressable hitSlop={12} onPress={onClose}>
-            <Icon name="close" size={26} color={colors.muted} />
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={s.form}>
-          <Input
-            label="Etiqueta"
-            icon="pricetag"
-            value={f.etiqueta}
-            onChangeText={set("etiqueta")}
-            placeholder="Casa, Oficina…"
-          />
-          <Input
-            label="Calle"
-            icon="map"
-            value={f.calle}
-            onChangeText={set("calle")}
-            placeholder="Calle"
-          />
-          <Input
-            label="Número exterior"
-            icon="home"
-            value={f.numeroExterior ?? ""}
-            onChangeText={set("numeroExterior")}
-            placeholder="123"
-          />
-          <Input
-            label="Colonia"
-            value={f.colonia ?? ""}
-            onChangeText={set("colonia")}
-            placeholder="Colonia"
-          />
-          <Input
-            label="Municipio"
-            value={f.municipio ?? ""}
-            onChangeText={set("municipio")}
-            placeholder="Municipio"
-          />
-          <Input
-            label="Estado"
-            value={f.estado}
-            onChangeText={set("estado")}
-            placeholder="Estado"
-          />
-          <Input
-            label="Código postal"
-            icon="mail"
-            value={f.codigoPostal}
-            onChangeText={set("codigoPostal")}
-            placeholder="00000"
-            keyboardType="number-pad"
-            maxLength={5}
-          />
-          {m.isError ? (
-            <Text accessibilityRole="alert" style={{ color: colors.danger }}>
-              No pudimos confirmar que la dirección se guardó. Cierra este formulario y actualiza la
-              lista antes de intentar crearla nuevamente.
-            </Text>
-          ) : null}
-          <Button
-            label="Guardar dirección"
-            icon="save"
-            busy={m.isPending}
-            disabled={!valido}
-            onPress={() => m.mutate()}
-          />
-          <View style={{ height: space.xl }} />
-        </ScrollView>
-      </View>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={() => {
+        if (!m.isPending) onClose();
+      }}
+    >
+      <SafeAreaView style={s.modalRoot}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={s.modalHead}>
+            <Text style={s.modalTitle}>{initial ? "Editar dirección" : "Nueva dirección"}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar dirección"
+              hitSlop={12}
+              disabled={m.isPending}
+              onPress={onClose}
+            >
+              <Icon name="close" size={26} color={colors.muted} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={s.form} keyboardShouldPersistTaps="handled">
+            <AddressMap
+              disabled={m.isPending}
+              onSelect={(fields) =>
+                setF((previous) => ({
+                  ...previous,
+                  ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== "")),
+                }))
+              }
+            />
+            <Input
+              label="Etiqueta"
+              icon="pricetag"
+              value={f.etiqueta}
+              onChangeText={set("etiqueta")}
+              placeholder="Casa, Oficina…"
+            />
+            <Input
+              label="Calle"
+              icon="map"
+              value={f.calle}
+              onChangeText={set("calle")}
+              placeholder="Calle"
+            />
+            <Input
+              label="Número exterior"
+              icon="home"
+              value={f.numeroExterior ?? ""}
+              onChangeText={set("numeroExterior")}
+              placeholder="123"
+            />
+            <Input
+              label="Colonia"
+              value={f.colonia ?? ""}
+              onChangeText={set("colonia")}
+              placeholder="Colonia"
+            />
+            <Input
+              label="Municipio"
+              value={f.municipio ?? ""}
+              onChangeText={set("municipio")}
+              placeholder="Municipio"
+            />
+            <Input
+              label="Estado"
+              value={f.estado}
+              onChangeText={set("estado")}
+              placeholder="Estado"
+            />
+            <Input
+              label="Código postal"
+              icon="mail"
+              value={f.codigoPostal}
+              onChangeText={set("codigoPostal")}
+              placeholder="00000"
+              keyboardType="number-pad"
+              maxLength={5}
+            />
+            <Input
+              label="Referencias"
+              value={f.referencias ?? ""}
+              onChangeText={set("referencias")}
+              placeholder="Entre calles, color de la fachada…"
+              multiline
+            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ flex: 1, color: colors.ink }}>Usar como dirección principal</Text>
+              <Switch
+                accessibilityLabel="Usar como dirección principal"
+                value={f.isDefaultEnvio ?? false}
+                disabled={m.isPending}
+                onValueChange={(value) => setF((p) => ({ ...p, isDefaultEnvio: value }))}
+                trackColor={{ true: colors.brand, false: colors.line }}
+              />
+            </View>
+            {m.isError ? (
+              <Text accessibilityRole="alert" style={{ color: colors.danger }}>
+                No pudimos confirmar que la dirección se guardó. Cierra este formulario y actualiza
+                la lista antes de intentar crearla nuevamente.
+              </Text>
+            ) : null}
+            <Button
+              label="Guardar dirección"
+              icon="save"
+              busy={m.isPending}
+              disabled={!valido || (!initial && m.isError)}
+              onPress={() => m.mutate()}
+            />
+            <View style={{ height: space.xl }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -254,7 +363,7 @@ const s = StyleSheet.create({
   },
   etiqueta: { fontWeight: "700", color: colors.ink, fontSize: 15 },
   dir: { color: colors.muted, fontSize: 13, marginTop: 2 },
-  modalRoot: { flex: 1, backgroundColor: colors.bg, paddingTop: 48 },
+  modalRoot: { flex: 1, backgroundColor: colors.bg, paddingTop: 8 },
   modalHead: {
     flexDirection: "row",
     alignItems: "center",

@@ -25,6 +25,7 @@ import {
 } from "./modules/billing/routes.js";
 import comercioCheckoutRoutes from "./modules/cliente-portal/comercio-checkout-routes.js";
 import comercioRoutes from "./modules/cliente-portal/comercio-routes.js";
+import customerPasskeyRoutes from "./modules/cliente-portal/passkey-routes.js";
 import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import marketplaceTenantRoutes, {
@@ -255,6 +256,10 @@ export async function buildApp(
   await app.register(stripeWebhookRoutes);
   await app.register(billingAdminGaesSoftRoutes);
   await app.register(clienteAuthRoutes, { prefix: "/auth/cliente" });
+  await app.register(customerPasskeyRoutes, {
+    prefix: "/auth/cliente/passkey",
+    challengeSecret: config.JWT_SECRET,
+  });
   await app.register(clientePortalRoutes, { prefix: "/cliente-portal" });
   await app.register(comercioRoutes, { prefix: "/cliente-portal/comercio" });
   await app.register(comercioCheckoutRoutes, { prefix: "/cliente-portal/comercio" });
