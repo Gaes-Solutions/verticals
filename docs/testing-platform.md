@@ -32,3 +32,7 @@ PLATFORM_QA_ACCOUNTS=/ruta/privada/sesiones.json node scripts/staging/check-plat
 `PLATFORM_TEST_URL` permite apuntar a localhost con proxy hacia staging. Los scripts rechazan dominios de producción. Los scripts versionados no realizan cambios en datos de negocio; el flujo de creación y cierre de ticket se validó por separado con limpieza específica. Ejecutar los recorridos en secuencia para respetar el límite de peticiones de staging. Al terminar, eliminar las cuentas desechables, el ticket de prueba y los archivos privados de sesión.
 
 No se ejecutaron cobros, anulaciones reales, transferencias a partners, cancelaciones de clientes ni jobs globales. Esas operaciones requieren una prueba separada con proveedores de pago en modo de prueba y datos aislados. Este recorrido no certifica todos los flujos del producto.
+
+## Continuación: operaciones completas
+
+La revisión posterior de altas, ciclo de vida, facturación y partners, sus correcciones y límites están en [testing-platform-workflows.md](testing-platform-workflows.md). El recorrido anterior cubre pantallas y recuperación; no debe confundirse con operaciones comerciales externas.

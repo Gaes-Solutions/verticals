@@ -58,6 +58,15 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
       });
     }
 
+    if (["suspended", "archived", "unpaid"].includes(tenant.status)) {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: "Forbidden",
+        message:
+          "El negocio está suspendido o archivado. Contacta al administrador o revisa tu suscripción.",
+      });
+    }
+
     const tenantPrisma = getTenantClient(req.user.tenantSlug);
     const user = await loadTenantUserById(req.user.sub, tenantPrisma);
     // Un token de tienda solo vale para el usuario de sistema de la tienda: si

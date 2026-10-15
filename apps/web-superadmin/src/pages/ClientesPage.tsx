@@ -505,6 +505,7 @@ function CrearClienteModal({
         <label className="mb-3 block">
           <span className="gx-label">Plan</span>
           <select
+            aria-label="Plan"
             value={planCode}
             onChange={(e) => setPlanCode(e.target.value)}
             className="gx-input"

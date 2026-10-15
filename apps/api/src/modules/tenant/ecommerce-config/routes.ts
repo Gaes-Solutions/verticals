@@ -232,16 +232,19 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       ...(body.politicasHtml ? { politicasHtml: body.politicasHtml } : {}),
       ...patchDominioPropio(body.dominioPropio, existing?.dominioPropio ?? null),
     };
-    const cfg = existing
-      ? await req.tenantPrisma.configTiendaEcommerce.update({ where: { id: existing.id }, data })
-      : await req.tenantPrisma.configTiendaEcommerce.create({
-          data: { id: SINGLETON_ID, ...data },
-        });
-    await sincronizarDominioMaster(app.masterPrisma, req.tenantSlug, {
-      subdominio: cfg.subdominio,
-      dominioPropio: cfg.dominioPropio,
-      dominioVerificado: cfg.dominioVerificado,
-      dominioPropioAnterior: existing?.dominioPropio ?? null,
+    const cfg = await req.tenantPrisma.$transaction(async (tenantTx) => {
+      const config = existing
+        ? await tenantTx.configTiendaEcommerce.update({ where: { id: existing.id }, data })
+        : await tenantTx.configTiendaEcommerce.create({
+            data: { id: SINGLETON_ID, ...data },
+          });
+      await sincronizarDominioMaster(app.masterPrisma, req.tenantSlug, {
+        subdominio: config.subdominio,
+        dominioPropio: config.dominioPropio,
+        dominioVerificado: config.dominioVerificado,
+        dominioPropioAnterior: existing?.dominioPropio ?? null,
+      });
+      return config;
     });
     return reply.code(existing ? 200 : 201).send({ ...cfg, urlPublica: urlPublicaTienda(cfg) });
   });
@@ -272,12 +275,18 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const ok = await verificarTxt(c.dominioPropio, c.dominioTokenVerificacion);
-    if (ok && !c.dominioVerificado) {
-      await req.tenantPrisma.configTiendaEcommerce.update({
-        where: { id: c.id },
-        data: { dominioVerificado: true },
-      });
-    }
+    const checked = await req.tenantPrisma.configTiendaEcommerce.updateMany({
+      where: {
+        id: c.id,
+        dominioPropio: c.dominioPropio,
+        dominioTokenVerificacion: c.dominioTokenVerificacion,
+      },
+      data: { dominioVerificado: ok },
+    });
+    if (checked.count !== 1)
+      return reply
+        .code(409)
+        .send({ message: "El dominio cambió durante la verificación; vuelve a intentarlo" });
     await sincronizarDominioMaster(app.masterPrisma, req.tenantSlug, {
       subdominio: c.subdominio,
       dominioPropio: c.dominioPropio,

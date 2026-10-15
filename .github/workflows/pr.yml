@@ -99,5 +99,8 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Platform workflows in disposable environment
+        run: node scripts/testing/run-platform-workflows.cjs
+
       - name: Build
         run: pnpm build

@@ -1,9 +1,10 @@
-import { onboardTenant } from "@gaespos/db";
+import { randomBytes } from "node:crypto";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
 import { adminRouteAllowed } from "../../lib/platform-access.js";
 import { VERTICALES } from "../../lib/verticales.js";
+import { BillingError, signupPublico } from "../billing/service.js";
 
 const crearSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{3,40}$/, "Slug: 3-40 caracteres [a-z 0-9 -]"),
@@ -126,31 +127,50 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      const result = await onboardTenant({
+      const password = body.ownerPassword ?? `Gaes-${randomBytes(10).toString("hex")}!9`;
+      const plan = await app.masterPrisma.plan.findUniqueOrThrow({
+        where: { code: body.planCode },
+      });
+      const result = await signupPublico(app.masterPrisma, {
         slug: body.slug,
         name: body.name,
         planCode: body.planCode,
-        ownerEmail: body.ownerEmail,
-        ...(body.vertical ? { vertical: body.vertical } : {}),
-        ...(body.ownerNombre ? { ownerNombre: body.ownerNombre } : {}),
-        ...(body.ownerPassword ? { ownerPassword: body.ownerPassword } : {}),
+        vertical: body.vertical ?? "retail_mayoreo",
+        currency: plan.currency,
+        billingEmail: body.ownerEmail,
+        adminEmail: body.ownerEmail,
+        adminPassword: password,
+        adminName: body.ownerNombre ?? "Dueño",
       });
       await writeAudit(app.masterPrisma, {
         actor: actorDe(req),
         action: "tenant.onboarded",
         resource: "tenant",
-        resourceId: result.slug,
+        resourceId: result.tenant.slug,
         metadata: { name: body.name, plan: body.planCode, ownerEmail: body.ownerEmail },
         ipAddress: req.ip,
       });
       return reply.code(201).send({
-        slug: result.slug,
+        slug: result.tenant.slug,
         name: body.name,
-        ownerEmail: result.ownerEmail,
-        ownerPassword: result.ownerPassword ?? body.ownerPassword ?? null,
-        passwordGenerada: result.ownerPassword !== null,
+        ownerEmail: result.admin.email,
+        ownerPassword: password,
+        passwordGenerada: !body.ownerPassword,
       });
     } catch (err) {
+      if (err instanceof BillingError)
+        return reply.code(err.statusCode).send({
+          statusCode: err.statusCode,
+          error: errLabel(err.statusCode),
+          message: err.message,
+        });
+      if (
+        err instanceof Error &&
+        (err.message === "TENANT_ALREADY_EXISTS" || ("code" in err && err.code === "P2002"))
+      )
+        return reply
+          .code(409)
+          .send({ statusCode: 409, message: "Ya existe un cliente con ese slug" });
       req.log.error({ err }, "fallo onboarding de tenant");
       return reply.code(500).send({
         statusCode: 500,

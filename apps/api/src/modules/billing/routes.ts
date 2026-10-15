@@ -1,5 +1,7 @@
+import { getTenantClient } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { buildTenantPrincipal, loadTenantUserById } from "../auth-tenant/service.js";
 import { estadoConnect, iniciarOnboardingConnect } from "./connect-service.js";
 import {
   changePlanSchema,
@@ -66,7 +68,7 @@ function tenantIdFrom(req: FastifyRequest): string {
 export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
   app.get("/auth/plans", async () => {
     const plans = await app.masterPrisma.plan.findMany({
-      where: { isPublic: true },
+      where: { isPublic: true, active: true },
       orderBy: { tierOrder: "asc" },
       select: { id: true, code: true, name: true, priceCents: true, currency: true },
     });
@@ -159,18 +161,26 @@ export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
         .send({ statusCode: 401, error: "Unauthorized", message: "Token inválido o expirado" });
     }
     if (req.user.kind === "admin_tenant") {
-      req.billingTenantId = req.user.tenantId;
-      return;
+      const admin = await app.masterPrisma.tenantUserAdmin.findUnique({
+        where: { id: req.user.sub },
+      });
+      if (admin && !admin.archivedAt && admin.tenantId === req.user.tenantId) {
+        if (!["GET", "HEAD"].includes(req.method) && admin.roleAdmin === "viewer")
+          return reply
+            .code(403)
+            .send({ message: "Esta cuenta solo tiene acceso de consulta a facturación" });
+        req.billingTenantId = admin.tenantId;
+        return;
+      }
     }
     if (req.user.kind === "tenant") {
-      const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-      const esDueno = perms.length === 1 && perms[0] === "*";
-      if (esDueno) {
-        const tenant = await app.masterPrisma.tenant.findUnique({
-          where: { slug: req.user.tenantSlug },
-          select: { id: true },
-        });
-        if (tenant) {
+      const tenant = await app.masterPrisma.tenant.findUnique({
+        where: { slug: req.user.tenantSlug },
+        select: { id: true },
+      });
+      if (tenant) {
+        const user = await loadTenantUserById(req.user.sub, getTenantClient(req.user.tenantSlug));
+        if (user?.isActive && buildTenantPrincipal(user, req.user.tenantSlug).isOwner) {
           req.billingTenantId = tenant.id;
           return;
         }

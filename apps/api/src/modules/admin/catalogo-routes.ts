@@ -15,7 +15,7 @@ const planCrearSchema = z.object({
   name: z.string().min(2).max(120),
   priceCents: z.number().int().min(0),
   currency: z.string().length(3).default("MXN"),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).nullable().optional(),
   tierOrder: z.number().int().min(0).default(0),
   isPublic: z.boolean().default(true),
   active: z.boolean().default(true),
@@ -106,6 +106,9 @@ const catalogoRoutes: FastifyPluginAsync = async (app) => {
         isPublic: body.isPublic,
         active: body.active,
         ...(body.description !== undefined ? { description: body.description } : {}),
+        prices: {
+          create: { currency: body.currency, interval: "monthly", unitAmount: body.priceCents },
+        },
       },
     });
     await writeAudit(app.masterPrisma, {
@@ -123,17 +126,38 @@ const catalogoRoutes: FastifyPluginAsync = async (app) => {
     if (!isSuperadmin(req)) return forbidden(reply);
     const { id } = idParamSchema.parse(req.params);
     const body = planEditarSchema.parse(req.body);
-    const plan = await app.masterPrisma.plan.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.priceCents !== undefined ? { priceCents: body.priceCents } : {}),
-        ...(body.currency !== undefined ? { currency: body.currency } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.tierOrder !== undefined ? { tierOrder: body.tierOrder } : {}),
-        ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
-        ...(body.active !== undefined ? { active: body.active } : {}),
-      },
+    const plan = await app.masterPrisma.$transaction(async (tx) => {
+      const updated = await tx.plan.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.priceCents !== undefined ? { priceCents: body.priceCents } : {}),
+          ...(body.currency !== undefined ? { currency: body.currency } : {}),
+          ...(body.description !== undefined ? { description: body.description } : {}),
+          ...(body.tierOrder !== undefined ? { tierOrder: body.tierOrder } : {}),
+          ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
+          ...(body.active !== undefined ? { active: body.active } : {}),
+        },
+      });
+      if (body.priceCents !== undefined || body.currency !== undefined) {
+        await tx.planPrice.upsert({
+          where: {
+            planId_currency_interval: {
+              planId: updated.id,
+              currency: updated.currency,
+              interval: "monthly",
+            },
+          },
+          create: {
+            planId: updated.id,
+            currency: updated.currency,
+            interval: "monthly",
+            unitAmount: updated.priceCents,
+          },
+          update: { unitAmount: updated.priceCents },
+        });
+      }
+      return updated;
     });
     await writeAudit(app.masterPrisma, {
       actor: actorDe(req),

@@ -31,6 +31,12 @@ export class BillingError extends Error {
 }
 
 const TRIAL_DAYS = 14;
+function mockBillingAllowed(): boolean {
+  return (
+    ["test", "development"].includes(process.env.NODE_ENV ?? "") &&
+    process.env.PAGOS_ALLOW_MOCK === "true"
+  );
+}
 
 function daysFromNow(d: number): Date {
   return new Date(Date.now() + d * 24 * 60 * 60 * 1000);
@@ -90,6 +96,11 @@ async function cobrarSuscripcion(
       ...(r.failureReason ? { failureReason: r.failureReason } : {}),
     };
   }
+  if (!mockBillingAllowed())
+    return {
+      success: false,
+      failureReason: "Proveedor de cobro o tarjeta no configurados. No se realizó ningún cobro.",
+    };
   return mockCobrar(pm.id);
 }
 
@@ -167,20 +178,38 @@ export async function signupPublico(
 
   const currency = input.currency ?? "MXN";
   const interval = input.interval ?? "monthly";
-  const price = await master.planPrice.findUnique({
+  let price = await master.planPrice.findUnique({
     where: { planId_currency_interval: { planId: plan.id, currency, interval } },
   });
+  // Older catalogue plans stored their monthly price directly on Plan.
+  if (!price && interval === "monthly" && currency === plan.currency) {
+    price = await master.planPrice.upsert({
+      where: { planId_currency_interval: { planId: plan.id, currency, interval } },
+      create: { planId: plan.id, currency, interval, unitAmount: plan.priceCents },
+      update: {},
+    });
+  }
   if (!price) throw new BillingError(400, `Plan sin precio para ${currency}/${interval}`);
 
-  await onboardTenant({
-    slug: input.slug,
-    name: input.name,
-    planCode: plan.code,
-    vertical: input.vertical,
-    ownerEmail: input.adminEmail,
-    ownerPassword: input.adminPassword,
-    ownerNombre: input.adminName,
-  });
+  try {
+    await onboardTenant({
+      slug: input.slug,
+      name: input.name,
+      planCode: plan.code,
+      vertical: input.vertical,
+      failIfExists: true,
+      ownerEmail: input.adminEmail,
+      ownerPassword: input.adminPassword,
+      ownerNombre: input.adminName,
+    });
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message === "TENANT_ALREADY_EXISTS" || ("code" in err && err.code === "P2002"))
+    )
+      throw new BillingError(409, "Slug ya tomado");
+    throw err;
+  }
 
   const now = new Date();
   const trialEnd = daysFromNow(TRIAL_DAYS);
@@ -290,7 +319,7 @@ export async function getBillingContext(
     include: { plan: { include: { features: true } } },
   });
   const subscription = await master.subscription.findFirst({
-    where: { tenantId },
+    where: { tenantId, status: { not: "canceled" } },
     orderBy: { createdAt: "desc" },
     include: { discountCoupon: true },
   });
@@ -340,6 +369,12 @@ export async function agregarPaymentMethod(
   input: AddPaymentMethodInput,
 ) {
   const stripe = stripeBilling();
+  if ((!stripe || !input.paymentMethodId) && !mockBillingAllowed()) {
+    throw new BillingError(
+      503,
+      "Configura el proveedor de cobro y registra una tarjeta válida antes de continuar",
+    );
+  }
   let externalMethodId = `pm_mock_${randomUUID().slice(0, 12)}`;
   let tarjeta: DatosTarjeta = {
     ...(input.last4 !== undefined ? { last4: input.last4 } : {}),
@@ -473,7 +508,7 @@ export async function cambiarPlan(
   newPlanCode: string,
 ) {
   const sub = await master.subscription.findFirst({
-    where: { tenantId },
+    where: { tenantId, status: { not: "canceled" } },
     orderBy: { createdAt: "desc" },
     include: { plan: true },
   });
@@ -669,58 +704,68 @@ async function intentarPagoInvoice(
   master: MasterPrismaClient,
   invoiceId: string,
 ): Promise<{ success: boolean; failureReason?: string }> {
-  const invoice = await master.invoice.findUniqueOrThrow({
-    where: { id: invoiceId },
-    include: { tenant: { include: { paymentMethods: { where: { isDefault: true }, take: 1 } } } },
-  });
-  if (invoice.status === "paid") return { success: true };
+  return master.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${invoiceId}, 7710040))`;
+      const invoice = await tx.invoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+        include: {
+          tenant: { include: { paymentMethods: { where: { isDefault: true }, take: 1 } } },
+        },
+      });
+      if (invoice.status === "paid") return { success: true };
+      if (invoice.status !== "open")
+        return { success: false, failureReason: "La factura ya no está abierta" };
 
-  const pm = invoice.tenant.paymentMethods[0];
-  if (!pm) {
-    await master.invoicePayment.create({
-      data: {
-        invoiceId,
-        amount: invoice.total,
-        currency: invoice.currency,
-        status: "failed",
-        failureReason: "Sin método de pago default",
-      },
-    });
-    return { success: false, failureReason: "Sin método de pago default" };
-  }
+      const pm = invoice.tenant.paymentMethods[0];
+      if (!pm) {
+        await tx.invoicePayment.create({
+          data: {
+            invoiceId,
+            amount: invoice.total,
+            currency: invoice.currency,
+            status: "failed",
+            failureReason: "Sin método de pago default",
+          },
+        });
+        return { success: false, failureReason: "Sin método de pago default" };
+      }
 
-  const charge = await cobrarSuscripcion(invoice, invoice.tenant, pm);
-  await master.invoicePayment.create({
-    data: {
-      invoiceId,
-      amount: invoice.total,
-      currency: invoice.currency,
-      paymentMethodId: pm.id,
-      status: charge.success ? "succeeded" : "failed",
-      ...(charge.externalChargeId ? { externalChargeId: charge.externalChargeId } : {}),
-      ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
-      ...(charge.success ? { paidAt: new Date() } : {}),
+      const charge = await cobrarSuscripcion(invoice, invoice.tenant, pm);
+      await tx.invoicePayment.create({
+        data: {
+          invoiceId,
+          amount: invoice.total,
+          currency: invoice.currency,
+          paymentMethodId: pm.id,
+          status: charge.success ? "succeeded" : "failed",
+          ...(charge.externalChargeId ? { externalChargeId: charge.externalChargeId } : {}),
+          ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
+          ...(charge.success ? { paidAt: new Date() } : {}),
+        },
+      });
+
+      if (charge.success) {
+        const cfdiUuid = mockBillingAllowed() ? await generarCfdiMock() : null;
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: "paid",
+            paidAt: new Date(),
+            ...(cfdiUuid ? { cfdiUuid, cfdiPdfUrl: `https://mock.cfdi/${cfdiUuid}.pdf` } : {}),
+            nextRetryAt: null,
+            attempts: { increment: 1 },
+          },
+        });
+        return { success: true };
+      }
+      return {
+        success: false,
+        ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
+      };
     },
-  });
-
-  if (charge.success) {
-    const cfdiUuid = await generarCfdiMock();
-    await master.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: "paid",
-        paidAt: new Date(),
-        cfdiUuid,
-        cfdiPdfUrl: `https://mock.cfdi/${cfdiUuid}.pdf`,
-        attempts: { increment: 1 },
-      },
-    });
-    return { success: true };
-  }
-  return {
-    success: false,
-    ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
-  };
+    { maxWait: 30_000, timeout: 30_000 },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -731,38 +776,43 @@ export async function procesarWebhookPagoMock(
   master: MasterPrismaClient,
   invoiceId: string,
 ): Promise<{ paid: boolean; cfdiUuid?: string }> {
-  const invoice = await master.invoice.findUnique({ where: { id: invoiceId } });
-  if (!invoice) throw new BillingError(404, "Invoice no encontrada");
-  if (invoice.status === "paid") {
-    return { paid: true, ...(invoice.cfdiUuid ? { cfdiUuid: invoice.cfdiUuid } : {}) };
-  }
-  const cfdiUuid = await generarCfdiMock();
-  const updated = await master.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: "paid",
-      paidAt: new Date(),
-      cfdiUuid,
-      cfdiPdfUrl: `https://mock.cfdi/${cfdiUuid}.pdf`,
-    },
-  });
-  await master.invoicePayment.create({
-    data: {
-      invoiceId,
-      amount: updated.total,
-      currency: updated.currency,
-      status: "succeeded",
-      externalChargeId: `ch_webhook_${randomUUID().slice(0, 12)}`,
-      paidAt: new Date(),
-    },
-  });
-  if (updated.subscriptionId) {
-    await master.subscription.update({
-      where: { id: updated.subscriptionId },
-      data: { status: "active" },
+  return master.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${invoiceId}, 7710040))`;
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId } });
+    if (!invoice) throw new BillingError(404, "Invoice no encontrada");
+    if (invoice.status === "paid") {
+      return { paid: true, ...(invoice.cfdiUuid ? { cfdiUuid: invoice.cfdiUuid } : {}) };
+    }
+    if (invoice.status !== "open")
+      throw new BillingError(409, "Solo una factura abierta puede recibir la confirmación de pago");
+    const cfdiUuid = await generarCfdiMock();
+    const updated = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+        cfdiUuid,
+        cfdiPdfUrl: `https://mock.cfdi/${cfdiUuid}.pdf`,
+      },
     });
-  }
-  return { paid: true, cfdiUuid };
+    await tx.invoicePayment.create({
+      data: {
+        invoiceId,
+        amount: updated.total,
+        currency: updated.currency,
+        status: "succeeded",
+        externalChargeId: `ch_webhook_${randomUUID().slice(0, 12)}`,
+        paidAt: new Date(),
+      },
+    });
+    if (updated.subscriptionId) {
+      await tx.subscription.update({
+        where: { id: updated.subscriptionId },
+        data: { status: "active" },
+      });
+    }
+    return { paid: true, cfdiUuid };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -776,7 +826,11 @@ export async function correrTrialConversions(master: MasterPrismaClient): Promis
 }> {
   const now = new Date();
   const vencidos = await master.subscription.findMany({
-    where: { status: "trialing", trialEnd: { lte: now } },
+    where: {
+      status: "trialing",
+      trialEnd: { lte: now },
+      tenant: { status: { notIn: ["cancelled", "archived"] } },
+    },
     include: { plan: true },
   });
   let cobrados = 0;
@@ -784,14 +838,15 @@ export async function correrTrialConversions(master: MasterPrismaClient): Promis
 
   for (const sub of vencidos) {
     const period = siguientePeriodo(sub.currentPeriodEnd, sub.interval);
-    await master.subscription.update({
-      where: { id: sub.id },
+    const claimed = await master.subscription.updateMany({
+      where: { id: sub.id, status: "trialing" },
       data: {
         currentPeriodStart: period.start,
         currentPeriodEnd: period.end,
         status: "active",
       },
     });
+    if (claimed.count !== 1) continue;
     const newSub = await master.subscription.findUniqueOrThrow({ where: { id: sub.id } });
     const invoice = await generarInvoiceCiclo(
       master,
@@ -837,14 +892,23 @@ async function suspenderPorMora(
   invoice: { id: string; tenantId: string; subscriptionId: string | null },
   updateInvoiceData: Record<string, unknown> = { status: "uncollectible" },
 ): Promise<void> {
-  await master.invoice.update({ where: { id: invoice.id }, data: updateInvoiceData });
-  if (invoice.subscriptionId) {
-    await master.subscription.update({
-      where: { id: invoice.subscriptionId },
-      data: { status: "unpaid" },
+  await master.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${invoice.id}, 7710040))`;
+    const changed = await tx.invoice.updateMany({
+      where: { id: invoice.id, status: "open" },
+      data: updateInvoiceData,
     });
-  }
-  await master.tenant.update({ where: { id: invoice.tenantId }, data: { status: "suspended" } });
+    if (changed.count !== 1) return;
+    if (invoice.subscriptionId)
+      await tx.subscription.updateMany({
+        where: { id: invoice.subscriptionId, status: { not: "canceled" } },
+        data: { status: "unpaid" },
+      });
+    await tx.tenant.updateMany({
+      where: { id: invoice.tenantId, status: { notIn: ["cancelled", "archived"] } },
+      data: { status: "suspended" },
+    });
+  });
 }
 
 async function reactivarTrasPago(
@@ -852,12 +916,15 @@ async function reactivarTrasPago(
   invoice: { tenantId: string; subscriptionId: string | null },
 ): Promise<void> {
   if (invoice.subscriptionId) {
-    await master.subscription.update({
-      where: { id: invoice.subscriptionId },
+    await master.subscription.updateMany({
+      where: { id: invoice.subscriptionId, status: { not: "canceled" } },
       data: { status: "active" },
     });
   }
-  await master.tenant.update({ where: { id: invoice.tenantId }, data: { status: "active" } });
+  await master.tenant.updateMany({
+    where: { id: invoice.tenantId, status: { notIn: ["cancelled", "archived"] } },
+    data: { status: "active" },
+  });
 }
 
 async function procesarFalloDunning(
@@ -879,7 +946,7 @@ async function procesarFalloDunning(
     await suspenderPorMora(master, invoice, updateData);
     return { suspendido: true };
   }
-  await master.invoice.update({ where: { id: invoice.id }, data: updateData });
+  await master.invoice.updateMany({ where: { id: invoice.id, status: "open" }, data: updateData });
   return { suspendido: false };
 }
 
@@ -892,6 +959,7 @@ export async function correrDunningCiclo(master: MasterPrismaClient): Promise<{
   const pendientes = await master.invoice.findMany({
     where: {
       status: "open",
+      tenant: { status: { notIn: ["cancelled", "archived"] } },
       OR: [{ nextRetryAt: { lte: now } }, { nextRetryAt: null, dueDate: { lte: now } }],
     },
   });
@@ -917,6 +985,11 @@ export async function correrDunningCiclo(master: MasterPrismaClient): Promise<{
       await reactivarTrasPago(master, invoice);
       continue;
     }
+    const current = await master.invoice.findUnique({
+      where: { id: invoice.id },
+      select: { status: true },
+    });
+    if (current?.status !== "open") continue;
     const fallo = await procesarFalloDunning(master, invoice);
     if (fallo.suspendido) suspendidos += 1;
   }

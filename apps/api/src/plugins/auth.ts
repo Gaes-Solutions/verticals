@@ -248,7 +248,7 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
   // en cuanto el tenant se cancela, no al expirar el access token.
   const tenantActivo = async (slug: string): Promise<boolean> => {
     const tenant = await app.masterPrisma.tenant.findUnique({ where: { slug } });
-    return !!tenant && tenant.status !== "cancelled";
+    return !!tenant && ["trial", "active", "past_due"].includes(tenant.status);
   };
 
   app.decorate("authenticateCliente", async (req: FastifyRequest, reply: FastifyReply) => {

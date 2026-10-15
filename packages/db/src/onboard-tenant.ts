@@ -11,6 +11,8 @@ export interface OnboardTenantInput {
   planCode?: string;
   vertical?: string;
   ownerEmail: string;
+  /** Public/API creation must never reuse a tenant or replace its owner. */
+  failIfExists?: boolean;
   ownerPassword?: string;
   ownerNombre?: string;
 }
@@ -89,6 +91,7 @@ async function crearUsuarioDueno(
  */
 export async function onboardTenant(input: OnboardTenantInput): Promise<OnboardTenantResult> {
   const existente = await masterPrisma.tenant.findUnique({ where: { slug: input.slug } });
+  if (existente && input.failIfExists) throw new Error("TENANT_ALREADY_EXISTS");
   let tenantCreado = false;
   if (!existente) {
     await createTenant({

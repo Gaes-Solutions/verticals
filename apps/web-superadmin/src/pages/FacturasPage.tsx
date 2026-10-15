@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 interface Invoice {
   id: string;
   invoiceNumber: string | null;
   status: string;
-  total: string;
+  total: number;
   currency: string;
   attempts: number;
   createdAt: string;
@@ -29,27 +29,55 @@ function badge(s: string): string {
 }
 
 export function FacturasPage() {
+  const requestVersion = useRef(0);
   const [items, setItems] = useState<Invoice[]>([]);
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [cargando, setCargando] = useState(false);
+  const [reprogramando, setReprogramando] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("");
   const [voiding, setVoiding] = useState<Invoice | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
-    const qs = filtro ? `?status=${filtro}` : "";
-    api<{ items: Invoice[] }>(`/admin/billing-ops/invoices${qs}`)
-      .then((r) => setItems(r.items))
-      .catch(() => setItems([]));
-  }, [filtro]);
+    const version = ++requestVersion.current;
+    setCargando(true);
+    const qs = new URLSearchParams({ page: String(pagina), pageSize: "50" });
+    if (filtro) qs.set("status", filtro);
+    api<{ items: Invoice[]; total: number }>(`/admin/billing-ops/invoices?${qs}`)
+      .then((r) => {
+        if (version !== requestVersion.current) return;
+        setItems(r.items);
+        setTotal(r.total);
+      })
+      .catch(() => {
+        if (version !== requestVersion.current) return;
+        setItems([]);
+        setTotal(0);
+      })
+      .finally(() => {
+        if (version === requestVersion.current) setCargando(false);
+      });
+  }, [filtro, pagina]);
 
-  useEffect(() => cargar(), [cargar]);
+  useEffect(() => {
+    cargar();
+    return () => {
+      requestVersion.current++;
+    };
+  }, [cargar]);
 
   async function reprogramar(inv: Invoice) {
+    if (reprogramando) return;
     setError(null);
+    setReprogramando(inv.id);
     try {
       await api(`/admin/billing-ops/invoices/${inv.id}/reintentar`, { body: {} });
       cargar();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Error");
+    } finally {
+      setReprogramando(null);
     }
   }
 
@@ -59,7 +87,10 @@ export function FacturasPage() {
         <h1 className="font-bold text-2xl text-slate-800">Facturas</h1>
         <select
           value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
+          onChange={(e) => {
+            setPagina(1);
+            setFiltro(e.target.value);
+          }}
           className="gx-input w-auto"
         >
           <option value="">Todas</option>
@@ -95,13 +126,15 @@ export function FacturasPage() {
                 </td>
                 <td className="gx-td text-right">{inv.attempts}</td>
                 <td className="gx-td text-right font-semibold">
-                  ${Number(inv.total).toLocaleString("es-MX")} {inv.currency}
+                  ${(inv.total / 100).toLocaleString("es-MX", { minimumFractionDigits: 2 })}{" "}
+                  {inv.currency}
                 </td>
                 <td className="gx-td text-right">
                   {inv.status === "open" && puedePlataforma("billing.manage") && (
                     <button
                       type="button"
                       onClick={() => reprogramar(inv)}
+                      disabled={reprogramando !== null}
                       className="mr-3 font-semibold text-brand text-sm hover:underline"
                     >
                       Reprogramar cobro
@@ -130,6 +163,32 @@ export function FacturasPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+        <output>
+          {cargando
+            ? "Consultando facturas…"
+            : `${total} facturas · Página ${pagina} de ${Math.max(1, Math.ceil(total / 50))}`}
+        </output>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="gx-btn-secondary"
+            disabled={cargando || pagina <= 1}
+            onClick={() => setPagina(pagina - 1)}
+          >
+            Anterior
+          </button>
+          <button
+            type="button"
+            className="gx-btn-secondary"
+            disabled={cargando || pagina * 50 >= total}
+            onClick={() => setPagina(pagina + 1)}
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
 
       {voiding && (

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const periodoSchema = z.string().regex(/^\d{4}(0[1-9]|1[0-2])$/, "Periodo válido: AAAAMM");
+
 const tipoEnum = z.enum(["contador", "integrador", "consultor", "agencia", "otro"]);
 const nivelEnum = z.enum(["bronze", "silver", "gold", "diamond"]);
 const estadoEnum = z.enum(["invitado", "activo", "pausado", "terminado"]);
@@ -25,8 +27,10 @@ export const partnerUpdateSchema = z.object({
   tipo: tipoEnum.optional(),
   nivel: nivelEnum.optional(),
   comisionPctOverride: z
-    .union([z.number().min(0).max(100), z.string().regex(/^\d+(\.\d+)?$/)])
-    .transform((v) => String(v))
+    .union([z.number(), z.string().regex(/^\d+(\.\d+)?$/)])
+    .transform(Number)
+    .pipe(z.number().finite().min(0).max(100))
+    .transform(String)
     .optional(),
   estado: estadoEnum.optional(),
   isAcceptingNewReferrals: z.boolean().optional(),
@@ -73,10 +77,7 @@ export const referralListQuerySchema = z.object({
 
 export const commissionListQuerySchema = z.object({
   partnerId: z.string().optional(),
-  periodoYyyymm: z
-    .string()
-    .regex(/^\d{6}$/)
-    .optional(),
+  periodoYyyymm: periodoSchema.optional(),
   estado: z.enum(["pendiente", "aprobada", "pagada", "rechazada", "disputada"]).optional(),
 });
 
@@ -88,7 +89,7 @@ export const commissionRechazarSchema = z.object({
 
 export const payoutCrearSchema = z.object({
   partnerId: z.string().min(1),
-  periodoYyyymm: z.string().regex(/^\d{6}$/),
+  periodoYyyymm: periodoSchema,
   metodoPago: z.enum(["spei", "paypal", "stripe_connect", "otro"]),
 });
 
@@ -98,7 +99,7 @@ export const payoutMarcarPagadoSchema = z.object({
 });
 
 export const recalcularComisionesSchema = z.object({
-  periodoYyyymm: z.string().regex(/^\d{6}$/),
+  periodoYyyymm: periodoSchema,
 });
 
 export type PartnerCreateInput = z.infer<typeof partnerCreateSchema>;

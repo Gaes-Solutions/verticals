@@ -789,7 +789,7 @@ function CrearPayoutModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   }, []);
 
   async function guardar() {
-    if (!partnerId || !/^\d{6}$/.test(periodoYyyymm)) {
+    if (!partnerId || !/^\d{4}(0[1-9]|1[0-2])$/.test(periodoYyyymm)) {
       setErr("Elige partner y un periodo válido (AAAAMM)");
       return;
     }

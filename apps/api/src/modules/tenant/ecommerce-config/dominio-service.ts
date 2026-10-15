@@ -121,30 +121,34 @@ export async function sincronizarDominioMaster(
   tenantSlug: string,
   input: SyncInput,
 ): Promise<void> {
-  const apex = apexPlataforma();
-  if (apex) {
-    const host = `${input.subdominio}.${apex}`.toLowerCase();
-    await asegurarHostDisponible(master, tenantSlug, host);
-    await master.tiendaDominio.upsert({
-      where: { host },
-      create: { host, tenantSlug, tipo: "subdominio", verificado: true },
-      update: { tenantSlug, tipo: "subdominio", verificado: true },
-    });
-  }
-
-  const anterior = input.dominioPropioAnterior?.toLowerCase() ?? null;
-  const actual = input.dominioPropio?.toLowerCase() ?? null;
-  if (anterior && anterior !== actual) {
-    await master.tiendaDominio.deleteMany({ where: { host: anterior, tipo: "propio" } });
-  }
-  if (actual) {
-    await asegurarHostDisponible(master, tenantSlug, actual);
-    await master.tiendaDominio.upsert({
-      where: { host: actual },
-      create: { host: actual, tenantSlug, tipo: "propio", verificado: input.dominioVerificado },
-      update: { tenantSlug, tipo: "propio", verificado: input.dominioVerificado },
-    });
-  }
+  await master.$transaction(async (tx) => {
+    // Serialize namespace writes across processes; a pre-check alone cannot protect an upsert.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(7710044)`;
+    const claim = async (host: string, tipo: "subdominio" | "propio", verificado: boolean) => {
+      await tx.tiendaDominio.createMany({
+        data: [{ host, tenantSlug, tipo, verificado }],
+        skipDuplicates: true,
+      });
+      const updated = await tx.tiendaDominio.updateMany({
+        where: { host, tenantSlug },
+        data: { tipo, verificado },
+      });
+      if (updated.count !== 1) throw new DominioEnUsoError(host);
+    };
+    const apex = apexPlataforma();
+    if (apex) {
+      const host = `${input.subdominio}.${apex}`.toLowerCase();
+      await claim(host, "subdominio", true);
+      await tx.tiendaDominio.deleteMany({
+        where: { tenantSlug, tipo: "subdominio", host: { not: host } },
+      });
+    }
+    const anterior = input.dominioPropioAnterior?.toLowerCase() ?? null;
+    const actual = input.dominioPropio?.toLowerCase() ?? null;
+    if (actual) await claim(actual, "propio", input.dominioVerificado);
+    if (anterior && anterior !== actual)
+      await tx.tiendaDominio.deleteMany({ where: { host: anterior, tenantSlug, tipo: "propio" } });
+  });
 }
 
 /** Resuelve el tenant dueño de un host verificado (para el storefront público). */

@@ -87,6 +87,7 @@ export class StripeBillingClient {
     };
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     const res = await fetch(`${this.baseUrl}${path}`, {
+      signal: AbortSignal.timeout(15_000),
       method: "POST",
       headers,
       body: form.toString(),
@@ -101,6 +102,7 @@ export class StripeBillingClient {
 
   private async get<T>(path: string): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
+      signal: AbortSignal.timeout(15_000),
       method: "GET",
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });

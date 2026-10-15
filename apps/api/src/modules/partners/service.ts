@@ -391,10 +391,12 @@ export async function aprobarComision(
   if (c.estado !== "pendiente") {
     throw new PartnerError(409, `Comisión en estado ${c.estado}; solo se aprueban pendientes`);
   }
-  await master.commission.update({
-    where: { id: commissionId },
+  const changed = await master.commission.updateMany({
+    where: { id: commissionId, estado: "pendiente" },
     data: { estado: "aprobada", aprobadaAt: new Date(), aprobadaPorAdminId: adminUserId },
   });
+  if (changed.count !== 1)
+    throw new PartnerError(409, "La comisión ya fue revisada; actualiza la lista");
 }
 
 export async function rechazarComision(
@@ -407,10 +409,12 @@ export async function rechazarComision(
   if (c.estado !== "pendiente") {
     throw new PartnerError(409, `Comisión en estado ${c.estado}; solo se rechazan pendientes`);
   }
-  await master.commission.update({
-    where: { id: commissionId },
+  const changed = await master.commission.updateMany({
+    where: { id: commissionId, estado: "pendiente" },
     data: { estado: "rechazada", rechazadaAt: new Date(), rechazadaMotivo: motivo },
   });
+  if (changed.count !== 1)
+    throw new PartnerError(409, "La comisión ya fue revisada; actualiza la lista");
 }
 
 export interface CrearPayoutInput {
@@ -424,52 +428,64 @@ export async function crearPayout(
   master: MasterPrismaClient,
   input: CrearPayoutInput,
 ): Promise<{ payoutId: string; commissionsAgrupadas: number; montoTotal: string }> {
-  const existing = await master.payout.findUnique({
-    where: {
-      partnerId_periodoYyyymm: { partnerId: input.partnerId, periodoYyyymm: input.periodoYyyymm },
-    },
-  });
-  if (existing) {
-    throw new PartnerError(409, `Ya existe payout del partner para periodo ${input.periodoYyyymm}`);
-  }
-  const commissions = await master.commission.findMany({
-    where: {
-      partnerId: input.partnerId,
-      periodoYyyymm: input.periodoYyyymm,
-      estado: "aprobada",
-      payoutId: null,
-    },
-  });
-  if (commissions.length === 0) {
-    throw new PartnerError(409, "No hay comisiones aprobadas pendientes de pago para este periodo");
-  }
-  const montoTotal = commissions.reduce(
-    (acc, c) => acc.plus(c.montoComision.toString()),
-    new Decimal(0),
-  );
-  const payout = await master.$transaction(async (tx) => {
+  return master.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${input.partnerId}:${input.periodoYyyymm}`}, 7710041))`;
+    const existing = await tx.payout.findUnique({
+      where: {
+        partnerId_periodoYyyymm: { partnerId: input.partnerId, periodoYyyymm: input.periodoYyyymm },
+      },
+    });
+    if (existing)
+      throw new PartnerError(
+        409,
+        `Ya existe payout del partner para periodo ${input.periodoYyyymm}`,
+      );
+    const commissions = await tx.commission.findMany({
+      where: {
+        partnerId: input.partnerId,
+        periodoYyyymm: input.periodoYyyymm,
+        estado: "aprobada",
+        payoutId: null,
+      },
+    });
+    const firstCommission = commissions[0];
+    if (!firstCommission)
+      throw new PartnerError(
+        409,
+        "No hay comisiones aprobadas pendientes de pago para este periodo",
+      );
+    // A payout cannot combine currencies into a single transfer.
+    const monedas = new Set(commissions.map((c) => c.moneda));
+    if (monedas.size !== 1)
+      throw new PartnerError(409, "No se pueden agrupar comisiones de monedas distintas");
+    const montoTotal = commissions.reduce(
+      (sum, c) => sum.plus(c.montoComision.toString()),
+      new Decimal(0),
+    );
     const p = await tx.payout.create({
       data: {
         partnerId: input.partnerId,
         periodoYyyymm: input.periodoYyyymm,
         montoTotal: montoTotal.toFixed(2),
         montoNeto: montoTotal.toFixed(2),
+        moneda: firstCommission.moneda,
         metodoPago: input.metodoPago,
         estado: "pendiente",
         ...(input.creadoPorAdminId ? { creadoPorAdminId: input.creadoPorAdminId } : {}),
       },
     });
-    await tx.commission.updateMany({
-      where: { id: { in: commissions.map((c) => c.id) } },
+    const grouped = await tx.commission.updateMany({
+      where: { id: { in: commissions.map((c) => c.id) }, estado: "aprobada", payoutId: null },
       data: { payoutId: p.id },
     });
-    return p;
+    if (grouped.count !== commissions.length)
+      throw new PartnerError(409, "Las comisiones cambiaron; vuelve a intentarlo");
+    return {
+      payoutId: p.id,
+      commissionsAgrupadas: commissions.length,
+      montoTotal: montoTotal.toFixed(2),
+    };
   });
-  return {
-    payoutId: payout.id,
-    commissionsAgrupadas: commissions.length,
-    montoTotal: montoTotal.toFixed(2),
-  };
 }
 
 export async function marcarPayoutPagado(
@@ -484,8 +500,8 @@ export async function marcarPayoutPagado(
     throw new PartnerError(409, `Payout en estado ${payout.estado}; no permite marcar pagado`);
   }
   await master.$transaction(async (tx) => {
-    await tx.payout.update({
-      where: { id: payoutId },
+    const changed = await tx.payout.updateMany({
+      where: { id: payoutId, estado: { in: ["pendiente", "en_proceso"] } },
       data: {
         estado: "pagado",
         folioBancario,
@@ -493,6 +509,8 @@ export async function marcarPayoutPagado(
         ...(invoicePartnerUrl ? { invoicePartnerUrl } : {}),
       },
     });
+    if (changed.count !== 1)
+      throw new PartnerError(409, "El pago ya fue registrado; actualiza la lista");
     await tx.commission.updateMany({
       where: { payoutId, estado: "aprobada" },
       data: { estado: "pagada", pagadaAt: new Date() },

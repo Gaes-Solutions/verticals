@@ -109,23 +109,23 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
     if (!requireCobranza(req, reply)) return;
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     const { motivo } = voidSchema.parse(req.body);
-    const invoice = await app.masterPrisma.invoice.findUnique({ where: { id } });
-    if (!invoice) {
-      return reply
-        .code(404)
-        .send({ statusCode: 404, error: "Not Found", message: "Factura no encontrada" });
-    }
-    if (invoice.status === "paid" || invoice.status === "void") {
-      return reply.code(409).send({
-        statusCode: 409,
-        error: "Conflict",
-        message: `Factura en estado ${invoice.status}, no se puede anular`,
-      });
-    }
-    const updated = await app.masterPrisma.invoice.update({
-      where: { id },
-      data: { status: "void", nextRetryAt: null },
-    });
+    const { invoice, updated } = await app.masterPrisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 7710040))`;
+        const invoice = await tx.invoice.findUnique({ where: { id } });
+        if (!invoice) throw app.httpErrors.notFound("Factura no encontrada");
+        if (invoice.status === "paid" || invoice.status === "void")
+          throw app.httpErrors.conflict(`Factura en estado ${invoice.status}, no se puede anular`);
+        const changed = await tx.invoice.updateMany({
+          where: { id, status: invoice.status },
+          data: { status: "void", nextRetryAt: null },
+        });
+        if (changed.count !== 1)
+          throw app.httpErrors.conflict("La factura cambió; actualiza la lista antes de anular");
+        return { invoice, updated: await tx.invoice.findUniqueOrThrow({ where: { id } }) };
+      },
+      { maxWait: 30_000, timeout: 30_000 },
+    );
     await writeAudit(app.masterPrisma, {
       actor: req.user.kind === "admin" ? req.user.email : "?",
       action: "billing.invoice_void",
@@ -156,7 +156,15 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const nextRetryAt = fecha ? new Date(fecha) : new Date();
-    const updated = await app.masterPrisma.invoice.update({ where: { id }, data: { nextRetryAt } });
+    const changed = await app.masterPrisma.invoice.updateMany({
+      where: { id, status: "open" },
+      data: { nextRetryAt },
+    });
+    if (changed.count !== 1)
+      return reply
+        .code(409)
+        .send({ statusCode: 409, message: "La factura ya no está abierta; actualiza la lista" });
+    const updated = await app.masterPrisma.invoice.findUniqueOrThrow({ where: { id } });
     await writeAudit(app.masterPrisma, {
       actor: req.user.kind === "admin" ? req.user.email : "?",
       action: "billing.invoice_retry_scheduled",
