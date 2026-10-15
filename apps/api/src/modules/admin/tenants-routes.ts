@@ -2,9 +2,8 @@ import { onboardTenant } from "@gaespos/db";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 import { VERTICALES } from "../../lib/verticales.js";
-
-const ROLES_COBRANZA = new Set(["superadmin", "billing"]);
 
 const crearSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{3,40}$/, "Slug: 3-40 caracteres [a-z 0-9 -]"),
@@ -44,7 +43,7 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
 
   function requireSuperadmin(req: FastifyRequest, reply: FastifyReply): boolean {
-    if (req.user.kind === "admin" && req.user.role === "superadmin") return true;
+    if (adminRouteAllowed(req)) return true;
     reply.code(403).send({
       statusCode: 403,
       error: "Forbidden",
@@ -56,7 +55,7 @@ const adminTenantsRoutes: FastifyPluginAsync = async (app) => {
   // El detalle de facturación expone métodos de pago (last4/brand/expiry) y
   // política de cobranza: dato sensible que support no debe leer, solo cobranza.
   function requireCobranza(req: FastifyRequest, reply: FastifyReply): boolean {
-    if (req.user.kind === "admin" && ROLES_COBRANZA.has(req.user.role)) return true;
+    if (adminRouteAllowed(req)) return true;
     reply.code(403).send({
       statusCode: 403,
       error: "Forbidden",

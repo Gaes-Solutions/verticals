@@ -1,14 +1,17 @@
 import fastifyCookie from "@fastify/cookie";
 import fastifyJwt from "@fastify/jwt";
 import { getTenantClient } from "@gaespos/db";
+import { platformPermissions } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "../config.js";
+import { adminRouteAllowed } from "../lib/platform-access.js";
 
 type AdminTokenPayload = {
   sub: string;
   email: string;
   role: string;
+  permissions?: string[];
   kind: "admin";
 };
 
@@ -92,7 +95,13 @@ type ClienteB2bTokenPayload = {
   kind: "cliente_b2b";
 };
 
-type KioskoMediaTokenPayload = { kind: "kiosko_media"; sub: string; tenantSlug: string; deviceId: string; publicationId: string };
+type KioskoMediaTokenPayload = {
+  kind: "kiosko_media";
+  sub: string;
+  tenantSlug: string;
+  deviceId: string;
+  publicationId: string;
+};
 
 type TokenPayload =
   | KioskoMediaTokenPayload
@@ -152,7 +161,8 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
   app.decorate("authenticate", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       await req.jwtVerify();
-      if (req.user.kind === "kiosko_media") return rejectUnauthorized(reply, "Este enlace solo permite leer el anuncio autorizado");
+      if (req.user.kind === "kiosko_media")
+        return rejectUnauthorized(reply, "Este enlace solo permite leer el anuncio autorizado");
     } catch (_err) {
       return rejectUnauthorized(reply, "Token inválido o expirado");
     }
@@ -173,12 +183,18 @@ const authPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
     // refresh tokens solo frena reemitir, no invalida el access token vivo).
     const admin = await app.masterPrisma.adminUser.findUnique({
       where: { id: req.user.sub },
-      select: { active: true, role: true },
+      select: { active: true, role: true, extraPermissions: true },
     });
     if (!admin || !admin.active) {
       return rejectUnauthorized(reply, "Cuenta inactiva o no encontrada");
     }
     req.user.role = admin.role;
+    req.user.permissions = platformPermissions(admin.role, admin.extraPermissions);
+    if (!adminRouteAllowed(req))
+      return reply.code(403).send({
+        statusCode: 403,
+        message: "No tienes permiso para esta función de la plataforma.",
+      });
   });
 
   app.decorate("authenticateTenant", async (req: FastifyRequest, reply: FastifyReply) => {

@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { loadConfig } from "../../config.js";
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 import {
   busquedaQuerySchema,
   crearResenaPublicaSchema,
@@ -258,7 +259,7 @@ const marketplaceTenantRoutes: FastifyPluginAsync = async (app) => {
 export const marketplaceAdminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
   app.addHook("preHandler", async (req, reply) => {
-    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    if (adminRouteAllowed(req)) return;
     return reply.code(403).send({
       statusCode: 403,
       error: "Forbidden",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 interface Agente {
   id: string;
@@ -102,7 +102,12 @@ export function TicketsPage() {
           <h1 className="font-bold text-2xl text-slate-800">Soporte</h1>
           <p className="text-slate-500 text-sm">Bandeja de tickets de los clientes.</p>
         </div>
-        <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+        <button
+          type="button"
+          disabled={!puedePlataforma("tickets.manage")}
+          onClick={() => setCreando(true)}
+          className="gx-btn-primary"
+        >
           + Nuevo ticket
         </button>
       </div>
@@ -400,6 +405,7 @@ function TicketDetalleModal({
 
             <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
               <select
+                disabled={!puedePlataforma("tickets.manage")}
                 value={ticket.status}
                 onChange={(e) => patch({ status: e.target.value })}
                 className="gx-input"
@@ -411,6 +417,7 @@ function TicketDetalleModal({
                 ))}
               </select>
               <select
+                disabled={!puedePlataforma("tickets.manage")}
                 value={ticket.priority}
                 onChange={(e) => patch({ priority: e.target.value })}
                 className="gx-input"
@@ -422,6 +429,7 @@ function TicketDetalleModal({
                 ))}
               </select>
               <select
+                disabled={!puedePlataforma("tickets.manage")}
                 value={ticket.assignedTo?.id ?? ""}
                 onChange={(e) => patch({ assignedToId: e.target.value || null })}
                 className="gx-input"
@@ -475,7 +483,9 @@ function TicketDetalleModal({
               <button
                 type="button"
                 onClick={responder}
-                disabled={enviando || respuesta.trim().length < 1}
+                disabled={
+                  enviando || respuesta.trim().length < 1 || !puedePlataforma("tickets.manage")
+                }
                 className="gx-btn-primary"
               >
                 {enviando ? "Enviando…" : "Responder"}

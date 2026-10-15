@@ -8,7 +8,7 @@ import {
   mfaActivate,
   mfaSetup,
   mfaVerify,
-  setRole,
+  setPlatformAccess,
   setToken,
 } from "../lib/api.js";
 import { BackupCodes } from "./BackupCodes.js";
@@ -41,8 +41,13 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
 
   function entrar(ses: SesionAdmin) {
     setToken(ses.accessToken);
-    setRole(ses.user.role);
-    onLogin({ nombre: ses.user.name, email: ses.user.email, role: ses.user.role });
+    setPlatformAccess(ses.user.role, ses.user.permissions ?? []);
+    onLogin({
+      nombre: ses.user.name,
+      email: ses.user.email,
+      role: ses.user.role,
+      permissions: ses.user.permissions ?? [],
+    });
   }
 
   async function submitPassword(e: FormEvent) {

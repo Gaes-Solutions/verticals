@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 import {
   commissionAprobarSchema,
   commissionListQuerySchema,
@@ -53,7 +54,7 @@ const partnersRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
   app.addHook("preHandler", async (req, reply) => {
     if (req.method === "GET") return;
-    if (req.user.kind === "admin" && req.user.role === "superadmin") return;
+    if (adminRouteAllowed(req)) return;
     return reply.code(403).send({
       statusCode: 403,
       error: "Forbidden",

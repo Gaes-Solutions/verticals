@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 interface Perfil {
   id: string;
@@ -125,7 +125,7 @@ export function MarketplacePage() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          disabled={busy === p.id}
+                          disabled={busy === p.id || !puedePlataforma("marketplace.manage")}
                           onClick={() => validar(p.id, false)}
                           className="gx-btn-secondary"
                         >
@@ -133,7 +133,7 @@ export function MarketplacePage() {
                         </button>
                         <button
                           type="button"
-                          disabled={busy === p.id}
+                          disabled={busy === p.id || !puedePlataforma("marketplace.manage")}
                           onClick={() => validar(p.id, true)}
                           className="gx-btn-primary"
                         >
@@ -170,7 +170,7 @@ export function MarketplacePage() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          disabled={busy === r.id}
+                          disabled={busy === r.id || !puedePlataforma("marketplace.manage")}
                           onClick={() => moderar(r.id, false)}
                           className="gx-btn-secondary"
                         >
@@ -178,7 +178,7 @@ export function MarketplacePage() {
                         </button>
                         <button
                           type="button"
-                          disabled={busy === r.id}
+                          disabled={busy === r.id || !puedePlataforma("marketplace.manage")}
                           onClick={() => moderar(r.id, true)}
                           className="gx-btn-primary"
                         >

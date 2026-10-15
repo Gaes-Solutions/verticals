@@ -25,3 +25,11 @@ export type { PermissionPrincipal } from "./check.js";
 
 export { PRESET_ROLES_RETAIL } from "./preset-roles.js";
 export type { PresetRole } from "./preset-roles.js";
+
+export {
+  PLATFORM_PERMISSIONS,
+  PLATFORM_DEFAULTS,
+  isPlatformPermission,
+  platformPermissions,
+} from "./platform.js";
+export type { PlatformPermission } from "./platform.js";

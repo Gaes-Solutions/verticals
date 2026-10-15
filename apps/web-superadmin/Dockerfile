@@ -17,10 +17,12 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY .npmrc ./
 COPY apps/web-superadmin/package.json ./apps/web-superadmin/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/permissions/package.json ./packages/permissions/
 
 RUN pnpm install --frozen-lockfile --filter "@gaespos/web-superadmin..."
 
 COPY packages/ui ./packages/ui
+COPY packages/permissions ./packages/permissions
 COPY apps/web-superadmin ./apps/web-superadmin
 
 RUN pnpm --filter @gaespos/web-superadmin build

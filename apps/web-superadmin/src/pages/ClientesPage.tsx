@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError, api, esSuperadmin } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 const GIROS = [
   { value: "retail_mayoreo", label: "Tienda / Retail / Mayoreo" },
@@ -84,7 +84,7 @@ export function ClientesPage() {
   const [credenciales, setCredenciales] = useState<Credenciales | null>(null);
   const [gestionar, setGestionar] = useState<Tenant | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const puedeGestionar = esSuperadmin();
+  const puedeGestionar = puedePlataforma("tenants.manage") || puedePlataforma("billing.read");
 
   const cargar = useCallback(() => {
     api<Tenant[]>("/admin/tenants")
@@ -101,7 +101,7 @@ export function ClientesPage() {
           <h1 className="font-bold text-2xl text-slate-800">Clientes</h1>
           <p className="text-slate-500 text-sm">Negocios dados de alta en la plataforma.</p>
         </div>
-        {esSuperadmin() && (
+        {puedePlataforma("tenants.manage") && (
           <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
             + Crear cliente
           </button>
@@ -215,14 +215,15 @@ function GestionarClienteModal({
     api<Plan[]>("/admin/tenants/planes")
       .then(setPlanes)
       .catch(() => setPlanes([]));
-    api<{ paymentMethods: PaymentMethod[]; dunningPolicy: string }>(
-      `/admin/tenants/${tenant.slug}/detalle`,
-    )
-      .then((d) => {
-        setMetodos(d.paymentMethods);
-        setDunning(d.dunningPolicy);
-      })
-      .catch(() => undefined);
+    if (puedePlataforma("billing.read"))
+      api<{ paymentMethods: PaymentMethod[]; dunningPolicy: string }>(
+        `/admin/tenants/${tenant.slug}/detalle`,
+      )
+        .then((d) => {
+          setMetodos(d.paymentMethods);
+          setDunning(d.dunningPolicy);
+        })
+        .catch(() => undefined);
   }, [tenant.slug]);
 
   async function accion<T>(fn: () => Promise<T>) {
@@ -265,107 +266,117 @@ function GestionarClienteModal({
           </span>
         </p>
 
-        <div className="mb-4">
-          <span className="gx-label">Plan</span>
-          <div className="flex gap-2">
-            <select
-              value={planCode}
-              onChange={(e) => setPlanCode(e.target.value)}
-              className="gx-input"
-            >
-              {planes.map((p) => (
-                <option key={p.code} value={p.code}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={cambiarPlan}
-              disabled={guardando || planCode === tenant.plan}
-              className="gx-btn-secondary whitespace-nowrap"
-            >
-              Cambiar plan
-            </button>
-          </div>
-        </div>
+        {puedePlataforma("tenants.manage") && (
+          <>
+            <div className="mb-4">
+              <span className="gx-label">Plan</span>
+              <div className="flex gap-2">
+                <select
+                  value={planCode}
+                  onChange={(e) => setPlanCode(e.target.value)}
+                  className="gx-input"
+                >
+                  {planes.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={cambiarPlan}
+                  disabled={guardando || planCode === tenant.plan}
+                  className="gx-btn-secondary whitespace-nowrap"
+                >
+                  Cambiar plan
+                </button>
+              </div>
+            </div>
 
-        <hr className="my-4 border-slate-200" />
-        <span className="gx-label">Estado del cliente</span>
-        <div className="flex flex-wrap gap-2">
-          {activo ? (
-            <button
-              type="button"
-              onClick={() => cambiarEstado("suspended")}
-              disabled={guardando}
-              className="gx-btn-danger"
-            >
-              Suspender
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => cambiarEstado("active")}
-              disabled={guardando}
-              className="gx-btn-primary"
-            >
-              Reactivar
-            </button>
-          )}
-          {tenant.status !== "cancelled" && (
-            <button
-              type="button"
-              onClick={() => cambiarEstado("cancelled")}
-              disabled={guardando}
-              className="gx-btn-ghost"
-            >
-              Cancelar cuenta
-            </button>
-          )}
-        </div>
-
-        <hr className="my-4 border-slate-200" />
-        <span className="gx-label">Métodos de pago</span>
-        {metodos.length === 0 ? (
-          <p className="text-slate-400 text-sm">Sin métodos de pago registrados.</p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {metodos.map((m) => (
-              <li key={m.id} className="flex items-center gap-2 text-slate-700">
-                <span className="font-medium">{PM_TIPO[m.type] ?? m.type}</span>
-                {m.brand && <span>{m.brand}</span>}
-                {m.last4 && <span className="text-slate-500">•••• {m.last4}</span>}
-                {m.expMonth && m.expYear && (
-                  <span className="text-slate-400">
-                    {String(m.expMonth).padStart(2, "0")}/{m.expYear}
-                  </span>
-                )}
-                {m.isDefault && <span className="gx-badge-info">Predet.</span>}
-              </li>
-            ))}
-          </ul>
+            <hr className="my-4 border-slate-200" />
+            <span className="gx-label">Estado del cliente</span>
+            <div className="flex flex-wrap gap-2">
+              {activo ? (
+                <button
+                  type="button"
+                  onClick={() => cambiarEstado("suspended")}
+                  disabled={guardando}
+                  className="gx-btn-danger"
+                >
+                  Suspender
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => cambiarEstado("active")}
+                  disabled={guardando}
+                  className="gx-btn-primary"
+                >
+                  Reactivar
+                </button>
+              )}
+              {tenant.status !== "cancelled" && (
+                <button
+                  type="button"
+                  onClick={() => cambiarEstado("cancelled")}
+                  disabled={guardando}
+                  className="gx-btn-ghost"
+                >
+                  Cancelar cuenta
+                </button>
+              )}
+            </div>
+          </>
         )}
+        {puedePlataforma("billing.read") && (
+          <>
+            <hr className="my-4 border-slate-200" />
+            <span className="gx-label">Métodos de pago</span>
+            {metodos.length === 0 ? (
+              <p className="text-slate-400 text-sm">Sin métodos de pago registrados.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {metodos.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2 text-slate-700">
+                    <span className="font-medium">{PM_TIPO[m.type] ?? m.type}</span>
+                    {m.brand && <span>{m.brand}</span>}
+                    {m.last4 && <span className="text-slate-500">•••• {m.last4}</span>}
+                    {m.expMonth && m.expYear && (
+                      <span className="text-slate-400">
+                        {String(m.expMonth).padStart(2, "0")}/{m.expYear}
+                      </span>
+                    )}
+                    {m.isDefault && <span className="gx-badge-info">Predet.</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
 
-        <hr className="my-4 border-slate-200" />
-        <span className="gx-label">Cobranza (reintentos)</span>
-        <div className="flex gap-2">
-          <select value={dunning} onChange={(e) => setDunning(e.target.value)} className="gx-input">
-            {Object.entries(DUNNING).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={guardarDunning}
-            disabled={guardando}
-            className="gx-btn-secondary whitespace-nowrap"
-          >
-            Guardar política
-          </button>
-        </div>
-
+            <hr className="my-4 border-slate-200" />
+            <span className="gx-label">Cobranza (reintentos)</span>
+            <div className="flex gap-2">
+              <select
+                value={dunning}
+                onChange={(e) => setDunning(e.target.value)}
+                className="gx-input"
+              >
+                {Object.entries(DUNNING).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={guardarDunning}
+                disabled={guardando || !puedePlataforma("billing.manage")}
+                className="gx-btn-secondary whitespace-nowrap"
+              >
+                Guardar política
+              </button>
+            </div>
+          </>
+        )}
         {err && <p className="mt-4 text-danger text-sm">{err}</p>}
         <div className="mt-5 flex justify-end">
           <button type="button" onClick={onClose} className="gx-btn-secondary">

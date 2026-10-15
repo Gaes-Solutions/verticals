@@ -136,6 +136,7 @@ model AdminUser {
   email          String    @unique
   passwordHash   String    @map("password_hash")
   name           String
+  extraPermissions String[] @default([]) @map("extra_permissions")
   role           AdminRole @default(superadmin)
   active         Boolean   @default(true)
   mfaSecret      String?   @map("mfa_secret")

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, esSuperadmin } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 type Tab = "planes" | "cupones";
 
@@ -84,7 +84,7 @@ export function CatalogoPage() {
 function PlanesTab() {
   const [items, setItems] = useState<Plan[]>([]);
   const [editando, setEditando] = useState<Plan | "nuevo" | null>(null);
-  const puede = esSuperadmin();
+  const puede = puedePlataforma("catalog.manage");
 
   const cargar = useCallback(() => {
     api<Plan[]>("/admin/catalogo/planes")
@@ -313,7 +313,7 @@ function PlanModal({
 function CuponesTab() {
   const [items, setItems] = useState<Coupon[]>([]);
   const [editando, setEditando] = useState<Coupon | "nuevo" | null>(null);
-  const puede = esSuperadmin();
+  const puede = puedePlataforma("catalog.manage");
 
   const cargar = useCallback(() => {
     api<Coupon[]>("/admin/catalogo/cupones")

@@ -1,4 +1,5 @@
 import type { AdminUser } from "@gaespos/db";
+import { platformPermissions } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../../config.js";
@@ -80,6 +81,7 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
         email: admin.email,
         name: admin.name,
         role: admin.role,
+        permissions: platformPermissions(admin.role, admin.extraPermissions),
       },
     };
   }
@@ -362,6 +364,7 @@ const authRoutes: FastifyPluginAsync<{ config: Config }> = async (app, opts) => 
         email: admin.email,
         name: admin.name,
         role: admin.role,
+        permissions: platformPermissions(admin.role, admin.extraPermissions),
       };
     },
   );

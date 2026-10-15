@@ -1,3 +1,4 @@
+import type { PlatformPermission } from "@gaespos/permissions";
 /**
  * Cliente API del panel de plataforma (super-admin). El admin se autentica con
  * password + TOTP; el access token de sesión vive en el navegador. En dev las
@@ -7,6 +8,7 @@
 const BASE = "/api";
 const TOKEN_KEY = "gaespos_super_token";
 const ROLE_KEY = "gaespos_super_role";
+const PERMISSIONS_KEY = "gaespos_super_permissions";
 
 export class ApiError extends Error {
   constructor(
@@ -23,7 +25,11 @@ let accessToken: string | null = null;
 export function setToken(token: string | null): void {
   accessToken = token;
   if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ROLE_KEY);
+    localStorage.removeItem(PERMISSIONS_KEY);
+  }
 }
 
 export function loadToken(): string | null {
@@ -40,6 +46,20 @@ export function getRole(): string {
   return localStorage.getItem(ROLE_KEY) ?? "";
 }
 
+export function setPlatformAccess(role: string, permissions: string[]): void {
+  setRole(role);
+  localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
+}
+export function puedePlataforma(permission: PlatformPermission): boolean {
+  try {
+    return (
+      esSuperadmin() ||
+      (JSON.parse(localStorage.getItem(PERMISSIONS_KEY) ?? "[]") as string[]).includes(permission)
+    );
+  } catch {
+    return false;
+  }
+}
 export function esSuperadmin(): boolean {
   return getRole() === "superadmin";
 }
@@ -67,6 +87,7 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
+    if (res.status === 403) window.dispatchEvent(new Event("platform-access-refresh"));
     // token de sesión vencido → cerrar sesión y volver al login.
     if (res.status === 401 && opts.token === undefined && opts.auth !== false && loadToken()) {
       setToken(null);
@@ -87,7 +108,7 @@ export interface LoginRetoMfa {
 }
 export interface SesionAdmin {
   accessToken: string;
-  user: { id: string; email: string; name: string; role: string };
+  user: { id: string; email: string; name: string; role: string; permissions: string[] };
   /** Solo presente al activar el 2FA por primera vez: códigos de respaldo en claro. */
   backupCodes?: string[];
 }

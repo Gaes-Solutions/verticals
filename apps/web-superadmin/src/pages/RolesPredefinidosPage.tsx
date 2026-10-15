@@ -6,10 +6,10 @@ import {
   type RolePlantilla,
   crearRolePlantilla,
   editarRolePlantilla,
-  esSuperadmin,
   listCatalogoPermisos,
   listRolePlantillas,
   listVerticales,
+  puedePlataforma,
 } from "../lib/api.js";
 
 export function RolesPredefinidosPage() {
@@ -44,7 +44,7 @@ export function RolesPredefinidosPage() {
             Los gobiernas tú por vertical; cada negocio ve los de su vertical (solo lectura).
           </p>
         </div>
-        {esSuperadmin() && (
+        {puedePlataforma("roles.manage") && (
           <button type="button" onClick={() => setEditar("nuevo")} className="gx-btn-primary">
             + Nuevo rol predefinido
           </button>
@@ -105,7 +105,7 @@ export function RolesPredefinidosPage() {
                       onClick={() => setEditar(r)}
                       className="font-semibold text-brand text-sm hover:underline"
                     >
-                      {esSuperadmin() ? "Editar" : "Ver"}
+                      {puedePlataforma("roles.manage") ? "Editar" : "Ver"}
                     </button>
                   </td>
                 </tr>
@@ -147,7 +147,7 @@ function RolPlantillaModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const soloLectura = !esSuperadmin();
+  const soloLectura = !puedePlataforma("roles.manage");
   const [vertical, setVertical] = useState(rol?.vertical ?? verticalActual);
   const [codigo, setCodigo] = useState(rol?.codigo ?? "");
   const [nombre, setNombre] = useState(rol?.nombre ?? "");

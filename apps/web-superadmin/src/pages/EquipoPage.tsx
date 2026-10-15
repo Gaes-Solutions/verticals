@@ -1,3 +1,4 @@
+import { PLATFORM_PERMISSIONS, platformPermissions } from "@gaespos/permissions";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 
@@ -7,6 +8,7 @@ interface Admin {
   name: string;
   role: string;
   active: boolean;
+  extraPermissions: string[];
   mfaVerifiedAt: string | null;
   lastLoginAt: string | null;
 }
@@ -57,7 +59,7 @@ export function EquipoPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-bold text-2xl text-slate-800">Equipo GaesSoft</h1>
         <button type="button" onClick={() => setNuevo(true)} className="gx-btn-primary">
           + Nuevo admin
@@ -166,6 +168,7 @@ function AdminModal({
   const [name, setName] = useState(admin?.name ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState(admin?.role ?? "support");
+  const [extraPermissions, setExtraPermissions] = useState<string[]>(admin?.extraPermissions ?? []);
   const [active, setActive] = useState(admin?.active ?? true);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -176,9 +179,12 @@ function AdminModal({
     setErr(null);
     try {
       if (esEdicion && admin) {
-        await api(`/admin/team/${admin.id}`, { method: "PATCH", body: { name, role, active } });
+        await api(`/admin/team/${admin.id}`, {
+          method: "PATCH",
+          body: { name, role, active, extraPermissions },
+        });
       } else {
-        await api("/admin/team", { body: { email, name, password, role } });
+        await api("/admin/team", { body: { email, name, password, role, extraPermissions } });
       }
       onDone();
     } catch (e2) {
@@ -189,7 +195,7 @@ function AdminModal({
 
   return (
     <div className="gx-modal-overlay">
-      <form onSubmit={guardar} className="gx-modal-panel">
+      <form onSubmit={guardar} className="gx-modal-panel max-h-[90dvh] overflow-y-auto">
         <h2 className="mb-4 font-bold text-lg text-slate-800">
           {esEdicion ? "Editar admin" : "Nuevo admin"}
         </h2>
@@ -230,7 +236,14 @@ function AdminModal({
         )}
         <label className="mb-3 block">
           <span className="gx-label">Rol</span>
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="gx-input">
+          <select
+            value={role}
+            onChange={(e) => {
+              setRole(e.target.value);
+              setExtraPermissions([]);
+            }}
+            className="gx-input"
+          >
             {ROLES.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
@@ -238,6 +251,54 @@ function AdminModal({
             ))}
           </select>
         </label>
+        <fieldset className="mb-4 rounded-xl border border-slate-200 p-3">
+          <legend className="px-1 font-semibold text-sm">Accesos adicionales</legend>
+          <p className="mb-3 text-slate-500 text-xs">
+            El rol incluye sus permisos mínimos. Solo un superadministrador puede añadir o retirar
+            estos accesos. Al cambiar de rol se limpian los accesos adicionales.
+          </p>
+          {role === "superadmin" ? (
+            <p className="text-sm">Acceso completo a la plataforma.</p>
+          ) : (
+            <div className="space-y-3">
+              {PLATFORM_PERMISSIONS.map((permission) => {
+                const base = platformPermissions(role).includes(permission.code);
+                const included = platformPermissions(role, extraPermissions).includes(
+                  permission.code,
+                );
+                const implied = included && !base && !extraPermissions.includes(permission.code);
+                return (
+                  <label key={permission.code} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      disabled={base || implied || guardando}
+                      checked={included}
+                      onChange={(e) =>
+                        setExtraPermissions((values) =>
+                          e.target.checked
+                            ? [...values, permission.code]
+                            : values.filter((value) => value !== permission.code),
+                        )
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">
+                        {permission.label}
+                        {base ? " · incluido en el rol" : ""}
+                      </span>
+                      <span className="block text-slate-500 text-xs">{permission.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-3 text-slate-500 text-xs">
+            Administrar el equipo, consultar la auditoría y aprobar incidentes requiere el rol
+            Superadministrador.
+          </p>
+        </fieldset>
         {esEdicion && (
           <label className="mb-3 flex items-center gap-2">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />

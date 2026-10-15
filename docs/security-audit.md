@@ -686,3 +686,14 @@ Rama: `seguridad/auditoria`. 4 vulnerabilidades aprobadas por el panel y aplicad
 **Verificación**: `pnpm --filter @gaespos/api exec tsc --noEmit` → exit 0.
 
 ---
+
+## 2026-10-15 — Permisos mínimos del equipo de plataforma
+
+- Soporte nace con directorio de negocios y atención de tickets; no consulta facturas, suscripciones, métricas financieras ni observabilidad global.
+- Cobranza nace con directorio y operación de facturación/suscripciones del SaaS; no consulta ni modifica tickets.
+- El superadministrador puede conceder y retirar permisos adicionales por usuario desde Equipo. Se almacenan en `AdminUser.extraPermissions`, con lista cerrada de códigos, sin wildcard. Un permiso de administración incluye la lectura de su módulo.
+- El servidor recarga rol y permisos desde la base de datos en cada petición: conceder, revocar, cambiar de rol o desactivar tiene efecto sobre JWT ya emitidos. Los permisos enviados dentro de un JWT no se usan como fuente de autorización.
+- Gestionar el equipo, leer auditoría, aprobar incidentes y ejecutar jobs globales continúa reservado al rol Superadministrador. Un usuario con permisos adicionales no puede delegar accesos ni promoverse a sí mismo.
+- Cambiar de rol limpia las concesiones anteriores salvo que el superadministrador envíe explícitamente las nuevas. Las modificaciones se registran con valores anteriores y nuevos en auditoría.
+- El panel obtiene los accesos de `/auth/me`, filtra los menús y controles y actualiza los permisos al volver a la ventana o periódicamente. Al retirar un acceso abandona la pantalla que dejó de estar autorizada.
+- Validación: pruebas de matriz de roles, concesión/revocación con el mismo JWT, suplantación de rol/permisos en claims, autoasignación rechazada, códigos desconocidos, cambios de rol y desactivación. Recorrido con TOTP real en navegador y revisión a 320 px. Esta entrada documenta este alcance; no certifica toda la plataforma.

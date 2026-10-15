@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 type Tab = "partners" | "comisiones" | "payouts";
 
@@ -164,7 +164,12 @@ function PartnersTab() {
             </option>
           ))}
         </select>
-        <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+        <button
+          disabled={!puedePlataforma("partners.manage")}
+          type="button"
+          onClick={() => setCreando(true)}
+          className="gx-btn-primary"
+        >
           + Nuevo partner
         </button>
       </div>
@@ -356,7 +361,12 @@ function CrearPartnerModal({ onClose, onDone }: { onClose: () => void; onDone: (
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="button" onClick={guardar} disabled={guardando} className="gx-btn-primary">
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || !puedePlataforma("partners.manage")}
+            className="gx-btn-primary"
+          >
             {guardando ? "Guardando…" : "Crear partner"}
           </button>
         </div>
@@ -455,7 +465,12 @@ function EditarPartnerModal({
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="button" onClick={guardar} disabled={guardando} className="gx-btn-primary">
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || !puedePlataforma("partners.manage")}
+            className="gx-btn-primary"
+          >
             {guardando ? "Guardando…" : "Guardar"}
           </button>
         </div>
@@ -539,6 +554,7 @@ function ComisionesTab() {
                   {c.estado === "pendiente" && (
                     <span className="flex justify-end gap-3">
                       <button
+                        disabled={!puedePlataforma("partners.manage")}
                         type="button"
                         onClick={() => aprobar(c)}
                         className="font-semibold text-ok text-sm hover:underline"
@@ -546,6 +562,7 @@ function ComisionesTab() {
                         Aprobar
                       </button>
                       <button
+                        disabled={!puedePlataforma("partners.manage")}
                         type="button"
                         onClick={() => setRechazando(c)}
                         className="font-semibold text-danger text-sm hover:underline"
@@ -632,7 +649,12 @@ function RechazarComisionModal({
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="button" onClick={rechazar} disabled={guardando} className="gx-btn-danger">
+          <button
+            type="button"
+            onClick={rechazar}
+            disabled={guardando || !puedePlataforma("partners.manage")}
+            className="gx-btn-danger"
+          >
             {guardando ? "Rechazando…" : "Rechazar"}
           </button>
         </div>
@@ -671,7 +693,12 @@ function PayoutsTab() {
           <option value="pagado">Pagado</option>
           <option value="fallido">Fallido</option>
         </select>
-        <button type="button" onClick={() => setCreando(true)} className="gx-btn-primary">
+        <button
+          disabled={!puedePlataforma("partners.manage")}
+          type="button"
+          onClick={() => setCreando(true)}
+          className="gx-btn-primary"
+        >
           + Generar payout
         </button>
       </div>
@@ -828,7 +855,12 @@ function CrearPayoutModal({ onClose, onDone }: { onClose: () => void; onDone: ()
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="button" onClick={guardar} disabled={guardando} className="gx-btn-primary">
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || !puedePlataforma("partners.manage")}
+            className="gx-btn-primary"
+          >
             {guardando ? "Generando…" : "Generar"}
           </button>
         </div>
@@ -888,7 +920,12 @@ function MarcarPagadoModal({
           <button type="button" onClick={onClose} className="gx-btn-secondary">
             Cancelar
           </button>
-          <button type="button" onClick={marcar} disabled={guardando} className="gx-btn-primary">
+          <button
+            type="button"
+            onClick={marcar}
+            disabled={guardando || !puedePlataforma("partners.manage")}
+            className="gx-btn-primary"
+          >
             {guardando ? "Guardando…" : "Confirmar pago"}
           </button>
         </div>

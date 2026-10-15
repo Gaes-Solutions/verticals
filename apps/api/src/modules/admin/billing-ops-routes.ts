@@ -1,8 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
-
-const ROLES_COBRANZA = new Set(["superadmin", "billing"]);
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -30,7 +29,7 @@ const adminBillingOpsRoutes: FastifyPluginAsync = async (app) => {
   // Operar cobranza (anular/reprogramar) es privilegio de superadmin o del rol billing;
   // support no debe manipular facturas del SaaS.
   function requireCobranza(req: FastifyRequest, reply: FastifyReply): boolean {
-    if (req.user.kind === "admin" && ROLES_COBRANZA.has(req.user.role)) {
+    if (adminRouteAllowed(req)) {
       return true;
     }
     reply.code(403).send({

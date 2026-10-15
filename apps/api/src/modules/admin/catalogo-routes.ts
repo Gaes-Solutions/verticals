@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 
 /**
  * Gestión del catálogo comercial de la plataforma (planes y cupones) desde el
@@ -48,7 +49,7 @@ const cuponCrearSchema = z.object({
 const cuponEditarSchema = cuponCrearSchema.partial().omit({ code: true });
 
 function isSuperadmin(req: FastifyRequest): boolean {
-  return req.user.kind === "admin" && req.user.role === "superadmin";
+  return adminRouteAllowed(req);
 }
 
 function forbidden(reply: FastifyReply): undefined {

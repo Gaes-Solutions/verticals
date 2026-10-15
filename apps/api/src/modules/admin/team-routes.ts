@@ -1,19 +1,31 @@
+import {
+  PLATFORM_PERMISSIONS,
+  isPlatformPermission,
+  platformPermissions,
+} from "@gaespos/permissions";
 import { hash as argon2Hash } from "@node-rs/argon2";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+
+const grantsSchema = z
+  .array(z.string().refine(isPlatformPermission, "Permiso de plataforma desconocido"))
+  .max(PLATFORM_PERMISSIONS.length)
+  .refine((values) => new Set(values).size === values.length, "Permisos repetidos");
 
 const crearSchema = z.object({
   email: z.string().email().toLowerCase(),
   name: z.string().min(2).max(120),
   password: z.string().min(10).max(200),
   role: z.enum(["superadmin", "support", "billing"]),
+  extraPermissions: grantsSchema.default([]),
 });
 
 const patchSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   role: z.enum(["superadmin", "support", "billing"]).optional(),
   active: z.boolean().optional(),
+  extraPermissions: grantsSchema.optional(),
 });
 
 const resetPasswordSchema = z.object({ password: z.string().min(10).max(200) });
@@ -37,6 +49,11 @@ const adminTeamRoutes: FastifyPluginAsync = async (app) => {
     return req.user.kind === "admin" ? req.user.email : "?";
   }
 
+  app.get("/permissions", async (req, reply) => {
+    if (!requireSuperadmin(req, reply)) return;
+    return PLATFORM_PERMISSIONS;
+  });
+
   app.get("/", async (req, reply) => {
     if (!requireSuperadmin(req, reply)) return;
     const admins = await app.masterPrisma.adminUser.findMany({
@@ -46,13 +63,17 @@ const adminTeamRoutes: FastifyPluginAsync = async (app) => {
         email: true,
         name: true,
         role: true,
+        extraPermissions: true,
         active: true,
         mfaVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
       },
     });
-    return admins;
+    return admins.map((admin) => ({
+      ...admin,
+      permissions: platformPermissions(admin.role, admin.extraPermissions),
+    }));
   });
 
   app.post("/", async (req, reply) => {
@@ -71,16 +92,24 @@ const adminTeamRoutes: FastifyPluginAsync = async (app) => {
         email: body.email,
         name: body.name,
         role: body.role,
+        extraPermissions: body.role === "superadmin" ? [] : body.extraPermissions,
         passwordHash: await argon2Hash(body.password),
       },
-      select: { id: true, email: true, name: true, role: true, active: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        active: true,
+        extraPermissions: true,
+      },
     });
     await writeAudit(app.masterPrisma, {
       actor: actorDe(req),
       action: "team.admin_created",
       resource: "admin_user",
       resourceId: admin.id,
-      metadata: { email: admin.email, role: admin.role },
+      metadata: { email: admin.email, role: admin.role, extraPermissions: admin.extraPermissions },
       ipAddress: req.ip,
     });
     return reply.code(201).send(admin);
@@ -95,21 +124,55 @@ const adminTeamRoutes: FastifyPluginAsync = async (app) => {
         .code(409)
         .send({ statusCode: 409, error: "Conflict", message: "No puedes desactivarte a ti misma" });
     }
+    if (
+      req.user.kind === "admin" &&
+      req.user.sub === id &&
+      body.role !== undefined &&
+      body.role !== "superadmin"
+    )
+      return reply
+        .code(409)
+        .send({ message: "No puedes quitarte tu propio rol de superadministrador." });
+    const previous = await app.masterPrisma.adminUser.findUnique({
+      where: { id },
+      select: { role: true, extraPermissions: true, active: true },
+    });
+    if (!previous) return reply.code(404).send({ message: "Administrador no encontrado." });
+    const extraPermissions =
+      (body.role ?? previous.role) === "superadmin"
+        ? []
+        : (body.extraPermissions ??
+          (body.role !== undefined && body.role !== previous.role
+            ? []
+            : previous.extraPermissions));
     const admin = await app.masterPrisma.adminUser.update({
       where: { id },
       data: {
+        extraPermissions,
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.active !== undefined ? { active: body.active } : {}),
         ...(body.role !== undefined ? { role: body.role } : {}),
       },
-      select: { id: true, email: true, name: true, role: true, active: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        active: true,
+        extraPermissions: true,
+      },
     });
     await writeAudit(app.masterPrisma, {
       actor: actorDe(req),
       action: "team.admin_updated",
       resource: "admin_user",
       resourceId: id,
-      metadata: body,
+      metadata: {
+        ...body,
+        extraPermissions,
+        previousRole: previous.role,
+        previousExtraPermissions: previous.extraPermissions,
+      },
       ipAddress: req.ip,
     });
     return admin;

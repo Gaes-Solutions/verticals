@@ -3,6 +3,7 @@ import { isAssignablePermission, listPermissionsByArea } from "@gaespos/permissi
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { writeAudit } from "../../lib/audit.js";
+import { adminRouteAllowed } from "../../lib/platform-access.js";
 
 const VERTICALES: { value: string; label: string }[] = [
   { value: "todas", label: "Todas (universal)" },
@@ -41,7 +42,7 @@ const adminRolesPlantillaRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);
 
   function requireSuperadmin(req: FastifyRequest, reply: FastifyReply): boolean {
-    if (req.user.kind === "admin" && req.user.role === "superadmin") return true;
+    if (adminRouteAllowed(req)) return true;
     reply.code(403).send({
       statusCode: 403,
       error: "Forbidden",

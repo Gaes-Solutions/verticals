@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../lib/api.js";
+import { ApiError, api, puedePlataforma } from "../lib/api.js";
 
 interface Invoice {
   id: string;
@@ -98,7 +98,7 @@ export function FacturasPage() {
                   ${Number(inv.total).toLocaleString("es-MX")} {inv.currency}
                 </td>
                 <td className="gx-td text-right">
-                  {inv.status === "open" && (
+                  {inv.status === "open" && puedePlataforma("billing.manage") && (
                     <button
                       type="button"
                       onClick={() => reprogramar(inv)}
@@ -107,15 +107,17 @@ export function FacturasPage() {
                       Reprogramar cobro
                     </button>
                   )}
-                  {inv.status !== "paid" && inv.status !== "void" && (
-                    <button
-                      type="button"
-                      onClick={() => setVoiding(inv)}
-                      className="font-semibold text-danger text-sm hover:underline"
-                    >
-                      Anular
-                    </button>
-                  )}
+                  {inv.status !== "paid" &&
+                    inv.status !== "void" &&
+                    puedePlataforma("billing.manage") && (
+                      <button
+                        type="button"
+                        onClick={() => setVoiding(inv)}
+                        className="font-semibold text-danger text-sm hover:underline"
+                      >
+                        Anular
+                      </button>
+                    )}
                 </td>
               </tr>
             ))}
