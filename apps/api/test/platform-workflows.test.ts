@@ -608,6 +608,25 @@ describe("dominio propio completo", () => {
 });
 
 describe("cobros sin proveedor fuera del modo de prueba", () => {
+  it.each(["payment-methods", "setup-intent", "connect/onboard"])(
+    "POST /billing/%s responde claramente 503, sin generar un error interno",
+    async (endpoint) => {
+      vi.stubEnv("NODE_ENV", "production");
+      try {
+        const response = await app.inject({
+          method: "POST",
+          url: `/billing/${endpoint}`,
+          headers: ownerAuth(),
+          payload: endpoint === "payment-methods" ? { type: "card", last4: "4242" } : {},
+        });
+        expect(response.statusCode).toBe(503);
+        expect(response.json().message).not.toBe("Algo salió mal");
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
   it("no guarda tarjetas inventadas en producción", async () => {
     vi.stubEnv("NODE_ENV", "production");
     try {

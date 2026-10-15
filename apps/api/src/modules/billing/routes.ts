@@ -28,6 +28,7 @@ import {
 } from "./service.js";
 
 function errLabel(s: number): string {
+  if (s === 503) return "Service Unavailable";
   if (s >= 500) return "Internal";
   if (s === 404) return "Not Found";
   if (s === 409) return "Conflict";
@@ -149,6 +150,12 @@ export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
  * Endpoints del admin del tenant para gestionar su cuenta SaaS.
  */
 export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
+  // Missing provider is an expected operational state, not an unhandled incident.
+  app.setErrorHandler((err, _req, reply) => {
+    if (handleErr(reply, err)) return;
+    return reply.send(err);
+  });
+
   // ADR 014 — sesión unificada: además del token admin_tenant, el token RBAC
   // del DUEÑO (rol "*") accede al billing de SU tenant, resuelto del propio
   // token (jamás de parámetros). Empleados con otros roles no pasan.
