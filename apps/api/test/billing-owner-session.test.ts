@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
 
 const TENANT_SLUG = "test-billing-owner-1";
@@ -68,5 +68,34 @@ describe("sesión unificada del dueño en /billing/* (ADR 014)", () => {
   it("sin token es 401", async () => {
     const res = await app.inject({ method: "GET", url: "/billing/me" });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+describe("Stripe public configuration does not leak misplaced secrets", () => {
+  it.each([
+    "sk_test_do_not_expose",
+    "sk_live_do_not_expose",
+    "rk_test_do_not_expose",
+    "whsec_do_not_expose",
+  ])("does not return a misplaced %s key", async (key) => {
+    vi.stubEnv("STRIPE_PUBLISHABLE_KEY", key);
+    const response = await app.inject({
+      method: "GET",
+      url: "/billing/stripe-config",
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ publishableKey: null });
+    expect(response.body).not.toContain(key);
+  });
+  it("returns a valid publishable key", async () => {
+    vi.stubEnv("STRIPE_PUBLISHABLE_KEY", "pk_test_public");
+    const response = await app.inject({
+      method: "GET",
+      url: "/billing/stripe-config",
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    expect(response.json()).toEqual({ publishableKey: "pk_test_public" });
   });
 });

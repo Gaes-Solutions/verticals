@@ -27,6 +27,7 @@ import {
   setMockChargeFailures,
   signupPublico,
 } from "./service.js";
+import { stripePublishableKey } from "./stripe.js";
 
 function errLabel(s: number): string {
   if (s === 503) return "Service Unavailable";
@@ -230,7 +231,7 @@ export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
   // Config pública que necesita el frontend para Stripe.js (la publishable NO es
   // secreta). Si no hay llave, el front muestra captura de tarjeta deshabilitada.
   app.get("/billing/stripe-config", async () => ({
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() || null,
+    publishableKey: stripePublishableKey(),
   }));
 
   // SetupIntent para guardar una tarjeta (Stripe Elements confirma en el front).
