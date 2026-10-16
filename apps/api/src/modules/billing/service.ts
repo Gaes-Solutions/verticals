@@ -17,6 +17,7 @@ import {
 } from "@gaespos/db";
 import { hash as argon2Hash, verify as argon2Verify } from "@node-rs/argon2";
 import { burnPasswordTiming } from "../../lib/password-timing.js";
+import { confirmarPagoStripe } from "./stripe-confirmation.js";
 import { stripeBilling } from "./stripe.js";
 
 export class BillingError extends Error {
@@ -73,7 +74,14 @@ async function mockCobrar(
 // tiene customer + tarjeta real de Stripe; si no, cae al mock. `invoice.total` ya
 // está en centavos. Idempotency por invoice para no duplicar el cobro en reintentos.
 async function cobrarSuscripcion(
-  invoice: { id: string; total: number; currency: string; invoiceNumber: string },
+  invoice: {
+    id: string;
+    total: number;
+    currency: string;
+    invoiceNumber: string;
+    attempts: number;
+    stripeIntentId?: string | undefined;
+  },
   tenant: { stripeCustomerId: string | null },
   pm: { id: string; externalMethodId: string | null },
 ): Promise<{ success: boolean; externalChargeId?: string; failureReason?: string }> {
@@ -82,19 +90,42 @@ async function cobrarSuscripcion(
   const pmId = pm.externalMethodId;
   const esTarjetaStripe = !!pmId && pmId.startsWith("pm_") && !pmId.startsWith("pm_mock_");
   if (stripe && customerId && pmId && esTarjetaStripe) {
-    const r = await stripe.cobrarOffSession({
-      customerId,
-      paymentMethodId: pmId,
-      montoCentavos: invoice.total,
-      moneda: invoice.currency,
-      descripcion: `Suscripción ${invoice.invoiceNumber}`,
-      idempotencyKey: `inv_${invoice.id}`,
-      metadata: { invoiceId: invoice.id },
-    });
+    if (!invoice.stripeIntentId)
+      return { success: false, failureReason: "No se pudo preparar el intento de pago" };
+    let intent = await stripe.obtenerIntent(invoice.stripeIntentId);
+    if (
+      intent.customer !== customerId ||
+      intent.amount !== invoice.total ||
+      intent.currency?.toUpperCase() !== invoice.currency.toUpperCase()
+    )
+      throw new BillingError(409, "El intento de pago no coincide con la factura");
+    if (["requires_confirmation", "requires_payment_method"].includes(intent.status)) {
+      try {
+        intent = await stripe.confirmarIntent(
+          intent.id,
+          pmId,
+          `inv_${invoice.id}_confirm_${invoice.attempts}`,
+        );
+      } catch {
+        return {
+          success: false,
+          externalChargeId: invoice.stripeIntentId,
+          failureReason:
+            "El banco no confirmó el pago. Revisa tu tarjeta o completa la autenticación.",
+        };
+      }
+    }
     return {
-      success: r.success,
-      ...(r.chargeId ? { externalChargeId: r.chargeId } : {}),
-      ...(r.failureReason ? { failureReason: r.failureReason } : {}),
+      success: intent.status === "succeeded",
+      externalChargeId: intent.id,
+      ...(intent.status !== "succeeded"
+        ? {
+            failureReason:
+              intent.status === "requires_action"
+                ? "Completa la autenticación de tu banco en Mi suscripción"
+                : "El banco aún no confirmó el pago",
+          }
+        : {}),
     };
   }
   if (!mockBillingAllowed())
@@ -317,12 +348,12 @@ export async function getBillingContext(
 ): Promise<unknown> {
   const tenant = await master.tenant.findUniqueOrThrow({
     where: { id: tenantId },
-    include: { plan: { include: { features: true } } },
+    include: { plan: { include: { features: true, prices: { where: { isActive: true } } } } },
   });
   const subscription = await master.subscription.findFirst({
     where: { tenantId, status: { not: "canceled" } },
     orderBy: { createdAt: "desc" },
-    include: { discountCoupon: true },
+    include: { discountCoupon: true, plan: { include: { prices: { where: { isActive: true } } } } },
   });
   const paymentMethods = await master.paymentMethod.findMany({
     where: { tenantId },
@@ -389,6 +420,12 @@ export async function agregarPaymentMethod(
   if (input.paymentMethodId && stripe) {
     externalMethodId = input.paymentMethodId;
     const t = await stripe.getTarjeta(input.paymentMethodId);
+    const tenant = await master.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { stripeCustomerId: true },
+    });
+    if (!tenant.stripeCustomerId || t.customerId !== tenant.stripeCustomerId)
+      throw new BillingError(403, "La tarjeta no pertenece a esta cuenta de facturación");
     tarjeta = {
       ...(t.last4 ? { last4: t.last4 } : {}),
       ...(t.brand ? { brand: t.brand } : {}),
@@ -734,10 +771,66 @@ async function generarCfdiMock(): Promise<string> {
   return `cfdi-mock-${randomUUID()}`;
 }
 
+/** Persist an unconfirmed intent before any charge. A crash can leave an unused intent, never a lost charge ID. */
+async function prepararIntentDurable(master: MasterPrismaClient, invoiceId: string): Promise<void> {
+  const stripe = stripeBilling();
+  if (!stripe) return;
+  await master.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${invoiceId}, 7710040))`;
+      const invoice = await tx.invoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+        include: {
+          tenant: { include: { paymentMethods: { where: { isDefault: true }, take: 1 } } },
+        },
+      });
+      const pm = invoice.tenant.paymentMethods[0];
+      if (
+        invoice.status !== "open" ||
+        invoice.total === 0 ||
+        !invoice.tenant.stripeCustomerId ||
+        !pm?.externalMethodId?.startsWith("pm_") ||
+        pm.externalMethodId.startsWith("pm_mock_") ||
+        ["cancelled", "archived"].includes(invoice.tenant.status)
+      )
+        return;
+      if (
+        await tx.invoicePayment.findFirst({
+          where: { invoiceId, externalChargeId: { startsWith: "pi_" } },
+        })
+      )
+        return;
+      const intent = await stripe.prepararCobro({
+        customerId: invoice.tenant.stripeCustomerId,
+        paymentMethodId: pm.externalMethodId,
+        montoCentavos: invoice.total,
+        moneda: invoice.currency,
+        descripcion: `Suscripción ${invoice.invoiceNumber}`,
+        idempotencyKey: `inv_${invoice.id}`,
+        metadata: { invoiceId },
+      });
+      if (!/^pi_[a-zA-Z0-9_]+$/.test(intent.id) || intent.status === "succeeded")
+        throw new BillingError(409, "Respuesta inesperada al preparar el pago");
+      await tx.invoicePayment.create({
+        data: {
+          invoiceId,
+          paymentMethodId: pm.id,
+          amount: invoice.total,
+          currency: invoice.currency,
+          status: "pending",
+          externalChargeId: intent.id,
+        },
+      });
+    },
+    { maxWait: 30000, timeout: 30000 },
+  );
+}
+
 async function intentarPagoInvoice(
   master: MasterPrismaClient,
   invoiceId: string,
 ): Promise<{ success: boolean; failureReason?: string }> {
+  await prepararIntentDurable(master, invoiceId);
   return master.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${invoiceId}, 7710040))`;
@@ -775,19 +868,28 @@ async function intentarPagoInvoice(
         return { success: false, failureReason: "Sin método de pago default" };
       }
 
-      const charge = await cobrarSuscripcion(invoice, invoice.tenant, pm);
-      await tx.invoicePayment.create({
-        data: {
-          invoiceId,
-          amount: invoice.total,
-          currency: invoice.currency,
-          paymentMethodId: pm.id,
-          status: charge.success ? "succeeded" : "failed",
-          ...(charge.externalChargeId ? { externalChargeId: charge.externalChargeId } : {}),
-          ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
-          ...(charge.success ? { paidAt: new Date() } : {}),
-        },
+      const prior = await tx.invoicePayment.findFirst({
+        where: { invoiceId, externalChargeId: { startsWith: "pi_" } },
+        orderBy: { createdAt: "desc" },
       });
+      const charge = await cobrarSuscripcion(
+        { ...invoice, stripeIntentId: prior?.externalChargeId ?? undefined },
+        invoice.tenant,
+        pm,
+      );
+      const paymentData = {
+        invoiceId,
+        amount: invoice.total,
+        currency: invoice.currency,
+        paymentMethodId: pm.id,
+        status: charge.success ? ("succeeded" as const) : ("failed" as const),
+        ...(charge.externalChargeId ? { externalChargeId: charge.externalChargeId } : {}),
+        ...(charge.failureReason ? { failureReason: charge.failureReason } : {}),
+        ...(charge.success ? { paidAt: new Date() } : {}),
+      };
+      if (prior?.status === "pending")
+        await tx.invoicePayment.update({ where: { id: prior.id }, data: paymentData });
+      else await tx.invoicePayment.create({ data: paymentData });
 
       if (charge.success) {
         const cfdiUuid = mockBillingAllowed() ? await generarCfdiMock() : null;
@@ -1112,4 +1214,67 @@ export async function correrDunningCiclo(master: MasterPrismaClient): Promise<{
   }
 
   return { procesados: pendientes.length, cobrados, suspendidos };
+}
+
+/** Owner-initiated recovery of an existing Stripe intent; never trusts client payment success. */
+export async function recuperarPagoInvoice(
+  master: MasterPrismaClient,
+  tenantId: string,
+  invoiceId: string,
+) {
+  const invoice = await master.invoice.findFirst({
+    where: { id: invoiceId, tenantId },
+    include: {
+      tenant: true,
+      payments: {
+        where: { externalChargeId: { startsWith: "pi_" } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+  if (!invoice) throw new BillingError(404, "Factura no encontrada");
+  if (invoice.status === "paid") return { status: "succeeded" as const };
+  if (invoice.status !== "open") throw new BillingError(409, "Esta factura ya no admite pagos");
+  const stripe = stripeBilling();
+  if (!stripe) throw new BillingError(503, "Stripe no está configurado");
+  const intentId = invoice.payments[0]?.externalChargeId;
+  if (!intentId)
+    throw new BillingError(409, "Esta factura aún no tiene un intento de pago de Stripe");
+  const intent = await stripe.obtenerIntent(intentId);
+  if (
+    !invoice.tenant.stripeCustomerId ||
+    intent.customer !== invoice.tenant.stripeCustomerId ||
+    intent.amount !== invoice.total ||
+    intent.currency?.toUpperCase() !== invoice.currency.toUpperCase()
+  )
+    throw new BillingError(409, "No se pudo validar el intento de pago de esta factura");
+  if (intent.status === "succeeded") {
+    await confirmarPagoStripe(master, {
+      tipo: "pago_exitoso",
+      chargeId: intent.id,
+      montoCentavos: intent.amount_received ?? 0,
+      raw: { ...intent },
+    });
+    const current = await master.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
+    if (current.status !== "paid")
+      throw new BillingError(409, "El pago está pendiente de conciliación");
+    return { status: "succeeded" as const };
+  }
+  if (intent.status === "processing") return { status: "processing" as const };
+  if (
+    !["requires_action", "requires_confirmation", "requires_payment_method"].includes(
+      intent.status,
+    ) ||
+    !intent.client_secret
+  )
+    throw new BillingError(409, "El banco no permite completar este intento de pago");
+  const pm = await master.paymentMethod.findFirst({ where: { tenantId, isDefault: true } });
+  const paymentMethodId = pm?.externalMethodId ?? intent.payment_method;
+  if (!paymentMethodId?.startsWith("pm_"))
+    throw new BillingError(409, "Agrega una tarjeta para completar el pago");
+  const card = await stripe.getTarjeta(paymentMethodId);
+  if (card.customerId !== invoice.tenant.stripeCustomerId)
+    throw new BillingError(403, "La tarjeta no pertenece a esta cuenta");
+  return { status: intent.status, clientSecret: intent.client_secret, paymentMethodId };
 }

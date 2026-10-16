@@ -3,25 +3,30 @@ import { useCallback, useEffect, useState } from "react";
 import { AgregarTarjeta } from "../components/AgregarTarjeta.js";
 import { ConectarStripe } from "../components/ConectarStripe.js";
 import { ApiError, api } from "../lib/api.js";
+import { loadStripe } from "../lib/stripe.js";
 
+interface BillingPlan {
+  tierOrder: number;
+  code: string;
+  name: string;
+  priceCents: number;
+  currency: string;
+  prices: Array<{ currency: string; interval: string; unitAmount: number }>;
+}
 interface BillingContext {
   tenant: {
     slug: string;
     name: string;
     status: string;
-    plan: {
-      code: string;
-      name: string;
-      priceMonthly: string;
-      priceYearly: string;
-      features: Array<{ featureKey: string; limitValue: string | null }>;
-    } | null;
+    plan: BillingPlan | null;
   };
   subscription: {
     id: string;
     status: string;
     interval: string;
-    trialEndsAt: string | null;
+    trialEnd: string | null;
+    currency: string;
+    plan: BillingPlan;
     currentPeriodEnd: string | null;
     discountCoupon: { code: string; discountValue: string } | null;
   } | null;
@@ -36,23 +41,26 @@ interface BillingContext {
 
 interface Invoice {
   id: string;
-  folio: string;
+  invoiceNumber: string;
   status: string;
-  total: string;
+  total: number;
   currency: string;
   dueDate: string | null;
   createdAt: string;
 }
 
-interface Plan {
-  code: string;
-  name: string;
-  priceMonthly: string;
+interface Plan extends BillingPlan {
   tierOrder: number;
 }
-
-function money(v: string | number | null | undefined): string {
-  return Number(v ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+function priceFor(plan: BillingPlan, interval: string, currency: string): number | undefined {
+  return (
+    plan.prices.find((p) => p.interval === interval && p.currency === currency)?.unitAmount ??
+    (interval === "monthly" && plan.currency === currency ? plan.priceCents : undefined)
+  );
+}
+function money(cents: number | undefined, currency = "MXN"): string {
+  if (cents === undefined) return "Precio no disponible";
+  return (cents / 100).toLocaleString("es-MX", { style: "currency", currency });
 }
 
 function fecha(v: string | null | undefined): string {
@@ -63,6 +71,21 @@ function fecha(v: string | null | undefined): string {
     year: "numeric",
   });
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  trialing: "En prueba",
+  active: "Activa",
+  past_due: "Pago pendiente",
+  suspended: "Suspendida",
+  canceled: "Cancelada",
+  paid: "Pagada",
+  open: "Pendiente",
+  void: "Anulada",
+  uncollectible: "No cobrable",
+  paused: "Pausada",
+  unpaid: "Impagada",
+  draft: "Borrador",
+};
 
 const STATUS_BADGE: Record<string, string> = {
   trialing: "bg-info-light text-info",
@@ -78,10 +101,16 @@ const STATUS_BADGE: Record<string, string> = {
 
 function CambiarPlanModal({
   planActual,
+  currentTier,
+  interval,
+  currency,
   onCerrar,
   onCambiado,
 }: {
   planActual: string;
+  currentTier: number;
+  interval: string;
+  currency: string;
   onCerrar: () => void;
   onCambiado: () => void;
 }) {
@@ -92,9 +121,18 @@ function CambiarPlanModal({
 
   useEffect(() => {
     api<Plan[]>("/auth/plans", { auth: false })
-      .then((ps) => setPlanes(ps.filter((p) => p.code !== planActual)))
+      .then((ps) =>
+        setPlanes(
+          ps.filter(
+            (p) =>
+              p.code !== planActual &&
+              p.tierOrder > currentTier &&
+              priceFor(p, interval, currency) !== undefined,
+          ),
+        ),
+      )
       .catch(() => setPlanes([]));
-  }, [planActual]);
+  }, [planActual, currentTier, interval, currency]);
 
   async function cambiar() {
     if (!elegido) return;
@@ -134,7 +172,10 @@ function CambiarPlanModal({
                 />
                 <span className="font-medium text-slate-800">{p.name}</span>
               </span>
-              <span className="text-slate-600 text-sm">{money(p.priceMonthly)}/mes</span>
+              <span className="text-slate-600 text-sm">
+                {money(priceFor(p, interval, currency), currency)}/
+                {interval === "yearly" ? "año" : "mes"}
+              </span>
             </label>
           ))}
         </div>
@@ -165,6 +206,7 @@ export function SuscripcionPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [stripePk, setStripePk] = useState<string | null>(null);
   const [agregandoTarjeta, setAgregandoTarjeta] = useState(false);
+  const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     Promise.all([api<BillingContext>("/billing/me"), api<Invoice[]>("/billing/invoices")])
@@ -185,6 +227,39 @@ export function SuscripcionPage() {
       .catch(() => setStripePk(null));
   }, []);
 
+  async function completarPago(invoiceId: string) {
+    if (!stripePk || payingInvoice) return;
+    setPayingInvoice(invoiceId);
+    setMsg(null);
+    type Recovery = { status: string; clientSecret?: string; paymentMethodId?: string };
+    const recover = () =>
+      api<Recovery>(`/billing/invoices/${invoiceId}/recover-payment`, { method: "POST" });
+    try {
+      let result = await recover();
+      if (result.clientSecret && result.paymentMethodId) {
+        const stripe = await loadStripe(stripePk);
+        if (!stripe)
+          throw new Error("No se pudo cargar Stripe. Revisa tu conexión e inténtalo de nuevo.");
+        const confirmed = await stripe.confirmCardPayment(result.clientSecret, {
+          payment_method: result.paymentMethodId,
+        });
+        if (confirmed.error)
+          throw new Error(confirmed.error.message ?? "El banco no pudo completar el pago");
+        result = await recover();
+      }
+      setMsg(
+        result.status === "succeeded"
+          ? "Pago confirmado. Tu suscripción está actualizada."
+          : "El banco está procesando el pago. Vuelve a comprobarlo en unos momentos.",
+      );
+      cargar();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "No se pudo completar el pago");
+    } finally {
+      setPayingInvoice(null);
+    }
+  }
+
   if (error) {
     return (
       <div className="mx-auto max-w-3xl">
@@ -196,7 +271,9 @@ export function SuscripcionPage() {
   if (!ctx) return <p className="text-slate-400">Cargando suscripción…</p>;
 
   const sub = ctx.subscription;
-  const plan = ctx.tenant.plan;
+  const plan = sub?.plan ?? ctx.tenant.plan;
+  const currency = sub?.currency ?? plan?.currency ?? "MXN";
+  const interval = sub?.interval ?? "monthly";
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -206,7 +283,9 @@ export function SuscripcionPage() {
           Plan, facturas y método de pago de {ctx.tenant.name}
         </p>
       </div>
-      {msg && <p className="rounded-xl bg-white p-3 text-slate-700 text-sm shadow-sm">{msg}</p>}
+      {msg && (
+        <output className="rounded-xl bg-white p-3 text-slate-700 text-sm shadow-sm">{msg}</output>
+      )}
 
       <div className="gx-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -217,12 +296,12 @@ export function SuscripcionPage() {
                 <span
                   className={`mr-2 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[sub.status] ?? ""}`}
                 >
-                  {sub.status}
+                  {STATUS_LABEL[sub.status] ?? sub.status}
                 </span>
-                {sub.status === "trialing" && sub.trialEndsAt
-                  ? `Prueba gratis hasta ${fecha(sub.trialEndsAt)}`
+                {sub.status === "trialing" && sub.trialEnd
+                  ? `Prueba gratis hasta ${fecha(sub.trialEnd)}`
                   : sub.currentPeriodEnd
-                    ? `Siguiente cargo: ${fecha(sub.currentPeriodEnd)}`
+                    ? `${sub.status === "active" ? "Siguiente renovación" : "Periodo hasta"}: ${fecha(sub.currentPeriodEnd)}`
                     : ""}
                 {sub.discountCoupon ? ` · Cupón ${sub.discountCoupon.code}` : ""}
               </p>
@@ -231,7 +310,7 @@ export function SuscripcionPage() {
           <div className="text-right">
             {plan && (
               <p className="font-bold text-brand text-xl">
-                {money(sub?.interval === "yearly" ? plan.priceYearly : plan.priceMonthly)}
+                {money(priceFor(plan, interval, currency), currency)}
                 <span className="font-normal text-slate-400 text-sm">
                   /{sub?.interval === "yearly" ? "año" : "mes"}
                 </span>
@@ -264,7 +343,8 @@ export function SuscripcionPage() {
         </div>
         {ctx.paymentMethods.length === 0 ? (
           <p className="text-slate-400 text-sm">
-            Sin método de pago registrado: tus facturas se cobran manualmente.
+            Agrega una tarjeta para los cobros de tu suscripción. Sin tarjeta, los pagos pueden
+            quedar pendientes.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100 text-sm">
@@ -317,21 +397,36 @@ export function SuscripcionPage() {
                   <th className="gx-th">Fecha</th>
                   <th className="gx-th">Total</th>
                   <th className="gx-th">Estado</th>
+                  {stripePk && <th className="gx-th">Pago</th>}
                 </tr>
               </thead>
               <tbody>
                 {invoices.map((inv) => (
                   <tr key={inv.id}>
-                    <td className="gx-td font-mono text-slate-600">{inv.folio}</td>
+                    <td className="gx-td font-mono text-slate-600">{inv.invoiceNumber}</td>
                     <td className="gx-td text-slate-500">{fecha(inv.createdAt)}</td>
-                    <td className="gx-td font-medium">{money(inv.total)}</td>
+                    <td className="gx-td font-medium">{money(inv.total, inv.currency)}</td>
                     <td className="gx-td">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[inv.status] ?? ""}`}
                       >
-                        {inv.status}
+                        {STATUS_LABEL[inv.status] ?? inv.status}
                       </span>
                     </td>
+                    {stripePk && (
+                      <td className="gx-td">
+                        {inv.status === "open" && (
+                          <button
+                            type="button"
+                            className="gx-btn-primary whitespace-nowrap"
+                            disabled={payingInvoice !== null}
+                            onClick={() => completarPago(inv.id)}
+                          >
+                            {payingInvoice === inv.id ? "Verificando…" : "Completar pago"}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -343,6 +438,9 @@ export function SuscripcionPage() {
       {cambiando && plan && (
         <CambiarPlanModal
           planActual={plan.code}
+          currentTier={plan.tierOrder}
+          interval={interval}
+          currency={currency}
           onCerrar={() => setCambiando(false)}
           onCambiado={() => {
             setCambiando(false);

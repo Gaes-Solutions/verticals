@@ -60,7 +60,11 @@ async function ready(url, child) {
   let created = false;
   try {
     // Fail if the fixed QA ports are already occupied; do not reuse an unknown server.
-    for (const url of ["http://127.0.0.1:3059/health", "http://127.0.0.1:5179"]) {
+    for (const url of [
+      "http://127.0.0.1:3059/health",
+      "http://127.0.0.1:5179",
+      "http://127.0.0.1:5180",
+    ]) {
       let occupied = false;
       try {
         await fetch(url, { signal: AbortSignal.timeout(1000) });
@@ -115,6 +119,22 @@ process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect(
     );
     await ready(env.PLATFORM_TEST_URL, web);
     command(["exec", "node", "scripts/testing/platform-workflows.cjs"]);
+    const ownerWeb = start(
+      [
+        "--filter",
+        "@gaespos/web-admin",
+        "exec",
+        "vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "5180",
+        "--strictPort",
+      ],
+      "owner-web.log",
+    );
+    await ready("http://127.0.0.1:5180", ownerWeb);
+    command(["exec", "node", "scripts/testing/owner-billing.cjs"]);
   } finally {
     for (const child of children) {
       try {

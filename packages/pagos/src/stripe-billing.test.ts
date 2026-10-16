@@ -86,6 +86,7 @@ describe("StripeBillingClient", () => {
       last4: "4242",
       expMonth: 12,
       expYear: 2030,
+      customerId: null,
     });
   });
 
@@ -114,4 +115,50 @@ describe("StripeBillingClient", () => {
     const ev = client.parseWebhook(payload, firmaStripe(payload));
     expect(ev).toMatchObject({ tipo: "otro", stripeType: "customer.updated" });
   });
+});
+
+it("prepares a charge without confirming or charging it", async () => {
+  const fetch = mockFetch(200, { id: "pi_durable", status: "requires_payment_method" });
+  await new StripeBillingClient(OPTS).prepararCobro({
+    customerId: "cus_1",
+    paymentMethodId: "pm_1",
+    montoCentavos: 12000,
+    moneda: "MXN",
+    idempotencyKey: "invoice_unique",
+    metadata: { invoiceId: "invoice_1" },
+  });
+  const form = new URLSearchParams(String(fetch.mock.calls[0]?.[1]?.body));
+  expect(form.get("confirm")).toBeNull();
+  expect(form.get("metadata[invoiceId]")).toBe("invoice_1");
+});
+it("preserves the intent ID returned with an authentication-required error", async () => {
+  mockFetch(402, {
+    error: {
+      message: "authentication required",
+      payment_intent: { id: "pi_auth", status: "requires_payment_method" },
+    },
+  });
+  expect(
+    await new StripeBillingClient(OPTS).cobrarOffSession({
+      customerId: "cus_1",
+      paymentMethodId: "pm_1",
+      montoCentavos: 12000,
+      moneda: "MXN",
+    }),
+  ).toMatchObject({ success: false, chargeId: "pi_auth" });
+});
+
+it("confirms an existing intent with the saved card and an idempotency key", async () => {
+  const fetch = mockFetch(200, { id: "pi_existing", status: "succeeded" });
+  await new StripeBillingClient(OPTS).confirmarIntent("pi_existing", "pm_owner", "invoice_retry_1");
+  expect(fetch.mock.calls[0]?.[0]).toBe(
+    "https://api.stripe.com/v1/payment_intents/pi_existing/confirm",
+  );
+  expect(new URLSearchParams(String(fetch.mock.calls[0]?.[1]?.body)).get("off_session")).toBe(
+    "true",
+  );
+  expect(new URLSearchParams(String(fetch.mock.calls[0]?.[1]?.body)).get("payment_method")).toBe(
+    "pm_owner",
+  );
+  expect(fetch.mock.calls[0]?.[1]?.headers).toMatchObject({ "Idempotency-Key": "invoice_retry_1" });
 });

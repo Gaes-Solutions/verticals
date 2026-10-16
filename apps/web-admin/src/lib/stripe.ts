@@ -19,6 +19,13 @@ export interface StripeSetupResult {
   setupIntent?: { payment_method?: string; status?: string };
 }
 export interface StripeLike {
+  confirmCardPayment(
+    clientSecret: string,
+    data?: { payment_method: string },
+  ): Promise<{
+    error?: { message?: string };
+    paymentIntent?: { status?: string };
+  }>;
   elements(opts?: Record<string, unknown>): StripeElements;
   confirmCardSetup(
     clientSecret: string,
@@ -49,5 +56,8 @@ export function loadStripe(publishableKey: string): Promise<StripeLike | null> {
     script.onerror = () => resolve(null);
     document.head.appendChild(script);
   });
-  return cargando;
+  return cargando.then((result) => {
+    if (!result) cargando = null;
+    return result;
+  });
 }

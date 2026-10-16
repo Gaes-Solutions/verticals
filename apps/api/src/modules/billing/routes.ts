@@ -23,6 +23,7 @@ import {
   listInvoices,
   loginAdminTenant,
   procesarWebhookPagoMock,
+  recuperarPagoInvoice,
   setMockChargeFailures,
   signupPublico,
 } from "./service.js";
@@ -71,7 +72,15 @@ export const billingPublicRoutes: FastifyPluginAsync = async (app) => {
     const plans = await app.masterPrisma.plan.findMany({
       where: { isPublic: true, active: true },
       orderBy: { tierOrder: "asc" },
-      select: { id: true, code: true, name: true, priceCents: true, currency: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        priceCents: true,
+        currency: true,
+        tierOrder: true,
+        prices: { where: { isActive: true } },
+      },
     });
     return plans;
   });
@@ -209,6 +218,14 @@ export const billingAdminTenantRoutes: FastifyPluginAsync = async (app) => {
     const pm = await agregarPaymentMethod(app.masterPrisma, tenantIdFrom(req), body);
     return reply.code(201).send(pm);
   });
+
+  app.post<{ Params: { id: string } }>(
+    "/billing/invoices/:id/recover-payment",
+    async (req, reply) => {
+      reply.header("Cache-Control", "no-store");
+      return recuperarPagoInvoice(app.masterPrisma, tenantIdFrom(req), req.params.id);
+    },
+  );
 
   // Config pública que necesita el frontend para Stripe.js (la publishable NO es
   // secreta). Si no hay llave, el front muestra captura de tarjeta deshabilitada.

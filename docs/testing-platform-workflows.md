@@ -27,7 +27,7 @@ Se revisaron los flujos del panel de plataforma y sus límites con el dueño y l
 - Operaciones simultáneas podían acreditar dos pagos, tomar dos decisiones sobre una comisión o sobrescribir el folio de un payout. Se agregaron transacciones, actualizaciones condicionales y bloqueos de PostgreSQL compartidos entre procesos.
 - Una reserva de host usaba comprobación seguida de upsert, que podía transferir el dominio en una carrera. La reserva ahora se serializa y solo actualiza al dueño del host.
 - Billing confiaba en el rol guardado dentro del token del dueño; ahora recarga el usuario y sus roles actuales. Los administradores antiguos se validan contra la base y un viewer no escribe.
-- Faltando proveedor, el cobro podía recurrir al mock fuera de pruebas. Ya no acredita dinero ni guarda tarjetas ficticias en producción. Los CFDI simulados tampoco se crean para cobros de producción. El cliente Stripe tiene límite de espera. La ausencia de proveedor devuelve 503 con una explicación en las rutas de tarjeta, SetupIntent y Connect; no se convierte en un 500 genérico ni en un incidente inesperado.
+- Faltando proveedor, el cobro podía recurrir al mock fuera de pruebas. Ya no acredita dinero ni guarda tarjetas ficticias en producción. Los CFDI simulados tampoco se crean para cobros de producción. La tarjeta se valida contra el customer de Stripe de su propio negocio antes de guardarla. El cliente Stripe tiene límite de espera. La ausencia de proveedor devuelve 503 con una explicación en las rutas de tarjeta, SetupIntent y Connect; no se convierte en un 500 genérico ni en un incidente inesperado.
 
 ## Repetir el recorrido de navegador
 

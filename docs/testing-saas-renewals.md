@@ -10,7 +10,10 @@ el servidor espera al barrido en curso antes de cerrar conexiones.
 La suscripción se bloquea en PostgreSQL al crear cada ciclo. La factura, su clave
 única de ciclo y el avance del periodo se guardan en una sola transacción. Otro
 proceso no genera el mismo ciclo. Si el proceso muere después de crear la factura,
-el barrido de mora retoma la factura abierta. Pago y reactivación se confirman en
+el barrido de mora retoma la factura abierta. Con Stripe, se crea una intención sin
+confirmarla y se guarda su ID antes de pedir el cargo. Un fallo de conexión al
+confirmar conserva ese ID: el siguiente barrido consulta y reutiliza la misma
+intención, en lugar de crear otro cargo. Pago y reactivación se confirman en
 la misma transacción. El folio usa un contador anual atómico inicializado desde
 el mayor folio histórico; eliminar una factura no reutiliza su número.
 
@@ -35,7 +38,7 @@ recuperar una confirmación que llegue antes del guardado del intento síncrono.
 ## Verificación reproducible
 
 ```sh
-pnpm exec dotenv -e .env -- node scripts/testing/run-platform-workflows.cjs --api-tests test/billing-renewals.test.ts test/billing-scheduler.test.ts test/billing.test.ts test/platform-workflows.test.ts
+pnpm exec dotenv -e .env -- node scripts/testing/run-platform-workflows.cjs --api-tests test/billing-recovery.test.ts test/billing-renewals.test.ts test/billing-scheduler.test.ts test/billing.test.ts test/platform-workflows.test.ts
 pnpm --filter @gaespos/billing test
 ```
 
@@ -49,6 +52,25 @@ importe cero, opt-out de cobro, error de precio con rollback, recuperación de
 mora, trial simultáneo, cupón de una sola aplicación, webhook temprano/repetido,
 importe/moneda/cliente distintos y estados finales de factura.
 
+`billing-recovery.test.ts` verifica por HTTP autenticación y pertenencia de factura,
+exclusión de viewers, validación de tarjeta contra el customer, recuperación de
+autenticación pendiente y conciliación cuando el webhook se retrasa. Las pruebas
+del cobro comprueban que el ID ya está confirmado en PostgreSQL antes de invocar
+el cargo, que una respuesta perdida no crea otra intención y que un rechazo
+reutiliza la intención con una nueva clave de confirmación.
+
+El recorrido de navegador incluye ahora la pantalla real **Mi suscripción**, en
+escritorio y 320 px: precio del plan vigente por moneda/intervalo, fecha del trial,
+folio de factura e importes en centavos convertidos correctamente. La sección de
+banco simulado prueba cancelar y completar la autenticación, y exige confirmación
+del backend antes de mostrar el pago exitoso. El runner también usa el puerto 5180.
+
+La recuperación usa el flujo de [confirmación de PaymentIntents de Stripe](https://docs.stripe.com/api/payment_intents/confirm), con Stripe.js para la interacción del banco. Una tarjeta guardada se valida contra el customer de su propio negocio.
+
+Verificación de esta entrega: 277 pruebas de API en 20 suites, 13 contratos del
+cliente Stripe, typecheck de 30 paquetes y recorrido de navegador de plataforma
+y dueño. Las bases y sesiones usadas para estas pruebas se eliminan al finalizar.
+
 ## Configuración externa pendiente
 
 Staging no tenía claves Stripe ni configuración del emisor SaaS al revisar esta
@@ -60,8 +82,13 @@ Antes de habilitar cargos comerciales:
    Guardarlas en Railway, nunca en un commit ni en el chat. Endpoint:
    `https://verticals-staging.up.railway.app/webhooks/stripe`.
 2. Probar guardar tarjeta, cobro, rechazo, recuperación y autenticación 3DS con
-   Stripe real en modo test. El flujo de autenticación pendiente y la política
-   de reintentos de intenciones rechazadas aún requieren validación externa.
+   Stripe real en modo test. La recuperación de autenticación pendiente y la
+   reutilización de intenciones rechazadas ya están implementadas y probadas con
+   contratos simulados; aún requieren validación con Stripe externo.
+   El dueño entra a **Mi suscripción → Facturas → Completar pago**. La API
+   `POST /billing/invoices/:id/recover-payment` consulta la intención existente y
+   solo entrega su client secret al titular autorizado, sin caché. Al volver del
+   banco se consulta nuevamente Stripe antes de acreditar el pago.
 3. Definir el dominio del negocio, publicar DNS y comprobar HTTPS desde fuera.
    Staging solo tiene dominios automáticos de Railway, sin dominio propio.
 4. Completar la integración de CFDI SaaS con emisor real: RFC, razón social,

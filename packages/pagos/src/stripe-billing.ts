@@ -41,6 +41,7 @@ export interface TarjetaInfo {
   last4: string | null;
   expMonth: number | null;
   expYear: number | null;
+  customerId: string | null;
 }
 
 export type BillingWebhookEvento =
@@ -50,9 +51,16 @@ export type BillingWebhookEvento =
   | { tipo: "otro"; stripeType: string; raw: Record<string, unknown> };
 
 interface StripeError {
-  error?: { message?: string };
+  error?: { message?: string; payment_intent?: PaymentIntentResponse };
 }
-interface PaymentIntentResponse {
+export interface PaymentIntentResponse {
+  customer?: string | null;
+  amount?: number;
+  amount_received?: number;
+  currency?: string;
+  client_secret?: string;
+  payment_method?: string | null;
+  metadata?: Record<string, string>;
   id: string;
   status: string;
   last_payment_error?: { message?: string };
@@ -95,7 +103,10 @@ export class StripeBillingClient {
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       const msg = (data as StripeError).error?.message ?? `HTTP ${res.status}`;
-      throw new PagoError(`Stripe: ${msg}`, "INVALID_INPUT", { status: res.status });
+      throw new PagoError(`Stripe: ${msg}`, "INVALID_INPUT", {
+        status: res.status,
+        paymentIntent: (data as StripeError).error?.payment_intent,
+      });
     }
     return data as T;
   }
@@ -139,9 +150,11 @@ export class StripeBillingClient {
   /** Datos de la tarjeta para mostrar ("Visa •••• 4242"). */
   async getTarjeta(paymentMethodId: string): Promise<TarjetaInfo> {
     const pm = await this.get<{
+      customer?: string | null;
       card?: { brand?: string; last4?: string; exp_month?: number; exp_year?: number };
     }>(`/v1/payment_methods/${paymentMethodId}`);
     return {
+      customerId: pm.customer ?? null,
       brand: pm.card?.brand ?? null,
       last4: pm.card?.last4 ?? null,
       expMonth: pm.card?.exp_month ?? null,
@@ -180,9 +193,50 @@ export class StripeBillingClient {
       return { success: false, chargeId: pi.id, failureReason: `Estado inesperado: ${pi.status}` };
     } catch (err) {
       // Tarjeta declinada → Stripe responde 402 con el motivo; no es un error de sistema.
-      if (err instanceof PagoError) return { success: false, failureReason: err.message };
+      if (err instanceof PagoError) {
+        const pi = err.extra?.paymentIntent as PaymentIntentResponse | undefined;
+        return {
+          success: false,
+          failureReason: err.message,
+          ...(pi?.id ? { chargeId: pi.id } : {}),
+        };
+      }
       throw err;
     }
+  }
+
+  prepararCobro(input: CobroOffSessionInput): Promise<PaymentIntentResponse> {
+    const form = new URLSearchParams({
+      amount: String(input.montoCentavos),
+      currency: input.moneda.toLowerCase(),
+      customer: input.customerId,
+      "payment_method_types[]": "card",
+    });
+    if (input.descripcion) form.set("description", input.descripcion);
+    for (const [key, value] of Object.entries(input.metadata ?? {}))
+      form.set(`metadata[${key}]`, value);
+    return this.post<PaymentIntentResponse>("/v1/payment_intents", form, input.idempotencyKey);
+  }
+
+  confirmarIntent(
+    intentId: string,
+    paymentMethodId: string,
+    idempotencyKey: string,
+  ): Promise<PaymentIntentResponse> {
+    if (!/^pi_[a-zA-Z0-9_]+$/.test(intentId))
+      throw new PagoError("Intención inválida", "INVALID_INPUT");
+    return this.post<PaymentIntentResponse>(
+      `/v1/payment_intents/${encodeURIComponent(intentId)}/confirm`,
+      new URLSearchParams({ payment_method: paymentMethodId, off_session: "true" }),
+      idempotencyKey,
+    );
+  }
+
+  /** Retrieve existing intent; never creates a second charge for recovery. */
+  obtenerIntent(intentId: string): Promise<PaymentIntentResponse> {
+    if (!/^pi_[a-zA-Z0-9_]+$/.test(intentId))
+      throw new PagoError("Intención inválida", "INVALID_INPUT");
+    return this.get<PaymentIntentResponse>(`/v1/payment_intents/${encodeURIComponent(intentId)}`);
   }
 
   /** Verifica firma y normaliza el evento de facturación. Lanza si la firma es inválida. */
