@@ -8,9 +8,14 @@ import { defineConfig, devices } from "@playwright/test";
  *   set -a && . .env && set +a
  *   pnpm e2e
  */
-const API = "http://127.0.0.1:3000";
-const ADMIN = "http://127.0.0.1:5174";
-const POS = "http://127.0.0.1:5173";
+const API = process.env.E2E_API ?? "http://127.0.0.1:3000";
+const ADMIN = process.env.E2E_ADMIN ?? "http://127.0.0.1:5174";
+const POS = process.env.E2E_POS ?? "http://127.0.0.1:5173";
+
+for (const url of [API, ADMIN, POS]) {
+  if (!["localhost", "127.0.0.1"].includes(new URL(url).hostname))
+    throw new Error("Retail E2E targets must be local; use the disposable test runner.");
+}
 
 export default defineConfig({
   testDir: ".",
@@ -42,31 +47,34 @@ export default defineConfig({
     },
     { name: "pos", testMatch: /pos\.e2e\.ts/, use: { ...devices["Desktop Chrome"], baseURL: POS } },
   ],
-  webServer: [
-    {
-      command: "pnpm --filter @gaespos/api dev",
-      // Cada prueba entra de cero y el login está limitado a 20 por minuto en
-      // producción. Ese límite protege al sistema real, no es lo que estas
-      // pruebas verifican, así que se afloja solo para el servidor de pruebas.
-      env: { RATE_LIMIT_MAX: "100000" },
-      url: `${API}/health`,
-      reuseExistingServer: true,
-      timeout: 120_000,
-      cwd: "../..",
-    },
-    {
-      command: "pnpm --filter @gaespos/web-admin dev",
-      url: ADMIN,
-      reuseExistingServer: true,
-      timeout: 120_000,
-      cwd: "../..",
-    },
-    {
-      command: "pnpm --filter @gaespos/web-pos dev",
-      url: POS,
-      reuseExistingServer: true,
-      timeout: 120_000,
-      cwd: "../..",
-    },
-  ],
+  webServer:
+    process.env.E2E_EXTERNAL_SERVERS === "true"
+      ? []
+      : [
+          {
+            command: "pnpm --filter @gaespos/api dev",
+            // Cada prueba entra de cero y el login está limitado a 20 por minuto en
+            // producción. Ese límite protege al sistema real, no es lo que estas
+            // pruebas verifican, así que se afloja solo para el servidor de pruebas.
+            env: { RATE_LIMIT_MAX: "100000" },
+            url: `${API}/health`,
+            reuseExistingServer: true,
+            timeout: 120_000,
+            cwd: "../..",
+          },
+          {
+            command: "pnpm --filter @gaespos/web-admin dev",
+            url: ADMIN,
+            reuseExistingServer: true,
+            timeout: 120_000,
+            cwd: "../..",
+          },
+          {
+            command: "pnpm --filter @gaespos/web-pos dev",
+            url: POS,
+            reuseExistingServer: true,
+            timeout: 120_000,
+            cwd: "../..",
+          },
+        ],
 });

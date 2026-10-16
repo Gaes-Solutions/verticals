@@ -13,7 +13,7 @@ jobs:
   verify:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -101,6 +101,9 @@ jobs:
 
       - name: Platform workflows in disposable environment
         run: node scripts/testing/run-platform-workflows.cjs
+
+      - name: Retail POS and owner browser workflows in disposable environment
+        run: node scripts/testing/run-platform-workflows.cjs --retail-e2e
 
       - name: Build
         run: pnpm build

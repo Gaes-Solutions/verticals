@@ -13,7 +13,7 @@ fs.chmodSync(temp, 0o700);
 const source = new URL(process.env.DATABASE_URL_MASTER);
 if (!["localhost", "127.0.0.1"].includes(source.hostname))
   throw Error("Only localhost databases allowed");
-const dbName = `qa_platform_${Date.now()}`;
+const dbName = `qa_platform_${Date.now()}${Math.floor(Math.random() * 1e9)}`;
 const qaUrl = new URL(source);
 qaUrl.pathname = `/${dbName}`;
 qaUrl.search = "";
@@ -32,6 +32,36 @@ for (const key of Object.keys(env))
     /STRIPE|CONEKTA|FACTURAMA|SAAS_FISCAL|RESEND|SMTP|SENTRY|OPENAI|ANTHROPIC|KIMI|AWS_/.test(key)
   )
     delete env[key];
+// Local non-root installs may live outside /usr/bin. Preserve decoder isolation.
+for (const [key, tool] of [
+  ["KIOSKO_FFMPEG", "ffmpeg"],
+  ["KIOSKO_FFPROBE", "ffprobe"],
+]) {
+  if (env[key]) continue;
+  const executable = (env.PATH ?? "")
+    .split(path.delimiter)
+    .map((dir) => path.join(dir, tool))
+    .find((candidate) => {
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return fs.statSync(candidate).isFile();
+      } catch {
+        return false;
+      }
+    });
+  if (executable) env[key] = fs.realpathSync(executable);
+}
+const retail = process.argv[2] === "--retail-e2e";
+if (retail)
+  Object.assign(env, {
+    RETAIL_FLOW_TESTS: "true",
+    E2E_API: "http://127.0.0.1:3059",
+    E2E_ADMIN: "http://127.0.0.1:5180",
+    E2E_POS: "http://127.0.0.1:5181",
+    E2E_EXTERNAL_SERVERS: "true",
+    E2E_TENANT: "test-e2e-retail",
+    E2E_REPO_ROOT: repo,
+  });
 const children = [];
 function command(args) {
   const r = spawnSync("pnpm", args, { cwd: repo, env, stdio: "inherit" });
@@ -60,17 +90,20 @@ async function ready(url, child) {
   let created = false;
   try {
     // Fail if the fixed QA ports are already occupied; do not reuse an unknown server.
-    for (const url of [
-      "http://127.0.0.1:3059/health",
-      "http://127.0.0.1:5179",
-      "http://127.0.0.1:5180",
-    ]) {
+    for (const url of process.argv[2] === "--api-tests"
+      ? []
+      : [
+          "http://127.0.0.1:3059/health",
+          "http://127.0.0.1:5179",
+          "http://127.0.0.1:5180",
+          ...(retail ? ["http://127.0.0.1:5181"] : []),
+        ]) {
       let occupied = false;
       try {
         await fetch(url, { signal: AbortSignal.timeout(1000) });
         occupied = true;
       } catch {}
-      if (occupied) throw Error("QA ports 3059/5179 are in use");
+      if (occupied) throw Error(`QA port is in use: ${new URL(url).port}`);
     }
     await pg.query(`CREATE DATABASE "${dbName}"`);
     created = true;
@@ -88,7 +121,11 @@ import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { hash } from '${repo}/apps/api/node_modules/@node-rs/argon2/index.js';
 import { masterPrisma } from '${repo}/packages/db/src/index.ts';
-import { buildTestApp } from '${repo}/apps/api/test/helpers.ts';
+import { buildTestApp, createTestTenant, createTenantUser } from '${repo}/apps/api/test/helpers.ts';
+if(process.env.RETAIL_FLOW_TESTS==='true') {
+ await createTestTenant('test-e2e-retail','QA Retail','free');
+ await createTenantUser('test-e2e-retail',{email:'dueno@e2e.local',password:'E2ePruebas!2026',rolCodigo:'dueno',nombre:'QA Dueño'});
+}
 const accounts=[];
 for(const role of ['superadmin','support','billing']) {
  const email='qa-flow-'+role+'@example.invalid',password=randomBytes(18).toString('base64url');
@@ -118,7 +155,7 @@ process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect(
       "web.log",
     );
     await ready(env.PLATFORM_TEST_URL, web);
-    command(["exec", "node", "scripts/testing/platform-workflows.cjs"]);
+    if (!retail) command(["exec", "node", "scripts/testing/platform-workflows.cjs"]);
     const ownerWeb = start(
       [
         "--filter",
@@ -134,7 +171,27 @@ process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect(
       "owner-web.log",
     );
     await ready("http://127.0.0.1:5180", ownerWeb);
+    if (retail) {
+      const pos = start(
+        [
+          "--filter",
+          "@gaespos/web-pos",
+          "exec",
+          "vite",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "5181",
+          "--strictPort",
+        ],
+        "pos-web.log",
+      );
+      await ready("http://127.0.0.1:5181", pos);
+      command(["exec", "playwright", "test", "--config", "tests/e2e/playwright.config.ts"]);
+      return;
+    }
     command(["exec", "node", "scripts/testing/owner-billing.cjs"]);
+    command(["exec", "node", "scripts/testing/platform-role-screens.cjs"]);
   } finally {
     for (const child of children) {
       try {

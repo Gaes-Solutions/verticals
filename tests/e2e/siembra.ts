@@ -10,7 +10,7 @@
 const API = process.env.E2E_API ?? "http://127.0.0.1:3000";
 
 export const CUENTA = {
-  tenant: "e2e-retail",
+  tenant: process.env.E2E_TENANT ?? "e2e-retail",
   email: "dueno@e2e.local",
   password: "E2ePruebas!2026",
 };

@@ -16,9 +16,18 @@ export function fijarCarritoVersion(version: string | null) {
   remoteVersion = version;
 }
 let onEdit: (() => void) | null = null;
-export function configurarCarrito(owner: string | null, edit: (() => void) | null): void {
+let onFlush: (() => Promise<void>) | null = null;
+export async function esperarCarritoGuardado(): Promise<void> {
+  await onFlush?.();
+}
+export function configurarCarrito(
+  owner: string | null,
+  edit: (() => void) | null,
+  flush: (() => Promise<void>) | null = null,
+): void {
   KEY = owner ? `gaespos_carrito_cuenta:${owner}` : "gaespos_carrito";
   onEdit = edit;
+  onFlush = flush;
   window.dispatchEvent(new Event("carrito-actualizado"));
 }
 export function recibirCarrito(items: CarritoLineaLocal[]): void {

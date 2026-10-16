@@ -6,7 +6,7 @@ import { CATALOGO, CUENTA } from "./siembra.js";
  * efectivo. Es el flujo que más veces al día corre un negocio real, así que si
  * algo se rompe aquí no hay piloto.
  */
-test.use({ baseURL: "http://127.0.0.1:5173" });
+test.use({ baseURL: process.env.E2E_POS ?? "http://127.0.0.1:5173" });
 
 const CAFE = CATALOGO[0];
 const AZUCAR = CATALOGO[1] as (typeof CATALOGO)[number];

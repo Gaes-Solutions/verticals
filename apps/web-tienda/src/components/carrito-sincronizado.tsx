@@ -29,6 +29,7 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
     let busy = false;
     let ready = false;
     let dirty = false;
+    let syncFailed = false;
     let revision = 0;
     let version: string | null = null;
     let coupon: string | null = null;
@@ -78,13 +79,23 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
       // A pending checkout owns its cart; its outcome must be resolved first.
       if (pathRef.current.startsWith("/checkout") && ready && !dirty) return;
       busy = true;
+      syncFailed = false;
       const start = revision;
       try {
         if (!ready || !dirty) {
           const result = await request();
           if (!result || !alive) return;
-          const saved = leerCarritoPendiente(localStorage.getItem(pendingKey));
           const remoteVersion = result.cart?.version ?? null;
+          let saved = leerCarritoPendiente(localStorage.getItem(pendingKey));
+          const guestRaw = localStorage.getItem("gaespos_carrito");
+          const guest = leerLineasGuardadas(guestRaw);
+          if (!saved && !result.cart?.items.length && guest.length > 0) {
+            // Move the guest selection into this empty account durably before clearing it.
+            saved = { version: remoteVersion, items: guest };
+            localStorage.setItem(pendingKey, JSON.stringify(saved));
+            if (localStorage.getItem("gaespos_carrito") === guestRaw)
+              localStorage.removeItem("gaespos_carrito");
+          }
           if (saved && mismasCantidades(saved.items, result.cart?.items ?? [])) {
             // The server may have saved a POST whose response was lost.
             localStorage.removeItem(pendingKey);
@@ -131,6 +142,7 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
           }
         }
       } catch (error) {
+        syncFailed = true;
         if (!alive) return;
         if ((error as { code?: string }).code === "CART_CHANGED") {
           setLocal(leerCarrito());
@@ -154,6 +166,27 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
             setMessage("Guardando carrito…");
             clearTimeout(timer);
             timer = setTimeout(() => void sync(), 600);
+          }
+        : null,
+      owner
+        ? async () => {
+            clearTimeout(timer);
+            const deadline = Date.now() + 20000;
+            for (let pass = 0; pass < 3; pass++) {
+              while (busy && alive && Date.now() < deadline)
+                await new Promise((resolve) => setTimeout(resolve, 30));
+              if (!alive || busy || Date.now() >= deadline)
+                throw new Error(
+                  "No pudimos terminar de guardar tu carrito. Reintenta antes de pagar.",
+                );
+              if (ready && !dirty && !localStorage.getItem(pendingKey)) return;
+              await sync();
+              if (syncFailed || (ready && !dirty && localStorage.getItem(pendingKey))) break;
+            }
+            if (!ready || dirty || localStorage.getItem(pendingKey))
+              throw new Error(
+                "Tu carrito tiene cambios por sincronizar. Actualízalo antes de pagar; tu selección se conserva.",
+              );
           }
         : null,
     );

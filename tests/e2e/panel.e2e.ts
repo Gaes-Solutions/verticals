@@ -8,7 +8,7 @@ import { CATALOGO, CUENTA } from "./siembra.js";
  * El menú se pinta dos veces (escritorio y cajón móvil), así que cada botón de
  * navegación se toma con `.first()`.
  */
-test.use({ baseURL: "http://127.0.0.1:5174" });
+test.use({ baseURL: process.env.E2E_ADMIN ?? "http://127.0.0.1:5174" });
 
 const menu = (nombre: string) => ({ name: nombre, exact: true }) as const;
 

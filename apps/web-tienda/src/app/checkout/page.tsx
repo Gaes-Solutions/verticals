@@ -3,7 +3,13 @@
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type PagoStripeHandle, PagoTarjetaStripe } from "@/components/pago-tarjeta-stripe";
-import { type CarritoLineaLocal, carritoVersion, leerCarrito, vaciar } from "@/lib/carrito-store";
+import {
+  type CarritoLineaLocal,
+  carritoVersion,
+  esperarCarritoGuardado,
+  leerCarrito,
+  vaciar,
+} from "@/lib/carrito-store";
 import {
   type CheckoutAttempt,
   completeAttempt,
@@ -588,6 +594,7 @@ export default function CheckoutPage() {
     setProcesando(true);
     setError(null);
     try {
+      await esperarCarritoGuardado();
       const firstSubmission = await submitAttempt(attempt);
       const current = { ...attempt, submitted: true };
       setAttempt(current);
