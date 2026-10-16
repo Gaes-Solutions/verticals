@@ -128,7 +128,11 @@ describe("renewal worker against PostgreSQL", () => {
     const { tenant, sub } = await fixture();
     await correrRenovaciones(masterPrisma);
     await correrRenovaciones(masterPrisma);
-    expect(await invoices(tenant.id)).toHaveLength(1);
+    const pending = await invoices(tenant.id);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.nextRetryAt?.getTime()).toBe(
+      (pending[0]?.dueDate.getTime() ?? 0) + 86400000,
+    );
     expect(await masterPrisma.subscription.findUnique({ where: { id: sub.id } })).toMatchObject({
       status: "past_due",
     });

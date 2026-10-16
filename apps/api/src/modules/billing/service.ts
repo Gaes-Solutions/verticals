@@ -960,7 +960,12 @@ async function correrCiclosVencidos(
         cobrados++;
       } else {
         fallidos++;
-        await procesarFalloDunning(master, current);
+        const retry = siguienteDunning({ attemptsSoFar: 0, dueDate: current.dueDate });
+        if (retry.action === "retry")
+          await master.invoice.updateMany({
+            where: { id: current.id, status: "open", attempts: 0 },
+            data: { attempts: 1, nextRetryAt: retry.nextRetryAt },
+          });
       }
     } catch {
       // Do not block other businesses or expose provider errors/secrets in logs.
