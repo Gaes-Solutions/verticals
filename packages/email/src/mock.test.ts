@@ -13,12 +13,40 @@ describe("renderPlantilla", () => {
     expect(r.html).toContain("1160.00");
   });
 
-  it("carrito_recovery incluye el código", () => {
+  it("carrito_recovery incluye el enlace en HTML y texto", () => {
     const r = renderPlantilla("carrito_recovery", {
       recoveryCodigo: "VUELVE10",
       urlCarrito: "http://x",
     });
-    expect(r.html).toContain("VUELVE10");
+    expect(r.html).toContain('href="http://x/"');
+    expect(r.texto).toContain("http://x");
+  });
+
+  it("carrito_recovery sin enlace conserva el código como alternativa", () => {
+    const r = renderPlantilla("carrito_recovery", { recoveryCodigo: "RECUPERAR123" });
+    expect(r.html).toContain("RECUPERAR123");
+    expect(r.texto).toContain("RECUPERAR123");
+  });
+
+  it("escapa texto del comprador en HTML sin modificar asunto o texto", () => {
+    const r = renderPlantilla("pedido_confirmado", {
+      folioPublico: '<a href="https://malicioso.test">Pedido</a>',
+      total: "10&20",
+    });
+    expect(r.html).not.toContain("<a href=");
+    expect(r.html).toContain("&lt;a href=&quot;");
+    expect(r.texto).toContain("10&20");
+    expect(r.asunto).toContain("<a href=");
+  });
+
+  it("no inserta enlaces ejecutables ni permite salir del atributo", () => {
+    const bad = renderPlantilla("pedido_enviado", { trackingUrl: "javascript:alert(1)" });
+    expect(bad.html).not.toContain("href=");
+    const valid = renderPlantilla("recuperar_contrasena", {
+      url: 'https://tienda.test/?a=1&b="onclick="bad',
+    });
+    expect(valid.html).toContain("&amp;");
+    expect(valid.html).not.toContain('"onclick="');
   });
 
   it("recuperar_contrasena incluye el enlace y su vigencia", () => {

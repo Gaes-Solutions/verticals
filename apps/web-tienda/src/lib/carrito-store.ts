@@ -50,6 +50,40 @@ export function leerLineasGuardadas(raw: string | null): CarritoLineaLocal[] {
     return [];
   }
 }
+/** Pending edits retain their base version, so a reload cannot overwrite another device. */
+export interface CarritoPendiente {
+  items: CarritoLineaLocal[];
+  version?: string | null;
+}
+export function leerCarritoPendiente(raw: string | null): CarritoPendiente | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (Array.isArray(value)) return { items: leerLineasGuardadas(raw) };
+    if (
+      !value ||
+      !Array.isArray(value.items) ||
+      (value.version !== null && typeof value.version !== "string")
+    )
+      return null;
+    return { items: leerLineasGuardadas(JSON.stringify(value.items)), version: value.version };
+  } catch {
+    return null;
+  }
+}
+export function mismasCantidades(
+  a: { varianteId: string; cantidad: string | number }[],
+  b: { varianteId: string; cantidad: string | number }[],
+): boolean {
+  if (a.length !== b.length) return false;
+  const quantities = new Map(a.map((item) => [item.varianteId, Number(item.cantidad)]));
+  return (
+    quantities.size === a.length &&
+    new Set(b.map((item) => item.varianteId)).size === b.length &&
+    b.every((item) => quantities.get(item.varianteId) === Number(item.cantidad))
+  );
+}
+
 export function leerCarrito(): CarritoLineaLocal[] {
   if (typeof window === "undefined") return [];
   return leerLineasGuardadas(localStorage.getItem(KEY));

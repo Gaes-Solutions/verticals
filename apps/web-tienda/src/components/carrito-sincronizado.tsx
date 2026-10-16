@@ -5,7 +5,9 @@ import {
   fijarCarritoVersion,
   guardarCarrito,
   leerCarrito,
+  leerCarritoPendiente,
   leerLineasGuardadas,
+  mismasCantidades,
   recibirCarrito,
 } from "@/lib/carrito-store";
 import { usePathname } from "next/navigation";
@@ -32,8 +34,10 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
     let coupon: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const pendingKey = `gaespos_carrito_pendiente:${owner}`;
-    const old = localStorage.getItem(pendingKey) ?? localStorage.getItem("gaespos_carrito");
-    setLocal(owner ? leerLineasGuardadas(old) : []);
+    const pending = leerCarritoPendiente(localStorage.getItem(pendingKey));
+    setLocal(
+      owner ? (pending?.items ?? leerLineasGuardadas(localStorage.getItem("gaespos_carrito"))) : [],
+    );
     fijarCarritoVersion(null);
     setMessage(owner ? "Sincronizando carrito…" : "");
     function apply(cart: Cart | null) {
@@ -79,13 +83,35 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
         if (!ready || !dirty) {
           const result = await request();
           if (!result || !alive) return;
-          if (revision !== start) {
-            // Keep local work available to import, never silently overwrite the account.
-            setLocal(leerCarrito());
+          const saved = leerCarritoPendiente(localStorage.getItem(pendingKey));
+          const remoteVersion = result.cart?.version ?? null;
+          if (saved && mismasCantidades(saved.items, result.cart?.items ?? [])) {
+            // The server may have saved a POST whose response was lost.
+            localStorage.removeItem(pendingKey);
             dirty = false;
-            setMessage("El carrito se actualizó. Puedes agregar tu selección anterior abajo.");
-          } else setMessage("");
-          apply(result.cart);
+            setLocal([]);
+            setMessage("");
+            apply(result.cart);
+          } else if (saved && saved.version !== undefined && saved.version === remoteVersion) {
+            // Resume only against the original version; the API still enforces CAS.
+            version = remoteVersion;
+            coupon = result.cart?.cuponCodigo ?? null;
+            fijarCarritoVersion(version);
+            recibirCarrito(saved.items);
+            dirty = true;
+            revision++;
+            setLocal([]);
+            setMessage("Guardando carrito…");
+          } else {
+            if (saved || revision !== start) {
+              setLocal(saved?.items ?? leerCarrito());
+              dirty = false;
+              setMessage(
+                "El carrito cambió en otro dispositivo. Puedes agregar tu selección guardada abajo.",
+              );
+            } else setMessage("");
+            apply(result.cart);
+          }
           ready = true;
         } else {
           const result = await request({
@@ -124,7 +150,7 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
         ? () => {
             dirty = true;
             revision++;
-            localStorage.setItem(pendingKey, JSON.stringify(leerCarrito()));
+            localStorage.setItem(pendingKey, JSON.stringify({ version, items: leerCarrito() }));
             setMessage("Guardando carrito…");
             clearTimeout(timer);
             timer = setTimeout(() => void sync(), 600);
@@ -134,7 +160,7 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
     refreshRef.current = () => void sync();
     void sync();
     const refresh = () => {
-      if (!dirty) void sync();
+      void sync();
     };
     const poll = setInterval(refresh, 5000);
     window.addEventListener("focus", refresh);
