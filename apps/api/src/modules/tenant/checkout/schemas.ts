@@ -84,6 +84,9 @@ export function faltaFuenteDeTarjeta(
   >,
 ): string | null {
   if (body.metodoPago !== "tarjeta" || body.proveedorPago === "mock") return null;
+  // Stripe Elements captura y confirma después de guardar el intent en el pedido.
+  if (body.proveedorPago === "stripe" && !body.cardTokenId && !body.medioPagoGuardadoId)
+    return null;
   const fuentes = Number(Boolean(body.cardTokenId)) + Number(Boolean(body.medioPagoGuardadoId));
   return fuentes === 1
     ? null

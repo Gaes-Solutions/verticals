@@ -11,6 +11,9 @@ interface CheckoutResult {
   total: string;
   intentStatus: "confirmado" | "pendiente" | "requiere_accion" | "fallido";
   referenciaPago?: string;
+  paymentProvider?: string;
+  clientSecret?: string;
+  stripeAccountId?: string;
 }
 
 interface MedioPagoGuardado {
@@ -49,6 +52,15 @@ async function revertirMedioPago(token: string, id: string): Promise<void> {
 function publicResult(result: CheckoutResult) {
   return NextResponse.json(
     {
+      ...(result.paymentProvider === "stripe" &&
+      result.clientSecret &&
+      result.intentStatus !== "confirmado"
+        ? {
+            clientSecret: result.clientSecret,
+            stripeAccountId: result.stripeAccountId ?? null,
+            paymentProvider: "stripe",
+          }
+        : {}),
       folioPublico: result.folioPublico,
       total: result.total,
       intentStatus: result.intentStatus,
@@ -124,6 +136,20 @@ export async function POST(req: NextRequest) {
     if (!["tarjeta", "oxxo", "spei", "cod"].includes(metodoPago)) {
       return NextResponse.json({ message: "Método de pago no soportado." }, { status: 422 });
     }
+    const config = await getTiendaConfig();
+    const conStripe = config?.proveedorPago === "stripe";
+    if (
+      conStripe &&
+      (body.guardarTarjeta ||
+        body.medioPagoGuardadoId ||
+        body.cardTokenId ||
+        body.mesesSinIntereses)
+    ) {
+      return NextResponse.json(
+        { message: "Captura tu tarjeta en el formulario seguro de Stripe." },
+        { status: 422 },
+      );
+    }
     // Pagar al recoger no cobra en línea: solo aplica si el pedido se recoge en tienda.
     const alRecoger = metodoPago === "cod";
     if (alRecoger && body.metodoEnvio !== "click_collect") {
@@ -173,6 +199,7 @@ export async function POST(req: NextRequest) {
     }
     if (
       process.env.NODE_ENV === "production" &&
+      !conStripe &&
       !body.cardTokenId &&
       !body.medioPagoGuardadoId &&
       !referenciado &&
@@ -249,7 +276,7 @@ export async function POST(req: NextRequest) {
         idempotencyKey: identity.key,
         emailComprador: body.emailComprador,
         metodoPago,
-        proveedorPago: conConekta || referenciado ? "conekta" : "mock",
+        proveedorPago: conStripe ? "stripe" : conConekta || referenciado ? "conekta" : "mock",
         metodoEnvio: body.metodoEnvio,
         // Tarjeta nueva + "guardar": se cobra con la fuente recién guardada.
         ...(medioNuevo
@@ -267,7 +294,7 @@ export async function POST(req: NextRequest) {
     });
     // Los referenciados (OXXO/SPEI) esperan el webhook del proveedor y el pedido
     // al recoger espera el cobro en el mostrador: ninguno se confirma aquí.
-    if (!conConekta && !referenciado && !alRecoger)
+    if (!conStripe && !conConekta && !referenciado && !alRecoger)
       await api("/checkout/confirmar-mock", { body: { intentId: checkout.intentId } });
     // El resultado del proveedor no demuestra que la venta haya quedado asentada.
     const final = await api<CheckoutResult>(recoveryPath);

@@ -1,7 +1,11 @@
 import { PERMISSIONS } from "@gaespos/permissions";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { metodosPagoDeProveedor, tarjetaListaPara } from "../../../lib/metodos-pago.js";
+import {
+  llavePublicaPago,
+  metodosPagoDeProveedor,
+  tarjetaListaPara,
+} from "../../../lib/metodos-pago.js";
 import { evaluarCupon } from "../checkout/cupon-service.js";
 import { estadoTienda } from "../ecommerce-config/estado-tienda.js";
 import {
@@ -83,6 +87,17 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         where: { activa: true, sucursal: { isActive: true } },
       }),
     ]);
+    const connect =
+      c.pasarelaPagoProvider === "stripe"
+        ? await app.masterPrisma.tenant.findUnique({
+            where: { slug: req.principal.tenantSlug },
+            select: { stripeAccountId: true, stripeAccountStatus: true },
+          })
+        : null;
+    const cardReady =
+      tarjetaListaPara(c.pasarelaPagoProvider) &&
+      (c.pasarelaPagoProvider !== "stripe" ||
+        Boolean(connect?.stripeAccountId && connect.stripeAccountStatus === "enabled"));
     const estado = await estadoTienda(req.tenantPrisma);
     return {
       abierta: estado.abierta,
@@ -106,10 +121,12 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       // tienda aplica cuando hay pickup activo (aunque no haya envío a domicilio).
       etaEnvio: enviosActivos > 0 ? { min: c.etaDiasEnvioMin, max: c.etaDiasEnvioMax } : null,
       recogidaEnTienda: recogidasActivas > 0,
-      metodosPago: metodosPagoDeProveedor(
-        c.pasarelaPagoProvider,
-        tarjetaListaPara(c.pasarelaPagoProvider),
-      ),
+      metodosPago: metodosPagoDeProveedor(c.pasarelaPagoProvider, cardReady),
+      proveedorPago: c.pasarelaPagoProvider,
+      pagoPublicKey: cardReady
+        ? (llavePublicaPago(c.pasarelaPagoProvider as "stripe" | "conekta") ?? null)
+        : null,
+      stripeAccountId: cardReady ? (connect?.stripeAccountId ?? null) : null,
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null,
       envioGratisDesde: tarifaGratis?.montoMinimoEnvioGratis
         ? Number(tarifaGratis.montoMinimoEnvioGratis).toFixed(2)

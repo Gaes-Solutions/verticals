@@ -10,6 +10,7 @@ vi.mock("next/headers", () => ({
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/api")>()),
   api: vi.fn(),
+  getTiendaConfig: async () => ({}),
   slugActual: async () => "tienda-a",
 }));
 vi.mock("@/lib/cliente", async (importOriginal) => ({

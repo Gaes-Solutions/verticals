@@ -167,6 +167,9 @@ export interface TiendaConfig {
    * su proveedor configurado en el API. Ausente en tiendas aún no migradas.
    */
   metodosPago?: string[];
+  proveedorPago?: string | null;
+  pagoPublicKey?: string | null;
+  stripeAccountId?: string | null;
   /**
    * ETA de entrega a domicilio en días, sólo si el negocio tiene tarifas de
    * envío activas; null si no hace envíos (mostrar "Recoge hoy" o nada).

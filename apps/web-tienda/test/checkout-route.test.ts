@@ -78,9 +78,9 @@ describe("POST /api/checkout — método de pago", () => {
     }
   });
 
-  it("sin metodoPago asume tarjeta y no consulta la config", async () => {
+  it("sin metodoPago asume tarjeta y consulta su proveedor", async () => {
     const res = await POST(request(BASE_BODY));
-    expect(getTiendaConfig).not.toHaveBeenCalled();
+    expect(getTiendaConfig).toHaveBeenCalledOnce();
     expect(checkoutIdentity).toHaveBeenCalled();
     expect(res.status).not.toBe(422);
   });

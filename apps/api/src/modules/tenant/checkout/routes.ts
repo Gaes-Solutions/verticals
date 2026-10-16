@@ -14,6 +14,7 @@ import {
   iniciarCheckout,
   procesarWebhookPago,
 } from "./service.js";
+import { verificarPedidoStripe } from "./stripe-verification.js";
 
 /**
  * Tras confirmarse el pago: intenta la auto-guía y manda push de pago_confirmado
@@ -102,12 +103,23 @@ interface ConnectCobro {
 
 // Si el tenant ya tiene su cuenta Connect habilitada, el cobro con tarjeta se hace
 // EN su cuenta (direct charge) y la plataforma retiene su comisión.
-async function resolverConnect(app: FastifyInstance, tenantSlug: string): Promise<ConnectCobro> {
+async function resolverConnect(
+  app: FastifyInstance,
+  tenantSlug: string,
+  required = false,
+): Promise<ConnectCobro> {
   const t = await app.masterPrisma.tenant.findUnique({
     where: { slug: tenantSlug },
     select: { stripeAccountId: true, stripeAccountStatus: true },
   });
-  if (!t?.stripeAccountId || t.stripeAccountStatus !== "enabled") return {};
+  if (!t?.stripeAccountId || t.stripeAccountStatus !== "enabled") {
+    if (required)
+      throw new CheckoutError(
+        503,
+        "La tienda debe conectar Stripe antes de recibir pagos con tarjeta",
+      );
+    return {};
+  }
   const bps = Number(process.env.STRIPE_PLATFORM_FEE_BPS ?? "0") || 0;
   return { stripeAccountId: t.stripeAccountId, ...(bps > 0 ? { platformFeeBps: bps } : {}) };
 }
@@ -163,7 +175,19 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
     req.requireAnyPerm([PERMISSIONS.ECOMMERCE_PEDIDOS_LEER, PERMISSIONS.ECOMMERCE_TIENDA_WEB]);
     const { key } = z.object({ key: z.string().uuid() }).parse(req.params);
     try {
-      return await consultarIntentoCheckout(req.tenantPrisma, key, req.principal.userId);
+      reply.header("Cache-Control", "no-store");
+      const result = await consultarIntentoCheckout(req.tenantPrisma, key, req.principal.userId);
+      if (result.paymentProvider === "stripe" && result.intentStatus !== "confirmado") {
+        const intent = await verificarPedidoStripe(
+          app,
+          req.tenantPrisma,
+          req.principal.tenantSlug,
+          result.pedidoId,
+        );
+        if (intent.status === "succeeded")
+          return consultarIntentoCheckout(req.tenantPrisma, key, req.principal.userId);
+      }
+      return result;
     } catch (err) {
       if (handleErr(reply, err)) return;
       throw err;
@@ -193,7 +217,18 @@ const checkoutRoutes: FastifyPluginAsync = async (app) => {
       if (sinTarjeta)
         return reply.code(400).send({ statusCode: 400, error: "Bad Request", message: sinTarjeta });
       try {
-        const connect = await resolverConnect(app, req.principal.tenantSlug);
+        if (requirePublicStore && body.metodoPago !== "cod") {
+          const config = await req.tenantPrisma.configTiendaEcommerce.findFirst({
+            select: { pasarelaPagoProvider: true },
+          });
+          if (config?.pasarelaPagoProvider !== body.proveedorPago)
+            throw new CheckoutError(503, "El pago en línea no está disponible en esta tienda");
+        }
+        const connect = await resolverConnect(
+          app,
+          req.principal.tenantSlug,
+          body.proveedorPago === "stripe" && body.metodoPago !== "cod",
+        );
         const input = {
           ...buildCheckoutInput(body, req.principal.tenantSlug, connect),
           requestedBy: req.principal.userId,

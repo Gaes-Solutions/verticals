@@ -237,6 +237,11 @@ export async function checkoutMobile(
       : null;
   const stripeAccountId =
     connect?.stripeAccountStatus === "enabled" ? connect.stripeAccountId : null;
+  if (config.proveedor === "stripe" && !stripeAccountId)
+    throw new ComercioError(
+      503,
+      "La tienda debe conectar Stripe antes de recibir pagos con tarjeta",
+    );
   const result = await iniciarCheckout(client, app.pagoProviderFactory(config.proveedor), {
     carritoId: cart.id,
     expectedCartVersion: input.expectedCartVersion,

@@ -24,7 +24,11 @@ const METODO_A_PAYMENT_TYPE: Partial<Record<CrearIntentInput["metodo"], string>>
   oxxo: "oxxo",
 };
 
-interface StripeIntentResponse {
+export interface StripeIntentResponse {
+  amount: number;
+  amount_received: number;
+  currency: string;
+  metadata?: Record<string, string>;
   id: string;
   client_secret?: string;
   status: string;
@@ -113,6 +117,7 @@ export class StripeClient implements PaymentProvider {
       "/v1/payment_intents",
       form,
       input.stripeAccountId,
+      `checkout_${input.pedidoId}`,
     );
     const referencia = intent.next_action?.oxxo_display_details?.number;
     const expira = intent.next_action?.oxxo_display_details?.expires_after;
@@ -124,6 +129,19 @@ export class StripeClient implements PaymentProvider {
       ...(referencia ? { referenciaPago: referencia } : {}),
       ...(expira ? { expiraEn: new Date(expira * 1000) } : {}),
     };
+  }
+
+  /** Consulta autenticada, siempre en la cuenta original del pedido. */
+  async obtenerIntent(intentId: string, stripeAccountId?: string): Promise<StripeIntentResponse> {
+    const res = await fetch(`${this.baseUrl}/v1/payment_intents/${encodeURIComponent(intentId)}`, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        ...(stripeAccountId ? { "Stripe-Account": stripeAccountId } : {}),
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new PagoError("No se pudo verificar el pago", "PROVIDER_UNAVAILABLE");
+    return (await res.json()) as StripeIntentResponse;
   }
 
   /** Firma Stripe-Signature: `t=<ts>,v1=<hmac-sha256(secret, "<ts>.<payload>")>`. */

@@ -20,7 +20,7 @@ vi.mock("@/lib/checkout-session", () => ({
   checkoutIdentity: vi.fn(),
 }));
 
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, getTiendaConfig } from "@/lib/api";
 import { checkoutIdentity, sameOriginRequest } from "@/lib/checkout-session";
 import { POST } from "../src/app/api/checkout/route";
 
@@ -84,6 +84,7 @@ function mockGuardadoExitoso() {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(getTiendaConfig).mockResolvedValue({} as Awaited<ReturnType<typeof getTiendaConfig>>);
   vi.mocked(sameOriginRequest).mockReturnValue(true);
 });
 
@@ -206,5 +207,56 @@ describe("POST /api/checkout — tarjeta guardada y guardar tarjeta", () => {
       medioPagoGuardadoId: "cmp_1",
     });
     expect(iniciar?.body).not.toHaveProperty("cardTokenId");
+  });
+});
+
+describe("Stripe en checkout web", () => {
+  it("inicia Stripe sin token de Conekta y solo expone el secreto de su intento", async () => {
+    vi.mocked(getTiendaConfig).mockResolvedValue({
+      proveedorPago: "stripe",
+      metodosPago: ["tarjeta"],
+    } as Awaited<ReturnType<typeof getTiendaConfig>>);
+    vi.mocked(checkoutIdentity).mockResolvedValue({ key: "key", anonymousCart: "anon" } as Awaited<
+      ReturnType<typeof checkoutIdentity>
+    >);
+    const pending = {
+      folioPublico: "GP-STRIPE",
+      intentId: "pi_store",
+      total: "100.00",
+      intentStatus: "pendiente",
+      paymentProvider: "stripe",
+      clientSecret: "pi_store_secret_own",
+      stripeAccountId: "acct_store",
+    };
+    vi.mocked(api)
+      .mockRejectedValueOnce(new ApiError(404))
+      .mockResolvedValueOnce({ id: "cart" })
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce(pending);
+    const res = await POST(request(BASE_BODY));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      clientSecret: pending.clientSecret,
+      stripeAccountId: "acct_store",
+    });
+    expect(api).toHaveBeenCalledWith("/checkout/tienda/iniciar", {
+      body: expect.objectContaining({ proveedorPago: "stripe", metodoPago: "tarjeta" }),
+    });
+    expect(vi.mocked(api).mock.calls.some(([path]) => path === "/checkout/confirmar-mock")).toBe(
+      false,
+    );
+  });
+  it.each([
+    { cardTokenId: "tok_conekta" },
+    { medioPagoGuardadoId: "other-card" },
+    { guardarTarjeta: true },
+    { mesesSinIntereses: 3 },
+  ])("rechaza fuentes de Conekta y MSI en Stripe (%j)", async (extra) => {
+    vi.mocked(getTiendaConfig).mockResolvedValue({ proveedorPago: "stripe" } as Awaited<
+      ReturnType<typeof getTiendaConfig>
+    >);
+    const res = await POST(request({ ...BASE_BODY, ...extra }));
+    expect(res.status).toBe(422);
+    expect(api).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
+import { type PagoStripeHandle, PagoTarjetaStripe } from "@/components/pago-tarjeta-stripe";
 import { type CarritoLineaLocal, carritoVersion, leerCarrito, vaciar } from "@/lib/carrito-store";
 import {
   type CheckoutAttempt,
@@ -42,6 +43,9 @@ interface TiendaConfig {
   cuponEnCheckout: boolean;
   envioGratisDesde: string | null;
   metodosPago?: string[];
+  proveedorPago?: string | null;
+  pagoPublicKey?: string | null;
+  stripeAccountId?: string | null;
 }
 
 interface DireccionGuardada {
@@ -77,6 +81,9 @@ const PAGO_PENDIENTE_KEY = "gaespos_pago_pendiente_v1";
 interface RespuestaCheckout {
   code?: string;
   safeToRetry?: boolean;
+  clientSecret?: string;
+  stripeAccountId?: string | null;
+  paymentProvider?: string;
   pagoAlRecoger?: boolean;
   message?: string;
   intentStatus?: string;
@@ -126,6 +133,7 @@ function leerPagoPendiente(): PagoPendiente | null {
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const stripeForm = useRef<PagoStripeHandle>(null);
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
@@ -424,12 +432,16 @@ export default function CheckoutPage() {
     };
     setCuponInfo(r);
   }
-  const conektaKey = process.env.NEXT_PUBLIC_CONEKTA_PUBLIC_KEY ?? "";
+  const conStripe = config?.proveedorPago === "stripe";
+  const stripeKey = conStripe ? config?.pagoPublicKey : null;
+  const conektaKey = config?.proveedorPago === "conekta" ? (config.pagoPublicKey ?? "") : "";
   // Pagar al recoger no necesita proveedor de pagos: el cobro ocurre en el mostrador.
   const permiteDemo = process.env.NODE_ENV !== "production";
   // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
   const msiOfrecibles =
-    config?.msiHabilitado && total >= Number(config.msiMontoMinimo) ? config.msiMeses : [];
+    !conStripe && config?.msiHabilitado && total >= Number(config.msiMontoMinimo)
+      ? config.msiMeses
+      : [];
 
   function validar(): boolean {
     if (!entregaLista) {
@@ -480,6 +492,23 @@ export default function CheckoutPage() {
     }
     if (!response.ok)
       throw new Error(data.message ?? "Estamos verificando el pago. No vuelvas a pagar.");
+    if (
+      data.paymentProvider === "stripe" &&
+      data.clientSecret &&
+      data.intentStatus !== "confirmado"
+    ) {
+      if (!stripeForm.current)
+        throw new Error("Espera a que cargue el formulario seguro para retomar tu pago.");
+      await stripeForm.current.confirmar(data.clientSecret, data.stripeAccountId ?? null);
+      const params = new URLSearchParams({ context: current.context, idempotencyKey: current.key });
+      const verified = await fetch(`/api/checkout?${params}`, { cache: "no-store" });
+      const result = (await verified.json()) as RespuestaCheckout;
+      if (!verified.ok || result.intentStatus !== "confirmado")
+        throw new Error(
+          "Estamos verificando tu pago. Consulta este mismo pedido; no vuelvas a pagar.",
+        );
+      return handleCheckoutResponse(new Response(JSON.stringify(result)), current);
+    }
     // Pago referenciado (OXXO/SPEI): NO es error; el pedido queda apartado
     // esperando el pago offline y el proveedor confirma por webhook.
     const pendiente = resolverPagoPendiente(data, metodoActivo, pagoPendiente);
@@ -545,7 +574,13 @@ export default function CheckoutPage() {
       await consultarPedido();
       return;
     }
-    if (metodo === "tarjeta" && !cardTokenId && !extra?.medioPagoGuardadoId && !permiteDemo) {
+    if (
+      metodo === "tarjeta" &&
+      !cardTokenId &&
+      !extra?.medioPagoGuardadoId &&
+      !conStripe &&
+      !permiteDemo
+    ) {
       setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
       return;
     }
@@ -669,7 +704,9 @@ export default function CheckoutPage() {
   ).filter((o) => metodosDisponibles.includes(o.id));
 
   // "Mis tarjetas": tarjeta guardada seleccionada (pago en 1 toque) o tarjeta nueva.
-  const tarjetaGuardadaSel = mediosPago.find((m) => m.id === medioPagoSel) ?? null;
+  const tarjetaGuardadaSel = conStripe
+    ? null
+    : (mediosPago.find((m) => m.id === medioPagoSel) ?? null);
   const pagarConTarjetaNueva = !tarjetaGuardadaSel;
 
   return (
@@ -968,8 +1005,11 @@ export default function CheckoutPage() {
               </div>
             )}
             {metodoActivo === "tarjeta" ? (
-              <fieldset disabled={pagoDeshabilitado} className="mt-3 min-w-0">
-                {mediosPago.length > 0 && (
+              <fieldset
+                disabled={conStripe ? procesando || requiereSesion : pagoDeshabilitado}
+                className="mt-3 min-w-0"
+              >
+                {!conStripe && mediosPago.length > 0 && (
                   <div className="mb-3 space-y-2" role="radiogroup" aria-label="Tu tarjeta">
                     <p className="gx-label">Tu tarjeta</p>
                     {mediosPago.map((m) => {
@@ -1045,6 +1085,12 @@ export default function CheckoutPage() {
                       tarjeta
                     </p>
                   </div>
+                ) : stripeKey ? (
+                  <PagoTarjetaStripe
+                    ref={stripeForm}
+                    publicKey={stripeKey}
+                    accountId={config?.stripeAccountId ?? null}
+                  />
                 ) : conektaKey ? (
                   <>
                     <PagoTarjetaConekta
@@ -1255,7 +1301,7 @@ export default function CheckoutPage() {
               disabled={procesando}
               className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85"
             >
-              {procesando ? "Consultando…" : "Consultar pago"}
+              {procesando ? "Verificando…" : conStripe ? "Retomar pago" : "Consultar pago"}
             </button>
           ) : metodoActivo !== "tarjeta" ? (
             <button
@@ -1280,6 +1326,15 @@ export default function CheckoutPage() {
               }
               disabled={pagoDeshabilitado}
               className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
+            </button>
+          ) : stripeKey ? (
+            <button
+              type="button"
+              onClick={() => procesarPedido("tarjeta")}
+              disabled={pagoDeshabilitado}
+              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:opacity-50"
             >
               {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
             </button>
