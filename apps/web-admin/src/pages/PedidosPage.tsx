@@ -126,7 +126,7 @@ export function PedidosPage() {
       .then(setConfig)
       .catch(() => {});
     if (puedeGestionar) {
-      api<UsuarioRef[]>("/t/usuarios")
+      api<UsuarioRef[]>("/t/pedidos-ecommerce/asignables")
         .then((u) => setUsuarios(u.filter(Boolean)))
         .catch(() => {});
     }

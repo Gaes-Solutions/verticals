@@ -1,11 +1,14 @@
 import { getTenantClient } from "@gaespos/db";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { TIENDA_WEB_EMAIL } from "../src/modules/storefront/tienda-web.js";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
+
 const slug = "test-retail-role-matrix";
 const roles = ["dueno", "gerente", "cajero", "vendedor", "almacen", "contador_interno"] as const;
 type Role = (typeof roles)[number];
 let app: FastifyInstance;
+let internalUserId: string;
 const users = {} as Record<Role, { id: string; token: string }>;
 const auth = (role: Role) => ({ authorization: `Bearer ${users[role].token}` });
 beforeAll(async () => {
@@ -21,6 +24,16 @@ beforeAll(async () => {
     const session = await loginTenantUser(app, slug, email, "RoleMatrixQA!2026");
     users[role] = { id: user.id, token: session.accessToken };
   }
+  internalUserId = (
+    await getTenantClient(slug).usuario.create({
+      data: {
+        email: TIENDA_WEB_EMAIL,
+        nombre: "QA Internal",
+        passwordHash: "unused-test-hash",
+        tipoUsuario: "empleado",
+      },
+    })
+  ).id;
 });
 afterAll(async () => {
   await app?.close();
@@ -97,6 +110,66 @@ describe("retail users: least privilege and immediate revocation", () => {
       expect(write.statusCode).toBe(403);
     },
   );
+  it.each(roles)("%s receives only operational branch and fulfillment choices", async (role) => {
+    const branches = await app.inject({
+      method: "GET",
+      url: "/t/sucursales/opciones",
+      headers: auth(role),
+    });
+    expect(branches.statusCode, branches.body).toBe(200);
+    expect(branches.json().length).toBeGreaterThan(0);
+    expect(Object.keys(branches.json()[0]).sort()).toEqual(["codigo", "id", "isDefault", "nombre"]);
+    if (["almacen", "contador_interno"].includes(role)) {
+      expect(
+        (await app.inject({ method: "GET", url: "/t/sucursales", headers: auth(role) })).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `/t/sucursales/${branches.json()[0].id}`,
+            headers: auth(role),
+          })
+        ).statusCode,
+      ).toBe(403);
+    }
+    const workers = await app.inject({
+      method: "GET",
+      url: "/t/pedidos-ecommerce/asignables",
+      headers: auth(role),
+    });
+    const allowed = ["dueno", "gerente", "vendedor", "almacen"].includes(role);
+    expect(workers.statusCode, workers.body).toBe(allowed ? 200 : 403);
+    if (allowed) {
+      expect(workers.json().length).toBeGreaterThan(0);
+      for (const worker of workers.json()) {
+        expect(Object.keys(worker).sort()).toEqual(["id", "nombre"]);
+        expect(worker.id).not.toBe(internalUserId);
+      }
+    }
+  });
+  it("internal storefront accounts cannot be assigned fulfillment work", async () => {
+    const client = getTenantClient(slug);
+    const order = await client.pedidoEcommerce.create({
+      data: {
+        folioPublico: "QA-MATRIX-INTERNAL",
+        emailComprador: "qa@example.invalid",
+        subtotal: "0",
+        total: "0",
+        metodoEnvio: "click_collect",
+      },
+    });
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/t/pedidos-ecommerce/${order.id}/asignar`,
+      headers: auth("dueno"),
+      payload: { usuarioId: internalUserId },
+    });
+    expect(response.statusCode, response.body).toBe(422);
+    expect(
+      (await client.pedidoEcommerce.findUniqueOrThrow({ where: { id: order.id } })).asignadoAId,
+    ).toBeNull();
+  });
   it("manager cannot grant itself owner or reset the owner's password", async () => {
     const client = getTenantClient(slug);
     const ownerRole = await client.rol.findUniqueOrThrow({ where: { codigo: "dueno" } });

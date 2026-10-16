@@ -3,6 +3,7 @@ import { PERMISSIONS } from "@gaespos/permissions";
 import Decimal from "decimal.js";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { TIENDA_WEB_EMAIL } from "../../storefront/tienda-web.js";
 import { CheckoutError, confirmarPagoPedido } from "../checkout/service.js";
 import {
   MensajePedidoError,
@@ -138,6 +139,16 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Config de etiquetas de estado (personalizable por tenant).
+  // Fulfillment needs employee names, not access to user administration.
+  app.get("/asignables", async (req) => {
+    req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_GESTIONAR);
+    return req.tenantPrisma.usuario.findMany({
+      where: { isActive: true, email: { not: TIENDA_WEB_EMAIL } },
+      select: { id: true, nombre: true },
+      orderBy: [{ nombre: "asc" }, { id: "asc" }],
+    });
+  });
+
   app.get("/config", async (req) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_PEDIDOS_LEER);
     const etiquetas = await etiquetasDe(req.tenantPrisma);
@@ -202,9 +213,9 @@ const pedidosEcommerceRoutes: FastifyPluginAsync = async (app) => {
     if (usuarioId) {
       const u = await req.tenantPrisma.usuario.findUnique({
         where: { id: usuarioId },
-        select: { nombre: true, isActive: true },
+        select: { nombre: true, isActive: true, email: true },
       });
-      if (!u || !u.isActive) {
+      if (!u || !u.isActive || u.email === TIENDA_WEB_EMAIL) {
         return reply
           .code(422)
           .send({ statusCode: 422, error: "Unprocessable", message: "Empleado inválido" });

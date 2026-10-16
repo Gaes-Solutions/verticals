@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
-import type { InventarioItem, Paged, Producto, Sucursal } from "../lib/types.js";
+import type { InventarioItem, Paged, Producto, SucursalOpcion } from "../lib/types.js";
 
 export function InventarioPage() {
   const [items, setItems] = useState<InventarioItem[]>([]);
@@ -242,7 +242,7 @@ function AjusteModal({
 }
 
 function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursales, setSucursales] = useState<SucursalOpcion[]>([]);
   const [sucursalId, setSucursalId] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
@@ -254,7 +254,7 @@ function EntradaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    api<Sucursal[]>("/t/sucursales")
+    api<SucursalOpcion[]>("/t/sucursales/opciones")
       .then((r) => {
         setSucursales(r);
         const inicial = r.find((s) => s.isDefault) ?? r[0];

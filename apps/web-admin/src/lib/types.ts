@@ -79,6 +79,8 @@ export interface VentaDetalle {
   pagos: Array<{ metodo: string; monto: string }>;
 }
 
+export type SucursalOpcion = Pick<Sucursal, "id" | "codigo" | "nombre" | "isDefault">;
+
 export interface Sucursal {
   id: string;
   codigo: string;

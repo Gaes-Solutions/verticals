@@ -12,6 +12,20 @@ const sucursalesRoutes: FastifyPluginAsync = async (app) => {
     return items;
   });
 
+  // Minimal branch choices for inventory and purchasing, without configuration data.
+  app.get("/opciones", async (req) => {
+    req.requireAnyPerm([
+      PERMISSIONS.SUCURSALES_LEER,
+      PERMISSIONS.INVENTARIO_LEER,
+      PERMISSIONS.COMPRAS_OC_LEER,
+    ]);
+    return req.tenantPrisma.sucursal.findMany({
+      where: { isActive: true, archivedAt: null },
+      select: { id: true, codigo: true, nombre: true, isDefault: true },
+      orderBy: [{ isDefault: "desc" }, { codigo: "asc" }],
+    });
+  });
+
   app.get("/:id", async (req, reply) => {
     req.requirePerm(PERMISSIONS.SUCURSALES_LEER);
     const params = sucursalIdParamSchema.parse(req.params);

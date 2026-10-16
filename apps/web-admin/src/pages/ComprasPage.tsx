@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api.js";
 
-interface Sucursal {
+interface SucursalOpcion {
   id: string;
   codigo: string;
   nombre: string;
@@ -52,7 +52,7 @@ function badge(estado: string): string {
 export function ComprasPage() {
   const [ordenes, setOrdenes] = useState<OcRow[]>([]);
   const [filtro, setFiltro] = useState("");
-  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursales, setSucursales] = useState<SucursalOpcion[]>([]);
   const [creando, setCreando] = useState(false);
   const [detalle, setDetalle] = useState<OcDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -76,7 +76,7 @@ export function ComprasPage() {
 
   useEffect(() => cargar(), [cargar]);
   useEffect(() => {
-    api<Sucursal[]>("/t/sucursales")
+    api<SucursalOpcion[]>("/t/sucursales/opciones")
       .then(setSucursales)
       .catch(() => setSucursales([]));
   }, []);
@@ -217,7 +217,7 @@ function NuevaOcModal({
   onClose,
   onCreada,
 }: {
-  sucursales: Sucursal[];
+  sucursales: SucursalOpcion[];
   onClose: () => void;
   onCreada: () => void;
 }) {
