@@ -66,6 +66,37 @@ describe("retail users: least privilege and immediate revocation", () => {
       ["dueno", "gerente", "almacen"].includes(role) ? 201 : 403,
     );
   });
+  it.each(["gerente", "contador_interno"] as const)(
+    "%s can read fiscal issuer details without receiving secrets or write access",
+    async (role) => {
+      const client = getTenantClient(slug);
+      await client.cfdiConfig.upsert({
+        where: { rfcEmisor: "EKU9003173C9" },
+        update: {},
+        create: {
+          rfcEmisor: "EKU9003173C9",
+          razonSocialEmisor: "QA Fiscal",
+          regimenFiscalSat: "601",
+          codigoPostalEmisor: "06000",
+          lugarExpedicion: "06000",
+          facturamaApiKey: "stub-private-fiscal-qa",
+        },
+      });
+      const read = await app.inject({ method: "GET", url: "/t/cfdis/config", headers: auth(role) });
+      expect(read.statusCode, read.body).toBe(200);
+      expect(read.json().rfcEmisor).toBe("EKU9003173C9");
+      expect(read.json().facturamaApiKeyConfigured).toBe(true);
+      expect(read.json().facturamaApiKey).toBeUndefined();
+      expect(read.body).not.toContain("stub-private-fiscal-qa");
+      const write = await app.inject({
+        method: "PUT",
+        url: "/t/cfdis/config",
+        headers: auth(role),
+        payload: {},
+      });
+      expect(write.statusCode).toBe(403);
+    },
+  );
   it("manager cannot grant itself owner or reset the owner's password", async () => {
     const client = getTenantClient(slug);
     const ownerRole = await client.rol.findUniqueOrThrow({ where: { codigo: "dueno" } });

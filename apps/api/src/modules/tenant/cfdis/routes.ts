@@ -43,7 +43,7 @@ function handleCfdiErr<T>(
 
 const cfdisRoutes: FastifyPluginAsync = async (app) => {
   app.get("/cfdis/config", async (req, reply) => {
-    req.requirePerm(PERMISSIONS.CFDI_CONFIGURAR);
+    req.requireAnyPerm([PERMISSIONS.CFDI_CONFIGURAR, PERMISSIONS.CFDI_LEER]);
     const cfg = await req.tenantPrisma.cfdiConfig.findFirst();
     if (!cfg) {
       return reply
