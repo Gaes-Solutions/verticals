@@ -86,7 +86,7 @@ const assert = require("node:assert/strict");
   await p.waitForLoadState("networkidle");
   assert.equal(await p.getByLabel("Calle", { exact: true }).inputValue(), "Reforma");
   console.log("PASS sesión inválida solicita login y retorna al mismo carrito");
-  const identity = await (await c.request.get(`${base}/api/checkout/session`)).json();
+  const identity = await p.evaluate(async () => (await fetch("/api/checkout/session")).json());
   await p.waitForFunction(
     (ctx) =>
       JSON.parse(localStorage.getItem("gaespos_checkout_attempt_v1") || "{}").context === ctx,

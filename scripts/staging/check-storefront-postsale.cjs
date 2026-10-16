@@ -75,11 +75,16 @@ require("node:fs").mkdirSync("/tmp/gaes-design", { recursive: true });
     await page.getByText(/Este pedido fue cancelado/).waitFor();
     await page.reload({ waitUntil: "networkidle" });
     await page.getByText(/Este pedido fue cancelado/).waitFor();
-    const replay = await context.request.post(`${base}/api/cuenta/pedidos/${folio}/cancelar`, {
-      data: { motivo: "Pedido de prueba, sin cobro" },
-    });
-    assert.equal(replay.status(), 200);
-    assert.equal((await replay.json()).reembolsado, false);
+    const replay = await page.evaluate(async (folio) => {
+      const response = await fetch(`/api/cuenta/pedidos/${folio}/cancelar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: "Pedido de prueba, sin cobro" }),
+      });
+      return { status: response.status, data: await response.json() };
+    }, folio);
+    assert.equal(replay.status, 200);
+    assert.equal(replay.data.reembolsado, false);
     console.log(
       "PASS cancelación real en staging: pedido sin cobro, Escape y foco, error de red recuperable, estado persistente y repetición sin duplicados",
     );
@@ -123,8 +128,10 @@ require("node:fs").mkdirSync("/tmp/gaes-design", { recursive: true });
       const b = document.querySelector('button[aria-label="Notificaciones"]');
       return b && b.innerText.trim() === "";
     });
-    const notices = await context.request.get(`${base}/api/cuenta/notificaciones`);
-    assert.equal((await notices.json()).noLeidas, 0);
+    const notices = await page.evaluate(async () =>
+      (await fetch("/api/cuenta/notificaciones")).json(),
+    );
+    assert.equal(notices.noLeidas, 0);
     await page.keyboard.press("Escape");
     assert.equal(await bell.getAttribute("aria-expanded"), "false");
     console.log(

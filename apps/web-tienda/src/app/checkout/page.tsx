@@ -657,10 +657,29 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="text-center">
-        <h1 className="font-bold text-2xl">Tu carrito está vacío</h1>
-        <Link href="/" className="mt-4 inline-block text-marca">
-          Ver catálogo
-        </Link>
+        <h1 className="font-bold text-2xl">
+          {requiereSesion ? "Retoma tu compra" : "Tu carrito está vacío"}
+        </h1>
+        {requiereSesion ? (
+          <div
+            id="checkout-session-notice"
+            role="alert"
+            tabIndex={-1}
+            className="mx-auto mt-4 max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
+          >
+            <p>
+              Tu sesión venció. Inicia sesión para recuperar tu selección y los datos de esta
+              compra.
+            </p>
+            <Link href="/cuenta/login?next=%2Fcheckout" className="gx-btn-primary mt-3">
+              Iniciar sesión y continuar
+            </Link>
+          </div>
+        ) : (
+          <Link href="/" className="mt-4 inline-block text-marca">
+            Ver catálogo
+          </Link>
+        )}
       </div>
     );
   }
