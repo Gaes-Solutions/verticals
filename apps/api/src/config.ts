@@ -27,6 +27,11 @@ const configSchema = z.object({
   // `trustProxy: true` (cadena completa) el rate-limit por IP se evade con un XFF
   // aleatorio por request. 0 = ignorar XFF (usar socket, p.ej. sin proxy).
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(1),
+  BILLING_SCHEDULER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  BILLING_RUN_INTERVAL_MIN: z.coerce.number().int().min(1).max(1440).default(15),
   FLOWS_SCHEDULER_ENABLED: z
     .enum(["true", "false"])
     .default("false")

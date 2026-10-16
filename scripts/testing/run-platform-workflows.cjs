@@ -28,7 +28,10 @@ const env = {
   VITE_API_URL: "http://127.0.0.1:3059",
 };
 for (const key of Object.keys(env))
-  if (/STRIPE|CONEKTA|RESEND|SMTP|SENTRY|OPENAI|ANTHROPIC|KIMI|AWS_/.test(key)) delete env[key];
+  if (
+    /STRIPE|CONEKTA|FACTURAMA|SAAS_FISCAL|RESEND|SMTP|SENTRY|OPENAI|ANTHROPIC|KIMI|AWS_/.test(key)
+  )
+    delete env[key];
 const children = [];
 function command(args) {
   const r = spawnSync("pnpm", args, { cwd: repo, env, stdio: "inherit" });
@@ -69,6 +72,10 @@ async function ready(url, child) {
     created = true;
     command(["--filter", "@gaespos/db", "prisma:migrate:deploy"]);
     command(["--filter", "@gaespos/db", "seed:master"]);
+    if (process.argv[2] === "--api-tests") {
+      command(["--filter", "@gaespos/api", "exec", "vitest", "run", ...process.argv.slice(3)]);
+      return;
+    }
     const fixture = path.join(temp, "api.mts");
     fs.writeFileSync(
       fixture,

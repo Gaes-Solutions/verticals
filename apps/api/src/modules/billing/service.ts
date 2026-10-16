@@ -89,6 +89,7 @@ async function cobrarSuscripcion(
       moneda: invoice.currency,
       descripcion: `Suscripción ${invoice.invoiceNumber}`,
       idempotencyKey: `inv_${invoice.id}`,
+      metadata: { invoiceId: invoice.id },
     });
     return {
       success: r.success,
@@ -579,12 +580,20 @@ export async function cambiarPlan(
 // Generación / cobro de invoices
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function siguienteFolioInvoice(master: MasterPrismaClient): Promise<string> {
-  const year = new Date().getFullYear();
-  const count = await master.invoice.count({
-    where: { invoiceNumber: { startsWith: `INV-${year}-` } },
-  });
-  return formatInvoiceNumber(year, count + 1);
+type BillingDb = Pick<
+  MasterPrismaClient,
+  "invoice" | "planPrice" | "coupon" | "couponRedemption" | "$queryRaw"
+>;
+
+async function siguienteFolioInvoice(master: BillingDb): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  const [counter] = await master.$queryRaw<Array<{ value: number }>>`
+    INSERT INTO invoice_folio_counters (year, value) VALUES (${year}, 1)
+    ON CONFLICT (year) DO UPDATE SET value = invoice_folio_counters.value + 1
+    RETURNING value
+  `;
+  if (!counter) throw new Error("No se pudo reservar el folio de factura");
+  return formatInvoiceNumber(year, counter.value);
 }
 
 async function generarInvoiceProrrateo(
@@ -617,7 +626,7 @@ async function generarInvoiceProrrateo(
 }
 
 async function generarInvoiceCiclo(
-  master: MasterPrismaClient,
+  master: BillingDb,
   sub: {
     id: string;
     tenantId: string;
@@ -645,7 +654,24 @@ async function generarInvoiceCiclo(
   let discount = 0;
   if (sub.discountCouponId) {
     const coupon = await master.coupon.findUnique({ where: { id: sub.discountCouponId } });
-    if (coupon) {
+    const redemption = await master.couponRedemption.findUnique({
+      where: { couponId_tenantId: { couponId: sub.discountCouponId, tenantId: sub.tenantId } },
+    });
+    let withinDuration = true;
+    if (coupon?.duration === "once") withinDuration = (redemption?.discountAmountTotal ?? 0) === 0;
+    if (coupon?.duration === "repeating") {
+      if (!redemption || !coupon.durationInMonths) withinDuration = false;
+      else {
+        const expires = new Date(redemption.redeemedAt);
+        expires.setUTCMonth(expires.getUTCMonth() + coupon.durationInMonths);
+        withinDuration = sub.currentPeriodStart < expires;
+      }
+    }
+    if (
+      coupon &&
+      withinDuration &&
+      (coupon.discountType !== "fixed" || !coupon.currency || coupon.currency === sub.currency)
+    ) {
       const r = aplicarCupon(total, {
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
@@ -678,10 +704,11 @@ async function generarInvoiceCiclo(
     });
   }
 
-  return master.invoice.create({
+  const invoice = await master.invoice.create({
     data: {
       tenantId: sub.tenantId,
       subscriptionId: sub.id,
+      billingCycleKey: `${sub.id}:${sub.currentPeriodStart.toISOString()}`,
       invoiceNumber,
       status: "open",
       periodStart: sub.currentPeriodStart,
@@ -694,6 +721,13 @@ async function generarInvoiceCiclo(
       items: { create: items },
     },
   });
+  if (discount > 0 && sub.discountCouponId) {
+    await master.couponRedemption.updateMany({
+      where: { couponId: sub.discountCouponId, tenantId: sub.tenantId },
+      data: { discountAmountTotal: { increment: discount } },
+    });
+  }
+  return invoice;
 }
 
 async function generarCfdiMock(): Promise<string> {
@@ -717,6 +751,16 @@ async function intentarPagoInvoice(
       if (invoice.status !== "open")
         return { success: false, failureReason: "La factura ya no está abierta" };
 
+      if (invoice.total === 0) {
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: { status: "paid", paidAt: new Date(), nextRetryAt: null },
+        });
+        await reactivarTrasPago(tx, invoice);
+        return { success: true };
+      }
+      if (invoice.tenant.status === "cancelled" || invoice.tenant.status === "archived")
+        return { success: false, failureReason: "Negocio inactivo" };
       const pm = invoice.tenant.paymentMethods[0];
       if (!pm) {
         await tx.invoicePayment.create({
@@ -757,6 +801,7 @@ async function intentarPagoInvoice(
             attempts: { increment: 1 },
           },
         });
+        await reactivarTrasPago(tx, invoice);
         return { success: true };
       }
       return {
@@ -819,68 +864,118 @@ export async function procesarWebhookPagoMock(
 // Worker: conversión de trial → cobro al vencer
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function correrTrialConversions(master: MasterPrismaClient): Promise<{
-  procesados: number;
-  cobrados: number;
-  fallidos: number;
-}> {
+/** Prepare a cycle atomically. If the worker dies after commit, dunning resumes the open invoice. */
+async function correrCiclosVencidos(
+  master: MasterPrismaClient,
+  status: "trialing" | "active",
+): Promise<{ procesados: number; cobrados: number; fallidos: number; errores: string[] }> {
   const now = new Date();
-  const vencidos = await master.subscription.findMany({
+  const due = await master.subscription.findMany({
     where: {
-      status: "trialing",
-      trialEnd: { lte: now },
-      tenant: { status: { notIn: ["cancelled", "archived"] } },
+      status,
+      ...(status === "trialing" ? { trialEnd: { lte: now } } : { currentPeriodEnd: { lte: now } }),
+      externalSubscriptionId: null,
+      tenant: { deletedAt: null, status: { in: ["trial", "active", "past_due"] } },
     },
-    include: { plan: true },
+    select: { id: true },
+    orderBy: { currentPeriodEnd: "asc" },
+    take: 100,
   });
+  let procesados = 0;
   let cobrados = 0;
   let fallidos = 0;
-
-  for (const sub of vencidos) {
-    const period = siguientePeriodo(sub.currentPeriodEnd, sub.interval);
-    const claimed = await master.subscription.updateMany({
-      where: { id: sub.id, status: "trialing" },
-      data: {
-        currentPeriodStart: period.start,
-        currentPeriodEnd: period.end,
-        status: "active",
-      },
-    });
-    if (claimed.count !== 1) continue;
-    const newSub = await master.subscription.findUniqueOrThrow({ where: { id: sub.id } });
-    const invoice = await generarInvoiceCiclo(
-      master,
-      {
-        id: newSub.id,
-        tenantId: newSub.tenantId,
-        planId: newSub.planId,
-        currency: newSub.currency,
-        interval: newSub.interval,
-        discountCouponId: newSub.discountCouponId,
-        currentPeriodStart: newSub.currentPeriodStart,
-        currentPeriodEnd: newSub.currentPeriodEnd,
-      },
-      { code: sub.plan.code, name: sub.plan.name },
-    );
-
-    const res = await intentarPagoInvoice(master, invoice.id);
-    if (res.success) {
-      cobrados += 1;
-      await master.tenant.update({ where: { id: sub.tenantId }, data: { status: "active" } });
-    } else {
-      fallidos += 1;
-      const decision = siguienteDunning({ attemptsSoFar: 0, dueDate: invoice.dueDate });
-      if (decision.action === "retry") {
-        await master.invoice.update({
-          where: { id: invoice.id },
-          data: { nextRetryAt: decision.nextRetryAt, attempts: 1 },
+  const errores: string[] = [];
+  for (const candidate of due) {
+    try {
+      const invoice = await master.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${candidate.id}, 7710045))`;
+        const sub = await tx.subscription.findUniqueOrThrow({
+          where: { id: candidate.id },
+          include: { plan: true, tenant: { include: { settingsMaster: true } } },
         });
+        const end = status === "trialing" ? sub.trialEnd : sub.currentPeriodEnd;
+        if (
+          sub.status !== status ||
+          !end ||
+          end > now ||
+          sub.externalSubscriptionId ||
+          sub.tenant.deletedAt ||
+          !["trial", "active", "past_due"].includes(sub.tenant.status)
+        )
+          return null;
+        if (sub.cancelAtPeriodEnd) {
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { status: "canceled", canceledAt: now },
+          });
+          const other = await tx.subscription.count({
+            where: {
+              tenantId: sub.tenantId,
+              id: { not: sub.id },
+              status: { in: ["trialing", "active", "past_due", "paused"] },
+            },
+          });
+          if (!other)
+            await tx.tenant.update({ where: { id: sub.tenantId }, data: { status: "cancelled" } });
+          return null;
+        }
+        if (sub.pauseCollectionUntil && sub.pauseCollectionUntil > now) return null;
+        if (
+          await tx.invoice.count({
+            where: { subscriptionId: sub.id, status: "open", periodStart: { not: null } },
+          })
+        )
+          return null;
+        const period = siguientePeriodo(end, sub.interval);
+        const created = await generarInvoiceCiclo(
+          tx,
+          {
+            ...sub,
+            currentPeriodStart: period.start,
+            currentPeriodEnd: period.end,
+          },
+          sub.plan,
+        );
+        await tx.subscription.update({
+          where: { id: sub.id },
+          data: {
+            currentPeriodStart: period.start,
+            currentPeriodEnd: period.end,
+            status: "past_due",
+          },
+        });
+        await tx.tenant.update({ where: { id: sub.tenantId }, data: { status: "past_due" } });
+        return {
+          id: created.id,
+          autoCharge: sub.tenant.settingsMaster?.autoChargeEnabled !== false,
+          total: created.total,
+        };
+      });
+      if (!invoice) continue;
+      procesados++;
+      if (!invoice.autoCharge && invoice.total > 0) continue;
+      const result = await intentarPagoInvoice(master, invoice.id);
+      const current = await master.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
+      if (result.success) {
+        cobrados++;
+      } else {
+        fallidos++;
+        await procesarFalloDunning(master, current);
       }
-      await master.subscription.update({ where: { id: sub.id }, data: { status: "past_due" } });
-      await master.tenant.update({ where: { id: sub.tenantId }, data: { status: "past_due" } });
+    } catch {
+      // Do not block other businesses or expose provider errors/secrets in logs.
+      errores.push(candidate.id);
     }
   }
-  return { procesados: vencidos.length, cobrados, fallidos };
+  return { procesados, cobrados, fallidos, errores };
+}
+
+export function correrTrialConversions(master: MasterPrismaClient) {
+  return correrCiclosVencidos(master, "trialing");
+}
+
+export function correrRenovaciones(master: MasterPrismaClient) {
+  return correrCiclosVencidos(master, "active");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -912,7 +1007,7 @@ async function suspenderPorMora(
 }
 
 async function reactivarTrasPago(
-  master: MasterPrismaClient,
+  master: Pick<MasterPrismaClient, "subscription" | "tenant">,
   invoice: { tenantId: string; subscriptionId: string | null },
 ): Promise<void> {
   if (invoice.subscriptionId) {
@@ -959,7 +1054,25 @@ export async function correrDunningCiclo(master: MasterPrismaClient): Promise<{
   const pendientes = await master.invoice.findMany({
     where: {
       status: "open",
-      tenant: { status: { notIn: ["cancelled", "archived"] } },
+      tenant: {
+        deletedAt: null,
+        status: { notIn: ["cancelled", "archived"] },
+        OR: [{ settingsMaster: { is: null } }, { settingsMaster: { autoChargeEnabled: true } }],
+      },
+      AND: [
+        {
+          OR: [
+            { subscriptionId: null },
+            {
+              subscription: {
+                externalSubscriptionId: null,
+                status: { notIn: ["canceled", "paused"] },
+                OR: [{ pauseCollectionUntil: null }, { pauseCollectionUntil: { lte: now } }],
+              },
+            },
+          ],
+        },
+      ],
       OR: [{ nextRetryAt: { lte: now } }, { nextRetryAt: null, dueDate: { lte: now } }],
     },
   });
@@ -982,7 +1095,6 @@ export async function correrDunningCiclo(master: MasterPrismaClient): Promise<{
     const res = await intentarPagoInvoice(master, invoice.id);
     if (res.success) {
       cobrados += 1;
-      await reactivarTrasPago(master, invoice);
       continue;
     }
     const current = await master.invoice.findUnique({

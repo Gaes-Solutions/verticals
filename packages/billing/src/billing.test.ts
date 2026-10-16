@@ -104,6 +104,19 @@ describe("siguienteDunning", () => {
 });
 
 describe("siguientePeriodo", () => {
+  it("clamps January 31 to February instead of skipping a month", () => {
+    expect(siguientePeriodo(new Date("2026-01-31T13:45:00Z"), "monthly").end.toISOString()).toBe(
+      "2026-02-28T13:45:00.000Z",
+    );
+  });
+  it("preserves leap February and clamps leap-year annual renewal", () => {
+    expect(siguientePeriodo(new Date("2028-01-31T00:00:00Z"), "monthly").end.toISOString()).toBe(
+      "2028-02-29T00:00:00.000Z",
+    );
+    expect(siguientePeriodo(new Date("2028-02-29T00:00:00Z"), "yearly").end.toISOString()).toBe(
+      "2029-02-28T00:00:00.000Z",
+    );
+  });
   it("mensual avanza un mes", () => {
     const r = siguientePeriodo(new Date("2026-05-15T00:00:00Z"), "monthly");
     expect(r.end.toISOString()).toBe("2026-06-15T00:00:00.000Z");

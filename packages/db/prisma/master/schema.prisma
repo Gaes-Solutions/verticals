@@ -1187,6 +1187,7 @@ model Invoice {
   tenantId          String        @map("tenant_id")
   subscriptionId    String?       @map("subscription_id")
   invoiceNumber     String        @unique @map("invoice_number")
+  billingCycleKey   String?       @unique @map("billing_cycle_key")
   status            InvoiceStatus @default(open)
   periodStart       DateTime?     @map("period_start")
   periodEnd         DateTime?     @map("period_end")
@@ -1522,4 +1523,12 @@ model TiendaDominio {
 
   @@index([tenantSlug])
   @@map("tienda_dominios")
+}
+
+// Allocation is atomic and never reuses a deleted invoice number.
+model InvoiceFolioCounter {
+  year Int @id
+  value Int
+
+  @@map("invoice_folio_counters")
 }

@@ -273,7 +273,7 @@ export const billingWebhookRoutes: FastifyPluginAsync = async (app) => {
 
 /**
  * Endpoints de operación de billing — solo admin GaesSoft. Disparan los workers
- * (en producción los corre un cron BullMQ; aquí endpoint para tests/demos).
+ * El scheduler en proceso los ejecuta cuando BILLING_SCHEDULER_ENABLED=true.
  */
 export const billingAdminGaesSoftRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", app.authenticateAdmin);

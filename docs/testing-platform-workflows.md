@@ -47,5 +47,6 @@ Las regresiones de API están en `apps/api/test/platform-workflows.test.ts`, jun
 - La prueba TXT positiva usa un resolver DNS simulado. Falta conectar un dominio real, publicar CNAME/TXT y comprobar el certificado HTTPS y el acceso público desde ese dominio.
 - Los payouts son registros de pago manual. La prueba no realiza una transferencia SPEI/PayPal/Connect.
 - El cálculo V1 de comisiones toma el precio del plan del referido activo; no se probó una conciliación automática contra cobros reales.
-- La emisión fiscal real del SaaS y el motor de renovación periódica posterior al primer ciclo no quedan certificados por esta batería. El servicio actual genera el primer ciclo al convertir el trial y procesa sus reintentos; esto no demuestra renovación mensual automática.
+- El motor de renovación mensual/anual y su scheduler ya tienen pruebas de PostgreSQL y concurrencia; ver [renovaciones SaaS](testing-saas-renewals.md). Esto no certifica cargos externos de Stripe: faltan las claves sandbox y sus recorridos reales.
+- La emisión fiscal real del SaaS sigue pendiente de integración y validación con los datos del emisor y su cuenta/CSD de Facturama. El cobro confirmado no fabrica un UUID fiscal de producción.
 - Esta batería no certifica todos los flujos del POS, tienda y APK ni todos los posibles fallos distribuidos o de infraestructura. Esos productos conservan sus suites específicas.

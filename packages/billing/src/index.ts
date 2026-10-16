@@ -111,11 +111,13 @@ export function siguientePeriodo(
 ): { start: Date; end: Date } {
   const start = new Date(currentEnd);
   const end = new Date(currentEnd);
-  if (interval === "monthly") {
-    end.setUTCMonth(end.getUTCMonth() + 1);
-  } else {
-    end.setUTCFullYear(end.getUTCFullYear() + 1);
-  }
+  // Clamp Jan 31 / Feb 29 instead of overflowing into the following month.
+  const day = end.getUTCDate();
+  end.setUTCDate(1);
+  if (interval === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
+  else end.setUTCFullYear(end.getUTCFullYear() + 1);
+  const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  end.setUTCDate(Math.min(day, lastDay));
   return { start, end };
 }
 

@@ -4,6 +4,7 @@ import { MockRecargaProvider } from "@gaespos/recargas";
 import { buildApp } from "./app.js";
 import type { BuildAppOptions } from "./app.js";
 import { loadConfig } from "./config.js";
+import { startBillingScheduler } from "./jobs/billing-scheduler.js";
 import { startFlowsScheduler } from "./jobs/flows-scheduler.js";
 import { startIncidentAuditorScheduler } from "./jobs/incident-auditor-scheduler.js";
 import { startPostPagoScheduler } from "./jobs/post-pago-scheduler.js";
@@ -43,6 +44,9 @@ async function main(): Promise<void> {
     app.log.warn("⚠️  SHIPPING_PROVIDER=mock — usando MockShippingProvider (no apto producción)");
   }
 
+  const stopBillingScheduler = config.BILLING_SCHEDULER_ENABLED
+    ? startBillingScheduler(app, config.BILLING_RUN_INTERVAL_MIN)
+    : undefined;
   const stopPostPagoScheduler = startPostPagoScheduler(app);
   const stopIncidentAuditorScheduler = config.INCIDENT_AUDITOR_ENABLED
     ? startIncidentAuditorScheduler(app, config.INCIDENT_AUDITOR_INTERVAL_MIN)
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "shutdown signal received");
     try {
+      await stopBillingScheduler?.();
       stopPostPagoScheduler();
       stopIncidentAuditorScheduler?.();
       stopFlowsScheduler?.();

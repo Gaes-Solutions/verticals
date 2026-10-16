@@ -42,6 +42,8 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
     STOREFRONT_READ_RATE_LIMIT_MAX: 100000,
     RATE_LIMIT_WINDOW: "1 minute",
     TRUST_PROXY_HOPS: 1,
+    BILLING_SCHEDULER_ENABLED: false,
+    BILLING_RUN_INTERVAL_MIN: 15,
     FLOWS_SCHEDULER_ENABLED: false,
     FLOWS_RUN_INTERVAL_MIN: 360,
     RECORDATORIOS_SCHEDULER_ENABLED: false,
