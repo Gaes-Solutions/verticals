@@ -142,7 +142,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Inicio",
     items: [
-      { key: "inicio", label: "Guía de inicio", icon: Rocket, perm: "reportes.ventas" },
+      { key: "inicio", label: "Guía de inicio", icon: Rocket, perm: "configuracion.leer" },
       { key: "dashboard", label: "Resumen", icon: BarChart3, perm: "reportes.ventas" },
       { key: "reportes", label: "Reportes", icon: BarChart3, perm: "reportes.ventas" },
       { key: "ayuda", label: "Ayuda", icon: HelpCircle, perm: "public" },
@@ -369,7 +369,9 @@ export function App() {
     setUserMenuOpen(false);
   }
 
-  const ActivePage = PAGE_COMPONENTS[seccion];
+  const seccionPermitida =
+    visibleNav.find((item) => item.key === seccion)?.key ?? visibleNav[0]?.key ?? "ayuda";
+  const ActivePage = PAGE_COMPONENTS[seccionPermitida];
 
   return (
     <div className="flex h-full flex-col md:flex-row">
