@@ -87,7 +87,10 @@ const routes: FastifyPluginAsync = async (app) => {
     }),
   );
   app.get("/pago-config", (req, reply) =>
-    respond(reply, () => configPagoMobile(app, context(req).client)),
+    respond(reply, () => {
+      const { client, tenant } = context(req);
+      return configPagoMobile(app, client, tenant);
+    }),
   );
   app.post("/checkout/preparar", (req, reply) =>
     respond(reply, () => {

@@ -105,7 +105,11 @@ export async function enviosMobile(
     })),
   };
 }
-export async function configPagoMobile(app: FastifyInstance, client: TenantPrismaClient) {
+export async function configPagoMobile(
+  app: FastifyInstance,
+  client: TenantPrismaClient,
+  tenantSlug: string,
+) {
   const cfg = await client.configTiendaEcommerce.findFirst({
     select: { pasarelaPagoProvider: true, activa: true },
   });
@@ -122,6 +126,13 @@ export async function configPagoMobile(app: FastifyInstance, client: TenantPrism
     app.pagoProviderFactory(provider);
   } catch {
     return unavailable;
+  }
+  if (provider === "stripe") {
+    const connect = await app.masterPrisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { stripeAccountId: true, stripeAccountStatus: true },
+    });
+    if (!connect?.stripeAccountId || connect.stripeAccountStatus !== "enabled") return unavailable;
   }
   const cardReady = tarjetaListaPara(provider);
   return {
@@ -222,7 +233,7 @@ export async function checkoutMobile(
   if (!profile?.isActive || !profile.emailPrincipal)
     throw new ComercioError(409, "Completa tu cuenta con un correo válido antes de pagar");
   if (!actor) throw new ComercioError(503, "La tienda no está disponible para recibir pagos");
-  const config = await configPagoMobile(app, client);
+  const config = await configPagoMobile(app, client, tenant);
   if (
     (config.proveedor !== "stripe" && config.proveedor !== "conekta") ||
     !config.metodos.includes(input.metodoPago)

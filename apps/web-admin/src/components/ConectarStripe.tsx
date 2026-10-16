@@ -14,7 +14,7 @@ interface ConnectStatus {
  * Onboarding de Stripe Connect: el dueño conecta su cuenta para cobrar con
  * tarjeta a SUS clientes y recibir el dinero directo. Stripe hospeda el KYC.
  */
-export function ConectarStripe() {
+export function ConectarStripe({ modoPrueba = false }: { modoPrueba?: boolean }) {
   const [estado, setEstado] = useState<ConnectStatus | null>(null);
   const [cargando, setCargando] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,6 +75,11 @@ export function ConectarStripe() {
         Conecta tu cuenta de Stripe para aceptar tarjetas y que el dinero llegue directo a tu banco.
       </p>
 
+      {modoPrueba && (
+        <p className="mb-3 rounded-lg bg-warn-light p-3 text-warn text-sm">
+          Modo de prueba. Usa los datos de prueba de Stripe; no se moverá dinero real.
+        </p>
+      )}
       {habilitado ? (
         <div className="flex items-center gap-2 rounded-lg bg-ok-light px-3 py-2 text-ok text-sm">
           <CheckCircle2 size={16} className="shrink-0" />

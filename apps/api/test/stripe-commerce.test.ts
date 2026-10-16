@@ -5,6 +5,8 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildTestApp, createTenantUser, createTestTenant, loginTenantUser } from "./helpers.js";
 
+import { configPagoMobile } from "../src/modules/cliente-portal/comercio-checkout-service.js";
+
 const slug = "test-stripe-commerce";
 const account = "acct_merchant";
 const secret = "whsec_commerce_test";
@@ -71,6 +73,7 @@ function webhook(signatureValid = true, eventAccount = account) {
 }
 beforeAll(async () => {
   vi.stubEnv("STRIPE_API_KEY", "sk_test_commerce");
+  vi.stubEnv("STRIPE_PUBLISHABLE_KEY", "pk_test_commerce");
   vi.stubEnv("STRIPE_COMMERCE_WEBHOOK_SECRET", secret);
   app = await buildTestApp(
     {},
@@ -105,6 +108,9 @@ beforeAll(async () => {
   });
   expect(product.statusCode).toBe(201);
   variant = product.json().variantes[0].id;
+  await getTenantClient(slug).configTiendaEcommerce.create({
+    data: { nombre: "Stripe QA", subdominio: slug, activa: true, pasarelaPagoProvider: "stripe" },
+  });
   await getTenantClient(slug).inventarioSucursal.create({
     data: { varianteId: variant, sucursalId: branch, stockActual: "100" },
   });
@@ -142,6 +148,36 @@ function providerMock() {
   });
 }
 describe("store Stripe reconciliation", () => {
+  it("web and mobile offer cards only when the merchant is connected", async () => {
+    await masterPrisma.tenant.update({ where: { slug }, data: { stripeAccountStatus: "pending" } });
+    try {
+      const web = await app.inject({
+        method: "GET",
+        url: "/t/tienda/config-publica",
+        headers: auth(),
+      });
+      expect(web.statusCode).toBe(200);
+      expect(web.json().metodosPago).toEqual([]);
+      expect(web.json().pagoPublicKey).toBeNull();
+      expect((await configPagoMobile(app, getTenantClient(slug), slug)).metodos).toEqual([]);
+    } finally {
+      await masterPrisma.tenant.update({
+        where: { slug },
+        data: { stripeAccountStatus: "enabled" },
+      });
+    }
+    expect((await configPagoMobile(app, getTenantClient(slug), slug)).metodos).toEqual(["tarjeta"]);
+    const web = await app.inject({
+      method: "GET",
+      url: "/t/tienda/config-publica",
+      headers: auth(),
+    });
+    expect(web.json()).toMatchObject({
+      metodosPago: ["tarjeta"],
+      pagoPublicKey: "pk_test_commerce",
+      stripeAccountId: account,
+    });
+  });
   it("requires merchant Connect before any intent; never charges platform fallback", async () => {
     providerMock();
     await masterPrisma.tenant.update({ where: { slug }, data: { stripeAccountStatus: "pending" } });

@@ -382,7 +382,7 @@ export function SuscripcionPage() {
         )}
       </div>
 
-      {stripePk && <ConectarStripe />}
+      {stripePk && <ConectarStripe modoPrueba={stripePk.startsWith("pk_test_")} />}
 
       <div className="gx-card p-5">
         <h2 className="mb-2 font-semibold text-slate-800">Facturas ({invoices.length})</h2>

@@ -45,7 +45,7 @@ export async function iniciarOnboardingConnect(
 
   const tenant = await master.tenant.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { stripeAccountId: true, commercialName: true, legalName: true },
+    select: { stripeAccountId: true, commercialName: true, legalName: true, slug: true },
   });
 
   let accountId = tenant.stripeAccountId;
@@ -71,8 +71,8 @@ export async function iniciarOnboardingConnect(
   const base = webAdminUrl();
   const link = await connect.crearAccountLink({
     accountId,
-    refreshUrl: `${base}/?connect=refresh`,
-    returnUrl: `${base}/?connect=done`,
+    refreshUrl: `${base}/?${new URLSearchParams({ connect: "refresh", negocio: tenant.slug })}`,
+    returnUrl: `${base}/?${new URLSearchParams({ connect: "done", negocio: tenant.slug })}`,
   });
   return { url: link.url };
 }

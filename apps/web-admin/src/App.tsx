@@ -274,7 +274,10 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
 
 export function App() {
   const [session, setSession] = useState<AdminSession | null>(null);
-  const [seccion, setSeccion] = useState<Seccion>("inicio");
+  const [seccion, setSeccion] = useState<Seccion>(() => {
+    const connect = new URLSearchParams(window.location.search).get("connect");
+    return connect === "done" || connect === "refresh" ? "suscripcion" : "inicio";
+  });
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [registrando, setRegistrando] = useState(false);
