@@ -43,10 +43,10 @@ Las regresiones de API están en `apps/api/test/platform-workflows.test.ts`, jun
 
 ## Límites y pendientes para una liberación comercial
 
-- En staging no hay `STRIPE_API_KEY`, `STRIPE_PUBLISHABLE_KEY` ni `STRIPE_WEBHOOK_SECRET`. Se validó el contrato del cliente con respuestas simuladas; queda la prueba externa con Stripe en modo test: guardar tarjeta, cobrar, rechazo, 3DS y webhook firmado. No se realizaron cargos ni transferencias reales.
+- Stripe sandbox ya quedó configurado y validado externamente: tarjeta guardada, cobro, webhook real firmado, rechazo y recuperación sobre la misma intención, y 3DS en la vista móvil desplegada. Ver [evidencia y alcance](testing-saas-renewals.md#validación-externa-con-stripe-sandbox). La tienda y el cliente temporales se eliminaron y los cargos de prueba se reembolsaron. Esto no certifica dinero real ni la activación de Stripe Connect de cada comercio.
 - La prueba TXT positiva usa un resolver DNS simulado. Falta conectar un dominio real, publicar CNAME/TXT y comprobar el certificado HTTPS y el acceso público desde ese dominio.
 - Los payouts son registros de pago manual. La prueba no realiza una transferencia SPEI/PayPal/Connect.
 - El cálculo V1 de comisiones toma el precio del plan del referido activo; no se probó una conciliación automática contra cobros reales.
-- El motor de renovación mensual/anual y su scheduler ya tienen pruebas de PostgreSQL y concurrencia; ver [renovaciones SaaS](testing-saas-renewals.md). Esto no certifica cargos externos de Stripe: faltan las claves sandbox y sus recorridos reales.
+- El motor de renovación mensual/anual y su scheduler ya tienen pruebas de PostgreSQL y concurrencia; ver [renovaciones SaaS](testing-saas-renewals.md). El cobro del worker también se verificó con Stripe sandbox; la renovación de periodos mensuales/anuales y su concurrencia conservan las pruebas aisladas de PostgreSQL.
 - La emisión fiscal real del SaaS sigue pendiente de integración y validación con los datos del emisor y su cuenta/CSD de Facturama. El cobro confirmado no fabrica un UUID fiscal de producción.
 - Esta batería no certifica todos los flujos del POS, tienda y APK ni todos los posibles fallos distribuidos o de infraestructura. Esos productos conservan sus suites específicas.
