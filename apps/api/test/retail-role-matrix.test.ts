@@ -43,6 +43,7 @@ describe("retail users: least privilege and immediate revocation", () => {
     const manager = role === "dueno" || role === "gerente";
     const cases: [string, boolean][] = [
       ["/t/productos", true],
+      ["/t/inventario", role !== "contador_interno"],
       ["/t/usuarios", manager],
       ["/t/roles", manager],
       ["/t/ecommerce/config", manager],

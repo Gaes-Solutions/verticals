@@ -42,6 +42,7 @@ export function ClientesB2bPage() {
   const [modal, setModal] = useState(false);
   const [listas, setListas] = useState<ListaPrecio[]>([]);
   const puedeCrear = puede("clientes.crear");
+  const cargarListas = puedeCrear && puede("precios.leer");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -65,10 +66,11 @@ export function ClientesB2bPage() {
   }, [cargar]);
 
   useEffect(() => {
+    if (!cargarListas) return;
     api<ListaPrecio[]>("/t/precios/listas")
       .then(setListas)
       .catch(() => setListas([]));
-  }, []);
+  }, [cargarListas]);
 
   return (
     <div>
