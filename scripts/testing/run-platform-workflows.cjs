@@ -60,6 +60,8 @@ if (retail)
     E2E_POS: "http://127.0.0.1:5181",
     E2E_EXTERNAL_SERVERS: "true",
     E2E_TENANT: "test-e2e-retail",
+    E2E_POS_EMAIL: "cajero@e2e.local",
+    E2E_POS_PASSWORD: "E2ePruebas!2026",
     E2E_REPO_ROOT: repo,
   });
 const children = [];
@@ -125,6 +127,7 @@ import { buildTestApp, createTestTenant, createTenantUser } from '${repo}/apps/a
 if(process.env.RETAIL_FLOW_TESTS==='true') {
  await createTestTenant('test-e2e-retail','QA Retail','free');
  await createTenantUser('test-e2e-retail',{email:'dueno@e2e.local',password:'E2ePruebas!2026',rolCodigo:'dueno',nombre:'QA Dueño'});
+ await createTenantUser('test-e2e-retail',{email:'cajero@e2e.local',password:'E2ePruebas!2026',rolCodigo:'cajero',nombre:'QA Cajero'});
 }
 const accounts=[];
 for(const role of ['superadmin','support','billing']) {
@@ -191,6 +194,7 @@ process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect(
       return;
     }
     command(["exec", "node", "scripts/testing/owner-billing.cjs"]);
+    command(["exec", "node", "scripts/testing/tenant-role-screens.cjs"]);
     command(["exec", "node", "scripts/testing/platform-role-screens.cjs"]);
   } finally {
     for (const child of children) {

@@ -13,8 +13,8 @@ const AZUCAR = CATALOGO[1] as (typeof CATALOGO)[number];
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Correo").fill(CUENTA.email);
-  await page.getByLabel("Contraseña").fill(CUENTA.password);
+  await page.getByLabel("Correo").fill(process.env.E2E_POS_EMAIL ?? CUENTA.email);
+  await page.getByLabel("Contraseña").fill(process.env.E2E_POS_PASSWORD ?? CUENTA.password);
   await page.getByRole("button", { name: "Entrar" }).click();
 
   // El POS no deja vender sin caja abierta: es la salvaguarda que hace que el

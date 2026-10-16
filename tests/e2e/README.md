@@ -1,23 +1,22 @@
 # Happy paths en navegador (Playwright)
 
 Cubren los caminos que un negocio real recorre todos los días: el cajero cobrando y el dueño
-administrando su catálogo. Complementan a las 1010 pruebas de API, que verifican el backend pero
+administrando su catálogo. Complementan las pruebas de API, que verifican el backend pero
 no que los botones existan y hagan lo que dicen.
 
 ## Correrlas
 
 ```bash
-set -a && . .env && set +a
-pnpm e2e                    # todo
-pnpm e2e --project=pos      # solo el punto de venta
-pnpm e2e --project=panel    # solo el panel
-pnpm e2e --ui               # modo interactivo, para depurar
+pnpm exec dotenv -e .env -- node scripts/testing/run-platform-workflows.cjs --retail-e2e
 ```
 
-Playwright levanta solo la API, el panel y el punto de venta. Siempre contra la base **local**;
-nunca apuntar a producción, porque crea ventas de verdad.
+El runner crea una base PostgreSQL **local y desechable**, siembra el negocio de
+prueba y levanta la API, el panel y el POS. Al terminar elimina la base y los
+servidores. El panel entra como dueño y los recorridos del POS como cajero,
+con sus permisos reales. Rechaza bases remotas y puertos ocupados; no reutiliza un servidor desconocido.
+No necesita preparar manualmente un tenant ni modificar datos de desarrollo.
 
-## Preparar la máquina, una sola vez
+## Modo manual de desarrollo (opcional)
 
 ```bash
 npx playwright install chromium
@@ -27,6 +26,8 @@ pnpm --filter @gaespos/db migrate tenant onboard e2e-retail \
 ```
 
 El catálogo y las existencias se siembran solos antes de cada corrida (`siembra.ts`).
+El modo manual usa `pnpm e2e` contra su base configurada; para la auditoría se usa
+el runner desechable de arriba.
 
 ## Qué cubren hoy
 
