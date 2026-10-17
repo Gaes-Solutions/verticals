@@ -402,3 +402,81 @@ carrito de dos unidades y una dirección antes de la limpieza.
   modelos Android ni cobro con tarjeta. Stripe sandbox se consultó de nuevo
   después de iniciar esta corrida: registro aún incompleto, `charges_enabled`
   y `payouts_enabled` falsos. No se cambió ningún indicador para saltar ese bloqueo.
+
+## Verificación de las cuentas entregadas en staging
+
+Se usó el archivo privado de accesos de PRUEBAS del Escritorio para verificar
+las cuentas entregadas, sin sustituirlas por usuarios QA nuevos. Las URL se
+comprobaron como staging antes de autenticar. No se usó el archivo de producción.
+
+- Las diez contraseñas del archivo fueron aceptadas por sus endpoints reales.
+  Son diez claves distintas, todas de al menos doce caracteres; los valores no
+  se imprimieron ni se incorporaron al repositorio. El TXT y ZIP locales de
+  accesos de pruebas quedaron con permisos de lectura/escritura solo para su dueño.
+- Dueño, gerente, cajero, vendedor interno, almacén y contador recibieron sesiones
+  reales de Gaesland. Se cotejaron identidad, negocio y rol; los seis permisos
+  persistidos coinciden con sus presets actuales. Solo el dueño tiene wildcard.
+- El recorrido de las seis cuentas existentes pasó **226 comprobaciones de
+  pantallas a 1280 y 390 px**, más **18 aperturas/cancelaciones de formularios**,
+  con el ingreso real desde el formulario de cada cuenta. Se compararon menús
+  con permisos y se revisaron lecturas de API, errores JavaScript, carga y
+  desbordamiento horizontal. No hubo escrituras de negocio. Pantallas por vista:
+  dueño 34, gerente 32, cajero 11, vendedor 13, almacén 10 y contador 13.
+- Las tres cuentas de plataforma existen y están activas. Soporte y cobranza
+  no tienen permisos adicionales. Superadmin y soporte tienen MFA configurado;
+  cobranza conserva pendiente el alta inicial de MFA.
+- Matriz publicada de **80 comprobaciones, cero fallos**: lecturas permitidas,
+  bloqueo de usuarios/roles/configuración/reportes/suscripción según el rol,
+  rechazo de escrituras no permitidas de productos/usuarios/roles, separación
+  de sesiones de empleados frente a plataforma/compradores y rechazo de los
+  tokens intermedios MFA en rutas administrativas. Las escrituras rechazadas
+  no crean registros de negocio.
+- Comprador: ingreso real desde el formulario web, lectura de su perfil, pedidos
+  y direcciones, y cierre de esa sesión de prueba, sin crear compras ni cambiar
+  sus datos.
+- Superadmin y soporte: se comprobó desde el navegador que la contraseña válida
+  muestra el formulario de código 2FA y no concede menú ni token de sesión de
+  plataforma. El ingreso completo de estas dos cuentas queda pendiente del
+  código de sus autenticadores. No se usaron códigos de respaldo ni se modificó
+  su configuración MFA. La cuenta de cobranza requiere su alta inicial de 2FA.
+- Validación complementaria en PostgreSQL desechable: **136/136** en siete suites
+  de administración, permisos de plataforma, matriz retail, autenticación de
+  empleados, 2FA y sesiones/recuperación de cobranza. Incluye operaciones
+  permitidas, rechazos, concesión/revocación con JWT existente y restricciones
+  contra elevar privilegios. La base, servidores y sesiones QA se limpiaron.
+
+La prueba de navegador de cuentas existentes se conserva en
+`scripts/staging/check-existing-retail-accounts.cjs`. Recibe `RETAIL_ACCESS_FILE`
+como ruta a un JSON privado de registros `{role,email,password,url}`; se ejecuta
+desde la raíz del repositorio. Solo admite el panel staging de Gaesland, inicia
+sesión mediante el formulario real, compara menús con los permisos, abre vistas
+de escritorio/móvil y abre/cancela formularios. Bloquea cualquier escritura de
+negocio y no registra secretos en sus resultados. No debe publicarse el JSON.
+
+### Fallo encontrado: los roles archivados conservaban permisos
+
+- El archivado de un rol personalizado guardaba `isActive: false`, pero las
+  consultas de autenticación seguían incorporando sus permisos. Un empleado
+  asignado conservaba el permiso archivado tanto en sesiones existentes como
+  al volver a entrar.
+- La nueva regresión reprodujo el fallo contra PostgreSQL aislado: después de
+  archivar un rol de consulta de reportes, la misma sesión seguía recibiendo
+  HTTP 200 cuando debía recibir 403.
+- El cambio `f4af348` filtra roles activos tanto en el ingreso como al reconstruir
+  el usuario de una sesión. Los pasos MFA y `/auth/tenant/me` reutilizan esa
+  misma consulta. No cambia los permisos definidos para cada rol activo.
+- La prueba ahora comprueba retirada inmediata con JWT existente, ausencia del
+  rol/permiso en el perfil y en un ingreso nuevo, y recuperación del acceso si
+  el dueño reactiva el rol. Se conserva cualquier otro rol activo del usuario.
+- Las siete suites afectadas pasaron: 136 pruebas únicas; typecheck 30/30.
+  La consulta guardada de Gaesland mostró cero asignaciones de roles inactivos
+  en empleados activos. La reproducción no cambió roles, contraseñas ni MFA de
+  las cuentas entregadas.
+
+### Estado del correo durante esta revisión
+
+Brevo respondió correctamente desde el API de staging. Los cuatro remitentes
+`notifications@angaes.com`, `alerts@angaes.com`, `support@angaes.com` y
+`contact@angaes.com` aparecen registrados y activos; `angaes.com` aparece
+registrado, verificado y autenticado. Esta comprobación fue de lectura y no
+certifica entrega al buzón: no se envió un correo de prueba en esta ronda.
