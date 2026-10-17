@@ -1168,3 +1168,24 @@ manda ningún mensaje al personal ni se certifica su entrega real. El smoke
 publicado solo consulta un pedido inexistente con una cuenta de pruebas y
 comprueba denegación de invitados; no marca como leído ningún pedido existente.
 Este lote es web-tienda, sin cambios de APK ni producción.
+
+### Verificación publicada de mensajes
+
+Build final correcto; lint sin errores (avisos de complejidad del componente y
+fixture), typecheck **30/30**. Fuente staging
+`f64552bfe2eb350097f9180dca8c8f045dacd5ad`, deployment web-tienda
+`0892d6a7-67e7-4839-914d-0dda283e481b`, estado SUCCESS.
+
+El smoke real `check-order-chat-access.cjs` pasó tres grupos sin simular el API:
+GET/POST de invitado devuelven 401 con caché privada; el comprador entregado
+inicia sesión, verifica su identidad y recibe 404 para un folio inexistente,
+sin historial fabricado; otro contexto sin sesión tampoco puede consultar.
+No se hizo ningún POST de chat autenticado ni se consultaron hilos existentes,
+por lo que no hubo notificaciones al personal ni cambios de lectura de pedidos.
+Los once grupos de interfaz se ejecutaron localmente con el componente real,
+datos sintéticos y API simulada; no se presentan como entrega real del chat.
+
+El archivo temporal de credenciales de esta prueba fue eliminado; contextos y
+navegadores cerrados. No se modificaron producción, APKs, pagos, correos ni base
+de datos mediante migraciones. Para revisar la interfaz publicada: Mi cuenta →
+Mis pedidos → abrir un pedido propio → Mensajes con la tienda.
