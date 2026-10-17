@@ -14,15 +14,20 @@ async function remote() {
   const db = new PrismaClient({ datasources: { db: { url: url.href } } });
   const peer = new PrismaClient({ datasources: { db: { url: url.href } } });
   try {
-    await db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024))`;
-      const [during] =
-        await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024)) AS acquired`;
-      assert.equal(during.acquired, false);
-      const [other] =
-        await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended('qa_other_tenant:solicitud_devolucion', 7710024)) AS acquired`;
-      assert.equal(other.acquired, true);
-    });
+    await db.$transaction(
+      async (tx) => {
+        const [context] = await tx.$queryRaw`SELECT current_schema()::text AS schema`;
+        assert.equal(context.schema, "tenant_gaesland");
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024))`;
+        const [during] =
+          await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024)) AS acquired`;
+        assert.equal(during.acquired, false);
+        const [other] =
+          await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended('qa_other_tenant:solicitud_devolucion', 7710024)) AS acquired`;
+        assert.equal(other.acquired, true);
+      },
+      { isolationLevel: "ReadCommitted" },
+    );
     const [after] =
       await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024)) AS acquired`;
     assert.equal(after.acquired, true);
@@ -52,6 +57,7 @@ try {
     ],
     { encoding: "utf8", timeout: 60000, stdio: ["ignore", "pipe", "pipe"] },
   );
+  if (!output.includes("PASS real PostgreSQL:")) throw new Error("Missing lock evidence");
   console.log(
     output
       .split("\n")

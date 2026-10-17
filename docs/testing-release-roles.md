@@ -1238,3 +1238,35 @@ el segundo solo hace POST de invitado y consultas autenticadas a un folio
 inexistente; el tercero usa SELECT y transacciones, sin crear ni modificar
 pedidos/devoluciones. No se cancelan compras, solicitan devoluciones reales,
 reembolsan cobros ni envían notificaciones como parte de estas pruebas.
+
+### Verificación publicada de cancelaciones y devoluciones
+
+Build de web-tienda y API correctos; lint sin errores (avisos de complejidad de
+validadores, hook e interceptores de QA); typecheck **30/30**. Fuente staging
+`96a71a0b0b71d4205d5ba739933a0726e2d41b46`. Ambos deployments terminaron SUCCESS:
+
+- Web-tienda: `ee57f0fb-01cd-4c0a-9924-2ef5fa17bb7a`.
+- API verticals: `f303bf79-b149-4399-a692-ae162c27deb7`.
+
+`check-order-actions-access.cjs` pasó contra los servicios reales: GET y POST
+sin sesión de ambas rutas devuelven 401 y deshabilitan caché privada; la cuenta
+compradora entregada inicia sesión y verifica su identidad; consultar un folio
+inexistente en ambas rutas devuelve 404 sin `confirmada` ni `permitida`. No se
+hizo POST autenticado de cancelación/devolución.
+
+`check-return-request-lock.cjs` pasó con dos clientes PostgreSQL reales,
+protegido por proyecto, ambiente, host y comprobación de `current_schema()` igual
+a `tenant_gaesland`. Se verificaron exclusión de otra conexión en la misma clave,
+liberación al commit y disponibilidad independiente de una clave de otra tienda,
+con el mismo aislamiento `ReadCommitted`. Solo ejecuta SELECT y transacciones;
+no escribe registros. El script exige evidencia PASS en la salida de Railway.
+Esta prueba valida el mecanismo real de bloqueo; la concurrencia del servicio
+se comprobó con el modelo unitario, sin crear devoluciones reales.
+
+Los veinte grupos de interfaz se ejecutaron localmente con componentes reales y
+respuestas simuladas, incluyendo resultados perdidos y actualización del router
+que no cambia la página. No certifican cobros ni reembolsos de pasarelas.
+Credenciales temporales eliminadas y navegadores/contextos cerrados. No hubo
+migraciones, cambios en producción, APKs, compras canceladas, solicitudes reales
+ni notificaciones al personal. Para revisar la interfaz: Mi cuenta → Mis pedidos
+→ abrir un pedido propio elegible → Cancelar compra o Solicitar devolución.
