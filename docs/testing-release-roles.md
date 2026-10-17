@@ -1705,3 +1705,51 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
   navegador. Dos POST se respondieron localmente con 503 y nunca se remitieron al
   API. No hubo canjes, pedidos, cobros ni escrituras comerciales reales. Contextos
   y navegador cerrados al terminar; no se usaron credenciales de compradores.
+
+## 17 de octubre: recuperación del checkout y pagos pendientes — web staging
+
+- Fuentes: `59703de51cede7bd262000c088d93c88355e443f` y
+  `57163c78e06e214d4523c083eb46fe937884854f`. Web desplegada **SUCCESS** con el
+  segundo SHA, deployment `e74c4edc-75c5-49aa-b87f-cb933d649c29`.
+- Se corrigió un fallo reproducido al consultar una referencia recuperada:
+  `metodoActivo` se inicializaba después del retorno de la pantalla pendiente.
+  La consulta alcanzaba esa variable sin inicializar y el aviso de error, además,
+  quedaba oculto por esa misma pantalla. Ahora muestra errores, una acción para
+  volver a iniciar sesión y el resultado de una consulta que sigue pendiente.
+- Consultar y enviar comparten un bloqueo inmediato en memoria. Las solicitudes
+  de checkout tienen límite de 20 segundos y se cancelan al desmontar o cambiar
+  de contexto. La consulta BFF comparte 15 segundos entre identidad del comprador,
+  autenticación de storefront y lectura del intento; sus respuestas son privadas
+  y no se almacenan en caché. No se impone ese límite a la confirmación bancaria
+  interactiva del SDK. Guardar opcionalmente una dirección tiene su propio límite.
+- Se valida que el resultado contenga folio, total y estado reconocidos antes de
+  mostrar instrucciones o completar la compra. Los datos persistidos también se
+  validan; se mantienen separados por propietario y no se adopta la clave antigua
+  sin dueño. Una respuesta con otro folio no reemplaza el pedido apartado.
+- Los errores de red, timeout, respuesta incompleta o JSON inválido conservan el
+  intento enviado, su referencia válida y el carrito. No provocan otro POST ni
+  generan una clave nueva. Solo el 404 explícito `ATTEMPT_NOT_FOUND` acompañado
+  por `safeToRetry: true` habilita corregir el mismo intento y retira su pantalla
+  pendiente. La idempotencia del servidor existente sigue siendo necesaria.
+- Una referencia renovada del mismo folio conserva el método guardado. Si falta
+  el dato del método, no se inventan instrucciones OXXO. Un resultado Stripe
+  `fallido` se muestra como fallo antes de intentar otra confirmación del SDK.
+- Pantalla pendiente extraída a `components/pago-pendiente.tsx`: avisos accesibles,
+  enlace de sesión que regresa a checkout, controles de al menos 44 px y referencia
+  que se ajusta a pantalla estrecha. Captura sintética de 320 px inspeccionada.
+- **605/605 pruebas web** (34 nuevas), compilación de producción web y **30/30
+  tareas de tipos** aprobadas. **18 grupos locales de navegador** sobre la página
+  real: recarga, doble consulta, siete errores/recuperaciones, fallo Stripe,
+  conservación del método, método desconocido, sesión vencida con cuerpo no JSON,
+  recuperación segura del mismo intento, referencia corrupta, móvil de 320 px,
+  doble clic al enviar, desmontaje con respuesta tardía y confirmación verificada.
+- Script `scripts/staging/check-checkout-recovery.cjs`: **18 grupos publicados
+  aprobados**, 17 con fixtures de respuestas y un GET real del BFF invitado con
+  clave aleatoria inexistente, que devolvió 404 privado sin crear pedido. Las
+  aserciones de error se limitan al aviso de checkout para no confundirlo con el
+  anunciador global de rutas de Next. El único POST de checkout de los fixtures
+  se intercepta y aborta en el navegador, sin remitirlo al servidor.
+- Esta ronda no creó pedidos, cargos, direcciones ni notificaciones reales; no
+  certifica pagos OXXO/SPEI recibidos, SCA, webhooks bancarios ni cobros Stripe.
+  No actualiza APK ni producción. Los pendientes externos de Stripe Connect y
+  facturación documentados anteriormente continúan abiertos.

@@ -116,7 +116,7 @@ let stage = "setup";
       const page = await context.newPage();
       page.setDefaultTimeout(10000);
       const fixture = { mode: "pending", reads: 0, writes: 0, release: null, errors: [] };
-      page.on("pageerror", (e) => fixture.errors.push(e.name));
+      page.on("pageerror", (e) => fixture.errors.push(e.message));
       await page.route("**/api/**", async (route) => {
         const req = route.request();
         const pathname = new URL(req.url()).pathname;
@@ -265,7 +265,7 @@ let stage = "setup";
           window.qaFastDeadline = true;
         });
       await page.getByRole("button", { name: "Ya pagué · consultar estado" }).click();
-      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.locator("#checkout-error")).toBeVisible();
       await expect(page.getByRole("button", { name: "Ya pagué · consultar estado" })).toBeEnabled();
       await retained(page);
       assert.equal(fixture.reads, 1);
@@ -277,7 +277,7 @@ let stage = "setup";
       });
       await page.getByRole("button", { name: "Ya pagué · consultar estado" }).click();
       await expect(page.getByRole("status")).toContainText("El pago sigue pendiente");
-      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.locator("#checkout-error")).toHaveCount(0);
       pass();
     }
     stage = "a failed Stripe intent shows the failure without attempting SDK confirmation";
@@ -319,7 +319,7 @@ let stage = "setup";
     ({ page, fixture } = await setup());
     fixture.mode = "session";
     await page.getByRole("button", { name: "Ya pagué · consultar estado" }).click();
-    await expect(page.getByRole("alert")).toContainText("Inicia sesión");
+    await expect(page.locator("#checkout-session-notice")).toContainText("Inicia sesión");
     await expect(page.getByRole("link", { name: "Iniciar sesión para retomar" })).toHaveAttribute(
       "href",
       "/cuenta/login?next=%2Fcheckout",
