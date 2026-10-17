@@ -1,0 +1,42 @@
+appId: com.gaessoft.cliente.staging
+name: Gaesland guest catalog, image controls and login recovery
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: Buscar artículos
+    timeout: 60000
+- assertNotVisible: mi-tienda
+- takeScreenshot: gaesland-inicio
+- tapOn: Buscar artículos
+- inputText: Licuadora
+- hideKeyboard
+- tapOn: Buscar
+- extendedWaitUntil:
+    visible: Ver Licuadora de cocina
+    timeout: 60000
+- tapOn: Ver Licuadora de cocina
+- extendedWaitUntil:
+    visible: Ampliar imagen de Licuadora de cocina
+    timeout: 30000
+- takeScreenshot: gaesland-producto
+- tapOn: Ampliar imagen de Licuadora de cocina
+- tapOn: Ampliar imagen
+- assertVisible: 150% · Restablecer
+- tapOn: Girar imagen 90 grados
+- takeScreenshot: gaesland-imagen-girada
+- tapOn: Restablecer imagen
+- assertVisible: 100% · Restablecer
+- tapOn: Cerrar imagen
+- tapOn: Agregar al carrito
+- extendedWaitUntil:
+    visible: Tu artículo te espera. Entra para guardarlo en tu carrito.
+    timeout: 15000
+- assertNotVisible: mi-tienda
+- assertVisible: Correo
+- takeScreenshot: gaesland-login-sin-selector-tienda
+- tapOn: .*Olvidaste tu contraseña.*
+- assertVisible: Recuperar contraseña
+- assertVisible: Enviar enlace
+- assertNotVisible: mi-tienda
+- takeScreenshot: gaesland-recuperacion

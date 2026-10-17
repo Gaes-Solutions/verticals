@@ -1,0 +1,68 @@
+name: Android staging APK smoke
+on:
+  push:
+    branches: [trabajo/codex-tienda-08sep]
+    paths:
+      - .github/workflows/android-staging-smoke.yml
+      - apps/mobile-cliente/.maestro/**
+      - scripts/testing/publish-native-result.py
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android-staging-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download and verify the staging APK and Maestro
+        run: |
+          mkdir -p "$RUNNER_TEMP/native"
+          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/4_IpGgcrV6Av--X6M7tfs09bmCdSZuoNqaOuEhaQitA.apk' -o "$RUNNER_TEMP/native/client.apk"
+          printf '%s  %s\n' '231f7656cc88f8593c066072a4e1b69dd1e8694b0b50e197f121a33f3bd858e6' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
+          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 9 --sdk "$ANDROID_HOME"
+          curl --fail --location --retry 2 'https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip' -o "$RUNNER_TEMP/native/maestro.zip"
+          printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
+          find "$RUNNER_TEMP/native/cli" -path '*/bin/maestro' -printf '%h\n' >> "$GITHUB_PATH"
+      - name: Enable KVM for the disposable runner
+        run: |
+          sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
+          script: |
+            adb install -r "$RUNNER_TEMP/native/client.apk"
+            mkdir -p "$RUNNER_TEMP/native/results"
+            cd apps/mobile-cliente
+            maestro test --format junit --output "$RUNNER_TEMP/native/results/results.xml" .maestro/native-guest.yml
+      - name: Save native test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-staging-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/native/results
+            apps/mobile-cliente/gaesland-*.png
+            ~/.maestro/tests
+          if-no-files-found: ignore
+      - name: Publish bounded QA evidence on a separate result branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_NATIVE_STATUS: ${{ job.status }}
+        run: python3 scripts/testing/publish-native-result.py
