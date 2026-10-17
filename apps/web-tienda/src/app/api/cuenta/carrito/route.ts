@@ -1,7 +1,36 @@
+import { esCarritoRemoto } from "@/lib/carrito-contract";
 import { sameOriginRequest } from "@/lib/checkout-session";
 import { ClienteSessionError, getClienteSession } from "@/lib/cliente";
 import { type NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
+async function respuestaServidor(
+  res: Response,
+  method: string,
+  owner: string,
+  allowClear: boolean,
+) {
+  if (method === "GET" && res.status === 404)
+    return NextResponse.json({ owner, cart: null }, { headers: { "Cache-Control": "no-store" } });
+  const data = res.status === 204 ? null : await res.json().catch(() => undefined);
+  const cleared = res.status === 204 && allowClear;
+  if (res.ok && !cleared && !esCarritoRemoto(data))
+    return NextResponse.json(
+      {
+        message: "No pudimos confirmar tu carrito. Tu selección se conserva; vuelve a intentarlo.",
+      },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
+    );
+  if (!res.ok && (!data || typeof data !== "object"))
+    return NextResponse.json(
+      { message: "No pudimos sincronizar tu carrito. Reintenta." },
+      { status: res.status, headers: { "Cache-Control": "no-store" } },
+    );
+  return NextResponse.json(res.ok ? { owner, cart: data } : data, {
+    status: res.status === 204 ? 200 : res.status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
 async function forward(req: NextRequest) {
   if (req.method !== "GET" && !sameOriginRequest(req))
     return NextResponse.json({ message: "Solicitud no autorizada." }, { status: 403 });
@@ -42,13 +71,12 @@ async function forward(req: NextRequest) {
         signal: AbortSignal.timeout(15000),
       },
     );
-    if (req.method === "GET" && res.status === 404)
-      return NextResponse.json({ owner, cart: null }, { headers: { "Cache-Control": "no-store" } });
-    const data = res.status === 204 ? null : await res.json();
-    return NextResponse.json(res.ok ? { owner, cart: data } : data, {
-      status: res.status === 204 ? 200 : res.status,
-      headers: { "Cache-Control": "no-store" },
-    });
+    return await respuestaServidor(
+      res,
+      req.method,
+      owner,
+      req.method === "POST" && Array.isArray(input?.items) && input.items.length === 0,
+    );
   } catch (error) {
     return NextResponse.json(
       {

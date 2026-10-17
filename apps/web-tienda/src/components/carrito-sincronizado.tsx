@@ -1,4 +1,5 @@
 "use client";
+import { type CarritoRemoto as Cart, esRespuestaCarrito } from "@/lib/carrito-contract";
 import {
   type CarritoLineaLocal,
   configurarCarrito,
@@ -12,10 +13,13 @@ import {
 } from "@/lib/carrito-store";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-interface Cart {
-  version: string;
-  cuponCodigo: string | null;
-  items: { varianteId: string; cantidad: string; nombre: string; precioUnitario: string }[];
+const SYNC_ERROR =
+  "No pudimos sincronizar tu carrito. Tu selección se conserva; vuelve a intentarlo.";
+function errorRespuesta(data: unknown) {
+  const error = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  return Object.assign(new Error(typeof error.message === "string" ? error.message : SYNC_ERROR), {
+    code: error.code,
+  });
 }
 export function CarritoSincronizado({ owner }: { owner: string | null }) {
   const path = usePathname();
@@ -64,15 +68,16 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
         ...(body
           ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
           : {}),
+      }).catch(() => {
+        throw new Error(
+          "No pudimos sincronizar tu carrito. Tu selección se conserva; vuelve a intentarlo.",
+        );
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!alive) return null;
-      if (!res.ok)
-        throw Object.assign(new Error(data.message ?? "No pudimos sincronizar tu carrito."), {
-          code: data.code,
-        });
-      if (data.owner !== owner) throw new Error("La cuenta cambió. Vuelve a cargar la página.");
-      return data as { owner: string; cart: Cart | null };
+      if (!res.ok) throw errorRespuesta(data);
+      if (!esRespuestaCarrito(data, owner)) throw new Error(SYNC_ERROR);
+      return data;
     }
     async function sync() {
       if (!owner || !alive || busy || document.visibilityState === "hidden") return;

@@ -48,7 +48,18 @@ it("rejects cross-origin writes, changed accounts and missing version before ups
   expect(fetchMock).not.toHaveBeenCalled();
 });
 it("uses cookie identity and forwards only cart contents and expected version", async () => {
-  fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "cart", version: "new" })));
+  fetchMock.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        id: "cart",
+        version: "new",
+        cuponCodigo: null,
+        items: [
+          { varianteId: "v", cantidad: "2.000", nombre: "Producto", precioUnitario: "10.00" },
+        ],
+      }),
+    ),
+  );
   const items = [{ varianteId: "v", cantidad: 2 }];
   const response = await POST(
     request({
@@ -61,7 +72,7 @@ it("uses cookie identity and forwards only cart contents and expected version", 
     }),
   );
   expect(response.status).toBe(200);
-  const [url, init] = fetchMock.mock.calls[0]!;
+  const [url, init] = fetchMock.mock.calls[0] ?? [];
   expect(url).toContain("/cliente-portal/comercio/carrito");
   expect(init.headers.Authorization).toBe("Bearer private-customer-token");
   expect(JSON.parse(init.body)).toEqual({ expectedVersion: "old", items });
@@ -79,4 +90,22 @@ it("maps the empty-cart 204 response to a JSON result for the browser", async ()
   const response = await POST(request({ owner, expectedVersion: "old", items: [] }));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ owner, cart: null });
+});
+it.each([
+  "null",
+  "{}",
+  '{"version":"v1","cuponCodigo":null,"items":[{"varianteId":"v","cantidad":"NaN","nombre":"Producto","precioUnitario":"10"}]}',
+])("rejects an invalid successful cart response %s", async (body) => {
+  fetchMock.mockResolvedValue(new Response(body));
+  expect((await GET(request())).status).toBe(502);
+});
+it("does not discard pending nonempty edits for an unexpected 204", async () => {
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  expect(
+    (
+      await POST(
+        request({ owner, expectedVersion: "old", items: [{ varianteId: "v", cantidad: 1 }] }),
+      )
+    ).status,
+  ).toBe(502);
 });

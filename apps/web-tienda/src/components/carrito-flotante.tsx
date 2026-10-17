@@ -13,6 +13,10 @@ export function CarritoFlotante() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const refresh = () => setItems(leerCarrito());
+    const invalidarConfirmacion = () => {
+      if (timer.current) clearTimeout(timer.current);
+      setUltimo(null);
+    };
     const agregado = (event: Event) => {
       const linea = (event as CustomEvent<CarritoLineaLocal>).detail;
       setUltimo(linea);
@@ -22,11 +26,13 @@ export function CarritoFlotante() {
     refresh();
     window.addEventListener("carrito-actualizado", refresh);
     window.addEventListener("carrito-agregado", agregado);
-    window.addEventListener("storage", refresh);
+    window.addEventListener("carrito-externo-actualizado", invalidarConfirmacion);
+    window.addEventListener("carrito-contexto-cambiado", invalidarConfirmacion);
     return () => {
       window.removeEventListener("carrito-actualizado", refresh);
       window.removeEventListener("carrito-agregado", agregado);
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener("carrito-externo-actualizado", invalidarConfirmacion);
+      window.removeEventListener("carrito-contexto-cambiado", invalidarConfirmacion);
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);

@@ -10,6 +10,11 @@ export interface CarritoLineaLocal {
 }
 
 let KEY = "gaespos_carrito";
+function recibirCambioExterno(event: StorageEvent) {
+  if (event.storageArea !== localStorage || (event.key !== null && event.key !== KEY)) return;
+  window.dispatchEvent(new Event("carrito-actualizado"));
+  window.dispatchEvent(new Event("carrito-externo-actualizado"));
+}
 let remoteVersion: string | null = null;
 export const carritoVersion = () => remoteVersion;
 export function fijarCarritoVersion(version: string | null) {
@@ -25,9 +30,14 @@ export function configurarCarrito(
   edit: (() => void) | null,
   flush: (() => Promise<void>) | null = null,
 ): void {
-  KEY = owner ? `gaespos_carrito_cuenta:${owner}` : "gaespos_carrito";
+  const nextKey = owner ? `gaespos_carrito_cuenta:${owner}` : "gaespos_carrito";
+  const changed = nextKey !== KEY;
+  KEY = nextKey;
   onEdit = edit;
   onFlush = flush;
+  window.removeEventListener("storage", recibirCambioExterno);
+  window.addEventListener("storage", recibirCambioExterno);
+  if (changed) window.dispatchEvent(new Event("carrito-contexto-cambiado"));
   window.dispatchEvent(new Event("carrito-actualizado"));
 }
 export function recibirCarrito(items: CarritoLineaLocal[]): void {

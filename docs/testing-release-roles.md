@@ -901,3 +901,41 @@ credenciales. Las ocho pruebas de interfaz son locales con respuestas
 sintéticas; la comprobación publicada certifica estas rutas y su acceso, no
 la emisión ni una descarga real de Facturama. No se modificó producción,
 no se aplicaron migraciones y no se generó un APK.
+
+## Coherencia del carrito entre pestañas y respuestas incompletas — 17 de octubre de 2026
+
+Se reprodujeron cuatro fallos de contrato antes de corregir el proxy: un 200
+con `null`, un objeto incompleto o una cantidad inválida se aceptaban como
+carrito, y un 204 inesperado podía confirmar una selección no vacía. También
+fallaron cuatro grupos de navegador local con los componentes reales. La prueba
+contra el staging anterior confirmó que agregar en la ficha de producto no
+actualizaba el contador de la otra pestaña.
+
+- El proxy solo devuelve una instantánea con versión, cupón y líneas válidas,
+  sin variantes repetidas ni precios/cantidades inválidos. Un GET 404 explícito
+  sigue representando carrito inexistente; un 204 solo confirma vaciado cuando
+  se solicitó con `items: []`. Los éxitos incompletos devuelven 502.
+- El cliente valida también la identidad y la instantánea antes de reemplazar
+  su selección o eliminar cambios pendientes. Ante fallos muestra un mensaje
+  recuperable y conserva los artículos y su versión pendiente. Las protecciones
+  existentes de versión/CAS, tienda y cuenta se conservan.
+- Los cambios de localStorage del carrito activo notifican a todas las vistas:
+  encabezado, carrito, ficha, tarjetas de producto y resumen flotante. También
+  se contempla `localStorage.clear()`; se ignora sessionStorage y las claves de
+  otros carritos. Esto complementa la sincronización de cuenta con el servidor;
+  no sincroniza invitados entre dispositivos distintos.
+- Se retira la confirmación con Deshacer al cambiar de cuenta/contexto o recibir
+  una selección de otra pestaña, para no restar artículos de una compra distinta.
+
+La suite final pasó **187/187** (15 pruebas nuevas). Los cuatro grupos locales
+pasaron después de la corrección: cambios de invitado entre pestañas y vaciado,
+cambio entre cuentas sintéticas, GET incompleto sin pérdida de selección y POST
+incompleto conservando los cambios pendientes hasta un reintento correcto.
+Estas pruebas usan API simulada y no escriben datos de negocio.
+
+Regresiones: `scripts/staging/check-cart-consistency.cjs` (componentes reales y
+cuentas sintéticas, solo localhost) y `scripts/staging/check-cart-tabs.cjs`
+(tienda local o staging, dos pestañas de invitado y escrituras de API bloqueadas).
+El segundo permite una lectura opcional del carrito de una cuenta entregada
+mediante `STOREFRONT_CART_ACCOUNT`, archivo privado con email/password; nunca
+modifica ese carrito ni envía checkout. No se generó APK en este lote.
