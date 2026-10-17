@@ -117,6 +117,37 @@ name: Synthetic shopper registration, durable cart and saved address
     timeout: 20000
 - assertVisible: .*CP 06060
 - takeScreenshot: gaesland-auth-direccion
+# Simulated public landmark coordinates; inspect autofill without saving a second address.
+- setLocation:
+    latitude: 19.4326
+    longitude: -99.1332
+- tapOn: Agregar dirección
+- tapOn: Usar mi ubicación actual
+- extendedWaitUntil:
+    visible: Completamos los datos disponibles.*
+    timeout: 30000
+- swipe:
+    start: 95%, 85%
+    end: 95%, 30%
+- scrollUntilVisible:
+    element:
+      text: Estado
+      index: 1
+- copyTextFrom:
+    text: Estado
+    index: 1
+- assertTrue: ${maestro.copiedText.length > 2 && maestro.copiedText !== 'Estado'}
+- scrollUntilVisible:
+    element:
+      text: Código postal
+      index: 1
+- copyTextFrom:
+    text: Código postal
+    index: 1
+- assertTrue: ${/^0[0-9]{4}$/.test(maestro.copiedText)}
+- takeScreenshot: gaesland-auth-ubicacion
+- tapOn: Cerrar dirección
+
 - tapOn: Cuenta
 - scrollUntilVisible:
     element: Cerrar sesión
@@ -126,3 +157,33 @@ name: Synthetic shopper registration, durable cart and saved address
     visible: Iniciar sesión
     timeout: 20000
 - assertNotVisible: Mis direcciones
+
+# Enter again using the temporary account and recover the server cart/address.
+- tapOn: Iniciar sesión
+- tapOn: tu@correo.com
+- inputText: ${MAESTRO_QA_EMAIL}
+- tapOn: '••••••••'
+- inputText: ${MAESTRO_QA_PASSWORD}
+- hideKeyboard
+- tapOn: Entrar
+- extendedWaitUntil:
+    visible: Buscar artículos
+    timeout: 30000
+- tapOn: Carrito
+- extendedWaitUntil:
+    visible: Carrito guardado en tu cuenta
+    timeout: 20000
+- assertVisible: '2'
+- takeScreenshot: gaesland-auth-carrito-recuperado
+- tapOn: Cuenta
+- tapOn: Mis direcciones
+- assertVisible: Calle de prueba editada.*
+- assertVisible: .*CP 06060
+- tapOn: Cuenta
+- scrollUntilVisible:
+    element: Cerrar sesión
+- tapOn: Cerrar sesión
+- tapOn: Tienda
+- extendedWaitUntil:
+    visible: Iniciar sesión
+    timeout: 20000

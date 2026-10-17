@@ -34,7 +34,7 @@ files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
-for name in ("install.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log"):
+for name in ("install.log", "launcher.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log"):
     file = results.parent / name
     if file.is_file():
         files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]
@@ -43,7 +43,7 @@ for root in roots:
     if not root.exists():
         continue
     for file in root.rglob("gaesland-*.png"):
-        if len(files) >= 18:
+        if len(files) >= 22:
             break
         if file.is_file() and file.stat().st_size <= 2_000_000:
             files[f"qa-native-artifacts/{file.name}"] = file.read_bytes()

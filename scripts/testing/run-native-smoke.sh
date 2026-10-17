@@ -2,6 +2,12 @@
 set -euo pipefail
 results="$RUNNER_TEMP/native/results"
 mkdir -p "$results"
+export MAESTRO_CLI_NO_ANALYTICS=1
+# Only the disposable runner launcher: a cold-start ANR covered the shop UI.
+# Keep the app's own ANRs/errors visible and lower software rendering work.
+adb shell am force-stop com.google.android.apps.nexuslauncher
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > "$results/launcher.log" 2>&1 || true
+adb shell wm size 1080x1920
 adb install -r "$RUNNER_TEMP/native/client.apk" > "$results/install.log" 2>&1
 for flow in guest account; do
   output="results.xml"

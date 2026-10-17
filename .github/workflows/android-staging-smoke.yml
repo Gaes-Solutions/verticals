@@ -50,7 +50,7 @@ jobs:
           # Each script line uses a separate shell; set cwd on the action.
           working-directory: apps/mobile-cliente
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096 -cores 2
           script: bash ../../scripts/testing/run-native-smoke.sh
       - name: Sanitize all publishable text evidence
         id: sanitize
