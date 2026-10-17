@@ -1022,3 +1022,31 @@ Validación previa al despliegue:
 Regresión local `scripts/staging/check-address-recovery.cjs`. La regresión real
 de staging `check-address-footer.cjs` añade selección de dirección en checkout
 con envío de pedido bloqueado y persistencia de marcar/desmarcar predeterminada.
+
+### Verificación publicada de direcciones
+
+Build de web-tienda y API correctos; typecheck **30/30** y lint sin errores
+(permanecen avisos de complejidad del componente y el interceptor de QA).
+Fuente staging `c37d3705d42d803e92e13aad79726227cd4ee9c7` en ambos servicios:
+web-tienda `47f548f0-fd1d-4262-8b0d-fd4832159c05`, API/verticals
+`a5f8ffce-1b9d-4ef6-8b1d-07228fa2fc4c`, ambos SUCCESS.
+
+La regresión real `check-address-footer.cjs` pasó con una cuenta temporal:
+
+- Pie de guardar visible, foco contenido y Escape en 320×568, 390×640,
+  390×420 y 1280×800. Captura del diálogo con altura reducida revisada.
+- Geolocalización real del servicio con coordenadas de prueba de CDMX:
+  completó calle/estado/CP; alta real conservó `06060`.
+- Dirección guardada preseleccionada en checkout, CP con cero inicial visible,
+  cambio a nueva dirección con campos vacíos y regreso a la guardada. La ruta
+  de envío del pedido estuvo bloqueada durante esta comprobación.
+- Edición real; desmarcar predeterminada persistió tras recargar y al reabrir
+  el formulario. Marcarla de nuevo también se confirmó en la lista.
+- Borrado real, lista vacía confirmada y ningún error JavaScript del navegador.
+
+La limpieza protegida comprobó cero pedidos, eliminó el carrito temporal y el
+comprador, y terminó con `deleted: true`. Se cerró el navegador; no se usaron ni
+copiaron contraseñas de las cuentas entregadas. No hubo pedidos, cobros ni
+correos, migraciones, cambios en producción o generación de APK. Las pruebas
+de errores/timeout fueron locales con respuestas simuladas; la comprobación
+publicada ejerció el flujo positivo contra los servicios reales de staging.
