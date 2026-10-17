@@ -767,3 +767,17 @@ de verificación. Se usó una cuenta real entregada; los datos de otro propietar
 las líneas del carrito y las referencias fueron fixtures sintéticos locales.
 Las escrituras de negocio del navegador se bloquearon. No se crearon cuentas,
 pedidos, correos, direcciones o pagos ni se modificó el carrito del servidor.
+
+### Verificación del checkout publicado
+
+Build de web-tienda, lint sin errores y typecheck **30/30** correctos (se
+conservan avisos de complejidad del checkout). Fuente desplegada únicamente
+en staging: `0ce74edd319311de2f842cbd352c79b32390cbbd`, deployment web-tienda
+`da507dce-a7e4-47fa-a74d-c37a652b524f`, estado SUCCESS. Los mismos **ocho
+escenarios de privacidad** pasaron contra la tienda publicada después del
+despliegue, con una cuenta real y fixtures locales de datos ajenos.
+
+Se detuvo el servidor local y se eliminó la copia temporal de credenciales.
+Los navegadores de prueba fueron cerrados. No se aplicaron migraciones de
+base, no se generó un APK y no se modificó producción. Esta validación no
+certifica entrega de correo ni cobro/facturación externos, todavía pendientes.
