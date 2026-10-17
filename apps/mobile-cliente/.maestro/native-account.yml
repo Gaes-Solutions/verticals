@@ -123,6 +123,8 @@ name: Synthetic shopper registration, durable cart and saved address
 - tapOn: Calle de prueba
 - eraseText
 - inputText: Calle de prueba editada
+- assertVisible: Guardar dirección
+- takeScreenshot: gaesland-auth-direccion-teclado
 - hideKeyboard
 - scrollUntilVisible:
     element: Guardar dirección
@@ -199,6 +201,16 @@ name: Synthetic shopper registration, durable cart and saved address
 - tapOn: Mis direcciones
 - assertVisible: Calle de prueba editada.*
 - assertVisible: .*CP 06060
+- tapOn: Eliminar dirección Prueba sin entrega
+- assertVisible: .*Borrar.*Prueba sin entrega.*
+- tapOn: '(?i)no'
+- assertVisible: Prueba sin entrega
+- tapOn: Eliminar dirección Prueba sin entrega
+- tapOn: '(?iu)sí'
+- extendedWaitUntil:
+    visible: Sin direcciones
+    timeout: 20000
+- takeScreenshot: gaesland-auth-direccion-eliminada
 - tapOn: Cuenta
 - scrollUntilVisible:
     element: Cerrar sesión

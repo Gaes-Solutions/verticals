@@ -30,9 +30,9 @@ jobs:
       - name: Download and verify the staging APK and Maestro
         run: |
           mkdir -p "$RUNNER_TEMP/native"
-          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/9VMjiNMARcgEsBWhAavocn039okqGQwclbNNI-cJdyY.apk' -o "$RUNNER_TEMP/native/client.apk"
-          printf '%s  %s\n' '0359997e95ee90b593b99d22a2aa3af0172936742366e910d846eddea47c9d3e' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
-          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 10 --universal --sdk "$ANDROID_HOME"
+          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/ynM6hBP1H12TyddYVQoJ99i0biLowZ1OrPTw1F2Me5Q.apk' -o "$RUNNER_TEMP/native/client.apk"
+          printf '%s  %s\n' '29145201ac315ec75cb8cd055347e9948052f40e7b82093b00834a5df68abae1' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
+          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 11 --universal --sdk "$ANDROID_HOME"
           curl --fail --location --retry 2 'https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip' -o "$RUNNER_TEMP/native/maestro.zip"
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
@@ -72,5 +72,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QA_NATIVE_STATUS: ${{ job.status }}
-          QA_APK_VERSION: '10'
+          QA_APK_VERSION: '11'
         run: python3 scripts/testing/publish-native-result.py
