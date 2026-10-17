@@ -170,6 +170,12 @@ no deben apuntarse a producción.
   seis rutas financieras/administrativas sin sesión y coherencia de la
   configuración pública de tarjeta. Script repetible:
   `node scripts/staging/check-payment-boundaries.cjs`.
+- Catálogo publicado de web y app: **12/12 productos coinciden** en visibilidad,
+  variantes comprables, precios, ofertas, stock total e imágenes. Las doce imágenes
+  distintas responden HTTP 200 con contenido de imagen. El script normaliza el
+  formato anidado de variantes web frente al formato plano móvil, sin comparar
+  campos que solo ofrece una de las dos interfaces:
+  `node scripts/staging/check-public-catalog-parity.cjs`.
 - Lectura guardada de la base de staging: sin `CfdiConfig` de Gaesland; dominio
   propio sin configurar; solo está registrado/verificado el host de Railway.
   Stripe confirma cuenta vinculada, registro sin enviar y cobros/depósitos
