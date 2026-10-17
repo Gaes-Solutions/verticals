@@ -164,7 +164,10 @@ no deben apuntarse a producción.
   superposición sobre otras apps, que la tienda no utiliza. Se bloquearon los
   tres en `app.config.ts`. La introspección de Expo verifica su eliminación y
   mantiene ubicación, biometría y vibración. La nueva APK versión 9 se solicitó
-  desde `72c817e`, perfil `gaesland-staging-phone`.
+  desde `72c817e`, perfil `gaesland-staging-phone`. El verificador reproducible es
+  `python3 scripts/testing/check-customer-apk.py archivo.apk --version 9`
+  (requiere Android SDK). Como control negativo, rechazó la APK 8 precisamente
+  por los tres permisos retirados.
 - **12 comprobaciones públicas de staging** aprobadas: cuatro rechazos de firma
   Stripe (suscripciones y pedidos), inexistencia del webhook de simulación,
   seis rutas financieras/administrativas sin sesión y coherencia de la
