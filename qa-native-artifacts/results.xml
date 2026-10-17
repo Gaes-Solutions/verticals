@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="1" failures="1" time="64.846" timestamp="2026-10-17T03:51:19">
+    <testcase id="Gaesland guest catalog, image controls and login recovery" name="Gaesland guest catalog, image controls and login recovery" classname="Gaesland guest catalog, image controls and login recovery" file=".maestro/native-guest.yml" time="64.816" timestamp="2026-10-17T03:51:19" status="ERROR">
+      <failure>Assertion is false: "Buscar artículos" is visible</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
