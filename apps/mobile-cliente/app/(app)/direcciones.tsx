@@ -25,6 +25,7 @@ import { useState } from "react";
 import {
   Alert,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -132,21 +133,23 @@ function DireccionesConSesion() {
                   setEditing(item);
                   setNueva(true);
                 }}
-                style={{ padding: 10 }}
+                style={s.addressAction}
               >
                 <Icon name="create-outline" color={colors.brand} />
               </Pressable>
-              <Icon
-                name="trash-outline"
-                size={22}
-                color={colors.danger}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Eliminar dirección ${item.etiqueta}`}
+                style={s.addressAction}
                 onPress={() =>
                   Alert.alert("Eliminar", `¿Borrar "${item.etiqueta}"?`, [
                     { text: "No" },
                     { text: "Sí", style: "destructive", onPress: () => borrar.mutate(item.id) },
                   ])
                 }
-              />
+              >
+                <Icon name="trash-outline" size={22} color={colors.danger} />
+              </Pressable>
             </View>
           </View>
         )}
@@ -213,7 +216,7 @@ function NuevaModal({
       <SafeAreaView style={s.modalRoot}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={s.modalHead}>
             <Text style={s.modalTitle}>{initial ? "Editar dirección" : "Nueva dirección"}</Text>
@@ -227,7 +230,12 @@ function NuevaModal({
               <Icon name="close" size={26} color={colors.muted} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={s.form} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={s.form}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             <AddressMap
               disabled={m.isPending}
               onSelect={(fields) =>
@@ -302,6 +310,8 @@ function NuevaModal({
                 trackColor={{ true: colors.brand, false: colors.line }}
               />
             </View>
+          </ScrollView>
+          <View style={s.modalActions}>
             {m.isError ? (
               <Text accessibilityRole="alert" style={{ color: colors.danger }}>
                 No pudimos confirmar que la dirección se guardó. Cierra este formulario y actualiza
@@ -313,10 +323,12 @@ function NuevaModal({
               icon="save"
               busy={m.isPending}
               disabled={!valido || (!initial && m.isError)}
-              onPress={() => m.mutate()}
+              onPress={() => {
+                Keyboard.dismiss();
+                m.mutate();
+              }}
             />
-            <View style={{ height: space.xl }} />
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
@@ -364,7 +376,22 @@ const s = StyleSheet.create({
   etiqueta: { fontWeight: "700", color: colors.ink, fontSize: 15 },
   dir: { color: colors.muted, fontSize: 13, marginTop: 2 },
   modalRoot: { flex: 1, backgroundColor: colors.bg, paddingTop: 8 },
+  addressAction: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalActions: {
+    flexShrink: 0,
+    padding: space.lg,
+    gap: space.sm,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
   modalHead: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

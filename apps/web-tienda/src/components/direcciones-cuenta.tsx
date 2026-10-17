@@ -2,7 +2,7 @@
 
 import { type ResultadoMapa, camposDireccionMapa } from "@/lib/direccion-mapa";
 import { Check, House, LocateFixed, MapPin, Pencil, Plus, X } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 export interface Direccion {
   id: string;
@@ -31,6 +31,7 @@ const VACIA = {
 
 /** CRUD de direcciones guardadas del cliente (checkout rápido). */
 export function DireccionesCuenta() {
+  const dialog = useRef<HTMLDialogElement>(null);
   const [dirs, setDirs] = useState<Direccion[]>([]);
   const [form, setForm] = useState({ ...VACIA });
   const [editId, setEditId] = useState<string | null>(null);
@@ -43,6 +44,10 @@ export function DireccionesCuenta() {
   const [cargandoMapa, setCargandoMapa] = useState(false);
   const [avisoMapa, setAvisoMapa] = useState<string | null>(null);
   const [errorMapa, setErrorMapa] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (abierto && dialog.current && !dialog.current.open) dialog.current.showModal();
+  }, [abierto]);
 
   const cargar = useCallback(async () => {
     try {
@@ -321,14 +326,21 @@ export function DireccionesCuenta() {
       )}
 
       {abierto && (
-        <div className="gx-modal-overlay backdrop-blur-sm">
-          <form
-            onSubmit={guardar}
-            className="gx-modal-panel space-y-4 !max-w-2xl !rounded-2xl !p-0"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+        <dialog
+          ref={dialog}
+          aria-labelledby="direccion-modal-title"
+          onClose={() => setAbierto(false)}
+          onCancel={(event) => {
+            if (guardando) event.preventDefault();
+          }}
+          className="gx-modal-panel !m-auto w-[calc(100%-2rem)] !max-h-[calc(100dvh-2rem)] !overflow-hidden !max-w-2xl !rounded-2xl !border-0 !p-0 backdrop:bg-black/40 backdrop:backdrop-blur-sm"
+        >
+          <form onSubmit={guardar} className="flex max-h-[calc(100dvh-2rem)] flex-col">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
-                <h3 className="font-bold text-lg">{editId ? "Editar" : "Nueva"} dirección</h3>
+                <h3 id="direccion-modal-title" className="font-bold text-lg">
+                  {editId ? "Editar" : "Nueva"} dirección
+                </h3>
                 <p className="mt-0.5 text-slate-500 text-xs">
                   Encuentra tu domicilio y revisa los datos antes de guardar.
                 </p>
@@ -336,129 +348,140 @@ export function DireccionesCuenta() {
               <button
                 type="button"
                 onClick={() => setAbierto(false)}
+                disabled={guardando}
                 className="gx-btn-ghost !h-9 !w-9 !rounded-full !p-0"
                 aria-label="Cerrar"
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="mx-6 rounded-2xl border border-marca/15 bg-gradient-to-br from-marca/5 to-slate-50 p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-marca text-white">
-                  <MapPin size={17} />
-                </span>
-                <div>
-                  <p className="font-semibold text-sm">Encuentra tu dirección</p>
-                  <p className="mt-0.5 text-slate-500 text-xs">
-                    Busca una calle o usa la ubicación de tu dispositivo.
-                  </p>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain py-4">
+              <div className="mx-6 rounded-2xl border border-marca/15 bg-gradient-to-br from-marca/5 to-slate-50 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-marca text-white">
+                    <MapPin size={17} />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-sm">Encuentra tu dirección</p>
+                    <p className="mt-0.5 text-slate-500 text-xs">
+                      Busca una calle o usa la ubicación de tu dispositivo.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={busquedaMapa}
-                  onChange={(e) => setBusquedaMapa(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      buscarEnMapa();
-                    }
-                  }}
-                  placeholder="Calle, ciudad y estado"
-                  className="gx-input flex-1 !rounded-xl !bg-white"
-                  aria-label="Buscar dirección en el mapa"
-                />
+                <div className="flex gap-2">
+                  <input
+                    value={busquedaMapa}
+                    onChange={(e) => setBusquedaMapa(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        buscarEnMapa();
+                      }
+                    }}
+                    placeholder="Calle, ciudad y estado"
+                    className="gx-input flex-1 !rounded-xl !bg-white"
+                    aria-label="Buscar dirección en el mapa"
+                  />
+                  <button
+                    type="button"
+                    onClick={buscarEnMapa}
+                    className="gx-btn-secondary !rounded-xl !px-3"
+                    disabled={cargandoMapa}
+                  >
+                    Buscar
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={buscarEnMapa}
-                  className="gx-btn-secondary !rounded-xl !px-3"
+                  onClick={usarUbicacion}
+                  className="gx-btn-ghost w-full !rounded-xl !border !border-slate-200 !bg-white"
                   disabled={cargandoMapa}
                 >
-                  Buscar
+                  <LocateFixed size={16} />{" "}
+                  {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
+                </button>
+                {mapa && (
+                  <iframe
+                    title="Ubicación seleccionada"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapa.lon - 0.005}%2C${mapa.lat - 0.005}%2C${mapa.lon + 0.005}%2C${mapa.lat + 0.005}&layer=mapnik&marker=${mapa.lat}%2C${mapa.lon}`}
+                    className="h-48 w-full rounded-xl border border-slate-200 shadow-sm"
+                    loading="lazy"
+                  />
+                )}
+                {avisoMapa && <output className="block text-sm text-marca">{avisoMapa}</output>}
+                {errorMapa && <p className="text-danger text-xs">{errorMapa}</p>}
+                <p className="text-xs text-slate-500">
+                  Puedes corregir cualquier campo antes de guardar. Datos del mapa:{" "}
+                  <a
+                    href="https://www.openstreetmap.org/copyright"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    © OpenStreetMap
+                  </a>
+                  .
+                </p>
+              </div>
+              <div className="grid gap-3 px-6 sm:grid-cols-2">
+                {(
+                  [
+                    ["etiqueta", "Etiqueta (Casa, Oficina…)"],
+                    ["calle", "Calle"],
+                    ["numeroExterior", "Número"],
+                    ["colonia", "Colonia"],
+                    ["municipio", "Ciudad / Municipio"],
+                    ["estado", "Estado"],
+                    ["codigoPostal", "Código postal"],
+                    ["referencias", "Referencias (opcional)"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="block">
+                    <span className="gx-label">{label}</span>
+                    <input
+                      value={form[key] as string}
+                      onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                      required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
+                      className="gx-input !rounded-xl"
+                    />
+                  </label>
+                ))}
+              </div>
+              <label className="mx-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isDefaultEnvio}
+                  onChange={(e) => setForm((f) => ({ ...f, isDefaultEnvio: e.target.checked }))}
+                />
+                Usar como predeterminada
+              </label>
+            </div>
+            <div className="shrink-0 space-y-3 border-t border-slate-100 px-6 py-4">
+              {error && (
+                <p role="alert" className="text-danger text-sm">
+                  {error}
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAbierto(false)}
+                  disabled={guardando}
+                  className="gx-btn-ghost"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardando}
+                  className="gx-btn-primary min-w-32 disabled:opacity-50"
+                >
+                  <Check size={16} /> {guardando ? "Guardando…" : "Guardar dirección"}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={usarUbicacion}
-                className="gx-btn-ghost w-full !rounded-xl !border !border-slate-200 !bg-white"
-                disabled={cargandoMapa}
-              >
-                <LocateFixed size={16} /> {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
-              </button>
-              {mapa && (
-                <iframe
-                  title="Ubicación seleccionada"
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapa.lon - 0.005}%2C${mapa.lat - 0.005}%2C${mapa.lon + 0.005}%2C${mapa.lat + 0.005}&layer=mapnik&marker=${mapa.lat}%2C${mapa.lon}`}
-                  className="h-48 w-full rounded-xl border border-slate-200 shadow-sm"
-                  loading="lazy"
-                />
-              )}
-              {avisoMapa && <output className="block text-sm text-marca">{avisoMapa}</output>}
-              {errorMapa && <p className="text-danger text-xs">{errorMapa}</p>}
-              <p className="text-xs text-slate-500">
-                Puedes corregir cualquier campo antes de guardar. Datos del mapa:{" "}
-                <a
-                  href="https://www.openstreetmap.org/copyright"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  © OpenStreetMap
-                </a>
-                .
-              </p>
-            </div>
-            <div className="grid gap-3 px-6 sm:grid-cols-2">
-              {(
-                [
-                  ["etiqueta", "Etiqueta (Casa, Oficina…)"],
-                  ["calle", "Calle"],
-                  ["numeroExterior", "Número"],
-                  ["colonia", "Colonia"],
-                  ["municipio", "Ciudad / Municipio"],
-                  ["estado", "Estado"],
-                  ["codigoPostal", "Código postal"],
-                  ["referencias", "Referencias (opcional)"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="block">
-                  <span className="gx-label">{label}</span>
-                  <input
-                    value={form[key] as string}
-                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                    required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
-                    className="gx-input !rounded-xl"
-                  />
-                </label>
-              ))}
-            </div>
-            <label className="mx-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isDefaultEnvio}
-                onChange={(e) => setForm((f) => ({ ...f, isDefaultEnvio: e.target.checked }))}
-              />
-              Usar como predeterminada
-            </label>
-            {error && (
-              <p role="alert" className="mx-6 text-danger text-sm">
-                {error}
-              </p>
-            )}
-            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-              <button type="button" onClick={() => setAbierto(false)} className="gx-btn-ghost">
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardando}
-                className="gx-btn-primary min-w-32 disabled:opacity-50"
-              >
-                <Check size={16} /> {guardando ? "Guardando…" : "Guardar dirección"}
-              </button>
             </div>
           </form>
-        </div>
+        </dialog>
       )}
     </div>
   );
