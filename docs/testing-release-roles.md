@@ -1094,3 +1094,30 @@ Regresión: `scripts/staging/check-order-status.cjs`. No envía compras ni mensa
 las escrituras de API del navegador se bloquean. Se identificó mediante lectura
 protegida de staging un pedido invitado `checkout-qa-*`, ya existente y pendiente,
 para verificar después el servicio real sin crear pedidos ni notificaciones.
+
+### Verificación publicada del seguimiento
+
+Build web-tienda correcto, lint sin errores (avisos de complejidad del resumen,
+hook e interceptor de QA) y typecheck **30/30**. Fuente staging
+`4db6b1800e0b68c6815c3ec986bee9b5ee16716d`, deployment web-tienda
+`a8321c84-6b96-4964-bef5-949c310599d9`, estado SUCCESS.
+
+Los mismos **doce grupos de navegador** pasaron en la tienda publicada, con
+respuestas controladas para los escenarios de error y diseño. Además,
+`scripts/staging/check-order-status-readonly.cjs` pasó contra los servicios
+reales con el pedido de QA existente, sin simular su respuesta:
+
+- API devuelve el folio y total correctos, con `private, no-store`.
+- El mismo folio con otro email devuelve 404 sin total ni datos del pedido.
+- Resumen final y pantalla de rastreo muestran el total de ese pedido real.
+- Con email incorrecto y `recogida=1`, el resumen muestra error y no anuncia
+  que se registró una compra.
+
+La consulta de fixture estuvo protegida por proyecto/ambiente/host de base y
+tenant Gaesland, seleccionando solo un invitado sintético `checkout-qa-*`, de
+recogida y pago pendiente. No se crearon registros para esta prueba ni se
+alteró el pedido existente. El archivo temporal con folio/email fue eliminado,
+los navegadores cerrados y el servidor local detenido. No se usaron contraseñas
+de clientes. Tampoco se enviaron mensajes/correos ni se aplicaron migraciones
+o generaron APKs. Producción no se modificó. Este lote corresponde al rastreo/resumen;
+no certifica entrega de mensajes del chat ni cobros.
