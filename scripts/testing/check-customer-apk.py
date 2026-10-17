@@ -11,6 +11,7 @@ import zipfile
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("apk", type=Path)
 parser.add_argument("--version", required=True, help="Expected Android versionCode")
+parser.add_argument("--previous", type=Path, help="Verify upgrade signing identity against an older APK")
 parser.add_argument("--sdk", type=Path, default=Path(
     os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
     or str(Path.home() / "Android/Sdk")
@@ -25,6 +26,15 @@ def main():
         key=lambda p: tuple(int(n) for n in re.findall(r"\d+", p.name)),
     )[-1]
     subprocess.run([str(tools / "apksigner"), "verify", str(args.apk)], check=True)
+    if args.previous:
+        def certificate(path):
+            info = subprocess.check_output(
+                [str(tools / "apksigner"), "verify", "--print-certs", str(path)], text=True
+            )
+            digest = re.search(r"Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)", info)
+            assert digest, "Signing certificate digest is missing"
+            return digest.group(1).lower()
+        assert certificate(args.apk) == certificate(args.previous), "Upgrade signing identity differs"
     badging = subprocess.check_output(
         [str(tools / "aapt"), "dump", "badging", str(args.apk)], text=True
     )
@@ -49,7 +59,7 @@ def main():
     } <= permissions, "Required shop capabilities are missing"
     with zipfile.ZipFile(args.apk) as archive:
         private_files = [name for name in archive.namelist()
-                         if Path(name).name == ".env"
+                         if Path(name).name.startswith(".env")
                          or Path(name).suffix in {".jks", ".keystore", ".p12"}]
         assert not private_files, "APK contains a private configuration or signing file"
         architectures = sorted({name.split("/")[1] for name in archive.namelist()
@@ -64,6 +74,7 @@ def main():
     print(json.dumps({
         "result": "PASS", "versionCode": args.version,
         "package": "com.gaessoft.cliente.staging", "signatureVerified": True,
+        "upgradeCertificateVerified": bool(args.previous),
         "architectures": architectures, "permissions": sorted(permissions),
         "sha256": hashlib.sha256(args.apk.read_bytes()).hexdigest(),
     }, indent=2))

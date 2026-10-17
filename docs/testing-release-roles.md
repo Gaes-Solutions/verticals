@@ -168,6 +168,16 @@ no deben apuntarse a producción.
   `python3 scripts/testing/check-customer-apk.py archivo.apk --version 9`
   (requiere Android SDK). Como control negativo, rechazó la APK 8 precisamente
   por los tres permisos retirados.
+- **APK 9 terminada y descargada:** el verificador del archivo real pasó. Firma
+  válida, mismo certificado que la versión 8 para admitir su actualización,
+  paquete de staging, ARM de 32/64 bits, sin modo depurable y sin los tres
+  permisos innecesarios. Conserva ubicación, biometría, red y vibración. API
+  de staging y tienda fija Gaesland verificadas en el bundle.
+  [Descargar APK 9](https://expo.dev/artifacts/eas/4_IpGgcrV6Av--X6M7tfs09bmCdSZuoNqaOuEhaQitA.apk).
+  SHA-256: `231f7656cc88f8593c066072a4e1b69dd1e8694b0b50e197f121a33f3bd858e6`.
+  Comando adicional: `--previous anterior.apk` comprueba continuidad del
+  certificado de firma. La inspección del instalable no sustituye su ejecución
+  en un teléfono.
 - **12 comprobaciones públicas de staging** aprobadas: cuatro rechazos de firma
   Stripe (suscripciones y pedidos), inexistencia del webhook de simulación,
   seis rutas financieras/administrativas sin sesión y coherencia de la
