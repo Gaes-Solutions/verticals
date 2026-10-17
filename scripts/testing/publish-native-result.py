@@ -28,7 +28,7 @@ def api(path, data):
 summary = {
     "status": os.environ["QA_NATIVE_STATUS"], "sourceCommit": sha,
     "runUrl": f"https://github.com/{repo}/actions/runs/{run_id}",
-    "apkVersion": 9, "environment": "staging", "account": "anonymous",
+    "apkVersion": int(os.environ["QA_APK_VERSION"]), "environment": "staging", "account": "anonymous",
 }
 files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"

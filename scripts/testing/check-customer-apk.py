@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("apk", type=Path)
 parser.add_argument("--version", required=True, help="Expected Android versionCode")
 parser.add_argument("--previous", type=Path, help="Verify upgrade signing identity against an older APK")
+parser.add_argument("--universal", action="store_true", help="Expect phone and emulator native libraries")
 parser.add_argument("--sdk", type=Path, default=Path(
     os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
     or str(Path.home() / "Android/Sdk")
@@ -64,7 +65,15 @@ def main():
         assert not private_files, "APK contains a private configuration or signing file"
         architectures = sorted({name.split("/")[1] for name in archive.namelist()
                                 if name.startswith("lib/")})
-        assert architectures == ["arm64-v8a", "armeabi-v7a"], "Unexpected phone architectures"
+        expected_architectures = ["arm64-v8a", "armeabi-v7a"]
+        if args.universal:
+            expected_architectures += ["x86", "x86_64"]
+        assert architectures == expected_architectures, "Unexpected Android architectures"
+        for architecture in expected_architectures:
+            for library in ("libreactnative.so", "libhermes.so"):
+                assert f"lib/{architecture}/{library}" in archive.namelist(), (
+                    f"Missing {library} for {architecture}"
+                )
         bundle = archive.read("assets/index.android.bundle")
         assert b"https://verticals-staging.up.railway.app" in bundle, "Missing staging API"
         assert b"gaesland" in bundle, "Missing fixed shop"

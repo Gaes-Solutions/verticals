@@ -27,9 +27,9 @@ jobs:
       - name: Download and verify the staging APK and Maestro
         run: |
           mkdir -p "$RUNNER_TEMP/native"
-          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/4_IpGgcrV6Av--X6M7tfs09bmCdSZuoNqaOuEhaQitA.apk' -o "$RUNNER_TEMP/native/client.apk"
-          printf '%s  %s\n' '231f7656cc88f8593c066072a4e1b69dd1e8694b0b50e197f121a33f3bd858e6' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
-          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 9 --sdk "$ANDROID_HOME"
+          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/9VMjiNMARcgEsBWhAavocn039okqGQwclbNNI-cJdyY.apk' -o "$RUNNER_TEMP/native/client.apk"
+          printf '%s  %s\n' '0359997e95ee90b593b99d22a2aa3af0172936742366e910d846eddea47c9d3e' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
+          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 10 --universal --sdk "$ANDROID_HOME"
           curl --fail --location --retry 2 'https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip' -o "$RUNNER_TEMP/native/maestro.zip"
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
@@ -39,8 +39,8 @@ jobs:
           sudo chmod 666 /dev/kvm
       - uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
         with:
-          # Android 11 Google APIs includes ARM translation for the phone APK.
-          api-level: 30
+          # Universal APK includes native x86_64 React Native and Hermes libraries.
+          api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_6
@@ -68,4 +68,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QA_NATIVE_STATUS: ${{ job.status }}
+          QA_APK_VERSION: '10'
         run: python3 scripts/testing/publish-native-result.py
