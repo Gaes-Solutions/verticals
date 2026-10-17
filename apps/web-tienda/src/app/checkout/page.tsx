@@ -408,7 +408,9 @@ export default function CheckoutPage() {
     setPickupSubtotal(null);
     setErrorPickup(null);
     if (subtotal === 0) return;
-    fetch(`/api/envios?subtotal=${subtotal}`, { signal: controller.signal })
+    fetch(`/api/envios?subtotal=${subtotal}`, {
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]),
+    })
       .then(async (res) => {
         if (!res.ok) throw new Error("Entrega no disponible");
         const cot = (await res.json()) as { pickup: OpcionPickup[] };
@@ -439,7 +441,7 @@ export default function CheckoutPage() {
       fetch(
         `/api/envios?cp=${cp}&estado=${encodeURIComponent(estado.trim())}&subtotal=${subtotal}`,
         {
-          signal: controller.signal,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]),
         },
       )
         .then(async (res) => {
