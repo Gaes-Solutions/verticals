@@ -24,7 +24,7 @@ export interface ClienteSession {
   cliente: ClienteMe & { tenantSlug: string };
 }
 
-export async function getClienteSession(): Promise<ClienteSession | null> {
+export async function getClienteSession(signal?: AbortSignal): Promise<ClienteSession | null> {
   const store = await cookies();
   const token = store.get(COOKIE)?.value;
   if (!token) return null;
@@ -33,6 +33,7 @@ export async function getClienteSession(): Promise<ClienteSession | null> {
     res = await fetch(`${API_URL}/cliente-portal/me`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      ...(signal ? { signal } : {}),
     });
   } catch {
     throw new ClienteSessionError(503, "No se pudo verificar tu sesión. Reintenta.");
@@ -63,9 +64,9 @@ export async function getClienteSession(): Promise<ClienteSession | null> {
   return { token, cliente };
 }
 
-export async function getClienteToken(): Promise<string | null> {
+export async function getClienteToken(signal?: AbortSignal): Promise<string | null> {
   try {
-    return (await getClienteSession())?.token ?? null;
+    return (await getClienteSession(signal))?.token ?? null;
   } catch (err) {
     if (err instanceof ClienteSessionError && (err.statusCode === 401 || err.statusCode === 403))
       return null;

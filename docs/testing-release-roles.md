@@ -1121,3 +1121,49 @@ los navegadores cerrados y el servidor local detenido. No se usaron contraseñas
 de clientes. Tampoco se enviaron mensajes/correos ni se aplicaron migraciones
 o generaron APKs. Producción no se modificó. Este lote corresponde al rastreo/resumen;
 no certifica entrega de mensajes del chat ni cobros.
+
+## Mensajes del pedido: recuperación y aislamiento — 17 de octubre de 2026
+
+La revisión encontró que fallar la red durante un envío dejaba el botón
+bloqueado; un HTTP 200 sin mensaje borraba el borrador; fallar la primera
+consulta parecía un historial vacío. Veinte pruebas iniciales del límite BFF
+fallaron con el código anterior. La corrección incorpora:
+
+- Verificación de historial/mensaje (ID, autor, cuerpo, fecha y usuario opcional),
+  rechazo de IDs duplicados y confirmación del cuerpo enviado. El POST del API
+  devuelve una fila sin relación `usuario`, lo cual se acepta explícitamente.
+- El BFF envía únicamente `cuerpo` recortado, de 1 a 2000 caracteres; no permite
+  que el navegador elija autor, cliente u otros campos. Escapa el folio y mantiene
+  401/403/404/429 con mensajes propios, sin exponer errores internos. Todas las
+  respuestas son `private, no-store`; un éxito inválido es 502 y fallo de red 503.
+- Un presupuesto de 15 segundos compartido entre verificación de sesión y
+  solicitud del chat, conectado al aborto del request. La señal opcional añadida
+  a `getClienteToken/getClienteSession` no cambia llamadas existentes.
+- Carga y error explícitos, actualización manual, SSE más consulta alternativa
+  cada 30 s en pestañas visibles, y recuperación al volver a estar en línea.
+- Envío protegido con referencia inmediata contra submits simultáneos, espera
+  cliente de 20 s y recuperación en `finally`. El borrador se conserva si falla;
+  una edición nueva durante el envío no se borra al confirmar el texto anterior.
+- Un resultado incierto requiere consultar correctamente el historial con
+  «Actualizar mensajes» antes de permitir otro envío. No hay reintento POST
+  automático ni garantía de envío exactamente una vez: si se perdió la respuesta
+  de un mensaje guardado, el comprador debe revisar el historial antes de repetirlo.
+- Cada folio tiene su propia instancia: al navegar se descartan borrador/historial,
+  se cancelan lecturas/escrituras y se cierra SSE. Las respuestas antiguas no
+  actualizan el pedido siguiente. Los mensajes largos conservan saltos y se
+  ajustan al ancho; límite de 2000 caracteres y controles de al menos 44 px.
+
+Validación local: **245/245 pruebas web** (22 nuevas), diez grupos de navegador
+con el componente React real y respuestas sintéticas. Incluyen red caída,
+timeout, éxito inválido, 401, doble submit, edición durante envío, SSE y callback
+de consulta alternativa, historial inválido conservando conversación, navegación
+con consulta pendiente y diseño a 320/390/1280 px. Captura de 320 px revisada.
+El límite cliente se reduce solo en el fixture para probar timeout en 1 s.
+Regresiones: `scripts/staging/check-order-chat.cjs` y
+`scripts/staging/check-order-chat-access.cjs`.
+
+Las pruebas de envío usan exclusivamente respuestas simuladas locales: no se
+manda ningún mensaje al personal ni se certifica su entrega real. El smoke
+publicado solo consulta un pedido inexistente con una cuenta de pruebas y
+comprueba denegación de invitados; no marca como leído ningún pedido existente.
+Este lote es web-tienda, sin cambios de APK ni producción.

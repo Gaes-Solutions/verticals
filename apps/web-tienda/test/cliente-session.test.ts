@@ -38,6 +38,12 @@ describe("sesión cliente ligada a tienda", () => {
       cache: "no-store",
     });
   });
+  it("propaga el presupuesto de consulta al verificar la sesión", async () => {
+    const signal = AbortSignal.timeout(1000);
+    fetchMock.mockResolvedValue(Response.json(me()));
+    expect(await getClienteToken(signal)).toBe(mocks.token);
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(signal);
+  });
   it("rechaza sesión de otra tienda aunque haya coincidencia de email o ID", async () => {
     fetchMock.mockImplementation(async () => Response.json(me("tienda-b")));
     await expect(getClienteSession()).rejects.toMatchObject({ statusCode: 403 });
