@@ -1270,3 +1270,59 @@ Credenciales temporales eliminadas y navegadores/contextos cerrados. No hubo
 migraciones, cambios en producción, APKs, compras canceladas, solicitudes reales
 ni notificaciones al personal. Para revisar la interfaz: Mi cuenta → Mis pedidos
 → abrir un pedido propio elegible → Cancelar compra o Solicitar devolución.
+
+## Favoritos y reseñas verificadas — 17 de octubre de 2026
+
+Se reprodujeron **18 fallos** con 18 pruebas iniciales del límite web: respuestas
+vacías se aceptaban como éxito, errores de red escapaban, faltaban límites de
+espera/caché privada y eliminar no exigía un 204 real. El cliente podía quedar
+bloqueado al guardar/enviar y no consultaba si un producto ya era favorito.
+
+- Nuevos GET privados de wishlist y compras reseñables; comprueban DTOs completos,
+  precios finitos y claves únicas. Un historial inválido no equivale a una lista
+  vacía. Todas las rutas verifican sesión, usan `private, no-store`, rechazan
+  redirects y comparten 15 s entre autenticación y API. Red caída devuelve 503 y
+  un éxito inválido 502. IDs de eliminación escapados como un segmento.
+- Guardar exige `itemId`, quitar exige 204 y reseñar exige `resenaId` más un estado
+  reconocido. El BFF valida estrellas enteras de 1 a 5, textos, tres fotos de hasta
+  250000 caracteres, cabecera JPEG/PNG/WebP y caracteres base64. Solo reenvía campos admitidos;
+  identidad, verificación por compra y aprobación siguen a cargo del servidor.
+- El corazón carga el estado real antes de permitir guardar, reconoce favoritos
+  existentes y permite recuperarse manualmente si falla. La opción de iniciar
+  sesión no deja una operación en espera indefinidamente.
+- Fallar al quitar conserva la tarjeta. Antes de reenviar una escritura incierta
+  se exige actualizar la lista. Una lista recibida del servidor reemplaza el
+  estado previo; la cuenta se separa con su ID al navegar entre compradores.
+- Las reseñas conservan estrellas, texto y fotos ante red caída, timeout, 401 o
+  respuesta inválida. Una consulta explícita encuentra la reseña ya registrada
+  o permite reintentar solo si esa misma compra/producto sigue pendiente.
+  Falta de coincidencia o respuesta inválida no habilita otro envío. No hay
+  reintentos automáticos de POST.
+- Una referencia protege cada operación de doble clic, espera cliente de 20 s y
+  aborto al desmontar/cambiar de producto. Confirmación de reseña usa el estado
+  real: pendiente de revisión o calificación publicada, incluyendo fotos en
+  moderación. Adjuntar abre el selector mediante un botón accesible; estrellas,
+  quitar foto y envío miden al menos 44 px, comentario limitado a 2000 caracteres.
+- Fotos: originales JPG/PNG/WebP de hasta 12 MB y 40 MP, hasta tres por reseña.
+  Compresión progresiva hasta cumplir el presupuesto del API, fondo blanco para
+  transparencia y cierre del bitmap incluso ante error/cancelación. Procesar
+  fotos bloquea el envío y tiene un tiempo límite; un resultado tardío no vuelve
+  a añadir fotos a otra instancia.
+- API wishlist: consulta hasta dos variantes para reconocer ambigüedad. Solo
+  entrega una variante de compra directa cuando existe exactamente una; con
+  varias opciones la web lleva al producto para que el comprador elija, en vez
+  de añadir arbitrariamente la primera.
+
+Validación local: **332/332 pruebas web** (37 nuevas de rutas y 5 de imágenes),
+**3/3 pruebas unitarias del API** para 0/1/2 variantes. **22 grupos de navegador**
+con componentes reales y API sintética: historial inicial, duplicación de clics,
+respuestas perdidas, reconciliación, sesión, navegación durante envíos, estado
+actualizado del servidor, elección de opciones y carrito, PNG real preparado en
+canvas y comprimido, archivo inválido, procesamiento bloqueado, borrador con
+fotos preservado y moderación. Selector de archivos probado con teclado.
+Vistas a 320/390/1280 px sin desbordamiento y capturas móviles revisadas.
+El fixture acorta solo sus deadlines a 1 s para simular timeout.
+
+Scripts: `check-preferencias-ui.cjs` (no contacta servicios externos) y
+`check-preferencias-access.cjs` (denegación de invitados y lecturas reales de
+la cuenta). No se publican reseñas ni se agregan/quitan favoritos reales en QA.

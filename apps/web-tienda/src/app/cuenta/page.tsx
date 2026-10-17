@@ -202,12 +202,12 @@ export default async function CuentaPage() {
       </div>
 
       <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>
-      <ResenasCuenta inicial={resenables} />
+      <ResenasCuenta key={me.id} inicial={resenables} />
 
       <h2 id="favoritos" className="mt-10 mb-4 scroll-mt-44 text-lg font-bold">
         Mi lista de deseos
       </h2>
-      <WishlistCuenta inicial={wishlist} />
+      <WishlistCuenta key={me.id} inicial={wishlist} />
     </div>
   );
 }

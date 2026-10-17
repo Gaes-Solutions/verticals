@@ -286,7 +286,7 @@ export async function getMiWishlist(
       slugSeo: true,
       precioPublicoOverride: true,
       fotosArray: true,
-      producto: { select: { variantes: { select: { id: true, precioBase: true }, take: 1 } } },
+      producto: { select: { variantes: { select: { id: true, precioBase: true }, take: 2 } } },
     },
   });
   const byId = new Map(productos.map((p) => [p.id, p]));
@@ -300,7 +300,8 @@ export async function getMiWishlist(
       return {
         itemId: i.id,
         productoPublicadoId: p.id,
-        varianteId: p.producto.variantes[0]?.id ?? null,
+        varianteId:
+          p.producto.variantes.length === 1 ? (p.producto.variantes[0]?.id ?? null) : null,
         tituloPublico: p.tituloPublico,
         slugSeo: p.slugSeo,
         precio: precio.toString(),
