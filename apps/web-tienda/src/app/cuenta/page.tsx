@@ -199,7 +199,7 @@ export default async function CuentaPage() {
       </div>
 
       <div className="mt-10">
-        <MediosPagoCuenta />
+        <MediosPagoCuenta key={me.id} />
       </div>
 
       <h2 className="mt-10 mb-4 text-lg font-bold">Califica tus compras</h2>

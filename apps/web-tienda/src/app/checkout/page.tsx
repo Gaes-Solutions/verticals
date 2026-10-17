@@ -282,7 +282,7 @@ export default function CheckoutPage() {
         setNombre((prev) => prev || me.nombre);
       })
       .catch(() => {});
-    // tarjetas guardadas ("Mis tarjetas"): [] para invitado; con al menos una,
+    // tarjetas guardadas ("Mis tarjetas"): 401 para invitado; con al menos una,
     // la primera queda pre-seleccionada para pagar en 1 toque.
     fetch("/api/cuenta/medios-pago", options)
       .then(async (res) => {

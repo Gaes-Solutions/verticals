@@ -1,94 +1,223 @@
 "use client";
-
 import type { MedioPagoGuardado } from "@/lib/cliente";
+import { errorTarjeta, listaTarjetas } from "@/lib/medios-pago-contract";
 import { CreditCard, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-
-/**
- * "Mis tarjetas" en la cuenta del cliente: lista las tarjetas guardadas con su
- * máscara y permite darlas de baja. Invitado (401/[] en el BFF): no se muestra
- * la sección, igual que los demás bloques de cuenta.
- */
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DialogoTienda } from "./dialogo-tienda";
+class ErrorTarjeta extends Error {
+  constructor(readonly status: number) {
+    super(errorTarjeta(status));
+  }
+}
+async function leerTarjetas(signal: AbortSignal) {
+  const res = await fetch("/api/cuenta/medios-pago", { cache: "no-store", signal });
+  if (!res.ok) throw new ErrorTarjeta(res.status);
+  const data: unknown = await res.json().catch(() => null);
+  signal.throwIfAborted();
+  if (!listaTarjetas(data)) throw new ErrorTarjeta(502);
+  return data;
+}
+/** Saved-card metadata only. An uncertain delete must be reconciled before another write. */
 export function MediosPagoCuenta() {
   const [medios, setMedios] = useState<MedioPagoGuardado[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [eliminando, setEliminando] = useState<string | null>(null);
-
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [debeActualizar, setDebeActualizar] = useState(false);
+  const [selected, setSelected] = useState<MedioPagoGuardado | null>(null);
+  const read = useRef<AbortController | null>(null);
+  const write = useRef<AbortController | null>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const focusAfterWrite = useRef(false);
   useEffect(() => {
-    let activo = true;
-    fetch("/api/cuenta/medios-pago", { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("carga");
-        const data = (await res.json()) as MedioPagoGuardado[];
-        if (activo) setMedios(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (activo) setError("No se pudieron cargar tus tarjetas. Reintenta más tarde.");
-      });
-    return () => {
-      activo = false;
-    };
-  }, []);
-
-  async function eliminar(id: string) {
-    if (eliminando) return;
-    setEliminando(id);
+    if (!selected && focusAfterWrite.current) {
+      focusAfterWrite.current = false;
+      refreshButton.current?.focus();
+    }
+  }, [selected]);
+  const cargar = useCallback(async (parent?: AbortSignal) => {
+    read.current?.abort();
+    const c = new AbortController();
+    read.current = c;
+    setLoading(true);
     setError(null);
+    const signal = AbortSignal.any([
+      c.signal,
+      AbortSignal.timeout(20000),
+      ...(parent ? [parent] : []),
+    ]);
     try {
-      const res = await fetch(`/api/cuenta/medios-pago/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("baja");
-      setMedios((prev) => (prev ?? []).filter((m) => m.id !== id));
-    } catch {
-      setError("No se pudo eliminar la tarjeta. Reintenta más tarde.");
+      const data = await leerTarjetas(signal);
+      signal.throwIfAborted();
+      setMedios(data);
+      setDebeActualizar(false);
+      return data;
+    } catch (e) {
+      if (!c.signal.aborted) {
+        setError(e instanceof ErrorTarjeta ? e.message : errorTarjeta(503));
+        setDebeActualizar(true);
+        if (e instanceof ErrorTarjeta && [401, 403].includes(e.status)) setMedios(null);
+      }
+      return null;
     } finally {
-      setEliminando(null);
+      if (read.current === c) {
+        read.current = null;
+        if (!c.signal.aborted) setLoading(false);
+      }
+    }
+  }, []);
+  useEffect(() => {
+    void cargar();
+    return () => {
+      read.current?.abort();
+      read.current = null;
+      write.current?.abort();
+      write.current = null;
+    };
+  }, [cargar]);
+  async function eliminar() {
+    if (!selected || write.current || read.current || debeActualizar) return;
+    const card = selected;
+    const c = new AbortController();
+    write.current = c;
+    setBusy(true);
+    setError(null);
+    setMensaje(null);
+    setDebeActualizar(true);
+    const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
+    try {
+      const res = await fetch(`/api/cuenta/medios-pago/${encodeURIComponent(card.id)}`, {
+        method: "DELETE",
+        cache: "no-store",
+        signal,
+      });
+      signal.throwIfAborted();
+      if (!res.ok) throw new ErrorTarjeta(res.status);
+      if (res.status !== 204) throw new ErrorTarjeta(502);
+      const actual = await cargar(signal);
+      signal.throwIfAborted();
+      if (actual && !actual.some((m) => m.id === card.id))
+        setMensaje("Tarjeta eliminada de tu cuenta.");
+      else if (actual) {
+        setDebeActualizar(true);
+        setError("La tarjeta sigue en la lista. Actualiza antes de continuar.");
+      }
+    } catch (e) {
+      if (!c.signal.aborted) {
+        setError(e instanceof ErrorTarjeta ? e.message : errorTarjeta(503));
+        setDebeActualizar(true);
+        if (e instanceof ErrorTarjeta && [401, 403].includes(e.status)) setMedios(null);
+      }
+    } finally {
+      if (write.current === c) {
+        write.current = null;
+        setBusy(false);
+        focusAfterWrite.current = true;
+        setSelected(null);
+      }
     }
   }
-
-  if (medios === null) {
-    return error ? <p className="text-danger text-sm">{error}</p> : null;
-  }
-  if (medios.length === 0) return null;
-
+  const blocked = busy || loading || debeActualizar;
   return (
-    <div>
-      <h2 className="mb-4 text-lg font-bold">Mis tarjetas</h2>
-      <div className="space-y-2">
-        {medios.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm"
-          >
-            <CreditCard size={18} strokeWidth={2} className="flex-shrink-0 text-slate-500" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-medium capitalize">{m.marca}</span>
-              <span className="block text-slate-500 text-xs">
-                •••• {m.last4} · exp {String(m.expMes).padStart(2, "0")}/{m.expAnio}
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => eliminar(m.id)}
-              disabled={eliminando === m.id}
-              className="gx-btn-ghost text-danger disabled:opacity-50"
-            >
-              <Trash2 size={14} strokeWidth={2} className="mr-1 inline" />
-              {eliminando === m.id ? "Eliminando…" : "Eliminar"}
-            </button>
-          </div>
-        ))}
+    <section aria-labelledby="tarjetas-title">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="tarjetas-title" className="text-lg font-bold">
+          Mis tarjetas
+        </h2>
+        <button
+          ref={refreshButton}
+          type="button"
+          disabled={busy || loading}
+          onClick={() => {
+            if (!read.current && !write.current) void cargar();
+          }}
+          className="gx-btn-ghost min-h-11"
+        >
+          Actualizar tarjetas
+        </button>
       </div>
+      {loading && (
+        <output className="mb-3 block text-sm text-slate-500">Cargando tus tarjetas…</output>
+      )}
+      {!loading && medios?.length === 0 && (
+        <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">
+          No tienes tarjetas guardadas. Si la tienda lo permite, puedes guardar una al pagar.
+        </p>
+      )}
+      {medios && medios.length > 0 && (
+        <ul className="space-y-2">
+          {medios.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm"
+            >
+              <CreditCard size={20} className="shrink-0 text-slate-500" />
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-medium capitalize">{m.marca}</p>
+                <p className="text-xs text-slate-500">
+                  •••• {m.last4} · exp {String(m.expMes).padStart(2, "0")}/{m.expAnio}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={blocked}
+                onClick={() => setSelected(m)}
+                aria-label={`Eliminar tarjeta ${m.marca} terminada en ${m.last4}`}
+                className="gx-btn-ghost min-h-11 min-w-11 shrink-0 text-danger disabled:opacity-50"
+              >
+                <Trash2 size={18} />
+                <span className="sr-only">Eliminar</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {error && (
-        <p role="alert" className="mt-2 rounded bg-danger-light p-2 text-sm text-danger">
+        <p role="alert" className="mt-3 rounded-lg bg-danger-light p-3 text-sm text-danger">
           {error}
         </p>
       )}
-      <p className="mt-2 text-slate-500 text-xs">
-        Tus datos de tarjeta no pasan por la tienda: solo guardamos la referencia segura que nos da
-        Conekta.
+      {debeActualizar && (
+        <p className="mt-2 text-sm text-slate-500">
+          Actualiza la lista para comprobar tus tarjetas antes de hacer otro cambio.
+        </p>
+      )}
+      {mensaje && <output className="mt-3 block text-sm text-ok">{mensaje}</output>}
+      <p className="mt-3 text-xs text-slate-500">
+        Las tarjetas guardadas usan una referencia segura de Conekta. Aquí solo mostramos su marca,
+        últimos cuatro dígitos y vencimiento.
       </p>
-    </div>
+      {selected && (
+        <DialogoTienda
+          titulo="Eliminar tarjeta guardada"
+          bloqueado={busy}
+          onCerrar={() => setSelected(null)}
+        >
+          <p className="break-words text-sm">
+            ¿Eliminar la tarjeta {selected.marca} terminada en {selected.last4} de tu cuenta? Esto
+            no cancela tus pedidos.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setSelected(null)}
+              className="gx-btn-secondary min-h-11"
+            >
+              Conservar tarjeta
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void eliminar()}
+              className="gx-btn-primary min-h-11"
+            >
+              {busy ? "Eliminando…" : "Eliminar tarjeta"}
+            </button>
+          </div>
+        </DialogoTienda>
+      )}
+    </section>
   );
 }
