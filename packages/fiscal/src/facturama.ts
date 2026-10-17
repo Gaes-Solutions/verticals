@@ -1,3 +1,4 @@
+import { DOMParser } from "@xmldom/xmldom";
 import {
   type CfdiCancelarInput,
   type CfdiCancelarResult,
@@ -22,26 +23,18 @@ interface FacturamaTimbradoResponse {
   Id: string;
   Folio: string;
   Serie?: string;
-  Complemento?: {
-    TimbreFiscalDigital?: {
-      UUID: string;
-      FechaTimbrado: string;
-      SelloCFD: string;
-      SelloSAT: string;
-      NoCertificadoSAT: string;
-      CadenaOriginal?: string;
-    };
-  };
 }
 
 export class FacturamaClient implements FiscalProvider {
   private readonly baseUrl: string;
   private readonly authHeader: string;
+  private readonly userAgent: string;
   private readonly timeoutMs: number;
 
   constructor(config: FacturamaConfig) {
     this.baseUrl = URLS[config.ambiente];
     this.authHeader = `Basic ${Buffer.from(config.apiKey).toString("base64")}`;
+    this.userAgent = config.apiKey.split(":", 1)[0] ?? "";
     this.timeoutMs = config.timeoutMs ?? 15000;
   }
 
@@ -52,28 +45,38 @@ export class FacturamaClient implements FiscalProvider {
       "/api-lite/3/cfdis",
       body,
     );
-    const tfd = timbrado.Complemento?.TimbreFiscalDigital;
-    if (!tfd) {
-      throw new FiscalError(
-        "MISSING_TIMBRE",
-        "Facturama no devolvió TimbreFiscalDigital",
-        timbrado,
-      );
-    }
-    const [xml, pdfBase64] = await Promise.all([
-      this.requestText(`/cfdi/xml/issued/${timbrado.Id}`),
-      this.requestText(`/cfdi/pdf/issued/${timbrado.Id}`),
+    const id = encodeURIComponent(timbrado.Id);
+    const [xmlBase64, pdfBase64] = await Promise.all([
+      this.download(`/api/Cfdi/xml/issuedLite/${id}`),
+      this.download(`/api/Cfdi/pdf/issuedLite/${id}`),
     ]);
+    const xml = Buffer.from(xmlBase64, "base64").toString("utf8");
+    // The API returns Complement.TaxStamp, not the SAT XML structure. Read the
+    // signed XML for seals and certificate details rather than inventing fields.
+    if (/<!DOCTYPE/i.test(xml)) throw new FiscalError("INVALID_XML", "CFDI con DTD no permitido");
+    const document = new DOMParser({
+      onError: () => {
+        throw new FiscalError("INVALID_XML", "XML de CFDI inválido");
+      },
+    }).parseFromString(xml, "application/xml");
+    const tfd = document
+      .getElementsByTagNameNS("http://www.sat.gob.mx/TimbreFiscalDigital", "TimbreFiscalDigital")
+      .item(0);
+    const attribute = (name: string) => {
+      const value = tfd?.getAttribute(name);
+      if (!value) throw new FiscalError("MISSING_TIMBRE", `CFDI sin ${name} del timbre fiscal`);
+      return value;
+    };
     return {
       facturamaId: timbrado.Id,
-      folioFiscal: tfd.UUID,
+      folioFiscal: attribute("UUID"),
       serie: timbrado.Serie ?? "A",
       folio: timbrado.Folio,
-      fechaTimbrado: new Date(tfd.FechaTimbrado),
-      selloDigitalCfdi: tfd.SelloCFD,
-      selloSat: tfd.SelloSAT,
-      noCertificadoSat: tfd.NoCertificadoSAT,
-      cadenaOriginalSat: tfd.CadenaOriginal ?? "",
+      fechaTimbrado: new Date(attribute("FechaTimbrado")),
+      selloDigitalCfdi: attribute("SelloCFD"),
+      selloSat: attribute("SelloSAT"),
+      noCertificadoSat: attribute("NoCertificadoSAT"),
+      cadenaOriginalSat: `||${attribute("Version")}|${attribute("UUID")}|${attribute("FechaTimbrado")}|${attribute("RfcProvCertif")}|${tfd?.getAttribute("Leyenda") ? `${tfd.getAttribute("Leyenda")}|` : ""}${attribute("SelloCFD")}|${attribute("NoCertificadoSAT")}||`,
       xml,
       pdfBase64,
     };
@@ -81,17 +84,16 @@ export class FacturamaClient implements FiscalProvider {
 
   async cancelar(input: CfdiCancelarInput): Promise<CfdiCancelarResult> {
     const params = new URLSearchParams({
-      type: "issued",
       motive: input.motivo,
       ...(input.folioFiscalRelacionado ? { uuidReplacement: input.folioFiscalRelacionado } : {}),
     });
     const result = await this.request<{ Status: string; Date?: string; Acuse?: string }>(
       "DELETE",
-      `/cfdi/${input.facturamaId}?${params.toString()}`,
+      `/api-lite/cfdis/${encodeURIComponent(input.facturamaId)}?${params.toString()}`,
     );
     return {
       acuse: result.Acuse ?? "",
-      estado: result.Status === "Cancelado" ? "Cancelado" : "EnProceso",
+      estado: ["Cancelado", "canceled"].includes(result.Status) ? "Cancelado" : "EnProceso",
       fechaCancelacion: result.Date ? new Date(result.Date) : new Date(),
     };
   }
@@ -114,7 +116,7 @@ export class FacturamaClient implements FiscalProvider {
       Receiver: {
         Rfc: input.receptor.rfc,
         Name: input.receptor.razonSocial,
-        FiscalAddress: input.receptor.codigoPostal,
+        TaxZipCode: input.receptor.codigoPostal,
         FiscalRegime: input.receptor.regimenFiscal,
         CfdiUse: input.receptor.usoCfdi,
         ...(input.receptor.correo ? { Email: input.receptor.correo } : {}),
@@ -195,6 +197,7 @@ export class FacturamaClient implements FiscalProvider {
         method,
         headers: {
           Authorization: this.authHeader,
+          "User-Agent": this.userAgent,
           "Content-Type": "application/json",
           Accept: "application/json",
         },
@@ -215,21 +218,15 @@ export class FacturamaClient implements FiscalProvider {
     }
   }
 
-  private async requestText(path: string): Promise<string> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const res = await fetch(`${this.baseUrl}${path}`, {
-        method: "GET",
-        headers: { Authorization: this.authHeader },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        throw new FiscalError(`HTTP_${res.status}`, `Facturama text download error ${res.status}`);
-      }
-      return await res.text();
-    } finally {
-      clearTimeout(timer);
+  private async download(path: string): Promise<string> {
+    const result = await this.request<{ Content: string }>("GET", path);
+    if (
+      typeof result.Content !== "string" ||
+      !result.Content ||
+      !/^[A-Za-z0-9+/_\-\s]*={0,2}$/.test(result.Content)
+    ) {
+      throw new FiscalError("INVALID_DOCUMENT", "Facturama no devolvió un documento Base64 válido");
     }
+    return result.Content;
   }
 }

@@ -153,7 +153,21 @@ export function CfdiPage() {
       <section className="mb-6 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Conexión con Facturama</h2>
         <p className="mb-4 text-slate-500 text-sm">
-          Pega tu API key de Facturama. En sandbox usa tu llave de pruebas.
+          Usa el usuario y la contraseña de tu cuenta Facturama en el formato usuario:contraseña.
+          Para pruebas, utiliza una cuenta del ambiente sandbox.{" "}
+          <a
+            href="https://dev.facturama.mx/api/registro"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            Crear cuenta de pruebas
+          </a>
+          .
+        </p>
+        <p className="mb-4 text-slate-500 text-sm">
+          Registra también el certificado de sello digital del emisor en la API-Lite de Facturama.
+          Guardar estos datos aquí no carga el certificado al proveedor.
         </p>
 
         <label className="mb-3 block">
@@ -174,8 +188,8 @@ export function CfdiPage() {
 
         <label className="mb-3 block">
           <span className="gx-label">
-            API key de Facturama{" "}
-            {configurado && <span className="text-ok text-xs">· configurada </span>}
+            Credenciales de Facturama{" "}
+            {configurado && <span className="text-ok text-xs">· configuradas </span>}
           </span>
           <input
             data-tour="cfdi-apikey"
@@ -183,7 +197,7 @@ export function CfdiPage() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={
-              configurado ? "•••••••• (déjala vacía para conservarla)" : "Pega tu API key"
+              configurado ? "•••••••• (deja vacío para conservarlas)" : "usuario:contraseña"
             }
             disabled={!puedeConfigurar}
             className="gx-input"
