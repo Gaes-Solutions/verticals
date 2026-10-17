@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="1" failures="0" time="245.211" timestamp="2026-10-17T04:44:20">
+    <testcase id="Synthetic shopper registration, durable cart and saved address" name="Synthetic shopper registration, durable cart and saved address" classname="Synthetic shopper registration, durable cart and saved address" file=".maestro/native-account.yml" time="245.165" timestamp="2026-10-17T04:44:20" status="SUCCESS"/>
+  </testsuite>
+</testsuites>
