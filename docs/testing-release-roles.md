@@ -1538,3 +1538,53 @@ reales. No se registraron ni eliminaron llaves de usuarios entregados.
   del comprador; controles móviles de 44 px sin desbordamiento horizontal ni
   errores JavaScript. No se completó una ceremonia de hardware físico publicada.
   La entrada temporal de credenciales se eliminó y los navegadores se cerraron.
+
+## Mis tarjetas — lectura fiable y baja comprobada (17 de octubre)
+
+Fuente web: `ff5bbe232d7d4ddc6dfb6429f507a8b39467d2e9`, solo staging.
+No cambia el API, APK, producción ni el proveedor de cobro. No se guardaron ni
+eliminaron tarjetas reales y no se enviaron cargos.
+
+- Los BFF comparten un plazo de 15 s entre sesión y upstream, bloquean
+  redirecciones y deshabilitan caché privada en todos los resultados. GET sin
+  sesión devuelve 401, en lugar de fingir una lista vacía. El checkout ya ignora
+  esa respuesta para invitados y conserva la opción de pagar sin tarjetas guardadas.
+- Guardar/borrar exige origen y host coincidentes; POST requiere JSON y solo
+  reenvía `cardTokenId` con los límites del API. Los identificadores de baja se
+  validan antes del upstream. Los errores conservan su código sin detalles del
+  proveedor. Solo 204 confirma el contrato de baja; un 200 genérico no se acepta.
+- GET y POST verifican máscaras, últimos cuatro dígitos, mes/año e identificadores
+  únicos, y filtran la respuesta para entregar únicamente `id`, `marca`, `last4`,
+  `expMes` y `expAnio`. Ningún campo adicional o referencia del proveedor llega
+  al navegador desde estas rutas.
+- La sección distingue carga, error y lista vacía comprobada; ofrece actualización
+  manual y confirmación nativa accesible antes de borrar. Evita solicitudes
+  simultáneas y consulta de nuevo la lista tras la baja antes de anunciar éxito.
+  Si la respuesta es incierta, falla la consulta posterior o la tarjeta todavía
+  aparece, conserva el estado desconocido y exige actualizar antes de otra baja.
+  La eliminación de la última tarjeta conserva tanto la confirmación como la lista
+  vacía. Los datos se reinician por comprador, se limpian ante sesión vencida y se
+  abortan las solicitudes al salir. Los botones tienen al menos 44 px; Escape
+  conserva la tarjeta sin escribir y el foco vuelve a Actualizar tras una baja.
+- **534/534 pruebas web**, compilación y **30/30 tareas de tipos**. **18 grupos
+  locales de navegador** con el componente real y máscaras sintéticas: cargas
+  malformadas/red/timeout, vacío confirmado, confirmación/cancelación/foco, doble
+  envío, bajas inciertas/404, lectura fallida después de 204, tarjeta aún presente,
+  última tarjeta, sesión vencida, bloqueo durante actualización, cambio de usuario
+  con solicitud pendiente y layout/teclado a 320 px. Se inspeccionó visualmente el
+  diálogo estrecho. Las esperas de fixtures se aislaron por ejecución para que una
+  respuesta antigua no modificara las tarjetas sintéticas del siguiente caso.
+- Scripts reproducibles: `scripts/staging/check-tarjetas-ui.cjs` y
+  `scripts/staging/check-tarjetas-access.cjs`. Las bajas se ejercen exclusivamente
+  en fixtures locales. El script publicado bloquea escrituras de tarjeta/checkout
+  en el navegador; una entrada de guardado incompleta se rechaza antes del proveedor.
+  Esto no certifica tokenización, guardado/baja en Conekta ni cobro con tarjeta real.
+- Despliegue web **SUCCESS**: `e0a2ec73-6320-4688-b7cd-07fad898f9a3`,
+  con el SHA fuente verificado. **Cuatro grupos publicados aprobados**: las tres
+  rutas rechazan invitados y no permiten caché privada; el checkout permite llenar
+  contacto como invitado pese al 401 de tarjetas, usando solo un carrito sintético
+  del navegador; el comprador recibe únicamente los cinco campos enmascarados y
+  el guardado incompleto se rechaza con 400 antes del proveedor; Mi cuenta y su
+  actualización coinciden con la lista real a 390 px, sin errores JavaScript ni
+  desbordamiento y con controles de 44 px. No se envió ninguna compra. Se eliminó
+  la entrada temporal de credenciales y se cerraron ambos contextos de navegador.
