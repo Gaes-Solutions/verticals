@@ -621,3 +621,29 @@ exclusivo de esta auditoría; no cierra sesiones de otros usuarios o dispositivo
 Se revocaron cuatro sesiones QA remanentes y se eliminaron las copias
 temporales de credenciales, claves y cookies. La configuración del autenticador
 queda únicamente en el archivo privado del escritorio para que el propietario pueda importarla; no se cambió su contraseña.
+
+## Cierre de sesión del comprador ante errores de red
+
+La revisión posterior de los demás paneles encontró un fallo en la tienda web:
+`LogoutBoton` no comprobaba el estado HTTP y navegaba al inicio incluso si
+`/api/cuenta/logout` devolvía 503. Una desconexión dejaba una promesa rechazada
+sin aviso ni reintento explícito. Esto podía dar impresión de haber salido sin
+haber eliminado la cookie.
+
+La tienda ahora confirma la respuesta antes de limpiar el borrador de compra
+y navegar, limita la espera a 15 segundos, muestra un aviso reintentable ante
+fallos y bloquea solicitudes duplicadas incluso con dos clics inmediatos.
+
+La regresión de navegador `scripts/staging/check-storefront-logout.cjs` usa
+`STOREFRONT_LOGOUT_ACCOUNT` (JSON privado con email/password), admite solamente
+localhost o staging y bloquea escrituras de negocio. Contra el frontend local
+y API staging, con la cuenta real de comprador entregada, pasaron cuatro casos:
+
+- HTTP 503: sesión y borrador conservados, error visible y botón habilitado.
+- Desconexión: mismo comportamiento seguro y posibilidad de reintentar.
+- Espera agotada: termina a los 15 segundos y permite reintentar.
+- Reintento exitoso con dos clics inmediatos: una sola solicitud, cookie y
+  borrador eliminados, y `/api/cuenta/me` rechazado con 401.
+
+No se crearon pedidos, direcciones, cuentas ni cobros. El cierre afecta solo a
+la sesión del navegador de prueba; no cambia la contraseña del comprador.
