@@ -157,7 +157,7 @@ export function RecuperarCarrito({ codigo }: { codigo: string }) {
               ))}
             </ul>
             <p className="mt-4 text-slate-500 text-sm">
-              Los precios y la disponibilidad se actualizarán en el carrito.
+              Los precios y la disponibilidad se verificarán antes de confirmar la compra.
             </p>
             {actual.cantidad > 0 && (
               <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm">
