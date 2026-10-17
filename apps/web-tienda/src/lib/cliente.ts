@@ -196,21 +196,45 @@ export async function authClienteBackend(
 ): Promise<
   { ok: true; token: string; cliente: ClienteMe } | { ok: false; status: number; message: string }
 > {
-  const res = await fetch(`${API_URL}/auth/cliente/${accion}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, tenantSlug: await slugActual() }),
-    cache: "no-store",
-  });
-  const data = (await res.json()) as
-    | { accessToken: string; cliente: ClienteMe }
-    | { message?: string };
-  if (!res.ok || !("accessToken" in data)) {
+  let res: Response;
+  let data: { accessToken?: unknown; cliente?: Partial<ClienteMe>; message?: unknown } | null;
+  try {
+    res = await fetch(`${API_URL}/auth/cliente/${accion}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, tenantSlug: await slugActual() }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    data = await res.json().catch(() => null);
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      message: "No pudimos verificar el acceso. Inténtalo de nuevo.",
+    };
+  }
+  if (!res.ok) {
     return {
       ok: false,
       status: res.status,
-      message: ("message" in data && data.message) || "Error de autenticación",
+      message: typeof data?.message === "string" ? data.message : "No se pudo iniciar sesión.",
     };
   }
-  return { ok: true, token: data.accessToken, cliente: data.cliente };
+  const cliente = data?.cliente;
+  if (
+    typeof data?.accessToken !== "string" ||
+    !data.accessToken.trim() ||
+    typeof cliente?.id !== "string" ||
+    !cliente.id ||
+    typeof cliente.nombre !== "string" ||
+    !(cliente.email === null || typeof cliente.email === "string")
+  ) {
+    return {
+      ok: false,
+      status: 502,
+      message: "No pudimos confirmar el acceso. Inténtalo de nuevo.",
+    };
+  }
+  return { ok: true, token: data.accessToken, cliente: cliente as ClienteMe };
 }

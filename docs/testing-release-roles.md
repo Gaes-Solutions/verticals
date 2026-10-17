@@ -659,3 +659,44 @@ deployment de web-tienda `0c055021-2838-4330-9e87-78ec68be0f03`, estado SUCCESS.
 Los mismos cuatro casos de navegador pasaron contra la tienda publicada después
 del despliegue. Se detuvo el servidor local y se eliminó el JSON temporal con
 las credenciales del comprador. Producción no se modificó.
+
+## Acceso y recuperación de contraseña — 17 de octubre de 2026
+
+La revisión posterior encontró dos fallos de confirmación y un bloqueo de
+usabilidad en los formularios públicos de cuenta:
+
+- Login/registro: si el API devolvía HTTP 200 sin `accessToken`, el intermediario
+  devolvía un error con estado 200; el formulario lo interpretaba como ingreso
+  correcto. Ahora se exige token no vacío e identidad válida antes de emitir
+  cookie; una respuesta exitosa mal formada devuelve 502 y no crea cookie.
+- Recuperación/restablecimiento: un HTTP 200 con cuerpo vacío o HTML se convertía
+  en `{}` y el formulario mostraba éxito. Ahora el proxy y los formularios
+  exigen el contrato `{mensaje: string}` no vacío antes de confirmar.
+- Los formularios no tenían límite de espera y recuperación/restablecimiento
+  no bloqueaban envíos repetidos. Ahora el servidor limita la solicitud al
+  API a 10 segundos y el navegador a 15, permite reintentar, conserva los campos
+  y bloquea envíos simultáneos mediante una referencia inmediata. Los campos
+  se deshabilitan mientras se procesa el envío.
+
+La regresión inicial reprodujo **13 fallos nuevos** con las otras 114 pruebas
+en verde. Con el cambio, la suite final de la tienda pasó **127/127**. Las
+pruebas de login comprueban el límite real del route handler: devuelve 502 y
+no incluye `Set-Cookie` ante token/cuenta incompletos. Las de recuperación
+comprueban HTML, JSON vacío/nulo, fallo de red, estado de error conservado y
+resolución del tenant desde la tienda, sin aceptar el tenant del navegador.
+
+La regresión `scripts/staging/check-storefront-auth-errors.cjs` no necesita
+credenciales. Intercepta todos los POST de autenticación y bloquea las demás
+escrituras. Pasaron **26 casos de navegador** contra el frontend local con
+configuración staging: cuatro formularios (ingreso, registro, pedir enlace,
+restablecer) por seis errores/condiciones (HTML 200, JSON vacío 200, HTTP 503,
+desconexión, espera agotada, envío doble), más dos reintentos de recuperación
+con respuesta válida simulada. En cada error se conservan los datos y el
+formulario, se muestra aviso y se permite reintentar; se verificó ausencia de
+desbordamiento en escritorio/móvil.
+
+Además se comprobó ingreso y cierre reales del comprador entregado, verificando
+identidad, cookie HttpOnly y rechazo del perfil después de salir. No se creó
+ninguna cuenta, pedido, dirección o cobro; no se envió un correo ni se cambió
+una contraseña real. Los éxitos simulados de recuperación no acreditan entrega
+SMTP ni un canje de token de correo real. Esos límites externos siguen vigentes.

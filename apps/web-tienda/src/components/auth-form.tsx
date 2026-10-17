@@ -4,7 +4,7 @@ import { destinoTrasLogin } from "@/lib/auth-return";
 import { ArrowRight, Eye, EyeOff, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PasskeyLogin } from "./customer-passkeys";
 
 export function AuthForm({
@@ -12,6 +12,7 @@ export function AuthForm({
   destino,
 }: { modo: "login" | "registro"; destino?: string | undefined }) {
   const router = useRouter();
+  const pending = useRef(false);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,27 +25,34 @@ export function AuthForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (cargando || passkeyBusy) return;
+    if (pending.current || passkeyBusy) return;
+    pending.current = true;
     setError(null);
     setCargando(true);
     try {
       const res = await fetch(`/api/cuenta/${modo}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify(
           modo === "registro" ? { nombre, email, password } : { email, password },
         ),
       });
-      if (!res.ok) {
-        const d = (await res.json()) as { message?: string };
-        setError(d.message ?? "No se pudo continuar");
+      const d = await res.json().catch(() => null);
+      if (!res.ok || typeof d?.cliente?.id !== "string" || !d.cliente.id) {
+        setError(
+          typeof d?.message === "string"
+            ? d.message
+            : "No pudimos confirmar el acceso. Inténtalo de nuevo.",
+        );
         return;
       }
       router.push(siguiente);
       router.refresh();
     } catch {
-      setError("Error de conexión");
+      setError("No pudimos confirmar el acceso. Revisa tu conexión e inténtalo de nuevo.");
     } finally {
+      pending.current = false;
       setCargando(false);
     }
   }
@@ -83,6 +91,7 @@ export function AuthForm({
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
+                disabled={cargando || passkeyBusy}
                 autoComplete="name"
                 className="gx-input"
               />
@@ -96,6 +105,7 @@ export function AuthForm({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={cargando || passkeyBusy}
               className="gx-input"
             />
           </label>
@@ -111,6 +121,7 @@ export function AuthForm({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={cargando || passkeyBusy}
                 minLength={8}
                 className="gx-input !pr-12"
               />

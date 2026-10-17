@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 /** Canjea el ?token= del email de recuperación y fija la nueva contraseña.
  *  Token inválido/expirado/usado → mensaje claro con opción de pedir otro enlace. */
 export function RestablecerContrasenaForm() {
   const sp = useSearchParams();
   const token = sp.get("token") ?? "";
+  const pending = useRef(false);
   const [password, setPassword] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export function RestablecerContrasenaForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending.current) return;
     setError(null);
     if (password.length < 8) {
       setError("La contraseña debe tener al menos 8 caracteres.");
@@ -26,22 +28,29 @@ export function RestablecerContrasenaForm() {
       setError("Las contraseñas no coinciden.");
       return;
     }
+    pending.current = true;
     setCargando(true);
     try {
       const res = await fetch("/api/cuenta/restablecer-contrasena", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ token, nuevaContrasena: password }),
       });
-      if (!res.ok) {
-        const d = (await res.json().catch(() => null)) as { message?: string } | null;
-        setError(d?.message ?? "No se pudo restablecer la contraseña. Inténtalo de nuevo.");
+      const d = await res.json().catch(() => null);
+      if (!res.ok || typeof d?.mensaje !== "string" || !d.mensaje.trim()) {
+        setError(
+          typeof d?.message === "string"
+            ? d.message
+            : "No se pudo confirmar el cambio de contraseña. Inténtalo de nuevo.",
+        );
         return;
       }
       setListo(true);
     } catch {
       setError("Error de conexión. Inténtalo de nuevo en un momento.");
     } finally {
+      pending.current = false;
       setCargando(false);
     }
   }
@@ -88,6 +97,7 @@ export function RestablecerContrasenaForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            disabled={cargando}
             className="gx-input"
           />
         </label>
@@ -100,6 +110,7 @@ export function RestablecerContrasenaForm() {
             onChange={(e) => setConfirmar(e.target.value)}
             required
             minLength={8}
+            disabled={cargando}
             className="gx-input"
           />
         </label>

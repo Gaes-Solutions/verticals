@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 /** Formulario "¿Olvidaste tu contraseña?": pide el email y muestra siempre el
  *  mensaje genérico de éxito, exista o no la cuenta (anti-enumeración). */
 export function OlvidarContrasenaForm() {
+  const pending = useRef(false);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -13,24 +14,32 @@ export function OlvidarContrasenaForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending.current) return;
+    pending.current = true;
     setError(null);
     setCargando(true);
     try {
       const res = await fetch("/api/cuenta/olvidar-contrasena", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ email }),
       });
       // 200 aunque el correo no exista; otro status es un fallo de red/servicio
-      if (!res.ok) {
-        const d = (await res.json().catch(() => null)) as { message?: string } | null;
-        setError(d?.message ?? "No se pudo enviar el enlace. Inténtalo de nuevo en un momento.");
+      const d = await res.json().catch(() => null);
+      if (!res.ok || typeof d?.mensaje !== "string" || !d.mensaje.trim()) {
+        setError(
+          typeof d?.message === "string"
+            ? d.message
+            : "No se pudo confirmar la solicitud. Inténtalo de nuevo en un momento.",
+        );
         return;
       }
       setEnviado(true);
     } catch {
       setError("Error de conexión. Inténtalo de nuevo en un momento.");
     } finally {
+      pending.current = false;
       setCargando(false);
     }
   }
@@ -71,6 +80,7 @@ export function OlvidarContrasenaForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={cargando}
             className="gx-input"
           />
         </label>

@@ -109,3 +109,25 @@ describe("BFF /api/cuenta/restablecer-contrasena", () => {
     });
   });
 });
+
+describe.each([
+  ["request", POST_OLVIDAR],
+  ["redeem", POST_REESTABLECER],
+] as const)("reset upstream contract: %s", (_name, route) => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each(["{}", "null", "<html>gateway</html>"])(
+    "never confirms success for invalid upstream body %s",
+    async (body) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+      const response = await post(route, "/api/cuenta/reset", {});
+      expect(response.status).toBe(502);
+      expect(await response.json()).toHaveProperty("message");
+    },
+  );
+  it("returns a safe retryable error on network failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("private upstream data")));
+    const response = await post(route, "/api/cuenta/reset", {});
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain("private upstream data");
+  });
+});

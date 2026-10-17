@@ -5,6 +5,7 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => (mocks.token ? { value: mocks.token } : undefined) }),
   headers: async () => new Headers({ "x-tienda-slug": mocks.slug }),
 }));
+import { POST as POST_AUTH } from "../src/app/api/cuenta/[accion]/route";
 import { authClienteBackend, getClienteSession, getClienteToken } from "../src/lib/cliente";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -73,4 +74,28 @@ describe("sesión cliente ligada a tienda", () => {
       expect(JSON.parse(String(init?.body)).tenantSlug).toBe("tienda-a");
     },
   );
+});
+
+// A successful HTTP status alone must never create a shopper session.
+describe("authentication upstream contract", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each([
+    {},
+    { message: "upstream error" },
+    { accessToken: "", cliente: me() },
+    { accessToken: "token" },
+    null,
+  ])("rejects malformed successful response %j", async (body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(body)));
+    const response = await POST_AUTH(
+      new Request("http://localhost/api/cuenta/login", {
+        method: "POST",
+        body: "{}",
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ accion: "login" }) },
+    );
+    expect(response.status).toBe(502);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
 });
