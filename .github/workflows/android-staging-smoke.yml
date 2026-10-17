@@ -44,12 +44,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # Each script line uses a separate shell; set cwd on the action.
+          working-directory: apps/mobile-cliente
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
           script: |
             mkdir -p "$RUNNER_TEMP/native/results"
             adb install -r "$RUNNER_TEMP/native/client.apk" > "$RUNNER_TEMP/native/results/install.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/install.log"; exit 1; }
-            cd apps/mobile-cliente
             maestro test --format junit --output "$RUNNER_TEMP/native/results/results.xml" .maestro/native-guest.yml > "$RUNNER_TEMP/native/results/maestro.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/maestro.log"; exit 1; }
             cat "$RUNNER_TEMP/native/results/maestro.log"
       - name: Save native test evidence
