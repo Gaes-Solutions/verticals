@@ -472,6 +472,14 @@ negocio y no registra secretos en sus resultados. No debe publicarse el JSON.
   La consulta guardada de Gaesland mostró cero asignaciones de roles inactivos
   en empleados activos. La reproducción no cambió roles, contraseñas ni MFA de
   las cuentas entregadas.
+- API desplegada en staging: `779850eb-8829-44ff-8f4b-ba9b79d89df5`, fuente
+  `f5691313cbfae4f5ada2fb28be20518734d52bb6`, estado SUCCESS y `/health` HTTP 200.
+  Se verificó el commit del proceso activo y los dos filtros de roles vigentes
+  en su código compilado. Después del despliegue se repitió el ingreso de las
+  diez cuentas y pasaron **86/86 comprobaciones de API**: la matriz anterior más
+  seis consultas de perfil con identidad, roles y permisos coherentes con el
+  ingreso. Los tres accesos de plataforma conservan el paso MFA pendiente;
+  esta pasada no lo salta ni lo acredita como completado.
 
 ### Estado del correo durante esta revisión
 
