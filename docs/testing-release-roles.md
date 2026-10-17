@@ -878,3 +878,26 @@ también el diseño, generar CSS con Tailwind de web-tienda y pasar su ruta como
 hicieron solicitudes fiscales externas, pedidos, pagos ni envíos de correo.
 La emisión/descarga de una factura real sigue pendiente de configurar el
 proveedor fiscal y de disponer de un pedido pagado de prueba.
+
+### Despliegue y control de acceso publicados de facturación
+
+Build de web-tienda correcto, lint de los archivos nuevos/modificados de
+facturación sin errores y typecheck **30/30**. Se conservan las advertencias
+de complejidad preexistentes del detalle de pedido, donde solo se añadió la
+clave del componente por folio para aislar su estado entre pedidos.
+
+Fuente staging `0c738b83267ea4241cbeb692a21af89be7208caa`, deployment web-tienda
+`e3e88ce3-4e5b-44d9-b727-2eb8ae3461b4`, estado SUCCESS. La regresión publicada
+`scripts/staging/check-invoice-access.cjs` pasó con el comprador real entregado:
+
+- Invitado: GET estado, POST factura y GET PDF responden 401 y caché privada
+  deshabilitada. No se hizo POST fiscal con sesión.
+- Cuenta real: perfil validado; consultar un folio inexistente devuelve `null`
+  y su PDF devuelve JSON 404 con `private, no-store`, sin documento inventado.
+- Un contexto separado sin cookies sigue recibiendo 401 al intentar el PDF.
+
+Se cerraron los contextos de prueba y se eliminó la copia temporal de las
+credenciales. Las ocho pruebas de interfaz son locales con respuestas
+sintéticas; la comprobación publicada certifica estas rutas y su acceso, no
+la emisión ni una descarga real de Facturama. No se modificó producción,
+no se aplicaron migraciones y no se generó un APK.
