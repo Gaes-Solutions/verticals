@@ -1646,3 +1646,62 @@ No cambia el API, el APK, producción ni la configuración de Stripe/Conekta.
   en el SDK simulado, cero errores JavaScript y sin desbordamiento a 390 px.
   Se cerraron el contexto y el navegador al terminar. La configuración real de
   cobro no se modificó y no se probó un cargo ni desafío bancario reales.
+
+## Cupones — descuento ligado a la compra y retirada explícita (17 de octubre)
+
+Fuente: `8ed16f0f9b67824825c724515919d0f39e3b9a04`, web y API en staging.
+No cambia el APK, producción, configuración de promociones ni límites de uso.
+No se canjearon cupones ni se crearon pedidos/cargos reales.
+
+- El BFF normaliza y limita el código según el contrato de alta de cupones y
+  valida el subtotal con hasta cuatro decimales, conservando compras fraccionadas.
+  Comparte un plazo de 12 s para token de tienda y consulta; usa `private, no-store`.
+  Solo confirma el DTO esperado, código coincidente y descuento monetario finito,
+  no negativo y dentro del subtotal redondeado a centavos. Un rechazo explícito
+  de la oferta mantiene 200/`valido:false`; un fallo de servicio devuelve 503 y
+  una respuesta malformada 502. No se presentan como un cupón inválido del usuario.
+- La consulta del navegador tiene plazo de 15 s y bloqueo inmediato de doble
+  envío. Editar/quitar el código o cambiar carrito, subtotal, entrega, comprador
+  o disponibilidad de la función cancela/invalida el resultado anterior. Cambiar
+  productos al mismo subtotal también exige revalidar; volver al carrito anterior
+  no recupera un descuento ya invalidado. Los datos no pasan de un comprador a otro.
+- Un código escrito aún no se envía al pedido: se aplica únicamente el confirmado
+  para el contexto vigente. El comprador debe aplicarlo o quitarlo para continuar.
+  Se muestran carga, error, rechazo de oferta y éxito por separado, con etiqueta,
+  tecla Enter y controles de 44 px. Se puede quitar durante una consulta pendiente.
+  El resumen distingue el importe anterior a validar; envío gratis modifica envío,
+  sin inventar un descuento de productos. Los controles se bloquean al enviar un
+  intento de pedido para no cambiar su código durante el procesamiento.
+- El BFF de checkout indica código vacío al guardar el carrito invitado cuando no
+  hay cupón aplicado. La ruta del API interpreta el vacío explícito como `null`;
+  omitir el campo sigue conservando el código de otros consumidores. Así quitar
+  un cupón deja de mantener silenciosamente uno anterior del carrito invitado.
+  La ruta autenticada ya limpia al omitir el código y conserva ese comportamiento.
+- **571/571 pruebas web** (31 nuevas), compilaciones web/API y **30/30 tareas de
+  tipos**. **Tres pruebas de la ruta HTTP real de API con persistencia simulada**
+  comprueban omisión/conservación, vacío/limpieza y sustitución. No son pruebas de
+  concurrencia ni de persistencia PostgreSQL. La prueba del BFF invitado comprueba
+  que checkout envíe el vacío explícito al reutilizar el carrito sin cupón.
+- **20 grupos locales de navegador** con el hook/control real y consultas GET
+  sintéticas: código pendiente, doble envío, Enter/normalización, oferta vencida,
+  respuesta vacía/código incorrecto/descuento corrupto o excesivo, red/timeout/429,
+  edición/quitar durante consulta, cambio de producto al mismo subtotal, cambio
+  de importe, envío gratis, comprador, función desactivada, formato y layout a
+  320 px. Se inspeccionó visualmente la recuperación en pantalla estrecha.
+- Scripts: `scripts/staging/check-cupon-ui.cjs` y
+  `scripts/staging/check-cupon-checkout.cjs`. Este último usa carritos/opciones de
+  entrega/cupones de fixtures, intercepta cada POST de checkout y lo responde sin
+  remitirlo al API. Incluye consultas reales de solo lectura del BFF de cupones.
+  El checkout del servidor sigue recalculando precios, elegibilidad y reserva del
+  uso; esta ronda no certifica un canje concurrente ni el cargo bancario final.
+- Despliegues **SUCCESS**, ambos con el SHA fuente verificado: web
+  `4839dbbc-edd9-47cd-be6d-764aefb24fb6` y API
+  `19388e7b-207c-4ca7-bc4c-3f3196e53f55`. **Cinco grupos publicados aprobados**:
+  aplicación y captura del código normalizado en el POST interceptado; retirada
+  con total restaurado y código ausente; sustitución de producto al mismo importe
+  con revalidación obligatoria; envío gratis y cambio de modalidad; y BFF real de
+  solo lectura que rechaza formato incorrecto y confirma un código inexistente.
+  Los cuatro primeros usan configuración comercial/cupones de fixtures en el
+  navegador. Dos POST se respondieron localmente con 503 y nunca se remitieron al
+  API. No hubo canjes, pedidos, cobros ni escrituras comerciales reales. Contextos
+  y navegador cerrados al terminar; no se usaron credenciales de compradores.
