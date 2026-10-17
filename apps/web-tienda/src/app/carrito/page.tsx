@@ -8,12 +8,28 @@ import {
   leerCarrito,
   quitar,
 } from "@/lib/carrito-store";
+import { useCarritoVerificado } from "@/lib/use-carrito-verificado";
 import { CheckCircle2, ImageOff, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function CarritoPage() {
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
+  const router = useRouter();
+  const verificacion = useCarritoVerificado(items);
+  const verificados = new Map(verificacion.lineas?.map((l) => [l.varianteId, l]));
+  const visibles = items.map((i) => ({
+    ...i,
+    precio: verificados.get(i.varianteId)?.precio ?? i.precio,
+  }));
+  const cambiarCantidad = (id: string, cambio: number) => {
+    const actual = leerCarrito().find((i) => i.varianteId === id);
+    if (actual) actualizarCantidad(id, actual.cantidad + cambio);
+  };
+  const continuar = () => {
+    if (verificacion.prepararCompra()) router.push("/checkout");
+  };
   const [envioGratisDesde, setEnvioGratisDesde] = useState<number | null>(null);
 
   useEffect(() => {
@@ -29,7 +45,7 @@ export default function CarritoPage() {
     return () => window.removeEventListener("carrito-actualizado", refresh);
   }, []);
 
-  const total = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
+  const total = visibles.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
 
   if (items.length === 0) {
     return (
@@ -54,16 +70,35 @@ export default function CarritoPage() {
         </p>
       </div>
 
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        {verificacion.cargando && <output>Actualizando precios y disponibilidad…</output>}
+        {verificacion.error && <p role="alert">{verificacion.error}</p>}
+        {verificacion.lineas && (
+          <p className="text-sm text-slate-600">
+            Precios consultados. La existencia final y el envío se confirman al pagar; esta revisión
+            no reserva productos.
+          </p>
+        )}
+        {(verificacion.error || (verificacion.lineas && !verificacion.listo)) && (
+          <button
+            type="button"
+            className="gx-btn-secondary mt-3 min-h-11"
+            onClick={verificacion.revalidar}
+          >
+            Volver a consultar
+          </button>
+        )}
+      </div>
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="min-w-0">
-          {envioGratisDesde && (
+          {envioGratisDesde && verificacion.listo && (
             <div className="mb-4">
               <BarraEnvioGratis subtotal={total} umbral={envioGratisDesde} />
             </div>
           )}
 
           <div className="space-y-3">
-            {items.map((i) => (
+            {visibles.map((i) => (
               <div key={i.varianteId} className="flex gap-3 gx-card !p-3 sm:!p-4">
                 <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-slate-100">
                   {i.imagenUrl ? (
@@ -92,22 +127,47 @@ export default function CarritoPage() {
                       ${(Number(i.precio) * i.cantidad).toFixed(2)}
                     </span>
                   </div>
+                  {verificados.get(i.varianteId)?.estado === "no_publicado" && (
+                    <p role="alert" className="mt-2 text-danger text-sm">
+                      Este artículo ya no está disponible. Quítalo para continuar.
+                    </p>
+                  )}
+                  {verificados.get(i.varianteId)?.estado === "insuficiente" && (
+                    <p role="alert" className="mt-2 text-danger text-sm">
+                      La cantidad supera el inventario público. Reduce la cantidad o quita el
+                      artículo.
+                    </p>
+                  )}
+                  {verificados.get(i.varianteId)?.precio != null &&
+                    Number(items.find((l) => l.varianteId === i.varianteId)?.precio) !==
+                      Number(i.precio) && (
+                      <p className="mt-2 text-sm text-marca">
+                        Precio actualizado:{" "}
+                        <s>
+                          $
+                          {Number(items.find((l) => l.varianteId === i.varianteId)?.precio).toFixed(
+                            2,
+                          )}
+                        </s>{" "}
+                        → ${Number(i.precio).toFixed(2)} c/u
+                      </p>
+                    )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => actualizarCantidad(i.varianteId, i.cantidad - 1)}
-                        className="flex h-10 w-10 items-center justify-center rounded border text-lg hover:bg-slate-50"
-                        aria-label="Disminuir"
+                        onClick={() => cambiarCantidad(i.varianteId, -1)}
+                        className="flex h-11 w-11 items-center justify-center rounded border text-lg hover:bg-slate-50"
+                        aria-label={`Disminuir cantidad de ${i.titulo}`}
                       >
                         −
                       </button>
                       <span className="w-8 text-center text-sm">{i.cantidad}</span>
                       <button
                         type="button"
-                        onClick={() => actualizarCantidad(i.varianteId, i.cantidad + 1)}
-                        className="flex h-10 w-10 items-center justify-center rounded border text-lg hover:bg-slate-50"
-                        aria-label="Aumentar"
+                        onClick={() => cambiarCantidad(i.varianteId, 1)}
+                        className="flex h-11 w-11 items-center justify-center rounded border text-lg hover:bg-slate-50"
+                        aria-label={`Aumentar cantidad de ${i.titulo}`}
                       >
                         +
                       </button>
@@ -118,7 +178,8 @@ export default function CarritoPage() {
                     <button
                       type="button"
                       onClick={() => quitar(i.varianteId)}
-                      className="gx-btn-ghost !px-2 text-danger"
+                      className="gx-btn-ghost min-h-11 !px-2 text-danger"
+                      aria-label={`Quitar ${i.titulo}`}
                     >
                       <Trash2 size={14} /> Quitar
                     </button>
@@ -138,7 +199,7 @@ export default function CarritoPage() {
               <ShieldCheck size={16} /> Compra protegida
             </div>
             <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
+              <span>Subtotal estimado</span>
               <span>${total.toFixed(2)}</span>
             </div>
             <p className="mt-1 text-slate-500 text-xs">Subtotal sin costo de envío.</p>
@@ -149,12 +210,17 @@ export default function CarritoPage() {
               </p>
               <p className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-ok" />
-                Confirmación inmediata
+                Revisa los cambios antes de pagar
               </p>
             </div>
-            <Link href="/checkout" className="gx-btn-primary mt-4 w-full !py-3">
+            <button
+              type="button"
+              onClick={continuar}
+              disabled={!verificacion.listo}
+              className="gx-btn-primary mt-4 min-h-11 w-full !py-3"
+            >
               Continuar compra →
-            </Link>
+            </button>
             <Link href="/" className="gx-btn-ghost mt-2 w-full">
               Seguir comprando
             </Link>
@@ -166,12 +232,17 @@ export default function CarritoPage() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white p-3 shadow-[0_-4px_12px_rgb(0_0_0/0.08)] lg:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div>
-            <p className="text-slate-500 text-xs">Subtotal</p>
+            <p className="text-slate-500 text-xs">Subtotal estimado</p>
             <p className="font-bold text-lg">${total.toFixed(2)}</p>
           </div>
-          <Link href="/checkout" className="gx-btn-primary flex-1 !py-3 sm:flex-none sm:px-8">
+          <button
+            type="button"
+            onClick={continuar}
+            disabled={!verificacion.listo}
+            className="gx-btn-primary min-h-11 flex-1 !py-3 sm:flex-none sm:px-8"
+          >
             Continuar compra →
-          </Link>
+          </button>
         </div>
       </div>
     </div>

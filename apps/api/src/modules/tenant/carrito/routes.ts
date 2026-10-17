@@ -14,6 +14,7 @@ import {
   politicasSugeridas,
 } from "../ecommerce-config/politicas.js";
 import { crearAvisoStock } from "../stock-alerts/service.js";
+import { cantidadVentaValida } from "../ventas/quantity.js";
 import {
   enriquecerDetalle,
   listarCatalogo,
@@ -28,6 +29,7 @@ import {
   catalogoQuerySchema,
 } from "./schemas.js";
 import { CarritoError, calcularCarrito } from "./service.js";
+import { verificarCarrito } from "./verificar-service.js";
 
 const recoveryCorrerSchema = z.object({
   minutosInactividad: z.number().int().nonnegative().optional(),
@@ -215,6 +217,27 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       productosRelacionados(req.tenantPrisma, config, prod),
     ]);
     return { ...prod, ...enriquecido, relacionados };
+  });
+
+  // Read-only live check; deliberately does not call the cart upsert endpoint.
+  app.post("/carrito/verificar", async (req, reply) => {
+    const body = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              varianteId: z.string().regex(/^[A-Za-z0-9_-]{1,120}$/),
+              cantidad: z.number().positive().max(100000).refine(cantidadVentaValida),
+            }),
+          )
+          .min(1)
+          .max(100),
+      })
+      .refine((v) => new Set(v.items.map((i) => i.varianteId)).size === v.items.length)
+      .parse(req.body);
+    if (!(await estadoTienda(req.tenantPrisma)).abierta)
+      return reply.code(404).send(TIENDA_CERRADA);
+    return verificarCarrito(req.tenantPrisma, req.principal.userId, body.items);
   });
 
   // --- Carrito ---

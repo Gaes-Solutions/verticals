@@ -30,11 +30,15 @@ const securityPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts)
     identities.set(req, user);
     return user;
   }
+  // This one POST is a bounded, read-only calculation; it never saves a cart.
+  const lecturaStorefront = (req: FastifyRequest) =>
+    req.method === "GET" ||
+    (req.method === "POST" && req.url.split("?")[0] === "/t/tienda/carrito/verificar");
   await app.register(fastifyRateLimit, {
     // The signed storefront service aggregates many browsers. Separate bounded
     // read capacity from checkout writes; neither changes endpoint authorization.
     max: (req) =>
-      req.method === "GET" && verifiedIdentity(req)?.kind === "tienda_web"
+      lecturaStorefront(req) && verifiedIdentity(req)?.kind === "tienda_web"
         ? opts.config.STOREFRONT_READ_RATE_LIMIT_MAX
         : opts.config.RATE_LIMIT_MAX,
     timeWindow: opts.config.RATE_LIMIT_WINDOW,
@@ -45,7 +49,7 @@ const securityPlugin: FastifyPluginAsync<{ config: Config }> = async (app, opts)
       if (user?.kind === "cliente" && user.tenantSlug && user.sub)
         return `cliente:${user.tenantSlug}:${user.sub}`;
       if (user?.kind === "tienda_web" && user.tenantSlug && user.sub)
-        return `tienda_web:${req.method === "GET" ? "read" : "write"}:${user.tenantSlug}:${user.sub}`;
+        return `tienda_web:${lecturaStorefront(req) ? "read" : "write"}:${user.tenantSlug}:${user.sub}`;
       return req.ip;
     },
   });
