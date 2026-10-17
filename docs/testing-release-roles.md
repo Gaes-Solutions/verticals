@@ -1906,3 +1906,65 @@ comprador autenticado. Los envíos válidos continuaron interceptados y las prue
 reales fueron lecturas o rechazos previos a la mutación; no se crearon preguntas,
 avisos ni correos. Se eliminó nuevamente el archivo temporal privado del comprador.
 La evidencia de esta entrega queda limitada a web/API de staging.
+
+
+## Recuperación de carrito con vista previa — 17 de octubre de 2026
+
+Se encontró que `/recovery/[codigo]` guardaba inmediatamente el carrito del enlace,
+reemplazando la selección actual sin revisión; además, una red fallida o JSON
+inválido dejaba la pantalla cargando sin salida. Corrección web:
+
+- Abrir el enlace ahora solo lee y presenta nombres/cantidades. El usuario elige
+  llevar la selección al carrito. Si ya hay productos, exige marcar una
+  confirmación explícita antes de reemplazarlos; no se suman cantidades ni se
+  anuncia un pedido creado. La validación final de precios/disponibilidad corresponde al checkout existente
+  en el servidor; la vista previa no presenta importes antiguos como cotización.
+  El carrito invitado aún puede mostrar los importes históricos del enlace hasta
+  llegar a ese control; esta entrega no implementa su recotización anticipada.
+- Todo cambio observado del carrito o contexto de cuenta invalida el consentimiento.
+  Antes de guardar se vuelve a comparar la selección y el contexto, cubriendo
+  también una modificación ocurrida entre render y clic. Bloqueo inmediato contra
+  doble clic. Fallos de almacenamiento no anuncian éxito.
+- Carga con límite de 20 segundos, cancelación al cambiar de enlace/desmontar y
+  descarte de respuestas tardías. Errores de red/JSON/servicio permiten reintento
+  explícito; enlaces inválidos/no disponibles y selecciones vacías mantienen el
+  carrito actual con salidas al catálogo y al carrito.
+- BFF: código acotado sin caracteres de ruta/query, límite compartido de 15 segundos
+  para autenticación/lectura, `private, no-store`, `Referrer-Policy: no-referrer`,
+  validación completa de hasta 100 líneas sin duplicados y respuesta limitada a
+  variante/nombre/precio/cantidad. Un dato inválido rechaza toda la respuesta,
+  evitando restauraciones parciales. Errores públicos sin detalles internos.
+- Página con metadatos `noindex, nofollow` y `no-referrer`; etiquetas y mensajes
+  accesibles, controles principales de al menos 44 px y revisión visual a 320 px.
+- **731/731 pruebas web** (35 nuevas de contrato/BFF), compilación de producción,
+  **30/30 tareas de tipos** y **20 escenarios locales de navegador** aprobados.
+  El script `scripts/staging/check-cart-recovery-ui.cjs` utiliza el componente real,
+  recibos ficticios y un carrito invitado exclusivamente local al navegador.
+  Incluye vista previa sin escritura, consentimiento, doble clic, siete fallos
+  recuperables, enlaces 404/410, carrito vacío, cambios entre pestañas/de cuenta,
+  modificación inmediata antes del clic, desmontaje/respuesta tardía, cambio de
+  enlace, almacenamiento fallido y layout móvil.
+
+No se modificó el API ni su política de vigencia: los enlaces reales continúan
+requiriendo un carrito en estado abandonado según la implementación existente.
+No se enviaron correos ni se crearon pedidos o carritos en base de datos; las
+respuestas de recuperación válidas se simulan para no utilizar enlaces privados
+reales. Los eventos de cambio de cuenta fueron simulados; esta entrega no equivale
+a repetir una compra completa autenticada ni el envío/recepción de emails. Solo
+web de staging, sin actualizar APK o producción.
+
+
+### Cierre publicado de recuperación de carrito
+
+Fuente inicial `a85ef9cb1ef11f95b1fdb2c75faf1fcb5c63766c`; ajuste de texto final
+`37610dc3ac657a815d5efddfdd9c297dbbbf5308`. Web-tienda de staging confirmó
+`SUCCESS` para esta última versión, despliegue
+`ff6a7b01-466b-4bfc-85eb-efc80149e5b8`.
+
+Se aprobaron **20 escenarios publicados** del mismo script, con recibos ficticios,
+carrito invitado solo en el navegador y todas las escrituras HTTP del navegador
+bloqueadas. Se comprobaron también los metadatos reales de privacidad y los
+rechazos reales 400/404 del BFF (código inválido y código aleatorio inexistente),
+ambos sin caché. Se inspeccionó la captura publicada de 320 px. El script acota
+los avisos al formulario para no confundirlos con el anunciador de navegación
+accesible de Next.js. No se utilizó un enlace privado real ni se enviaron correos.

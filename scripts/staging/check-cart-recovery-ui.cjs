@@ -187,7 +187,9 @@ let stage = "setup";
     for (const mode of ["404", "410"]) {
       stage = `${mode} unavailable link offers catalog and cart without overwriting`;
       ({ p, f } = await setup(mode));
-      await expect(p.getByRole("alert")).toContainText("ya no está disponible");
+      await expect(
+        p.locator('section[aria-labelledby="recovery-titulo"]').getByRole("alert"),
+      ).toContainText("ya no está disponible");
       assert.deepEqual(await cart(p), old);
       assert.equal(
         await p.getByRole("button", { name: "Volver a intentar", exact: true }).count(),
@@ -230,7 +232,9 @@ let stage = "setup";
     await p.getByRole("checkbox").check();
     await p.evaluate(() => window.dispatchEvent(new Event("carrito-contexto-cambiado")));
     await expect(p.getByRole("checkbox")).not.toBeChecked();
-    await expect(p.getByRole("alert")).toContainText("cuenta cambió");
+    await expect(
+      p.locator('section[aria-labelledby="recovery-titulo"]').getByRole("alert"),
+    ).toContainText("cuenta cambió");
     noWrites(f);
     pass();
     stage = "same-tick cart changes cannot slip through an already enabled button";
@@ -239,7 +243,9 @@ let stage = "setup";
       localStorage.setItem("gaespos_carrito", "[]");
       el.click();
     });
-    await expect(p.getByRole("alert")).toContainText("Tu carrito cambió");
+    await expect(
+      p.locator('section[aria-labelledby="recovery-titulo"]').getByRole("alert"),
+    ).toContainText("Tu carrito cambió");
     assert.deepEqual(await cart(p), []);
     noWrites(f);
     pass();
@@ -279,7 +285,9 @@ let stage = "setup";
       };
     });
     await p.getByRole("button", { name: "Reemplazar mi carrito", exact: true }).click();
-    await expect(p.getByRole("alert")).toContainText("No pudimos confirmar");
+    await expect(
+      p.locator('section[aria-labelledby="recovery-titulo"]').getByRole("alert"),
+    ).toContainText("No pudimos confirmar");
     assert.deepEqual(await cart(p), old);
     noWrites(f);
     pass();
