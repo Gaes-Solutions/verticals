@@ -292,3 +292,113 @@ incluidas las solicitudes de la carpeta API-Lite.
   `qa-native/19cda0d1954a-38999197173-1`, con resumen, JUnit y capturas.
   La rama fuente del job es `19cda0d1954a3858548e169c9e0fcce8e4ad4289`;
   la fuente del artefacto APK se identifica por separado arriba.
+
+## Ampliación de recorridos nativos con cuenta temporal
+
+La batería Android ahora incluye dos escenarios encadenados sobre la APK 11 de
+staging: invitado y cliente con una cuenta sintética nueva por ejecución. No se
+usan usuarios del dueño ni contraseñas guardadas. La APK 11 incorpora el ajuste
+de direcciones descrito abajo; el workflow comprueba su versión y hash exactos.
+
+El escenario con cuenta cubre registro sin selector de tienda, búsqueda, agregar
+un producto, aumentar a dos unidades, guardar el carrito, reabrir la app, entrar
+a entrega y pago sin confirmar compra, crear y editar una dirección con CP
+`06060`, consultar ubicación simulada, cerrar sesión, entrar de nuevo y recuperar
+el carrito y la dirección. También comprueba cancelar y confirmar la eliminación
+de la dirección. Las coordenadas son las de un punto público de Ciudad de México;
+no se guarda una segunda dirección a partir del mapa.
+
+Durante la preparación se identificaron y corrigieron dos fallas de la batería:
+
+- El iniciador Pixel Launcher del emulador presentó un ANR que cubrió la app. Se
+  aumentó memoria a 4 GB, se redujo la resolución a 1080×1920 y se deshabilitó
+  únicamente ese iniciador en el emulador desechable. No se ocultan errores o
+  bloqueos de Gaesland; sus diagnósticos siguen capturándose.
+- Una expresión de comprobación con el cuantificador de regex `{4}` fue truncada
+  al expandir `${...}` en Maestro. Se corrigió y se añadió una revisión de sintaxis
+  de todas las expresiones antes de descargar herramientas y arrancar el emulador:
+  `node scripts/testing/check-native-flows.cjs`. El control negativo reproduce y
+  rechaza la expresión que falló.
+
+Las credenciales se generan dentro del runner, se ocultan en sus logs y se eliminan
+de los archivos de texto publicables. No se sube la carpeta de reportes crudos de
+Maestro. Se verificó el saneamiento con valores sintéticos y un JWT de muestra.
+Las capturas autenticadas contienen exclusivamente datos de la cuenta de prueba.
+
+La limpieza desde la sesión local está acotada al correo sintético de una corrida,
+Gaesland y la base de staging. Exige nombre de fixture, antigüedad menor de seis
+horas y ausencia de ventas, pedidos y tarjetas antes de borrar carrito y cuenta:
+`node scripts/staging/cleanup-native-fixture.cjs RUN_ID ATTEMPT --delete`.
+Sin `--delete` solo informa cantidades del carrito y si se conserva la dirección
+editada con cero inicial. Este comando requiere autenticación local de Railway.
+
+Las capturas de la ejecución `39000581861` confirmaron visualmente seis etiquetas
+inferiores completas, dos unidades y subtotal $1,798.00, dirección editada con
+CP `06060`, y autollenado de calle, colonia, municipio, estado y CP desde el GPS
+simulado. Esa corrida se detuvo por la expresión de la prueba y no se cuenta
+como escenario completo aprobado. Su fixture se eliminó: cero pedidos, un
+carrito de dos unidades y una dirección antes de la limpieza.
+
+### Corrección de controles de dirección en pantallas pequeñas
+
+- La corrida `39001123475` detectó un problema real en la APK 10: después de
+  editar un campo y cerrar el teclado, Guardar quedaba parcialmente debajo del
+  área visible. No se rebajó la condición de visibilidad de la prueba.
+- El cambio `1d060ae` separa el pie de acciones del contenido desplazable en
+  Android y web. En Android conserva SafeAreaView, la adaptación nativa a la
+  altura del teclado y los bloqueos contra guardado duplicado. El botón de
+  eliminar ahora tiene una etiqueta accesible y área táctil de al menos 44 px.
+- En web se usa un diálogo HTML modal con título accesible, fondo bloqueado,
+  cierre con Escape y acciones fijas. Los campos y el mapa se desplazan dentro
+  del diálogo. Mientras se guarda, no se puede cerrar ni guardar otra vez.
+- Pruebas locales de los cambios de interfaz: 102/102 del cliente Android,
+  114/114 de la tienda web y typecheck 30/30 del repositorio.
+- El formulario web desplegado en staging pasó en Chromium a 320×568, 390×640,
+  390×420 y 1280×800: Guardar permanece completamente visible y no se desplaza
+  junto con los campos; Tab no entra a controles del fondo; Escape cierra el
+  formulario. Son tamaños de viewport, no una certificación del teclado físico
+  ni de todos los navegadores de un teléfono.
+- Se comprobó con un cliente sintético el autollenado desde ubicación simulada
+  y consulta real al servicio de mapas, crear dirección conservando CP `06060`,
+  editar calle y eliminar con confirmación. No hubo errores JavaScript del
+  navegador. La cuenta y sus datos se eliminaron; no se crearon pedidos.
+  Repetible con `node scripts/staging/check-address-footer.cjs` usando Chromium
+  instalado y autenticación local de Railway para limpiar el fixture.
+- También se eliminaron los fixtures de ambas corridas Android fallidas:
+  cero pedidos y un carrito de dos unidades en cada una. La ejecución cancelada
+  `39000540024` no llegó a crear cuenta.
+
+### APK 11 de pruebas: artefacto verificado
+
+- Build EAS `01723bec-2e82-4879-a53f-c59d1bfc329e`, versión Android 11,
+  fuente `1d060ae5a23883b5a3aaee20acdd4849ff65d6f5`, perfil `gaesland-staging`.
+- Firma válida y mismo certificado que la versión 10; bibliotecas React Native
+  y Hermes para ARM32, ARM64, x86 y x86_64. API de staging y Gaesland fijos.
+  No es un paquete conectado a producción.
+- SHA256: `29145201ac315ec75cb8cd055347e9948052f40e7b82093b00834a5df68abae1`.
+- [Descargar APK 11 de staging](https://expo.dev/artifacts/eas/ynM6hBP1H12TyddYVQoJ99i0biLowZ1OrPTw1F2Me5Q.apk).
+
+### Resultado nativo APK 11: ambos escenarios aprobados
+
+- [GitHub Actions 39003491483](https://github.com/Gaes-Solutions/verticals/actions/runs/39003491483),
+  fuente de la batería `081078a4fa170fe91db4e247bf7525d8bb81bac9`, concluyó
+  correctamente en Android 15 x86_64: invitado 1/1 en 53.7 s y cliente con
+  cuenta 1/1 en 245.2 s, cero fallos. Son dos recorridos encadenados, no cientos
+  de casos independientes. La fuente del APK es `1d060ae`, identificada arriba.
+- Se comprobó que Guardar dirección permanece visible con el teclado abierto
+  al editar, y que se puede guardar tras cerrarlo. El escenario también pasó
+  registro, carrito con dos unidades, reapertura de app, entrega/pago sin
+  confirmar pedido, dirección manual y edición con CP `06060`, autollenado con
+  ubicación simulada, cierre/reingreso y recuperación del carrito/dirección.
+- La eliminación se probó en ambas ramas: cancelar conserva la dirección;
+  confirmar muestra la lista vacía. La cuenta temporal se borró al finalizar:
+  cero pedidos, una entrada de carrito con dos unidades y cero direcciones.
+- Evidencia acotada en `qa-native/081078a4fa17-39003491483-1`: resultados JUnit,
+  logs saneados y capturas. Se revisaron visualmente Guardar sobre el teclado,
+  carrito recuperado con dos unidades y subtotal $1,798.00, datos del mapa con
+  CP `06060` y lista vacía tras eliminar, con las seis etiquetas inferiores
+  completas. La prueba no envía correos ni crea cargos/pedidos.
+- No certifica GPS físico, huella, notificaciones del dispositivo, todos los
+  modelos Android ni cobro con tarjeta. Stripe sandbox se consultó de nuevo
+  después de iniciar esta corrida: registro aún incompleto, `charges_enabled`
+  y `payouts_enabled` falsos. No se cambió ningún indicador para saltar ese bloqueo.
