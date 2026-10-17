@@ -12,6 +12,7 @@ async function check(path, expected, body, headers = {}) {
   });
   assert.equal(response.status, expected, `${path}: unexpected status`);
   console.log(`PASS ${path}: ${expected}`);
+  return response;
 }
 
 (async () => {
@@ -20,7 +21,13 @@ async function check(path, expected, body, headers = {}) {
     await check(route, 401, body);
     await check(route, 401, body, { "stripe-signature": "t=1,v1=invalid" });
   }
-  await check("/billing/webhook", 404, { invoiceId: "qa-nonexistent-boundary" });
+  const absentMock = await check("/billing/webhook", 404, { invoiceId: "qa-nonexistent-boundary" });
+  const absentBody = await absentMock.json();
+  assert.equal(
+    absentBody.message,
+    "Route POST:/billing/webhook not found",
+    "A missing invoice must not be mistaken for an absent mock endpoint",
+  );
   for (const path of ["/billing/me", "/billing/invoices", "/admin/tenants"]) await check(path, 401);
   for (const path of [
     "/billing/payment-methods",
