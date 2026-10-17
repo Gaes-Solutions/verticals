@@ -1,4 +1,3 @@
-import { CalculadoraEnvio } from "@/components/calculadora-envio";
 import { EstadoError } from "@/components/estado-error";
 import { GaleriaProducto } from "@/components/galeria-producto";
 import { GuardarWishlist } from "@/components/guardar-wishlist";
@@ -263,6 +262,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             </div>
           )}
           <ProductoCompra
+            mostrarCotizacion
             tipoVenta={prod.producto.tipoVenta}
             stockPorVariante={prod.stockPorVariante}
             variantes={prod.producto.variantes}
@@ -300,7 +300,6 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
           </div>
-          <CalculadoraEnvio subtotal={precioActual} />
           {prod.descripcionMd && (
             <p className="mt-6 whitespace-pre-line text-slate-600 leading-relaxed">
               {prod.descripcionMd}

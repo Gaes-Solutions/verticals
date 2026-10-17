@@ -40,12 +40,31 @@ let stage = "setup";
         stdin: {
           resolveDir: app,
           loader: "tsx",
-          contents: `import {useState} from 'react';import {createRoot} from 'react-dom/client';import {CalculadoraEnvio} from './src/components/calculadora-envio';function QA(){const [amount,setAmount]=useState(100);window.setAmount=setAmount;return <CalculadoraEnvio subtotal={amount}/>};const root=createRoot(document.getElementById('root'));window.unmountEstimate=()=>root.unmount();root.render(<QA/>);`,
+          contents: `import {useState} from 'react';import {createRoot} from 'react-dom/client';import {ProductoCompra} from './src/components/producto-compra';function QA(){const [amount,setAmount]=useState(null);window.setAmount=setAmount;return <ProductoCompra mostrarCotizacion variantes={[{id:"qa-standard",precioBase:"100",nombreVariante:"Estándar"},{id:"qa-large",precioBase:"200",nombreVariante:"Grande"}]} precioOverride={amount===null?null:String(amount)} titulo="Producto sintético QA" comprarAhora={false} msi={{habilitado:false,meses:[],montoMinimo:"0"}}/>};const root=createRoot(document.getElementById('root'));window.unmountEstimate=()=>root.unmount();root.render(<QA/>);`,
         },
         bundle: true,
         write: false,
         jsx: "automatic",
         define: { "process.env.NODE_ENV": '"production"' },
+        plugins: [
+          {
+            name: "next-fixtures",
+            setup(build) {
+              build.onResolve({ filter: /^next\/(link|navigation)$/ }, (args) => ({
+                path: args.path,
+                namespace: "fixture",
+              }));
+              build.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({
+                loader: "tsx",
+                resolveDir: app,
+                contents:
+                  args.path === "next/link"
+                    ? "export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}"
+                    : "export function useRouter(){return {push(){throw Error('Unexpected navigation')}}}",
+              }));
+            },
+          },
+        ],
       });
       server = http.createServer((req, res) => {
         if (req.url === "/bundle.js") {
@@ -293,6 +312,38 @@ let stage = "setup";
       t.f.release();
       await t.page.waitForTimeout(200);
       assert.deepEqual(t.f.errors, []);
+      pass();
+    }
+    stage = "selected quantity updates the estimate amount and invalidates the previous quote";
+    t = await setup();
+    await t.fill();
+    await t.calculate().click();
+    await expect(t.region).toContainText("$75.00");
+    const qty = t.page.getByLabel("Cantidad", { exact: true });
+    await qty.fill("2");
+    await expect(t.region).not.toContainText("$75.00");
+    await t.calculate().click();
+    await expect(t.region).toContainText("$75.00");
+    assert.equal(Number(t.f.reads[1].subtotal), Number(t.f.reads[0].subtotal) * 2);
+    await qty.fill("0");
+    await expect(t.region).not.toContainText("$75.00");
+    await t.calculate().click();
+    await expect(t.region.getByRole("alert")).toContainText("cantidad");
+    assert.equal(t.f.reads.length, 2);
+    pass();
+    if (!published) {
+      stage = "selected variant uses its own price and a 44px selector";
+      t = await setup();
+      await t.fill();
+      await t.calculate().click();
+      await expect(t.region).toContainText("$75.00");
+      const large = t.page.getByRole("button", { name: "Grande", exact: true });
+      await large.click();
+      await expect(t.region).not.toContainText("$75.00");
+      await t.calculate().click();
+      await expect(t.region).toContainText("$75.00");
+      assert.equal(t.f.reads[1].subtotal, "200");
+      assert((await large.boundingBox()).height >= 44);
       pass();
     }
     stage = "320px layout, accessible feedback, 44px inputs and submit control";

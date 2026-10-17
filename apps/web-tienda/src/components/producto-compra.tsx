@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AvisoStock } from "./aviso-stock";
+import { CalculadoraEnvio } from "./calculadora-envio";
 
 export interface VarianteCompra {
   id: string;
@@ -48,6 +49,7 @@ export function ProductoCompra({
   productoPublicadoId,
   stockPorVariante,
   tipoVenta = "unidad",
+  mostrarCotizacion = false,
 }: {
   variantes: VarianteCompra[];
   precioOverride: string | null;
@@ -64,6 +66,7 @@ export function ProductoCompra({
   productoPublicadoId?: string;
   stockPorVariante?: Record<string, number> | null;
   tipoVenta?: string;
+  mostrarCotizacion?: boolean;
 }) {
   const router = useRouter();
   const [sel, setSel] = useState(() =>
@@ -96,12 +99,12 @@ export function ProductoCompra({
   const restante =
     stockElegido == null ? null : Math.max(0, stockElegido - (enCarrito[variante.id] ?? 0));
   const limiteAlcanzado = restante != null && restante < paso;
-  const cantidadValida =
+  const cantidadFormatoValido =
     Number.isFinite(cantidad) &&
     cantidad >= paso &&
     (tipoVenta !== "unidad" || Number.isInteger(cantidad)) &&
-    Math.abs(cantidad * 1000 - Math.round(cantidad * 1000)) < 0.000001 &&
-    (restante == null || cantidad <= restante);
+    Math.abs(cantidad * 1000 - Math.round(cantidad * 1000)) < 0.000001;
+  const cantidadValida = cantidadFormatoValido && (restante == null || cantidad <= restante);
 
   function alCarrito() {
     if (!variante || sinStock || !cantidadValida) {
@@ -195,7 +198,7 @@ export function ProductoCompra({
                   setErrorCantidad(null);
                   setAgregado(false);
                 }}
-                className={`rounded-lg border px-3 py-1.5 text-sm ${
+                className={`min-h-11 rounded-lg border px-3 py-1.5 text-sm ${
                   i === sel
                     ? "border-marca bg-marca/10 font-medium text-marca"
                     : "border-slate-300 text-slate-700 hover:border-marca"
@@ -299,6 +302,9 @@ export function ProductoCompra({
       </div>
 
       {sinStock && productoPublicadoId && <AvisoStock productoPublicadoId={productoPublicadoId} />}
+      {mostrarCotizacion && (
+        <CalculadoraEnvio subtotal={cantidadFormatoValido ? precioNum * cantidad : Number.NaN} />
+      )}
     </div>
   );
 }

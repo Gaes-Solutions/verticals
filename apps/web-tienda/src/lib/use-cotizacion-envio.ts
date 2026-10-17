@@ -47,7 +47,14 @@ export function useCotizacionEnvio(subtotal: number) {
     if (current.current) return;
     setResultado(null);
     setFallo(null);
-    if (!destinoEnvioValido(cp, estado.trim()) || !subtotalEnvioValido(String(subtotal))) {
+    if (!subtotalEnvioValido(String(subtotal))) {
+      setFallo({
+        key,
+        mensaje: "Selecciona una cantidad y un precio válidos para calcular el envío.",
+      });
+      return;
+    }
+    if (!destinoEnvioValido(cp, estado.trim())) {
       setFallo({ key, mensaje: errorCotizacion(400) });
       return;
     }

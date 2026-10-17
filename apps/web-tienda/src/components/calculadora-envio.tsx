@@ -1,12 +1,16 @@
 "use client";
 import { useCotizacionEnvio } from "@/lib/use-cotizacion-envio";
 import { Truck } from "lucide-react";
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 
 /** Product estimate only; checkout verifies the final cost for the complete cart. */
 export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
   const c = useCotizacionEnvio(subtotal);
   const id = useId();
+  const [lista, setLista] = useState(false);
+  useEffect(() => {
+    setLista(true);
+  }, []);
   return (
     <section
       aria-labelledby={`${id}-titulo`}
@@ -19,7 +23,7 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
         <Truck size={16} strokeWidth={2} aria-hidden="true" /> ¿Cuándo llega?
       </h2>
       <p className="mb-3 text-slate-500 text-xs">
-        Estimación para este producto. El costo final se confirma con tu carrito.
+        Estimación para esta selección. El costo final se confirma con tu carrito.
       </p>
       <form
         onSubmit={(e) => {
@@ -27,11 +31,12 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
           void c.cotizar();
         }}
         className="flex flex-wrap items-end gap-2"
-        aria-busy={c.cargando}
+        aria-busy={!lista || c.cargando}
       >
         <label className="block min-w-0 flex-1 basis-32">
           <span className="gx-label">Código postal</span>
           <input
+            disabled={!lista}
             value={c.cp}
             onChange={(e) => c.cambiarCp(e.target.value)}
             inputMode="numeric"
@@ -44,6 +49,7 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
         <label className="block min-w-0 flex-1 basis-32">
           <span className="gx-label">Estado (opcional)</span>
           <input
+            disabled={!lista}
             value={c.estado}
             onChange={(e) => c.cambiarEstado(e.target.value)}
             autoComplete="address-level1"
@@ -53,7 +59,7 @@ export function CalculadoraEnvio({ subtotal }: { subtotal: number }) {
         </label>
         <button
           type="submit"
-          disabled={c.cargando}
+          disabled={!lista || c.cargando}
           className="gx-btn-primary min-h-11 disabled:cursor-wait disabled:opacity-50"
         >
           {c.cargando ? "Calculando…" : "Calcular"}
