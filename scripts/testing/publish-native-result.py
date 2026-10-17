@@ -34,6 +34,10 @@ files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
+for name in ("install.log", "maestro.log"):
+    file = results.parent / name
+    if file.is_file():
+        files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]
 roots = [Path("apps/mobile-cliente"), Path.home() / ".maestro/tests"]
 for root in roots:
     if not root.exists():
