@@ -104,9 +104,9 @@ interface RespuestaCheckout {
 /**
  * Un intento "pendiente" con referencia (OXXO/SPEI) NO es error: el pedido queda
  * apartado esperando el pago offline. Si ya teníamos esa referencia persistida
- * (re-consulta tras recargar), conserva su método; solo una compra nueva usa el
- * método seleccionado. Devuelve null cuando la respuesta no es un pendiente
- * referenciado.
+ * (re-consulta tras recargar), conserva el método del mismo folio, incluso si
+ * cambia la referencia. Sin ese dato no inventamos instrucciones OXXO/SPEI.
+ * Devuelve null cuando la respuesta no es un pendiente referenciado.
  */
 function resolverPagoPendiente(
   data: RespuestaCheckout,
@@ -115,11 +115,8 @@ function resolverPagoPendiente(
 ): PagoPendiente | null {
   if (data.intentStatus !== "pendiente" || !data.referenciaPago) return null;
   const metodo =
-    previo?.referenciaPago === data.referenciaPago
-      ? previo.metodo
-      : metodoSeleccionado === "spei"
-        ? "spei"
-        : "oxxo";
+    previo && previo.folioPublico === data.folioPublico ? previo.metodo : metodoSeleccionado;
+  if (metodo !== "oxxo" && metodo !== "spei") return null;
   const pendiente = {
     folioPublico: data.folioPublico ?? "",
     total: data.total ?? "",
@@ -580,6 +577,10 @@ export default function CheckoutPage() {
       throw new Error(
         "El resultado no corresponde al pedido apartado. Conserva tu referencia y contacta a la tienda antes de pagar.",
       );
+    if (data.intentStatus === "fallido") {
+      manejarNoConfirmado(data);
+      return;
+    }
     if (
       data.paymentProvider === "stripe" &&
       data.clientSecret &&

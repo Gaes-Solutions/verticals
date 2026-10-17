@@ -1,5 +1,6 @@
 /** Actual root checkout, synthetic pending orders and HTTP fixtures only.
- * All API requests intercepted; no order, payment, address or notification writes.
+ * UI API requests intercepted; optional published check also reads the real guest BFF.
+ * No order, payment, address or notification writes.
  * Without STOREFRONT_TEST_URL, bundles the real page into a local browser harness. */
 const assert = require("node:assert/strict");
 const http = require("node:http");
@@ -145,29 +146,43 @@ let stage = "setup";
                 ? { status: 503, json: { message: "No pudimos consultar; conserva el intento." } }
                 : mode === "malformed"
                   ? { contentType: "application/json", body: "broken" }
-                  : mode === "invalid"
-                    ? { json: { ...pending, total: "NaN" } }
-                    : mode === "other-order"
-                      ? {
-                          json: {
-                            ...pending,
-                            folioPublico: "QA-OTHER-ORDER",
-                            intentStatus: "confirmado",
-                          },
-                        }
-                      : mode === "unsafe404"
-                        ? { status: 404, json: { code: "ATTEMPT_NOT_FOUND" } }
-                        : mode === "safe404"
-                          ? { status: 404, json: { code: "ATTEMPT_NOT_FOUND", safeToRetry: true } }
-                          : mode === "confirmed" || lateConfirmed
-                            ? {
-                                json: {
-                                  folioPublico: payment.folioPublico,
-                                  total: payment.total,
-                                  intentStatus: "confirmado",
-                                },
-                              }
-                            : { json: pending };
+                  : mode === "failed-stripe"
+                    ? {
+                        json: {
+                          ...pending,
+                          intentStatus: "fallido",
+                          paymentProvider: "stripe",
+                          clientSecret: "qa_failed_secret",
+                        },
+                      }
+                    : mode === "changed-reference"
+                      ? { json: { ...pending, referenciaPago: "987654321098765432" } }
+                      : mode === "invalid"
+                        ? { json: { ...pending, total: "NaN" } }
+                        : mode === "other-order"
+                          ? {
+                              json: {
+                                ...pending,
+                                folioPublico: "QA-OTHER-ORDER",
+                                intentStatus: "confirmado",
+                              },
+                            }
+                          : mode === "unsafe404"
+                            ? { status: 404, json: { code: "ATTEMPT_NOT_FOUND" } }
+                            : mode === "safe404"
+                              ? {
+                                  status: 404,
+                                  json: { code: "ATTEMPT_NOT_FOUND", safeToRetry: true },
+                                }
+                              : mode === "confirmed" || lateConfirmed
+                                ? {
+                                    json: {
+                                      folioPublico: payment.folioPublico,
+                                      total: payment.total,
+                                      intentStatus: "confirmado",
+                                    },
+                                  }
+                                : { json: pending };
           return route.fulfill(options).catch(() => {});
         }
         if (pathname === "/api/tienda-config")
@@ -265,6 +280,41 @@ let stage = "setup";
       await expect(page.getByRole("alert")).toHaveCount(0);
       pass();
     }
+    stage = "a failed Stripe intent shows the failure without attempting SDK confirmation";
+    ({ page, fixture } = await setup(null));
+    fixture.mode = "failed-stripe";
+    await page.getByRole("button", { name: "Consultar estado del pago", exact: true }).click();
+    await expect(page.locator("#checkout-error")).toContainText(
+      "Contacta a la tienda antes de iniciar otro pago",
+    );
+    const failed = await page.evaluate(
+      (attemptKey) => ({
+        attempt: JSON.parse(localStorage.getItem(attemptKey)),
+        cart: JSON.parse(localStorage.getItem("gaespos_carrito")),
+      }),
+      attemptKey,
+    );
+    assert.deepEqual(failed.attempt, { context: owner, key, submitted: true });
+    assert.equal(failed.cart.length, 1);
+    assert.equal(fixture.writes, 0);
+    assert.deepEqual(fixture.errors, []);
+    pass();
+    stage = "a refreshed reference keeps the stored SPEI method for the same order";
+    ({ page, fixture } = await setup());
+    fixture.mode = "changed-reference";
+    await page.getByRole("button", { name: "Ya pagué · consultar estado" }).click();
+    await expect(page.getByText("987654321098765432", { exact: true })).toBeVisible();
+    await expect(page.getByText("CLABE interbancaria (18 dígitos)", { exact: true })).toBeVisible();
+    assert.equal(fixture.writes, 0);
+    pass();
+    stage = "a recovery without method metadata never invents OXXO payment instructions";
+    ({ page, fixture } = await setup(null));
+    await page.getByRole("button", { name: "Consultar estado del pago", exact: true }).click();
+    await expect(page.locator("#checkout-error")).toContainText("no vuelvas a pagar");
+    await expect(page.getByText("Referencia OXXO", { exact: true })).toHaveCount(0);
+    assert.equal(fixture.reads, 1);
+    assert.equal(fixture.writes, 0);
+    pass();
     stage = "expired session with non-JSON body shows login action and preserves pending purchase";
     ({ page, fixture } = await setup());
     fixture.mode = "session";
