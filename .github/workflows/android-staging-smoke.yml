@@ -25,6 +25,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Validate embedded Maestro expressions before starting an emulator
+        run: node scripts/testing/check-native-flows.cjs
       - name: Download and verify the staging APK and Maestro
         run: |
           mkdir -p "$RUNNER_TEMP/native"

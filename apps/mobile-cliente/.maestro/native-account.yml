@@ -159,7 +159,7 @@ name: Synthetic shopper registration, durable cart and saved address
 - copyTextFrom:
     text: Código postal
     index: 1
-- assertTrue: ${/^0[0-9]{4}$/.test(maestro.copiedText)}
+- assertTrue: ${/^0[0-9][0-9][0-9][0-9]$/.test(maestro.copiedText)}
 - takeScreenshot: gaesland-auth-ubicacion
 - tapOn: Cerrar dirección
 
