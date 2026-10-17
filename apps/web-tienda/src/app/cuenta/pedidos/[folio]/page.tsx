@@ -173,7 +173,7 @@ export default async function PedidoDetallePage({
           ) : (
             <CancelarPedido folio={pedido.folioPublico} />
           ))}
-        {facturable && <FacturaPedido folio={pedido.folioPublico} />}
+        {facturable && <FacturaPedido key={pedido.folioPublico} folio={pedido.folioPublico} />}
       </div>
 
       {(devolible || solicitud) && (

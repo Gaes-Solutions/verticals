@@ -836,3 +836,45 @@ offline; al reconectar con Reintentar se mostró Iniciar sesión y la API respon
 Se cerró el navegador, se detuvo el servidor local y se eliminaron tanto la copia
 temporal de credenciales como el perfil de navegador que contenía la caché
 anterior. No se modificó producción, no hubo migración y no se generó APK.
+
+## Recuperación de facturación y descarga privada — 17 de octubre de 2026
+
+Se reprodujeron seis fallos del BFF con ocho pruebas de contrato: respuestas
+vacías/HTML se aceptaban como emisión, fallos de red no se convertían en un
+error seguro y faltaban límites del proveedor y cabeceras de caché privada.
+En navegador, un error de red dejaba el formulario sin aviso y sin recuperarse.
+El enlace PDF apuntaba a una ruta web inexistente (404 en staging antes del cambio).
+
+- BFF de estado y emisión con validación explícita del contrato, errores seguros,
+  caché `private, no-store`, escape del folio, sesión del comprador y límite de
+  espera del proveedor (15 s lectura, 60 s emisión). No hay reenvío automático.
+- Nueva ruta privada `/api/cuenta/pedidos/[folio]/factura/pdf`: exige sesión y
+  conserva los controles de propiedad del API. Rechaza redirecciones, tipos de
+  archivo distintos a PDF, cuerpos vacíos y firmas incorrectas. Preserva los
+  bytes binarios y no copia cookies ni nombres de archivo del proveedor.
+- El formulario conserva sus datos ante errores/401, limita la espera del envío
+  a 65 s, impide envíos concurrentes desde la misma instancia y no afirma una
+  emisión sin identificador/folio válidos. Ante resultado incierto requiere una
+  consulta explícita antes de habilitar otro envío. Esto no sustituye la
+  idempotencia fiscal del servidor ni certifica que un proveedor haya cancelado
+  una solicitud al agotarse la espera.
+- La disponibilidad del enlace PDF se obtiene al consultar el estado; ya no se
+  inventa a partir de la respuesta de emisión. Una consulta vacía posterior no
+  elimina una emisión que esta instancia ya confirmó.
+- Se utiliza el diálogo accesible compartido, con Escape, foco contenido y
+  retorno al botón de origen. Cierre mínimo 44 px, controles de facturación
+  ampliados y campos fiscales apilados en pantallas pequeñas.
+
+La suite final pasó **172/172** (19 pruebas nuevas de contrato/PDF). Ocho grupos
+de navegador local pasaron con el componente real compilado, estilos reales y
+respuestas fiscales sintéticas: red, timeout, 200 inválido, 401, envío repetido,
+diálogo/foco, fallo inicial de consulta y disponibilidad del PDF. El timeout del
+navegador se acorta únicamente en la prueba. Se revisaron anchos 320/1280 px,
+sin desbordamiento horizontal, con envío alcanzable y de al menos 44 px.
+
+Regresión local: `node scripts/staging/check-invoice-ui.cjs`. Para comprobar
+también el diseño, generar CSS con Tailwind de web-tienda y pasar su ruta como
+`INVOICE_QA_CSS`. El servidor de fixtures solo escucha en localhost. No se
+hicieron solicitudes fiscales externas, pedidos, pagos ni envíos de correo.
+La emisión/descarga de una factura real sigue pendiente de configurar el
+proveedor fiscal y de disponer de un pedido pagado de prueba.

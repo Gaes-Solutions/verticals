@@ -42,7 +42,7 @@ export function DialogoTienda({
           onClick={onCerrar}
           disabled={bloqueado}
           aria-label="Cerrar"
-          className="rounded-lg p-2 text-slate-500 disabled:opacity-40"
+          className="min-h-11 min-w-11 rounded-lg p-2 text-slate-500 disabled:opacity-40"
         >
           <X size={18} />
         </button>
