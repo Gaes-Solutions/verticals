@@ -716,3 +716,54 @@ Alcance de esta ronda: web de staging. No se generó un nuevo APK ni se
 certificó su comportamiento equivalente. La entrega de correo y el canje real
 de recuperación siguen pendientes de probar con el buzón confirmado por el
 propietario. Producción no se modificó.
+
+## Aislamiento de borradores y referencias de checkout — 17 de octubre de 2026
+
+Se reprodujeron dos fallos en el staging anterior usando exclusivamente datos
+sintéticos en un navegador invitado: un borrador marcado como otra cuenta
+rellenaba el checkout, y una referencia de pago global sin propietario se
+mostraba sin verificar la identidad. No se accedió a datos de otro comprador.
+Siete pruebas nuevas de borrador reprodujeron cuatro fallos antes del cambio.
+
+El checkout ahora verifica su contexto antes de restaurar datos. El contexto
+existente está ligado por HMAC a la cookie privada del navegador, la tienda y
+el comprador validado por el servidor; no se acepta un identificador de cuenta
+propuesto por el formulario. El endpoint de preparación añade el contexto del
+invitado de esa misma tienda/navegador, sin devolver el secreto de la cookie.
+Esto permite conservar el borrador al iniciar sesión durante una compra.
+
+- Los borradores incluyen propietario; otra cuenta, otro contexto de invitado
+  o una sesión sin verificar no pueden recuperarlos. No se guardan campos de
+  un propietario bajo el contexto del siguiente al cambiar el contexto.
+- Se conservan la caducidad de 30 minutos y los ceros iniciales del código
+  postal. La adopción de invitado conserva la caducidad original al leer.
+- Las referencias OXXO/SPEI se guardan por contexto y solo se muestran después
+  de verificarlo. Borrar una referencia no borra las de otras cuentas.
+- Si falla la preparación, se muestra un aviso con reintento antes de mostrar
+  el formulario privado; la espera se limita a 15 segundos. No se borran datos
+  simplemente por no haber podido verificar la sesión.
+- Se limpian direcciones/tarjetas seleccionadas al cambiar el contexto y se
+  cancelan las lecturas de la identidad anterior. Se conserva la protección
+  existente que impide iniciar otro pago con un intento enviado pendiente.
+
+Migración local: los borradores antiguos sin propietario se descartan porque
+no se puede atribuir su dirección de forma segura. Las referencias antiguas
+sin propietario no se muestran ni se borran automáticamente; el pedido puede
+consultarse con la cuenta o con el intento original. No se adopta una referencia
+de pago de invitado al ingresar a una cuenta diferente.
+
+La suite final pasó **139/139 pruebas**, incluidas siete de borrador, cuatro de
+referencias y la verificación adicional de los contextos públicos devueltos por
+el endpoint. El contexto de invitado de otro negocio no coincide y el token
+de cuenta no aparece en esa respuesta.
+
+La regresión `scripts/staging/check-checkout-privacy.cjs` requiere el archivo
+privado `STOREFRONT_PRIVACY_ACCOUNT` con email/password. Contra el frontend local
+y el API staging pasaron **ocho escenarios de navegador**: recarga de borrador
+invitado, conservación al ingresar, rechazo de borrador de otro propietario,
+rechazo de borrador antiguo sin dueño, exclusión de referencias ajenas/antiguas,
+recuperación de referencia propia, paso de cuenta a invitado y fallo/reintento
+de verificación. Se usó una cuenta real entregada; los datos de otro propietario,
+las líneas del carrito y las referencias fueron fixtures sintéticos locales.
+Las escrituras de negocio del navegador se bloquearon. No se crearon cuentas,
+pedidos, correos, direcciones o pagos ni se modificó el carrito del servidor.

@@ -22,6 +22,12 @@ import {
   guardarBorradorCompra,
   leerBorradorCompra,
 } from "@/lib/checkout-draft";
+import {
+  type PagoPendiente,
+  borrarPagoPendiente,
+  guardarPagoPendiente,
+  leerPagoPendiente,
+} from "@/lib/checkout-pending-payment";
 import type { MedioPagoGuardado } from "@/lib/cliente";
 import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
@@ -76,14 +82,6 @@ type MetodoPago = "tarjeta" | "oxxo" | "spei" | "cod";
  * comprador vuelve antes de que llegue el webhook del proveedor (el intento
  * sigue bloqueado, así que no hay riesgo de doble pedido).
  */
-interface PagoPendiente {
-  folioPublico: string;
-  total: string;
-  referenciaPago: string;
-  metodo: "oxxo" | "spei";
-}
-const PAGO_PENDIENTE_KEY = "gaespos_pago_pendiente_v1";
-
 interface RespuestaCheckout {
   code?: string;
   safeToRetry?: boolean;
@@ -123,18 +121,6 @@ function resolverPagoPendiente(
     referenciaPago: data.referenciaPago,
     metodo,
   };
-}
-
-function leerPagoPendiente(): PagoPendiente | null {
-  try {
-    const raw = localStorage.getItem(PAGO_PENDIENTE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as PagoPendiente;
-    if (typeof p?.folioPublico !== "string" || typeof p?.referenciaPago !== "string") return null;
-    return { ...p, metodo: p.metodo === "spei" ? "spei" : "oxxo" };
-  } catch {
-    return null;
-  }
 }
 
 export default function CheckoutPage() {
@@ -185,7 +171,8 @@ export default function CheckoutPage() {
   const [guardarTarjeta, setGuardarTarjeta] = useState(false);
   const [sesionCliente, setSesionCliente] = useState(false);
   const [requiereSesion, setRequiereSesion] = useState(false);
-  const [borradorListo, setBorradorListo] = useState(false);
+  const [draftScope, setDraftScope] = useState<{ owner: string; guestOwner?: string } | null>(null);
+  const [borradorListo, setBorradorListo] = useState<string | null>(null);
   const borradorRestaurado = useRef(false);
   const entregaInicial = useRef(false);
   useEffect(() => {
@@ -208,89 +195,111 @@ export default function CheckoutPage() {
   }, [error, requiereSesion]);
 
   useEffect(() => {
-    const draft = leerBorradorCompra();
-    if (draft) {
-      borradorRestaurado.current = true;
-      setEmail(draft.email);
-      setNombre(draft.nombre);
-      setCalle(draft.calle);
-      setNumero(draft.numero);
-      setColonia(draft.colonia);
-      setCiudad(draft.ciudad);
-      setEstado(draft.estado);
-      setCp(draft.cp);
-      setModoEntrega(draft.modoEntrega);
-    }
-    setBorradorListo(true);
-  }, []);
+    if (!draftScope) return;
+    const draft = leerBorradorCompra(draftScope.owner, draftScope.guestOwner);
+    borradorRestaurado.current = Boolean(draft);
+    setEmail(draft?.email ?? "");
+    setNombre(draft?.nombre ?? "");
+    setCalle(draft?.calle ?? "");
+    setNumero(draft?.numero ?? "");
+    setColonia(draft?.colonia ?? "");
+    setCiudad(draft?.ciudad ?? "");
+    setEstado(draft?.estado ?? "");
+    setCp(draft?.cp ?? "");
+    setModoEntrega(draft?.modoEntrega ?? "envio");
+    setSesionCliente(false);
+    setDirecciones([]);
+    setDireccionId("");
+    setModoDir("nueva");
+    setMediosPago([]);
+    setMedioPagoSel("");
+    setBorradorListo(draftScope.owner);
+  }, [draftScope]);
   useEffect(() => {
-    if (borradorListo)
-      guardarBorradorCompra({
-        email,
-        nombre,
-        calle,
-        numero,
-        colonia,
-        ciudad,
-        estado,
-        cp,
-        modoEntrega,
-      });
-  }, [borradorListo, email, nombre, calle, numero, colonia, ciudad, estado, cp, modoEntrega]);
+    if (draftScope && borradorListo === draftScope.owner)
+      guardarBorradorCompra(
+        {
+          email,
+          nombre,
+          calle,
+          numero,
+          colonia,
+          ciudad,
+          estado,
+          cp,
+          modoEntrega,
+        },
+        draftScope.owner,
+      );
+  }, [
+    draftScope,
+    borradorListo,
+    email,
+    nombre,
+    calle,
+    numero,
+    colonia,
+    ciudad,
+    estado,
+    cp,
+    modoEntrega,
+  ]);
 
   function marcarPendiente(p: PagoPendiente) {
     setPagoPendiente(p);
-    try {
-      localStorage.setItem(PAGO_PENDIENTE_KEY, JSON.stringify(p));
-    } catch {
-      // Sin persistencia la pantalla sigue funcionando en la sesión actual.
-    }
+    if (draftScope) guardarPagoPendiente(draftScope.owner, p);
   }
 
   function limpiarPendiente() {
     setPagoPendiente(null);
-    try {
-      localStorage.removeItem(PAGO_PENDIENTE_KEY);
-    } catch {}
+    if (draftScope) borrarPagoPendiente(draftScope.owner);
   }
 
   useEffect(() => {
-    setPagoPendiente(leerPagoPendiente());
-  }, []);
+    setPagoPendiente(draftScope ? leerPagoPendiente(draftScope.owner) : null);
+  }, [draftScope]);
 
   useEffect(() => {
+    if (!borradorListo) return;
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
     setItems(leerCarrito());
-    fetch("/api/tienda-config")
+    fetch("/api/tienda-config", options)
       .then(async (res) => {
-        if (res.ok) setConfig((await res.json()) as TiendaConfig);
+        if (!res.ok) return;
+        const next = (await res.json()) as TiendaConfig;
+        if (!controller.signal.aborted) setConfig(next);
       })
       .catch(() => {});
     // prefill con la sesión del cliente si está logueado
-    fetch("/api/cuenta/me")
+    fetch("/api/cuenta/me", options)
       .then(async (res) => {
         if (!res.ok) return;
-        setSesionCliente(true);
         const me = (await res.json()) as { nombre: string; email: string | null };
+        if (controller.signal.aborted) return;
+        setSesionCliente(true);
         setEmail((prev) => prev || (me.email ?? ""));
         setNombre((prev) => prev || me.nombre);
       })
       .catch(() => {});
     // tarjetas guardadas ("Mis tarjetas"): [] para invitado; con al menos una,
     // la primera queda pre-seleccionada para pagar en 1 toque.
-    fetch("/api/cuenta/medios-pago")
+    fetch("/api/cuenta/medios-pago", options)
       .then(async (res) => {
         if (!res.ok) return;
         const medios = (await res.json()) as MedioPagoGuardado[];
+        if (controller.signal.aborted) return;
         if (!Array.isArray(medios) || medios.length === 0) return;
         setMediosPago(medios);
         setMedioPagoSel(medios[0]?.id ?? "");
       })
       .catch(() => {});
     // direcciones guardadas (checkout rápido): la predeterminada queda pre-seleccionada
-    fetch("/api/cuenta/direcciones")
+    fetch("/api/cuenta/direcciones", options)
       .then(async (res) => {
         if (!res.ok) return;
         const dirs = (await res.json()) as DireccionGuardada[];
+        if (controller.signal.aborted) return;
         if (!Array.isArray(dirs) || dirs.length === 0) return;
         setDirecciones(dirs);
         const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
@@ -301,19 +310,29 @@ export default function CheckoutPage() {
         }
       })
       .catch(() => {});
-  }, []);
+    return () => controller.abort();
+  }, [borradorListo]);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/checkout/session", { cache: "no-store" })
+    fetch("/api/checkout/session", { cache: "no-store", signal: AbortSignal.timeout(15_000) })
       .then(async (response) => {
-        const data = (await response.json()) as { context?: string; message?: string };
+        const data = (await response.json()) as {
+          context?: string;
+          guestContext?: string;
+          message?: string;
+        };
         if (response.status === 401 || response.status === 403) {
           if (active) setRequiereSesion(true);
           throw new Error("Inicia sesión para retomar tu compra sin perder el carrito.");
         }
-        if (!response.ok || !data.context)
+        if (!response.ok || typeof data.context !== "string" || !data.context)
           throw new Error(data.message ?? "No se pudo preparar la compra.");
+        if (!active) return;
+        setDraftScope({
+          owner: data.context,
+          ...(typeof data.guestContext === "string" ? { guestOwner: data.guestContext } : {}),
+        });
         const next = await prepareAttempt(data.context);
         if (active) {
           setAttempt(next);
@@ -321,7 +340,12 @@ export default function CheckoutPage() {
         }
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "No se pudo preparar la compra.");
+        if (active)
+          setError(
+            err instanceof Error && err.name === "Error"
+              ? err.message
+              : "No pudimos preparar tu compra. Revisa tu conexión e inténtalo de nuevo.",
+          );
       });
     return () => {
       active = false;
@@ -641,6 +665,41 @@ export default function CheckoutPage() {
     } finally {
       setProcesando(false);
     }
+  }
+
+  if (!draftScope || borradorListo !== draftScope.owner) {
+    return (
+      <div className="mx-auto max-w-md py-8 text-center">
+        <h1 className="font-bold text-2xl">
+          {requiereSesion ? "Retoma tu compra" : "Preparando tu compra"}
+        </h1>
+        {error ? (
+          <>
+            <p role="alert" className="mt-3 text-danger">
+              {error}
+            </p>
+            {requiereSesion ? (
+              <Link
+                href="/cuenta/login?next=%2Fcheckout"
+                className="gx-btn-primary mt-4 inline-block"
+              >
+                Iniciar sesión para continuar
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSessionRetry((n) => n + 1)}
+                className="gx-btn-primary mt-4"
+              >
+                Reintentar
+              </button>
+            )}
+          </>
+        ) : (
+          <output className="mt-3 block text-slate-500">Estamos recuperando tu selección.</output>
+        )}
+      </div>
+    );
   }
 
   if (pagoPendiente) {

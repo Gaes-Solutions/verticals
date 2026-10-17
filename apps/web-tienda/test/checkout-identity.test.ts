@@ -213,19 +213,37 @@ describe("checkout BFF: propiedad y reintentos", () => {
 });
 
 describe("bootstrap y namespace privado", () => {
-  it("crea cookie HttpOnly antes del checkout y devuelve solo contexto", async () => {
+  it("crea cookie HttpOnly y devuelve contextos públicos sin el secreto", async () => {
     cookiesMock.secret = undefined;
     const response = await bootstrap(new NextRequest("http://localhost/api/checkout/session"));
     expect(response.status).toBe(200);
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("SameSite=lax");
-    expect(Object.keys(await response.json())).toEqual(["context"]);
+    expect(Object.keys(await response.json())).toEqual(["context", "guestContext"]);
     expect(api).not.toHaveBeenCalled();
   });
   it("bootstrap existente no rota dueño entre visitas", async () => {
     const response = await bootstrap(new NextRequest("http://localhost/api/checkout/session"));
-    expect(await response.json()).toEqual({ context: guestContext });
+    expect(await response.json()).toEqual({ context: guestContext, guestContext });
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+  it("permite adoptar solo el contexto invitado de esta tienda y navegador", async () => {
+    vi.mocked(getClienteSession).mockResolvedValue({
+      token: "private-account-token",
+      cliente: {
+        id: "verified-client",
+        tenantSlug: "tienda-a",
+        nombre: "Prueba",
+        email: "verified@example.test",
+      },
+    });
+    const response = await bootstrap(new NextRequest("http://localhost/api/checkout/session"));
+    const data = await response.json();
+    expect(data.guestContext).toBe(guestContext);
+    expect(data.context).not.toBe(data.guestContext);
+    expect(data.guestContext).not.toBe(checkoutDigest(secret, "context", "tienda-b", "guest"));
+    expect(JSON.stringify(data)).not.toContain("private-account-token");
+    expect(Object.keys(data)).toEqual(["context", "guestContext"]);
   });
   it("key cambia con cookie, tenant o cliente y siempre es UUID válido", () => {
     const keys = [

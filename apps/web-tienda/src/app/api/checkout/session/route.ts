@@ -1,4 +1,4 @@
-import { CHECKOUT_COOKIE, checkoutOwner } from "@/lib/checkout-session";
+import { CHECKOUT_COOKIE, checkoutDigest, checkoutOwner } from "@/lib/checkout-session";
 import { ClienteSessionError } from "@/lib/cliente";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -8,7 +8,10 @@ export async function GET(req: NextRequest) {
   try {
     const identity = await checkoutOwner(true);
     const response = NextResponse.json(
-      { context: identity.context },
+      {
+        context: identity.context,
+        guestContext: checkoutDigest(identity.secret, "context", identity.tenant, "guest"),
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
     if (identity.created)
