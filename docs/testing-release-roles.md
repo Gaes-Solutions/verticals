@@ -818,3 +818,21 @@ Validación previa al despliegue:
 Los eventos push se verificaron con mocks; esto no certifica entrega real de
 notificaciones. No se enviaron correos ni notificaciones, ni se crearon pedidos,
 pagos o direcciones. Estos cambios corresponden a la tienda web, no al APK.
+
+### Verificación publicada de la actualización offline
+
+Build de web-tienda correcto y typecheck **30/30**. Fuente staging
+`0eb4c3939e5ebe6d79c1b1ac124774681b35dbec`, deployment web-tienda
+`be1ad832-d79f-4bba-8183-1f7ecc25d802`, estado SUCCESS. Los **seis grupos de
+navegador** pasaron también en la tienda publicada.
+
+Antes de reconectar, el navegador persistente cargó realmente el worker anterior
+y su caché con HTML autenticado. Al actualizar, se eliminó esa caché; quedó solo
+el aviso estático sin cookies ni identidad y se conservó la caché ajena de prueba.
+Después de retirar la cookie, cuenta, checkout y seguimiento devolvieron el aviso
+offline; al reconectar con Reintentar se mostró Iniciar sesión y la API respondió
+401. También pasó el respaldo con la caché eliminada.
+
+Se cerró el navegador, se detuvo el servidor local y se eliminaron tanto la copia
+temporal de credenciales como el perfil de navegador que contenía la caché
+anterior. No se modificó producción, no hubo migración y no se generó APK.
