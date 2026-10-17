@@ -126,6 +126,7 @@ function resolverPagoPendiente(
 export default function CheckoutPage() {
   const router = useRouter();
   const stripeForm = useRef<PagoStripeHandle>(null);
+  const [stripeReady, setStripeReady] = useState(false);
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
@@ -612,6 +613,10 @@ export default function CheckoutPage() {
       !permiteDemo
     ) {
       setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
+      return;
+    }
+    if (metodo === "tarjeta" && conStripe && !stripeForm.current?.disponible()) {
+      setError("Espera a que cargue el formulario seguro antes de enviar el pedido.");
       return;
     }
     if (!validar()) return;
@@ -1172,13 +1177,16 @@ export default function CheckoutPage() {
                   </div>
                 ) : stripeKey ? (
                   <PagoTarjetaStripe
+                    key={draftScope.owner}
                     ref={stripeForm}
                     publicKey={stripeKey}
                     accountId={config?.stripeAccountId ?? null}
+                    onReadyChange={setStripeReady}
                   />
                 ) : conektaKey ? (
                   <>
                     <PagoTarjetaConekta
+                      key={draftScope.owner}
                       publicKey={conektaKey}
                       montoTotal={total}
                       msiMeses={msiOfrecibles}
@@ -1418,7 +1426,7 @@ export default function CheckoutPage() {
             <button
               type="button"
               onClick={() => procesarPedido("tarjeta")}
-              disabled={pagoDeshabilitado}
+              disabled={pagoDeshabilitado || !stripeReady}
               className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:opacity-50"
             >
               {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
