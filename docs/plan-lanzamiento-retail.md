@@ -25,7 +25,7 @@ Antes de probar usuarios reales:
 3. Crear un tenant de prueba y verificar que no usa producción.
 4. Configurar los cinco frontends con sus Dockerfiles y `API_UPSTREAM`.
 5. Confirmar que las imágenes de productos usan almacenamiento persistente.
-6. Configurar `RESEND_API_KEY` de staging y probar recuperación de contraseña.
+6. Configurar `BREVO_API_KEY` y un `EMAIL_REMITENTE` verificado en staging; probar recuperación de contraseña.
 
 **Criterio de salida:** una instalación limpia arranca desde cero sin intervención manual en la base de datos.
 

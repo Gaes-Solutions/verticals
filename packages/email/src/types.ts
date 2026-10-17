@@ -23,12 +23,12 @@ export interface EnviarPlantillaInput {
 
 export interface EmailResult {
   emailId: string;
-  proveedor: "resend" | "mock";
+  proveedor: "brevo" | "resend" | "mock";
   aceptado: boolean;
 }
 
 export interface EmailProvider {
-  readonly codigo: "resend" | "mock";
+  readonly codigo: "brevo" | "resend" | "mock";
   enviar(input: EnviarEmailInput): Promise<EmailResult>;
   enviarPlantilla(input: EnviarPlantillaInput): Promise<EmailResult>;
 }

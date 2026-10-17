@@ -147,7 +147,7 @@ pasarelas + las 4 integraciones):
 | **Conekta** | `CONEKTA_API_KEY`, `CONEKTA_WEBHOOK_SECRET`, `NEXT_PUBLIC_CONEKTA_PUBLIC_KEY` (en web-tienda) | Dashboard Conekta → API Keys + Webhooks |
 | **Stripe** | `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET` | Dashboard Stripe → Developers |
 | **Facturama (CFDI)** | *por negocio* — cada tenant captura su llave en web-admin → Facturación. NO va en env. | Cuenta Facturama |
-| **Resend (email)** | `RESEND_API_KEY`, `EMAIL_REMITENTE` | Resend → API Keys + verificar dominio `gaespos.mx` |
+| **Brevo (email)** | `BREVO_API_KEY`, `EMAIL_REMITENTE` | Clave API (no SMTP) + remitente y dominio verificados en Brevo. Ver `docs/correo-brevo.md`. Resend queda como compatibilidad mientras no se configure Brevo. |
 | **WhatsApp Cloud** | `WHATSAPP_API_KEY`, `WHATSAPP_PHONE_ID` | Meta for Developers → WhatsApp (token permanente) |
 | **Skydropx / Envía** | `SKYDROPX_API_KEY`+`SKYDROPX_WEBHOOK_SECRET` y/o `ENVIA_API_KEY`+`ENVIA_WEBHOOK_SECRET` | Cuentas Skydropx / Envía |
 | **Push web (VAPID)** | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Generar: `npx web-push generate-vapid-keys` |

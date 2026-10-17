@@ -1,4 +1,4 @@
-import { type EmailProvider, MockEmailProvider, ResendClient } from "@gaespos/email";
+import { BrevoClient, type EmailProvider, MockEmailProvider, ResendClient } from "@gaespos/email";
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 
@@ -11,6 +11,12 @@ declare module "fastify" {
 }
 
 const defaultFactory: EmailProviderFactory = () => {
+  if (process.env.BREVO_API_KEY?.trim()) {
+    return new BrevoClient({
+      apiKey: process.env.BREVO_API_KEY,
+      remitenteDefault: process.env.EMAIL_REMITENTE ?? "no-reply@gaessoft.com",
+    });
+  }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || apiKey.startsWith("stub-")) {
     return new MockEmailProvider();

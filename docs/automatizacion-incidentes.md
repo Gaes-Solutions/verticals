@@ -8,4 +8,4 @@ Un superadmin revisa desde `/admin/incidents`. La aprobación queda en `system_i
 
 Cuando exista un runner autenticado de Codex o Kimi, el proceso opcional `pnpm --filter @gaespos/api incident:agent` toma un incidente aprobado (`AGENT_RUNNER_ENABLED=true`), trabaja en un worktree aislado y registra su salida como `agent_execution`. La salida siempre queda pendiente de revisión; el runner no hace push, deploy ni migraciones automáticamente.
 
-Para activar correo configura `RESEND_API_KEY`, `EMAIL_REMITENTE` e `INCIDENT_ALERT_EMAIL`. Si Resend falla, el incidente queda sin `lastNotifiedAt` y el siguiente ciclo vuelve a intentarlo. Aplica la migración `20260929090000_system_incidents` antes de activar el scheduler.
+Para activar correo configura `BREVO_API_KEY`, `EMAIL_REMITENTE` e `INCIDENT_ALERT_EMAIL`. Brevo tiene prioridad; `RESEND_API_KEY` se conserva por compatibilidad cuando no hay clave Brevo. Si el proveedor falla, el incidente queda sin `lastNotifiedAt` y el siguiente ciclo vuelve a intentarlo. Aplica la migración `20260929090000_system_incidents` antes de activar el scheduler. Ver `docs/correo-brevo.md` para guardar las claves sin exponerlas.

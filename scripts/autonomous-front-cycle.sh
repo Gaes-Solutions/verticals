@@ -57,14 +57,13 @@ send_email() {
   local checks_detail="${checks:-No se alcanzaron las validaciones.}"
   checks_detail="${checks_detail:0:6000}"
   local test_steps="Abrir la pantalla indicada en Pantallas/áreas revisadas; repetir el flujo feliz y el caso de error descrito en la tarea; verificar responsive en 360, 768 y escritorio. Para reproducir en local: pnpm --filter @gaespos/web-tienda typecheck && pnpm --filter @gaespos/web-tienda exec vitest run && pnpm --filter @gaespos/web-tienda build"
-  [[ -n "${RESEND_API_KEY:-}" ]] || return 0
+  [[ -n "${BREVO_API_KEY:-}${RESEND_API_KEY:-}" ]] || return 0
   local subject="[GaesPOS] Ciclo autónomo ${status}"
   local text="Ciclo autónomo: ${status}\n\nPantallas/áreas revisadas:\n${files}\n\nQué se pidió/resolvió:\n${TASK_PROMPT}\n\nCómo probarlo:\n${test_steps}\n\nValidaciones ejecutadas:\n${checks_detail}\n\nDictamen Codex:\n${judge}\n\nRama: ${branch:-no creada}"
   local html="<h2>Ciclo autónomo: ${status}</h2><h3>Pantallas/áreas revisadas</h3><pre>${files}</pre><h3>Qué se pidió/resolvió</h3><p>${TASK_PROMPT}</p><h3>Cómo probarlo</h3><p>${test_steps}</p><h3>Validaciones ejecutadas</h3><pre>${checks_detail}</pre><h3>Dictamen Codex</h3><pre>${judge}</pre><p>Rama: ${branch:-no creada}</p>"
-  curl --connect-timeout 10 --max-time 30 -fsS https://api.resend.com/emails \
-    -H "Authorization: Bearer ${RESEND_API_KEY}" \
-    -H "Content-Type: application/json" \
-    --data-binary "$(python3 -c 'import json,sys; print(json.dumps({"from":sys.argv[1],"to":[sys.argv[2]],"subject":sys.argv[3],"text":sys.argv[4],"html":sys.argv[5]}))' "$EMAIL_REMITENTE" "$INCIDENT_ALERT_EMAIL" "$subject" "$text" "$html")" >/dev/null || echo "No se pudo enviar el correo de ciclo" >&2
+  export EMAIL_REMITENTE INCIDENT_ALERT_EMAIL
+  python3 -c 'import json,sys; print(json.dumps({"subject":sys.argv[1],"text":sys.argv[2],"html":sys.argv[3]}))' "$subject" "$text" "$html" | \
+    python3 scripts/send-system-email.py || echo "No se pudo enviar el correo de ciclo" >&2
 }
 
 on_exit() {

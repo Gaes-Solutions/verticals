@@ -29,7 +29,9 @@ const env = {
 };
 for (const key of Object.keys(env))
   if (
-    /STRIPE|CONEKTA|FACTURAMA|SAAS_FISCAL|RESEND|SMTP|SENTRY|OPENAI|ANTHROPIC|KIMI|AWS_/.test(key)
+    /STRIPE|CONEKTA|FACTURAMA|SAAS_FISCAL|RESEND|BREVO|SMTP|SENTRY|OPENAI|ANTHROPIC|KIMI|AWS_/.test(
+      key,
+    )
   )
     delete env[key];
 // Local non-root installs may live outside /usr/bin. Preserve decoder isolation.
