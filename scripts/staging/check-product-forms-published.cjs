@@ -149,6 +149,14 @@ let stage = "setup";
     });
     assert.equal(invalid.status(), 400);
     assert.equal(invalid.headers()["cache-control"], "private, no-store");
+    const absent = await context.request.post(`${base}/api/avisos-stock`, {
+      headers: { origin: base },
+      data: {
+        productoPublicadoId: `qa-nonexistent-${randomUUID()}`,
+        email: "qa-nonexistent@example.invalid",
+      },
+    });
+    assert.equal(absent.status(), 404);
     pass();
     stage = "real guest Q&A owner read and write are private 401 responses";
     assert(ownerPath);

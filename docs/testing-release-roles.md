@@ -1810,3 +1810,74 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
 - No se crearon pedidos, guías ni cargos ni se enviaron avisos/correos. No se
   cambiaron las tarifas de la tienda ni se validó emisión de guías/cotización en
   vivo con paquetería. Esta entrega actualiza la web de staging, no APK/producción.
+
+## 17 de octubre: preguntas y avisos de disponibilidad confirmados — web/API staging
+
+- Fuente `945a7ff2d8c85b1dcad1a281f8bd769951f778e2`. Despliegues **SUCCESS**, ambos
+  con ese SHA: web `d7be5da7-f0c1-4a89-bf2c-cec7591ab249`, API
+  `3c689614-64d8-4b18-adbb-4ed4aacb0cd0`.
+- Los formularios aceptaban cualquier 2xx como confirmación y no recuperaban una
+  excepción de red; el aviso de stock tampoco bloqueaba envíos simultáneos. Ahora
+  comparten bloqueo inmediato, límite de 20 segundos incluyendo lectura del
+  cuerpo, cancelación al desmontar/cambiar de producto y recibo validado antes de
+  mostrar éxito. Los errores mantienen los datos; un resultado incierto permite
+  reintentar esos mismos datos, sin reenvío automático. Los borradores y claves de
+  solicitud permanecen en memoria de la página, no se guardan en almacenamiento
+  del navegador ni se restauran después de recargarla.
+- Avisos: correo acotado/recortado, producto publicado requerido y confirmación
+  explícita `{ok:true}`. El API serializa el registro por esquema/producto/correo
+  con advisory lock `7710025` y transacción `ReadCommitted`. La búsqueda del aviso
+  pendiente ignora diferencias de mayúsculas del correo; conserva el correo
+  escrito para el envío. No limpia duplicados históricos ni garantiza una sola
+  entrega de correo durante todo el ciclo de notificación/reactivación.
+- Preguntas: 5–500 caracteres; el mismo intento utiliza un UUID como clave primaria
+  de la pregunta y devuelve su recibo existente al repetirlo. Reutilizarlo con
+  otro comprador, producto o texto se rechaza; también se recupera una colisión
+  concurrente de clave única sin crear ni notificar otra vez. Una nueva pregunta
+  tras confirmar requiere la acción explícita «Hacer otra pregunta». El campo
+  existente es `TEXT`; no se agregó migración. Los consumidores del API sin clave
+  conservan la ruta anterior; la protección de reintento con UUID corresponde al
+  nuevo formulario web.
+- La pregunta exige cuenta comprobada antes de editar. Se oculta el borrador al
+  verificar sesión y se conserva solo si regresa la misma cuenta; otra cuenta o
+  producto reinicia el formulario. El BFF compara la cuenta esperada con la sesión
+  real antes de enviar al API: el identificador del cuerpo nunca concede identidad
+  ni permisos. La vista pública sigue mostrando únicamente respuestas publicadas.
+  Las pestañas abiertas con la versión anterior deben recargar el formulario.
+- BFF: origen/Host/JSON comprobados en escrituras, límites de 15 segundos
+  compartidos con autenticación, validación de datos, recibos filtrados, errores
+  sin detalles internos y `private, no-store`. Nuevas rutas API de registro impiden
+  que una web nueva escriba accidentalmente mediante un servidor anterior que
+  todavía descartaría el identificador de solicitud. Las rutas API anteriores se
+  mantienen para los clientes existentes.
+- Accesibilidad: etiquetas explícitas, avisos de carga/error/confirmación, campos
+  deshabilitados antes de activarse, controles de al menos 44 px y ajuste a 320 px.
+  Se inspeccionaron capturas sintéticas de ambos formularios.
+- **696/696 pruebas web** (50 adicionales), **13 pruebas API aisladas** sin el
+  setup destructivo de integración, compilaciones de web/API y **30/30 tareas de
+  tipos** aprobadas. API probado con persistencia simulada: repetición, carrera de
+  clave única, propiedad/datos distintos, notificación fallida tras persistir,
+  compatibilidad anterior, orden del lock y rutas HTTP de stock/publicación.
+- **26 grupos de navegador locales** con componentes reales y escrituras
+  simuladas: doble clic, cinco fallos inciertos por formulario y recuperación con
+  los mismos datos, rechazos/429, cambios de producto, desmontaje, layout, acceso
+  invitado, fallo de identidad, cambio de cuenta, longitud y nueva pregunta.
+- **12 grupos publicados** mediante `check-product-forms-published.cjs`: invitado
+  real, recibo exacto, doble envío, dos recuperaciones inciertas, cambio de cuenta,
+  320 px y límites del BFF. Todos los POST válidos de preguntas se interceptaron
+  en el navegador. Las comprobaciones reales de stock rechazaron origen/entrada
+  inválidos o un producto inexistente; no registraron suscripciones.
+- Con el comprador entregado: lectura del propietario mínimo, cuenta esperada
+  incorrecta rechazada antes de reenviar, texto inválido y ruta API nueva sin clave
+  rechazada usando un producto inexistente como protección adicional. Credenciales
+  y tokens no se imprimieron ni se cambiaron; el archivo temporal se eliminó.
+- `check-stock-registration-lock.cjs` comprobó el lock real con dos conexiones
+  PostgreSQL de staging: exclusión de la misma clave, separación de otro esquema
+  y liberación al commit. Solo SELECT/transacciones; no insertó alertas. Es prueba
+  del mecanismo de lock, no una prueba de dos altas concurrentes reales.
+- No se crearon preguntas, alertas de stock, correos ni notificaciones reales. El
+  catálogo consultado no tenía productos con stock público cero: la UI de stock
+  se validó localmente y su límite HTTP se verificó publicado; no se probó un alta
+  real ni el ciclo de reposición/envío. Tampoco se certifica entrega de avisos al
+  equipo: una pregunta persistida puede confirmarse al reintentar aunque fallara
+  su notificación. Esta entrega actualiza web/API de staging, no APK/producción.
