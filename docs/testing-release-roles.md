@@ -1894,3 +1894,15 @@ Una prueba adicional del API verifica ese contrato. El script PostgreSQL tambié
 comprobó que `QaXRecipient` coincide con el patrón `Qa_Recipient` mediante `ILIKE`,
 pero no mediante `=`, y que Prisma conserva el correo literal y emite la igualdad
 sin `ILIKE`. La comprobación fue solo de lectura, sin altas ni destinatarios reales.
+
+### Cierre publicado de esta entrega
+
+La corrección final `055e2860755b1f676ce0de1732a9e14752b68d6e` quedó en
+`SUCCESS` en ambos servicios de staging: web-tienda
+`2f194332-e4ba-4c29-b2b1-cf34b2ef9c88` y API verticals
+`077446ed-b845-438a-93d6-ba5a14c64014`. Se repitieron y aprobaron los **12 grupos
+publicados** con ambos servicios en esa versión, incluyendo los cuatro grupos con
+comprador autenticado. Los envíos válidos continuaron interceptados y las pruebas
+reales fueron lecturas o rechazos previos a la mutación; no se crearon preguntas,
+avisos ni correos. Se eliminó nuevamente el archivo temporal privado del comprador.
+La evidencia de esta entrega queda limitada a web/API de staging.
