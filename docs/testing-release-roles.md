@@ -1588,3 +1588,61 @@ eliminaron tarjetas reales y no se enviaron cargos.
   actualización coinciden con la lista real a 390 px, sin errores JavaScript ni
   desbordamiento y con controles de 44 px. No se envió ninguna compra. Se eliminó
   la entrada temporal de credenciales y se cerraron ambos contextos de navegador.
+
+## Formularios de tarjeta — carga acotada y callbacks seguros (17 de octubre)
+
+Fuente web: `ca92e2b24eed8a0b3f0abad021b2e05a4f190cb9`, solo staging.
+No cambia el API, el APK, producción ni la configuración de Stripe/Conekta.
+
+- La descarga de cada SDK se comparte mientras está en curso, falla tras 12 s
+  sin eventos y permite reintentar; un script cargado sin exponer el SDK no se
+  acepta como éxito. Se limpian scripts fallidos y temporizadores. Las instancias
+  de formulario y sus callbacks pertenecen a cada comprador/contexto.
+- Stripe espera el evento `ready` del campo, también acotado a 12 s, y permite
+  reintentar el montaje. El checkout deshabilita un pago nuevo mientras no esté
+  disponible y lo vuelve a comprobar antes de preparar la escritura. Reabrir el
+  método exige la nueva disponibilidad; pagar al recoger no depende de Stripe.
+  La semántica del evento se comprobó en la
+  [documentación oficial de Stripe](https://docs.stripe.com/js/element/events/on_ready).
+- La confirmación de Stripe permite una operación activa y comprueba cuenta y
+  contexto antes/después del SDK. Un resultado tardío de un campo reemplazado,
+  respuesta incompleta, rechazo de red o estado distinto de `succeeded` no se
+  presenta como pago confirmado. Se conserva la instrucción de consultar el mismo
+  pedido; no hay reintentos automáticos de cobro. No se añade un timeout al desafío
+  bancario de `confirmCardPayment`, que puede requerir interacción del comprador.
+- Conekta bloquea envíos inmediatos repetidos, incluso si el SDK responde de forma
+  síncrona, y procesa una sola devolución del token. Tras 20 s sin respuesta se
+  libera el formulario sin enviar un pedido; callbacks posteriores se ignoran.
+  Cambios de total/cuotas/llave o comprador y salida de pantalla cancelan su uso.
+  Se valida vencimiento/CVC y longitud del número antes de tokenizar, se oculta el
+  CVC y se limpia tras cada intento/cambio de contexto. El número admite 19 dígitos
+  agrupados. Las cuotas elegidas se reinician cuando cambia el contexto del importe.
+  Ninguno de esos controles sustituye la validación/autorización del proveedor.
+- Ambos formularios se reinician por el contexto del comprador en checkout. Una
+  recuperación del script conserva el mismo intento de compra y no llama por sí
+  sola a confirmar/tokenizar ni crea un pedido.
+- **540/540 pruebas web**, compilación y **30/30 tareas de tipos**. Se añadieron
+  seis pruebas de descarga compartida, disponibilidad real, SDK ausente, red,
+  timeout y fallo de DOM con reintento/limpieza de temporizadores.
+- **23 grupos locales de navegador** con componentes reales y SDK simulados:
+  tres fallos de descarga y recuperación por proveedor; espera/timeout del campo
+  Stripe; confirmación concurrente/cuenta equivocada; resultados pendientes,
+  rechazados, malformados y obsoletos; doble envío/callback de Conekta, incluida
+  respuesta síncrona; tokenización vencida con respuesta tardía; errores de SDK;
+  cambio de total/comprador; validación de datos/cuotas/CVC y layout a 320 px.
+  Se inspeccionó visualmente el formulario estrecho. Ninguna prueba local contacta
+  a Stripe/Conekta, crea pedidos ni envía datos de tarjeta reales.
+- Scripts: `scripts/staging/check-payment-forms-ui.cjs` y
+  `scripts/staging/check-payment-checkout-ui.cjs`. El segundo verifica el checkout
+  publicado usando carrito, opciones de entrega, configuración de cobro y SDK de
+  fixtures; bloquea todas las escrituras de negocio y llamadas al proveedor.
+  No certifica cobro real, 3DS bancario ni callbacks/webhooks del proveedor.
+- Despliegue web **SUCCESS**: `7ab2c41f-d836-43b8-ab89-a185ab826c4c`,
+  con el SHA fuente verificado. **Cuatro grupos publicados aprobados** con fixtures
+  de carrito/configuración/entrega/SDK: un fallo de descarga mantiene bloqueado
+  el envío nuevo con Stripe; pagar al recoger sigue habilitado; reintentar carga
+  no habilita el pago hasta recibir `ready`; volver a tarjeta exige la nueva
+  disponibilidad del campo. Cero escrituras de negocio, cero llamadas a confirmar
+  en el SDK simulado, cero errores JavaScript y sin desbordamiento a 390 px.
+  Se cerraron el contexto y el navegador al terminar. La configuración real de
+  cobro no se modificó y no se probó un cargo ni desafío bancario reales.
