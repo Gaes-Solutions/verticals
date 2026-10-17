@@ -781,3 +781,40 @@ Se detuvo el servidor local y se eliminó la copia temporal de credenciales.
 Los navegadores de prueba fueron cerrados. No se aplicaron migraciones de
 base, no se generó un APK y no se modificó producción. Esta validación no
 certifica entrega de correo ni cobro/facturación externos, todavía pendientes.
+
+## Privacidad offline y apertura de notificaciones — 17 de octubre de 2026
+
+Se reprodujo en staging que el service worker guardaba el HTML de inicio con
+la identidad de la cuenta real de prueba. Después de quitar su cookie y perder
+la conexión, una navegación a cuenta reutilizaba ese HTML. Solo se inspeccionaron
+datos de la cuenta entregada, sin acceder a otros compradores. Se conservó un
+perfil temporal con el worker anterior para verificar su actualización publicada.
+
+Ahora se precarga únicamente `/offline.html`, estático y sin cookies. Las
+navegaciones sin conexión reciben ese aviso público con estado 503 y reintento;
+si se elimina la caché, existe un aviso mínimo de respaldo. Las API y escrituras
+no se cachean ni se encolan. La activación elimina las cachés antiguas de la
+tienda y conserva las de otros componentes. La página estática no requiere
+resolver un negocio para poder instalar el nuevo worker.
+
+También se corrigieron el icono de push (`/icono.svg`), la selección de pestaña
+por URL exacta y la validación del destino: solo HTTP(S) del mismo origen sin
+credenciales en la URL. El pedido `/123` ya no selecciona la pestaña `/1234`.
+
+Validación previa al despliegue:
+
+- Catorce pruebas del worker: diez reprodujeron fallos antes de corregirlo;
+  las catorce pasan después. Suite total de web-tienda: **153/153**.
+- Lint de los cuatro archivos JS/TS sin errores.
+- Seis grupos de navegador local con API staging: limpieza de caché antigua,
+  cuenta/checkout/seguimiento offline, API sin HTML sustituido, diseño a 320 y
+  1280 px, caché eliminada y reconexión mediante el botón Reintentar. No reaparece
+  la cuenta anterior. Capturas revisadas sin recortes ni desbordamiento; botón
+  principal de al menos 44 px.
+- Regresión reutilizable: `scripts/staging/check-storefront-offline.cjs`, con
+  credenciales privadas en `STOREFRONT_OFFLINE_ACCOUNT`. El perfil opcional
+  `OFFLINE_QA_PROFILE` permite comprobar la actualización de un worker antiguo.
+
+Los eventos push se verificaron con mocks; esto no certifica entrega real de
+notificaciones. No se enviaron correos ni notificaciones, ni se crearon pedidos,
+pagos o direcciones. Estos cambios corresponden a la tienda web, no al APK.
