@@ -147,15 +147,18 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Aviso de reabastecimiento (storefront): deja tu correo para un producto agotado.
-  app.post("/avisos-stock", async (req, reply) => {
+  const registrarAviso = async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z
-      .object({ productoPublicadoId: z.string().min(1), email: z.string().email() })
+      .object({
+        productoPublicadoId: z.string().min(1).max(100),
+        email: z.string().trim().email().max(254),
+      })
       .parse(req.body);
     const prod = await req.tenantPrisma.productoPublicado.findUnique({
       where: { id: body.productoPublicadoId },
-      select: { id: true },
+      select: { id: true, isPublicado: true },
     });
-    if (!prod) {
+    if (!prod?.isPublicado) {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });
@@ -165,7 +168,9 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
       email: body.email,
     });
     return reply.code(201).send({ ok: true });
-  });
+  };
+  app.post("/avisos-stock", registrarAviso);
+  app.post("/avisos-stock/registrar", registrarAviso);
 
   // --- Catálogo público (lectura) ---
   app.get("/catalogo", async (req, reply) => {

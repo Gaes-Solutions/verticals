@@ -569,12 +569,23 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── Preguntas públicas sobre un producto (Q&A) ────────────────────────────
-  app.post("/productos/:productoPublicadoId/preguntas", async (req, reply) => {
+  const registrarPregunta = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    requiereSolicitud = false,
+  ) => {
     const { clienteId, tenantSlug } = clienteCtx(req);
     const { productoPublicadoId } = z
       .object({ productoPublicadoId: z.string().min(1) })
       .parse(req.params);
-    const { pregunta } = z.object({ pregunta: z.string().min(5).max(500) }).parse(req.body);
+    const { pregunta, solicitudId } = z
+      .object({
+        pregunta: z.string().trim().min(5).max(500),
+        solicitudId: z.string().uuid().optional(),
+      })
+      .parse(req.body);
+    if (requiereSolicitud && !solicitudId)
+      return reply.code(400).send({ message: "Falta el identificador de la solicitud." });
     const client = getTenantClient(tenantSlug);
     const cfg = await client.configTiendaEcommerce.findFirst();
     if (!cfg?.preguntasPublicas) {
@@ -595,6 +606,7 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
         clienteId,
         me?.nombre ?? null,
         pregunta,
+        solicitudId,
       );
       return reply.code(201).send(r);
     } catch (err) {
@@ -605,7 +617,13 @@ export const clientePortalRoutes: FastifyPluginAsync = async (app) => {
       }
       throw err;
     }
-  });
+  };
+  app.post("/productos/:productoPublicadoId/preguntas", (req, reply) =>
+    registrarPregunta(req, reply),
+  );
+  app.post("/productos/:productoPublicadoId/preguntas/solicitudes", (req, reply) =>
+    registrarPregunta(req, reply, true),
+  );
 
   app.get("/wishlist", async (req) => {
     const { clienteId, tenantSlug } = clienteCtx(req);

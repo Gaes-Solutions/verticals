@@ -10,21 +10,29 @@ export async function crearAvisoStock(
   prisma: TenantClient,
   input: { productoPublicadoId: string; email: string; clienteId?: string | undefined },
 ): Promise<void> {
-  const existe = await prisma.stockAlert.findFirst({
-    where: {
-      productoPublicadoId: input.productoPublicadoId,
-      email: input.email,
-      notificado: false,
+  const email = input.email.trim();
+  const key = JSON.stringify([input.productoPublicadoId, email.toLowerCase()]);
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${key}, 7710025))`;
+      const existe = await tx.stockAlert.findFirst({
+        where: {
+          productoPublicadoId: input.productoPublicadoId,
+          email: { equals: email, mode: "insensitive" },
+          notificado: false,
+        },
+      });
+      if (existe) return;
+      await tx.stockAlert.create({
+        data: {
+          productoPublicadoId: input.productoPublicadoId,
+          email,
+          ...(input.clienteId ? { clienteId: input.clienteId } : {}),
+        },
+      });
     },
-  });
-  if (existe) return;
-  await prisma.stockAlert.create({
-    data: {
-      productoPublicadoId: input.productoPublicadoId,
-      email: input.email,
-      ...(input.clienteId ? { clienteId: input.clienteId } : {}),
-    },
-  });
+    { isolationLevel: "ReadCommitted" },
+  );
 }
 
 /** Stock disponible total (todas las sucursales) de un producto publicado. */

@@ -22,23 +22,52 @@ export async function crearPregunta(
   clienteId: string | null,
   autorNombre: string | null,
   texto: string,
+  solicitudId?: string,
 ): Promise<{ id: string }> {
   const pregunta = texto.trim();
-  if (pregunta.length < 5) throw new PreguntaError(422, "Escribe una pregunta más completa");
+  if (pregunta.length < 5 || pregunta.length > 500)
+    throw new PreguntaError(422, "Escribe una pregunta más completa");
+  async function recuperar() {
+    if (!solicitudId) return null;
+    const row = await client.preguntaProducto.findUnique({ where: { id: solicitudId } });
+    if (!row) return null;
+    if (
+      row.productoPublicadoId !== productoPublicadoId ||
+      row.clienteId !== clienteId ||
+      row.pregunta !== pregunta
+    )
+      throw new PreguntaError(
+        409,
+        "Esta solicitud corresponde a otros datos. Revisa la pregunta antes de continuar.",
+      );
+    return { id: row.id };
+  }
+  const anterior = await recuperar();
+  if (anterior) return anterior;
   const prod = await client.productoPublicado.findUnique({
     where: { id: productoPublicadoId },
     select: { id: true, isPublicado: true, tituloPublico: true },
   });
   if (!prod || !prod.isPublicado) throw new PreguntaError(404, "Producto no encontrado");
 
-  const creada = await client.preguntaProducto.create({
-    data: {
-      productoPublicadoId,
-      pregunta,
-      ...(clienteId ? { clienteId } : {}),
-      ...(autorNombre ? { autorNombre } : {}),
-    },
-  });
+  let creada: { id: string };
+  try {
+    creada = await client.preguntaProducto.create({
+      data: {
+        ...(solicitudId ? { id: solicitudId } : {}),
+        productoPublicadoId,
+        pregunta,
+        ...(clienteId ? { clienteId } : {}),
+        ...(autorNombre ? { autorNombre } : {}),
+      },
+    });
+  } catch (err) {
+    if (solicitudId && err && typeof err === "object" && "code" in err && err.code === "P2002") {
+      const existente = await recuperar();
+      if (existente) return existente;
+    }
+    throw err;
+  }
 
   await notificarUsuariosConPermiso(client, PERMISSIONS.ECOMMERCE_RESENAS_MODERAR, {
     tipo: "pregunta_nueva",
