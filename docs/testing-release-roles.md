@@ -1415,3 +1415,34 @@ Las escrituras de marcado del primero son simuladas. El segundo solo hace POST
 sin sesión, lecturas autenticadas y abre/cancela el handshake SSE. No envía avisos,
 push ni correos y no marca notificaciones reales como leídas. Este lote no
 certifica entrega de un evento real generado por una compra ni entrega push/email.
+
+### Verificación publicada de campana y stream
+
+Build final web-tienda correcto, lint sin errores (avisos de complejidad del
+marcado y fixture), typecheck **30/30**. Fuente staging
+`8d871d7c2a28b47872381a3d171c8c8e62c9ff72`, deployment web-tienda
+`41fb899d-d113-4d87-bb75-9affaafb5f7b`, estado SUCCESS.
+
+`check-notificaciones-access.cjs` pasó cuatro grupos contra los servicios reales:
+
+- GET historial, POST de marcado individual/todas y GET SSE de invitado devuelven
+  401 con caché privada deshabilitada, sin abrir el stream del cliente.
+- La cuenta compradora entregada inicia sesión y verifica su identidad; la campana
+  publicada abre el diálogo y muestra el contador exacto devuelto por el GET real
+  después de Actualizar, sin alerta de error en ese diálogo.
+- Una segunda conexión autenticada abre SSE, recibe su handshake inicial y se
+  cancela desde el navegador. Se verificaron estado 200, MIME y caché privada.
+  No se publicaron eventos para esta prueba ni se registró su contenido privado.
+- En la página móvil publicada, Escape cierra el diálogo y devuelve el foco a la
+  campana. Las escrituras del navegador estuvieron bloqueadas durante esa visita.
+
+Los 14 grupos de UI locales usan respuestas sintéticas para todos los cambios de
+lectura y casos de error. No se hicieron POST autenticados de lectura en staging,
+no se cambió el estado de avisos reales y no se enviaron notificaciones, correos
+ni push. El handshake real valida transporte/autenticación/cancelación; no
+certifica la entrega de un evento de negocio nuevo ni entrega de correo/push.
+
+Archivo temporal de credenciales eliminado; navegadores/contextos y fixtures
+locales cerrados. Sin migraciones, APKs nuevos ni cambios en producción. Este lote
+es web-tienda y no modifica el servicio API. Para revisar: Mi cuenta → campana de
+Notificaciones → Actualizar avisos. Marcar leída y Ver detalle son acciones separadas.
