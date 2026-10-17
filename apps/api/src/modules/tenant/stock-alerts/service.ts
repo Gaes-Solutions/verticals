@@ -11,14 +11,14 @@ export async function crearAvisoStock(
   input: { productoPublicadoId: string; email: string; clienteId?: string | undefined },
 ): Promise<void> {
   const email = input.email.trim();
-  const key = JSON.stringify([input.productoPublicadoId, email.toLowerCase()]);
+  const key = JSON.stringify([input.productoPublicadoId, email]);
   await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ${key}, 7710025))`;
       const existe = await tx.stockAlert.findFirst({
         where: {
           productoPublicadoId: input.productoPublicadoId,
-          email: { equals: email, mode: "insensitive" },
+          email,
           notificado: false,
         },
       });

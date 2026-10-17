@@ -11,7 +11,14 @@ async function remote() {
   assert.equal(url.hostname, "postgres-sywn.railway.internal");
   url.searchParams.set("schema", "tenant_gaesland");
   const { PrismaClient } = require("/app/node_modules/@gaespos/db/src/generated/tenant/index.js");
-  const db = new PrismaClient({ datasources: { db: { url: url.href } } });
+  const db = new PrismaClient({
+    datasources: { db: { url: url.href } },
+    log: [{ emit: "event", level: "query" }],
+  });
+  const emailQueries = [];
+  db.$on("query", (event) => {
+    if (event.query.includes("stock_alerts")) emailQueries.push(event);
+  });
   const peer = new PrismaClient({ datasources: { db: { url: url.href } } });
   try {
     await db.$transaction(
@@ -31,6 +38,24 @@ async function remote() {
     const [after] =
       await peer.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(current_schema() || '["qa-product","qa@example.invalid"]', 7710025)) AS acquired`;
     assert.equal(after.acquired, true);
+    const [comparison] =
+      await db.$queryRaw`SELECT 'QaXRecipient@example.invalid' ILIKE 'Qa_Recipient@example.invalid' AS wildcard, 'QaXRecipient@example.invalid' = 'Qa_Recipient@example.invalid' AS literal`;
+    assert.equal(comparison.wildcard, true);
+    assert.equal(comparison.literal, false);
+    await db.stockAlert.findFirst({
+      where: {
+        productoPublicadoId: "qa-nonexistent-literal-email",
+        email: "Qa_Recipient@example.invalid",
+        notificado: false,
+      },
+      select: { id: true },
+    });
+    assert.equal(emailQueries.length, 1);
+    assert.equal(emailQueries[0].query.includes("ILIKE"), false);
+    assert(JSON.parse(emailQueries[0].params).includes("Qa_Recipient@example.invalid"));
+    console.log(
+      "PASS real Prisma/PostgreSQL: literal email equality preserves underscores and case; SELECT only",
+    );
     console.log(
       "PASS real PostgreSQL: same-tenant lock excludes a second connection, releases on commit and separates another tenant key",
     );

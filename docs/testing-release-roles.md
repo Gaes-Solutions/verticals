@@ -1813,7 +1813,7 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
 
 ## 17 de octubre: preguntas y avisos de disponibilidad confirmados — web/API staging
 
-- Fuente `945a7ff2d8c85b1dcad1a281f8bd769951f778e2`. Despliegues **SUCCESS**, ambos
+- Fuente base `945a7ff2d8c85b1dcad1a281f8bd769951f778e2`. Despliegues iniciales **SUCCESS**, ambos
   con ese SHA: web `d7be5da7-f0c1-4a89-bf2c-cec7591ab249`, API
   `3c689614-64d8-4b18-adbb-4ed4aacb0cd0`.
 - Los formularios aceptaban cualquier 2xx como confirmación y no recuperaban una
@@ -1827,8 +1827,8 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
 - Avisos: correo acotado/recortado, producto publicado requerido y confirmación
   explícita `{ok:true}`. El API serializa el registro por esquema/producto/correo
   con advisory lock `7710025` y transacción `ReadCommitted`. La búsqueda del aviso
-  pendiente ignora diferencias de mayúsculas del correo; conserva el correo
-  escrito para el envío. No limpia duplicados históricos ni garantiza una sola
+  pendiente utiliza coincidencia literal del correo recortado; conserva las
+  mayúsculas y los guiones bajos escritos para el envío. No limpia duplicados históricos ni garantiza una sola
   entrega de correo durante todo el ciclo de notificación/reactivación.
 - Preguntas: 5–500 caracteres; el mismo intento utiliza un UUID como clave primaria
   de la pregunta y devuelve su recibo existente al repetirlo. Reutilizarlo con
@@ -1853,7 +1853,7 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
 - Accesibilidad: etiquetas explícitas, avisos de carga/error/confirmación, campos
   deshabilitados antes de activarse, controles de al menos 44 px y ajuste a 320 px.
   Se inspeccionaron capturas sintéticas de ambos formularios.
-- **696/696 pruebas web** (50 adicionales), **13 pruebas API aisladas** sin el
+- **696/696 pruebas web** (50 adicionales), **14 pruebas API aisladas** sin el
   setup destructivo de integración, compilaciones de web/API y **30/30 tareas de
   tipos** aprobadas. API probado con persistencia simulada: repetición, carrera de
   clave única, propiedad/datos distintos, notificación fallida tras persistir,
@@ -1881,3 +1881,16 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
   real ni el ciclo de reposición/envío. Tampoco se certifica entrega de avisos al
   equipo: una pregunta persistida puede confirmarse al reintentar aunque fallara
   su notificación. Esta entrega actualiza web/API de staging, no APK/producción.
+
+### Revisión final de coincidencia literal de correo
+
+La inspección del SQL real encontró que `mode: insensitive` utiliza `ILIKE` sin
+escapar el guion bajo del correo. Dos destinatarios diferentes podían coincidir
+como patrón. Se retiró ese filtro para conservar la igualdad literal del servicio
+anterior, con el nuevo bloqueo transaccional. La clave del bloqueo conserva ahora
+la misma dirección exacta que se compara; no transforma las mayúsculas.
+
+Una prueba adicional del API verifica ese contrato. El script PostgreSQL también
+comprobó que `QaXRecipient` coincide con el patrón `Qa_Recipient` mediante `ILIKE`,
+pero no mediante `=`, y que Prisma conserva el correo literal y emite la igualdad
+sin `ILIKE`. La comprobación fue solo de lectura, sin altas ni destinatarios reales.

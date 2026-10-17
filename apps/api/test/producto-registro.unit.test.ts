@@ -112,7 +112,7 @@ describe("question retries use the question primary key, no migration", () => {
   });
 });
 describe("pending stock subscription locking", () => {
-  it("locks before reading and creating, with case-insensitive matching and ReadCommitted", async () => {
+  it("locks before reading and creating, with literal email matching and ReadCommitted", async () => {
     const events: string[] = [];
     const tx = {
       $executeRaw: vi.fn(async () => {
@@ -140,12 +140,29 @@ describe("pending stock subscription locking", () => {
     expect(tx.stockAlert.findFirst).toHaveBeenCalledWith({
       where: {
         productoPublicadoId: "qa-product",
-        email: { equals: "Qa@Example.invalid", mode: "insensitive" },
+        email: "Qa@Example.invalid",
         notificado: false,
       },
     });
     expect(tx.stockAlert.create).toHaveBeenCalledWith({
       data: { productoPublicadoId: "qa-product", email: "Qa@Example.invalid" },
+    });
+  });
+  it("keeps underscores and recipient case literal rather than passing an ILIKE pattern", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    const tx = { $executeRaw: vi.fn(), stockAlert: { findFirst, create: vi.fn() } };
+    await crearAvisoStock(
+      {
+        $transaction: async (fn: (tx: unknown) => Promise<void>) => fn(tx),
+      } as unknown as TenantPrismaClient,
+      { productoPublicadoId: "qa-product", email: "Qa_Recipient@example.invalid" },
+    );
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        productoPublicadoId: "qa-product",
+        email: "Qa_Recipient@example.invalid",
+        notificado: false,
+      },
     });
   });
   it("existing pending alerts do not create another row", async () => {
