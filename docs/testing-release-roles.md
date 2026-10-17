@@ -622,7 +622,7 @@ Se revocaron cuatro sesiones QA remanentes y se eliminaron las copias
 temporales de credenciales, claves y cookies. La configuración del autenticador
 queda únicamente en el archivo privado del escritorio para que el propietario pueda importarla; no se cambió su contraseña.
 
-## Cierre de sesión del comprador ante errores de red
+## Cierre de sesión del comprador ante errores de red — 17 de octubre de 2026
 
 La revisión posterior de los demás paneles encontró un fallo en la tienda web:
 `LogoutBoton` no comprobaba el estado HTTP y navegaba al inicio incluso si
@@ -647,3 +647,15 @@ y API staging, con la cuenta real de comprador entregada, pasaron cuatro casos:
 
 No se crearon pedidos, direcciones, cuentas ni cobros. El cierre afecta solo a
 la sesión del navegador de prueba; no cambia la contraseña del comprador.
+
+La compilación de producción de web-tienda, lint de los dos archivos cambiados
+y typecheck 30/30 terminaron correctamente. Un primer typecheck se ejecutó
+mientras Next dev regeneraba `.next/types` y falló por archivos generados que
+se estaban sustituyendo; tras detener el servidor local, el build completo y
+el chequeo de tipos terminaron sin errores.
+
+Desplegado en staging: fuente `1831356e659eb04cbc8cf235a549dd88fd805987`,
+deployment de web-tienda `0c055021-2838-4330-9e87-78ec68be0f03`, estado SUCCESS.
+Los mismos cuatro casos de navegador pasaron contra la tienda publicada después
+del despliegue. Se detuvo el servidor local y se eliminó el JSON temporal con
+las credenciales del comprador. Producción no se modificó.
