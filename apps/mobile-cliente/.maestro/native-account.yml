@@ -1,0 +1,128 @@
+appId: com.gaessoft.cliente.staging
+name: Synthetic shopper registration, durable cart and saved address
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: Iniciar sesión
+    timeout: 60000
+- tapOn: Iniciar sesión
+- tapOn: .*Nuevo.*Crea tu cuenta
+- tapOn: Tu nombre
+- inputText: Prueba Android
+- tapOn: tu@correo.com
+- inputText: ${MAESTRO_QA_EMAIL}
+- tapOn: '••••••••'
+- inputText: ${MAESTRO_QA_PASSWORD}
+- hideKeyboard
+- scrollUntilVisible:
+    element: Crear cuenta
+- tapOn: Crear cuenta
+- extendedWaitUntil:
+    visible: Buscar artículos
+    timeout: 30000
+- assertNotVisible: mi-tienda
+- tapOn: Buscar artículos
+- inputText: Licuadora
+- hideKeyboard
+- tapOn: Buscar
+- extendedWaitUntil:
+    visible: Ver Licuadora de cocina
+    timeout: 30000
+- tapOn: Ver Licuadora de cocina
+- scrollUntilVisible:
+    element: Agregar al carrito
+- tapOn: Agregar al carrito
+- extendedWaitUntil:
+    visible: Ver carrito, 1 artículos
+    timeout: 20000
+- tapOn: Ver carrito, 1 artículos
+- extendedWaitUntil:
+    visible: Carrito guardado en tu cuenta
+    timeout: 20000
+- tapOn: Aumentar cantidad
+- extendedWaitUntil:
+    visible: Carrito guardado en tu cuenta
+    timeout: 20000
+- takeScreenshot: gaesland-auth-carrito
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: Cuenta
+    timeout: 30000
+- tapOn: Carrito
+- extendedWaitUntil:
+    visible: Carrito guardado en tu cuenta
+    timeout: 20000
+- assertVisible: '2'
+- tapOn: Elegir entrega y pago
+- extendedWaitUntil:
+    visible: Entrega y pago
+    timeout: 30000
+- scrollUntilVisible:
+    element: Método de pago
+- scrollUntilVisible:
+    element: Generar referencia de pago
+- assertVisible: Generar referencia de pago
+# Inspect checkout only: never tap a button that creates a payment or order.
+- tapOn: Cuenta
+- extendedWaitUntil:
+    visible: Mis direcciones
+    timeout: 20000
+- takeScreenshot: gaesland-auth-cuenta
+- tapOn: Mis direcciones
+- tapOn: Agregar dirección
+- scrollUntilVisible:
+    element: Casa, Oficina…
+- tapOn: Casa, Oficina…
+- inputText: Prueba sin entrega
+- tapOn:
+    text: Calle
+    index: 1
+- inputText: Calle de prueba
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: Estado
+      index: 1
+- tapOn:
+    text: Estado
+    index: 1
+- inputText: Ciudad de Mexico
+- hideKeyboard
+- scrollUntilVisible:
+    element: '00000'
+- tapOn: '00000'
+- inputText: '06060'
+- hideKeyboard
+- scrollUntilVisible:
+    element: Guardar dirección
+- tapOn: Guardar dirección
+- extendedWaitUntil:
+    visible: Prueba sin entrega
+    timeout: 20000
+- assertVisible: .*CP 06060
+- tapOn: Editar dirección Prueba sin entrega
+- scrollUntilVisible:
+    element: Calle de prueba
+- tapOn: Calle de prueba
+- eraseText
+- inputText: Calle de prueba editada
+- hideKeyboard
+- scrollUntilVisible:
+    element: Guardar dirección
+- tapOn: Guardar dirección
+- extendedWaitUntil:
+    visible: Calle de prueba editada.*
+    timeout: 20000
+- assertVisible: .*CP 06060
+- takeScreenshot: gaesland-auth-direccion
+- tapOn: Cuenta
+- scrollUntilVisible:
+    element: Cerrar sesión
+- tapOn: Cerrar sesión
+- tapOn: Tienda
+- extendedWaitUntil:
+    visible: Iniciar sesión
+    timeout: 20000
+- assertNotVisible: Mis direcciones

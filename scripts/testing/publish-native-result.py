@@ -1,4 +1,4 @@
-"""Publish guest-only test evidence to an isolated branch, readable over Git SSH."""
+"""Publish synthetic-only, sanitized test evidence to an isolated branch, readable over Git SSH."""
 import base64
 import json
 import os
@@ -28,13 +28,13 @@ def api(path, data):
 summary = {
     "status": os.environ["QA_NATIVE_STATUS"], "sourceCommit": sha,
     "runUrl": f"https://github.com/{repo}/actions/runs/{run_id}",
-    "apkVersion": int(os.environ["QA_APK_VERSION"]), "environment": "staging", "account": "anonymous",
+    "apkVersion": int(os.environ["QA_APK_VERSION"]), "environment": "staging", "account": "anonymous-and-synthetic",
 }
 files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
-for name in ("install.log", "maestro.log", "view-hierarchy.xml", "crash.log"):
+for name in ("install.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log"):
     file = results.parent / name
     if file.is_file():
         files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]
@@ -43,7 +43,7 @@ for root in roots:
     if not root.exists():
         continue
     for file in root.rglob("gaesland-*.png"):
-        if len(files) >= 10:
+        if len(files) >= 18:
             break
         if file.is_file() and file.stat().st_size <= 2_000_000:
             files[f"qa-native-artifacts/{file.name}"] = file.read_bytes()

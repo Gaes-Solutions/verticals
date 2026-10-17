@@ -6,6 +6,7 @@ on:
       - .github/workflows/android-staging-smoke.yml
       - apps/mobile-cliente/.maestro/**
       - scripts/testing/publish-native-result.py
+      - scripts/testing/*native*
   workflow_dispatch:
 permissions:
   contents: write
@@ -34,6 +35,8 @@ jobs:
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
           find "$RUNNER_TEMP/native/cli" -path '*/bin/maestro' -printf '%h\n' >> "$GITHUB_PATH"
+      - name: Prepare isolated synthetic shopper credentials
+        run: python3 scripts/testing/prepare-native-fixture.py
       - name: Enable KVM for the disposable runner
         run: |
           sudo chmod 666 /dev/kvm
@@ -48,23 +51,22 @@ jobs:
           working-directory: apps/mobile-cliente
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
-          script: |
-            mkdir -p "$RUNNER_TEMP/native/results"
-            adb install -r "$RUNNER_TEMP/native/client.apk" > "$RUNNER_TEMP/native/results/install.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/install.log"; exit 1; }
-            maestro test --format junit --output "$RUNNER_TEMP/native/results/results.xml" .maestro/native-guest.yml > "$RUNNER_TEMP/native/results/maestro.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/maestro.log"; adb exec-out screencap -p > gaesland-native-failure.png; adb shell uiautomator dump /sdcard/native-ui.xml >/dev/null 2>&1; adb pull /sdcard/native-ui.xml "$RUNNER_TEMP/native/results/view-hierarchy.xml" >/dev/null 2>&1; adb logcat -d -s AndroidRuntime:E ReactNativeJS:E > "$RUNNER_TEMP/native/results/crash.log"; exit 1; }
-            cat "$RUNNER_TEMP/native/results/maestro.log"
-      - name: Save native test evidence
+          script: bash ../../scripts/testing/run-native-smoke.sh
+      - name: Sanitize all publishable text evidence
+        id: sanitize
         if: always()
+        run: python3 scripts/testing/sanitize-native-results.py
+      - name: Save native test evidence
+        if: always() && steps.sanitize.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: native-staging-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/native/results
             apps/mobile-cliente/gaesland-*.png
-            ~/.maestro/tests
           if-no-files-found: ignore
       - name: Publish bounded QA evidence on a separate result branch
-        if: always()
+        if: always() && steps.sanitize.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           QA_NATIVE_STATUS: ${{ job.status }}
