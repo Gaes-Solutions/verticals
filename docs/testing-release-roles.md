@@ -1487,3 +1487,54 @@ de sesiones del backend.
   exitosa y los errores de escritura se ejercieron en fixtures locales, sin cambiar
   datos/contraseñas reales en staging. No certifica cierre de otras sesiones tras
   cambiar la contraseña ni entrega de correos de recuperación.
+
+## Llaves de acceso del comprador — confirmación y recuperación (17 de octubre)
+
+Fuente web: `8c8340f58826ae2f990fc40c903a66b5a3d779fc`, solo staging.
+No cambia el APK, producción, el verificador criptográfico del API ni cuentas
+reales. No se registraron ni eliminaron llaves de usuarios entregados.
+
+- El BFF valida origen/host, conserva la vinculación del tenant desde el servidor,
+  filtra las entradas, comparte un plazo de 15 s entre autenticación y upstream,
+  bloquea redirecciones y usa respuestas `private, no-store`, incluidos errores y
+  emisión de cookies. Solo crea la cookie cuando la respuesta contiene un token
+  con formato JWT y los datos requeridos del cliente; no devuelve el token al
+  JavaScript. Las respuestas vacías/incompletas no generan sesiones ni éxitos de
+  registro/baja. No se cambió la verificación criptográfica del JWT del API.
+- Se comprueba la estructura de listas, identificadores únicos, fechas y nombres,
+  así como el dominio RP de las opciones y la exigencia de verificación de usuario
+  por el autenticador. Se conservan los rechazos por sesión, límites de intentos,
+  capacidad de diez llaves y datos incorrectos sin mostrar errores internos.
+- La pantalla distingue carga, lista vacía y error. Permite actualizar manualmente,
+  evita escrituras simultáneas y bloquea un nuevo cambio tras un resultado incierto
+  hasta obtener una lista válida. Registro confirmado y fallo posterior de lectura
+  muestran sus resultados por separado. La baja exige confirmación accesible y
+  consulta la lista antes de anunciar eliminación. Si el servidor aún devuelve
+  la llave, la pantalla solicita revisar su estado.
+- Las solicitudes y los diálogos nativos se cancelan al salir; el formulario se
+  reinicia por identidad del comprador. La verificación nativa tiene un botón de
+  cancelación. Las contraseñas se limpian tras el intento, sin persistencia local.
+  Los controles miden al menos 44 px. Escape conserva una llave sin escribir y
+  devuelve el foco al disparador; tras una baja, el foco vuelve a Actualizar.
+- **485/485 pruebas web** (55 nuevas), compilación y **30/30 tareas de tipos**.
+  La comprobación de tipos detectó una anotación faltante en una tabla de fixtures;
+  se corrigió y las verificaciones obligatorias pasaron antes del commit fuente.
+- **21 grupos locales de navegador** con los componentes y SimpleWebAuthn reales,
+  autenticador virtual de Chromium y verificador WebAuthn del servidor en fixtures
+  locales: tres registros y una autenticación con firmas y verificación de usuario
+  comprobadas. Incluye respuestas inválidas, no navegación tras acceso inválido,
+  doble envío, red/timeout, cancelación nativa, baja/reconciliación, recuperación de
+  lista, sesión vencida, rate limit, cambio de cuenta, límite de diez y layout móvil.
+  Esto no es una prueba con huella/rostro de hardware físico ni un alta publicada.
+- Scripts: `scripts/staging/check-passkeys-ui.cjs` y
+  `scripts/staging/check-passkeys-access.cjs`. El primero usa exclusivamente
+  fixtures locales; el segundo permite opciones públicas y lectura autenticada de
+  metadatos, y bloquea registro/baja en el navegador publicado.
+- Despliegue web **SUCCESS**: `2ab3fd06-9e8a-40df-a166-0792bf1f0e17`,
+  SHA fuente verificado. **Cinco grupos publicados en verde**: cuatro acciones
+  privadas rechazan invitados; origen ajeno y pruebas incompletas no crean sesión;
+  el API entrega opciones del dominio de staging con verificación de usuario
+  requerida; la lista y su actualización manual coinciden con los metadatos reales
+  del comprador; controles móviles de 44 px sin desbordamiento horizontal ni
+  errores JavaScript. No se completó una ceremonia de hardware físico publicada.
+  La entrada temporal de credenciales se eliminó y los navegadores se cerraron.
