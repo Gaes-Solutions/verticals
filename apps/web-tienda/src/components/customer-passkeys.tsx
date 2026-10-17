@@ -1,33 +1,80 @@
 "use client";
 import { destinoTrasLogin } from "@/lib/auth-return";
 import {
-  type PublicKeyCredentialCreationOptionsJSON,
-  type PublicKeyCredentialRequestOptionsJSON,
+  type LlaveCliente,
+  clienteLlave,
+  errorLlave,
+  listaLlaves,
+  opcionesLogin,
+  opcionesRegistro,
+  reciboLlave,
+} from "@/lib/passkey-contract";
+import {
+  WebAuthnAbortService,
   browserSupportsWebAuthn,
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
 import { Fingerprint, KeyRound, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-
-async function call<T>(action: string, body: unknown = {}): Promise<T> {
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DialogoTienda } from "./dialogo-tienda";
+class ErrorLlave extends Error {
+  constructor(readonly status: number) {
+    super(errorLlave(status));
+  }
+}
+async function call(action: string, signal: AbortSignal, body: unknown = {}) {
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(15000)]);
   const response = await fetch(`/api/cuenta/passkey/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+    signal: deadline,
+    cache: "no-store",
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message ?? "No pudimos verificar la llave de acceso.");
-  return data as T;
+  const data: unknown = await response.json().catch(() => null);
+  deadline.throwIfAborted();
+  if (!response.ok) throw new ErrorLlave(response.status);
+  return data;
 }
 function message(e: unknown) {
   if (e instanceof Error && ["NotAllowedError", "AbortError"].includes(e.name))
     return "No se completó la verificación. Puedes volver a intentarlo.";
-  return e instanceof Error && e.name === "Error"
-    ? e.message
-    : "No se completó la operación. Revisa tu conexión o vuelve a intentarlo.";
+  return e instanceof ErrorLlave ? e.message : errorLlave(503);
+}
+/** One ceremony at a time; leaving the screen cancels HTTP and the native prompt. */
+function useCeremonia() {
+  const current = useRef<AbortController | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(
+    () => () => {
+      if (current.current) {
+        current.current.abort();
+        WebAuthnAbortService.cancelCeremony();
+        current.current = null;
+      }
+    },
+    [],
+  );
+  function begin() {
+    if (current.current) return null;
+    const c = new AbortController();
+    current.current = c;
+    setBusy(true);
+    return c;
+  }
+  function end(c: AbortController) {
+    if (current.current === c) {
+      current.current = null;
+      setBusy(false);
+    }
+  }
+  function cancel() {
+    current.current?.abort();
+    WebAuthnAbortService.cancelCeremony();
+  }
+  return { busy, begin, end, cancel, isCurrent: (c: AbortController) => current.current === c };
 }
 export function PasskeyLogin({
   destino,
@@ -35,31 +82,40 @@ export function PasskeyLogin({
   onBusyChange,
 }: { destino?: string; disabled?: boolean; onBusyChange?: (busy: boolean) => void }) {
   const [supported, setSupported] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pending = useRef(false);
+  const flow = useCeremonia();
   const router = useRouter();
   useEffect(() => setSupported(window.isSecureContext && browserSupportsWebAuthn()), []);
   async function enter() {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
+    if (disabled) return;
+    const c = flow.begin();
+    if (!c) return;
     onBusyChange?.(true);
     setError(null);
     try {
-      const { options, challengeToken } = await call<{
-        options: PublicKeyCredentialRequestOptionsJSON;
-        challengeToken: string;
-      }>("login-options");
-      const response = await startAuthentication({ optionsJSON: options });
-      await call("login-verify", { response, challengeToken });
+      const data = await call("login-options", c.signal);
+      if (!opcionesLogin(data, window.location.hostname)) throw new ErrorLlave(502);
+      c.signal.throwIfAborted();
+      const response = await startAuthentication({ optionsJSON: data.options });
+      c.signal.throwIfAborted();
+      const result = await call("login-verify", c.signal, {
+        response,
+        challengeToken: data.challengeToken,
+      });
+      if (
+        !result ||
+        typeof result !== "object" ||
+        !("cliente" in result) ||
+        !clienteLlave(result.cliente)
+      )
+        throw new ErrorLlave(502);
+      c.signal.throwIfAborted();
       router.push(destinoTrasLogin(destino));
       router.refresh();
     } catch (e) {
-      setError(message(e));
+      if (!c.signal.aborted) setError(message(e));
     } finally {
-      pending.current = false;
-      setBusy(false);
+      flow.end(c);
       onBusyChange?.(false);
     }
   }
@@ -68,13 +124,18 @@ export function PasskeyLogin({
     <div className="mt-4 space-y-2">
       <button
         type="button"
-        disabled={busy || disabled}
+        disabled={flow.busy || disabled}
         onClick={enter}
-        className="gx-btn-secondary flex w-full items-center justify-center gap-2"
+        className="gx-btn-secondary flex min-h-11 w-full items-center justify-center gap-2"
       >
         <Fingerprint size={20} />
-        {busy ? "Verificando…" : "Entrar con huella o llave de acceso"}
+        {flow.busy ? "Verificando…" : "Entrar con huella o llave de acceso"}
       </button>
+      {flow.busy && (
+        <button type="button" onClick={flow.cancel} className="gx-btn-ghost min-h-11 w-full">
+          Cancelar verificación
+        </button>
+      )}
       <p className="text-center text-xs text-slate-500">
         Configúrala primero en Mi cuenta. Tu dispositivo puede usar huella, rostro o PIN.
       </p>
@@ -86,87 +147,139 @@ export function PasskeyLogin({
     </div>
   );
 }
-interface Key {
-  id: string;
-  deviceName: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-}
 export function CustomerPasskeys() {
   const [supported, setSupported] = useState(false);
-  const [keys, setKeys] = useState<Key[]>([]);
+  const [keys, setKeys] = useState<LlaveCliente[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [name, setName] = useState("Mi dispositivo");
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
+  const [selected, setSelected] = useState<LlaveCliente | null>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const focusAfterWrite = useRef(false);
+  useEffect(() => {
+    if (!selected && focusAfterWrite.current) {
+      focusAfterWrite.current = false;
+      refreshButton.current?.focus();
+    }
+  }, [selected]);
+  const [mustRefresh, setMustRefresh] = useState(false);
+  const refreshLock = useRef(false);
+  const read = useRef<AbortController | null>(null);
+  const flow = useCeremonia();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const load = useCallback(async (parent?: AbortSignal) => {
+    read.current?.abort();
+    const c = new AbortController();
+    read.current = c;
+    refreshLock.current = true;
+    setLoading(true);
+    setLoadError(null);
+    const signal = parent ? AbortSignal.any([parent, c.signal]) : c.signal;
+    try {
+      const data = await call("list", signal);
+      if (!listaLlaves(data)) throw new ErrorLlave(502);
+      signal.throwIfAborted();
+      setKeys(data);
+      setMustRefresh(false);
+      return data;
+    } catch (e) {
+      if (!signal.aborted) {
+        setLoadError(message(e));
+        setMustRefresh(true);
+        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
+      }
+      return null;
+    } finally {
+      if (read.current === c) {
+        read.current = null;
+        refreshLock.current = false;
+        if (!c.signal.aborted) setLoading(false);
+      }
+    }
+  }, []);
   useEffect(() => {
     setSupported(window.isSecureContext && browserSupportsWebAuthn());
-    let cancelled = false;
-    call<Key[]>("list")
-      .then((data) => {
-        if (!cancelled) setKeys(data);
-      })
-      .catch((e) => {
-        if (!cancelled) setStatus({ ok: false, text: message(e) });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void load();
     return () => {
-      cancelled = true;
+      read.current?.abort();
+      read.current = null;
+      refreshLock.current = false;
     };
-  }, []);
+  }, [load]);
   async function register(e: React.FormEvent) {
     e.preventDefault();
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
+    if (refreshLock.current || mustRefresh || !keys || keys.length >= 10 || !name.trim()) return;
+    const c = flow.begin();
+    if (!c) return;
     setStatus(null);
+    let sent = false;
     try {
-      const { options, challengeToken } = await call<{
-        options: PublicKeyCredentialCreationOptionsJSON;
-        challengeToken: string;
-      }>("register-options", { password });
+      const data = await call("register-options", c.signal, { password });
+      if (!opcionesRegistro(data, window.location.hostname)) throw new ErrorLlave(502);
+      c.signal.throwIfAborted();
       setPassword("");
-      const response = await startRegistration({ optionsJSON: options });
-      await call("register-verify", { response, challengeToken, deviceName: name.trim() });
+      const response = await startRegistration({ optionsJSON: data.options });
+      c.signal.throwIfAborted();
+      sent = true;
+      setMustRefresh(true);
+      const receipt = await call("register-verify", c.signal, {
+        response,
+        challengeToken: data.challengeToken,
+        deviceName: name.trim(),
+      });
+      if (!reciboLlave(receipt)) throw new ErrorLlave(502);
       setStatus({
         ok: true,
         text: "Llave de acceso guardada. Ya puedes usarla para entrar en esta tienda.",
       });
-      setKeys(await call<Key[]>("list"));
+      await load(c.signal);
     } catch (e) {
-      setPassword("");
-      setStatus({ ok: false, text: message(e) });
+      if (flow.isCurrent(c)) {
+        setStatus({ ok: false, text: message(e) });
+        if (sent) setMustRefresh(true);
+        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) {
+          setKeys(null);
+          setMustRefresh(true);
+        }
+      }
     } finally {
-      pending.current = false;
-      setBusy(false);
+      if (flow.isCurrent(c)) setPassword("");
+      flow.end(c);
     }
   }
-  async function remove(key: Key) {
-    if (
-      pending.current ||
-      !window.confirm(
-        `¿Eliminar la llave “${key.deviceName}”? Puedes seguir entrando con tu contraseña.`,
-      )
-    )
-      return;
-    pending.current = true;
-    setBusy(true);
+  async function remove() {
+    if (!selected || refreshLock.current || mustRefresh) return;
+    const c = flow.begin();
+    if (!c) return;
+    const key = selected;
+    setMustRefresh(true);
     setStatus(null);
     try {
-      await call("remove", { id: key.id });
-      setKeys((previous) => previous.filter((item) => item.id !== key.id));
-      setStatus({ ok: true, text: "Llave eliminada de esta cuenta." });
+      const receipt = await call("remove", c.signal, { id: key.id });
+      if (!reciboLlave(receipt)) throw new ErrorLlave(502);
+      const updated = await load(c.signal);
+      if (updated && !updated.some((k) => k.id === key.id))
+        setStatus({ ok: true, text: "Llave eliminada de esta cuenta." });
+      else if (updated) {
+        setMustRefresh(true);
+        setStatus({ ok: false, text: "La llave sigue en la lista. Actualiza antes de continuar." });
+      }
     } catch (e) {
-      setStatus({ ok: false, text: message(e) });
+      if (!c.signal.aborted) {
+        setStatus({ ok: false, text: message(e) });
+        setMustRefresh(true);
+        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
+      }
     } finally {
-      pending.current = false;
-      setBusy(false);
+      if (!c.signal.aborted) {
+        focusAfterWrite.current = true;
+        setSelected(null);
+      }
+      flow.end(c);
     }
   }
+  const blocked = flow.busy || loading || mustRefresh || keys === null;
   return (
     <section aria-labelledby="passkey-title" className="gx-card mb-8 p-5">
       <div className="flex items-start gap-3">
@@ -181,9 +294,34 @@ export function CustomerPasskeys() {
           </p>
         </div>
       </div>
-      {loading ? (
-        <output className="mt-3 block text-sm">Cargando tus llaves…</output>
-      ) : (
+      <button
+        type="button"
+        disabled={flow.busy || loading}
+        ref={refreshButton}
+        onClick={() => {
+          if (!refreshLock.current) void load();
+        }}
+        className="gx-btn-ghost mt-3 min-h-11"
+      >
+        Actualizar llaves
+      </button>
+      {loading && <output className="mt-3 block text-sm">Cargando tus llaves…</output>}
+      {loadError && (
+        <p role="alert" className="mt-3 text-sm text-danger">
+          {loadError}
+        </p>
+      )}
+      {mustRefresh && (
+        <p className="mt-2 text-sm">
+          Actualiza las llaves para comprobar su estado antes de hacer otro cambio.
+        </p>
+      )}
+      {!loading && keys?.length === 0 && (
+        <p className="mt-3 text-sm text-slate-500">
+          Todavía no tienes llaves de acceso en esta tienda.
+        </p>
+      )}
+      {keys && keys.length > 0 && (
         <ul className="mt-4 space-y-2">
           {keys.map((key) => (
             <li key={key.id} className="flex items-center gap-3 rounded-xl border p-3">
@@ -198,10 +336,10 @@ export function CustomerPasskeys() {
               </div>
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => remove(key)}
+                disabled={blocked}
+                onClick={() => setSelected(key)}
                 aria-label={`Eliminar llave ${key.deviceName}`}
-                className="rounded-lg p-3 text-danger"
+                className="min-h-11 min-w-11 rounded-lg p-3 text-danger"
               >
                 <Trash2 size={19} />
               </button>
@@ -216,10 +354,15 @@ export function CustomerPasskeys() {
             <input
               className="gx-input"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                e.target.setCustomValidity(
+                  e.target.value.trim() ? "" : "Escribe un nombre para el dispositivo.",
+                );
+              }}
               required
               maxLength={60}
-              disabled={busy}
+              disabled={blocked}
             />
           </label>
           <label className="block">
@@ -231,16 +374,26 @@ export function CustomerPasskeys() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={busy}
+              maxLength={120}
+              disabled={blocked}
             />
           </label>
           <button
             type="submit"
-            disabled={busy || loading || keys.length >= 10}
-            className="gx-btn-primary sm:col-span-2"
+            disabled={blocked || (keys?.length ?? 0) >= 10}
+            className="gx-btn-primary min-h-11 sm:col-span-2"
           >
-            {busy ? "Verificando…" : "Configurar huella o llave de acceso"}
+            {flow.busy ? "Verificando…" : "Configurar huella o llave de acceso"}
           </button>
+          {flow.busy && (
+            <button
+              type="button"
+              onClick={flow.cancel}
+              className="gx-btn-ghost min-h-11 sm:col-span-2"
+            >
+              Cancelar verificación
+            </button>
+          )}
         </form>
       ) : (
         <p className="mt-3 text-sm text-slate-500">
@@ -255,6 +408,35 @@ export function CustomerPasskeys() {
         >
           {status.text}
         </p>
+      )}
+      {selected && (
+        <DialogoTienda
+          titulo="Eliminar llave de acceso"
+          bloqueado={flow.busy}
+          onCerrar={() => setSelected(null)}
+        >
+          <p className="break-words text-sm">
+            ¿Eliminar la llave “{selected.deviceName}”? Puedes seguir entrando con tu contraseña.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={flow.busy}
+              onClick={() => setSelected(null)}
+              className="gx-btn-secondary min-h-11"
+            >
+              Conservar llave
+            </button>
+            <button
+              type="button"
+              disabled={flow.busy}
+              onClick={() => void remove()}
+              className="gx-btn-primary min-h-11"
+            >
+              {flow.busy ? "Eliminando…" : "Eliminar llave"}
+            </button>
+          </div>
+        </DialogoTienda>
       )}
     </section>
   );

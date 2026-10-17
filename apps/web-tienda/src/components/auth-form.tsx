@@ -20,12 +20,17 @@ export function AuthForm({
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const passkeyPending = useRef(false);
+  function handlePasskeyBusy(busy: boolean) {
+    passkeyPending.current = busy;
+    setPasskeyBusy(busy);
+  }
   const siguiente = destinoTrasLogin(destino);
   const retorno = siguiente === "/cuenta" ? "" : `?next=${encodeURIComponent(siguiente)}`;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pending.current || passkeyBusy) return;
+    if (pending.current || passkeyPending.current) return;
     pending.current = true;
     setError(null);
     setCargando(true);
@@ -159,7 +164,7 @@ export function AuthForm({
           )}
         </form>
         {modo === "login" && (
-          <PasskeyLogin destino={destino} disabled={cargando} onBusyChange={setPasskeyBusy} />
+          <PasskeyLogin destino={destino} disabled={cargando} onBusyChange={handlePasskeyBusy} />
         )}
         <p className="mt-4 text-center text-sm text-slate-500">
           {modo === "registro" ? (

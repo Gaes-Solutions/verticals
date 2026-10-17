@@ -119,7 +119,7 @@ export default async function CuentaPage() {
         />
       </div>
 
-      <CustomerPasskeys />
+      <CustomerPasskeys key={me.id} />
 
       <h2 id="pedidos" className="mb-4 scroll-mt-44 text-lg font-bold">
         Mis pedidos

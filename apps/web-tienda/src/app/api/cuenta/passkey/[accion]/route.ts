@@ -1,5 +1,14 @@
 import { slugActual } from "@/lib/api";
 import { COOKIE, getClienteToken } from "@/lib/cliente";
+import {
+  errorLlave,
+  listaLlaves,
+  objetoLlave,
+  opcionesLogin,
+  opcionesRegistro,
+  reciboLlave,
+  sesionLlave,
+} from "@/lib/passkey-contract";
 import { NextResponse } from "next/server";
 const actions = new Set([
   "register-options",
@@ -9,31 +18,66 @@ const actions = new Set([
   "list",
   "remove",
 ]);
+const json = (data: unknown, status = 200) =>
+  NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
+function entrada(accion: string, body: unknown): Record<string, unknown> | null {
+  if (!objetoLlave(body)) return null;
+  if (accion === "list" || accion === "login-options") return {};
+  if (accion === "remove")
+    return typeof body.id === "string" && body.id.trim() && body.id.length <= 200
+      ? { id: body.id }
+      : null;
+  if (accion === "register-options")
+    return typeof body.password === "string" &&
+      body.password.length > 0 &&
+      body.password.length <= 120
+      ? { password: body.password }
+      : null;
+  if (
+    typeof body.challengeToken !== "string" ||
+    !body.challengeToken.trim() ||
+    body.challengeToken.length > 4000 ||
+    !objetoLlave(body.response)
+  )
+    return null;
+  if (accion === "login-verify")
+    return { response: body.response, challengeToken: body.challengeToken };
+  return typeof body.deviceName === "string" &&
+    body.deviceName.trim() &&
+    body.deviceName.trim().length <= 60
+    ? {
+        response: body.response,
+        challengeToken: body.challengeToken,
+        deviceName: body.deviceName.trim(),
+      }
+    : null;
+}
 export async function POST(req: Request, { params }: { params: Promise<{ accion: string }> }) {
   const { accion } = await params;
-  if (!actions.has(accion))
-    return NextResponse.json({ message: "Acción inválida" }, { status: 404 });
+  if (!actions.has(accion)) return json({ message: "Acción inválida" }, 404);
   const origin = req.headers.get("origin");
   let parsed: URL;
   try {
     parsed = new URL(origin ?? "");
   } catch {
-    return NextResponse.json({ message: "Solicitud inválida" }, { status: 403 });
+    return json({ message: "Solicitud inválida" }, 403);
   }
   if (
     parsed.origin !== origin ||
-    parsed.host.toLowerCase() !== req.headers.get("host")?.toLowerCase()
+    parsed.host.toLowerCase() !== req.headers.get("host")?.toLowerCase() ||
+    (parsed.protocol !== "https:" &&
+      !(parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname)))
   )
-    return NextResponse.json({ message: "Solicitud inválida" }, { status: 403 });
+    return json({ message: "Solicitud inválida" }, 403);
   try {
+    const signal = AbortSignal.any([req.signal, AbortSignal.timeout(15000)]);
     const publicAction = accion.startsWith("login-");
-    const token = publicAction ? null : await getClienteToken();
-    if (!publicAction && !token)
-      return NextResponse.json(
-        { message: "Tu sesión venció. Inicia sesión nuevamente." },
-        { status: 401 },
-      );
-    const body = await req.json();
+    const token = publicAction ? null : await getClienteToken(signal);
+    if (!publicAction && !token) return json({ message: errorLlave(401) }, 401);
+    const body = entrada(accion, await req.json().catch(() => null));
+    if (!body) return json({ message: errorLlave(400) }, 400);
+    const tenantSlug = await slugActual();
+    signal.throwIfAborted();
     const res = await fetch(
       `${process.env.API_URL ?? "http://localhost:3000"}/auth/cliente/passkey/${accion}`,
       {
@@ -42,15 +86,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ accion:
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ ...body, origin, tenantSlug: await slugActual() }),
-        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ ...body, origin, tenantSlug }),
+        signal,
         cache: "no-store",
+        redirect: "error",
       },
     );
-    const data = await res.json();
-    if (accion === "login-verify" && res.ok) {
-      if (typeof data.accessToken !== "string") throw new Error("Invalid session");
-      const result = NextResponse.json({ cliente: data.cliente });
+    if (!res.ok) return json({ message: errorLlave(res.status) }, res.status);
+    const data: unknown = await res.json().catch(() => null);
+    signal.throwIfAborted();
+    if (accion === "login-verify") {
+      if (!sesionLlave(data)) return json({ message: errorLlave(502) }, 502);
+      const result = json({ cliente: data.cliente });
       result.cookies.set(COOKIE, data.accessToken, {
         httpOnly: true,
         sameSite: "lax",
@@ -60,14 +107,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ accion:
       });
       return result;
     }
-    return NextResponse.json(data, {
-      status: res.status,
-      headers: { "Cache-Control": "no-store" },
-    });
+    const valid =
+      accion === "list"
+        ? listaLlaves(data)
+        : accion === "login-options"
+          ? opcionesLogin(data, parsed.hostname)
+          : accion === "register-options"
+            ? opcionesRegistro(data, parsed.hostname)
+            : reciboLlave(data);
+    return valid ? json(data) : json({ message: errorLlave(502) }, 502);
   } catch {
-    return NextResponse.json(
-      { message: "No pudimos completar la solicitud. Revisa tu conexión y vuelve a intentarlo." },
-      { status: 503 },
-    );
+    return json({ message: errorLlave(503) }, 503);
   }
 }
