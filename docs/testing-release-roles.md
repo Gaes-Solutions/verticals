@@ -436,9 +436,11 @@ comprobaron como staging antes de autenticar. No se usó el archivo de producci�
   sus datos.
 - Superadmin y soporte: se comprobó desde el navegador que la contraseña válida
   muestra el formulario de código 2FA y no concede menú ni token de sesión de
-  plataforma. El ingreso completo de estas dos cuentas queda pendiente del
-  código de sus autenticadores. No se usaron códigos de respaldo ni se modificó
-  su configuración MFA. La cuenta de cobranza requiere su alta inicial de 2FA.
+  plataforma. En esa primera pasada el ingreso completo quedó pendiente del
+  código 2FA;
+  la comprobación posterior con TOTP registrado se documenta abajo. No se usaron
+  códigos de respaldo ni se modificó su configuración MFA. La cuenta de cobranza
+  requiere su alta inicial de 2FA.
 - Validación complementaria en PostgreSQL desechable: **136/136** en siete suites
   de administración, permisos de plataforma, matriz retail, autenticación de
   empleados, 2FA y sesiones/recuperación de cobranza. Incluye operaciones
@@ -478,8 +480,9 @@ negocio y no registra secretos en sus resultados. No debe publicarse el JSON.
   en su código compilado. Después del despliegue se repitió el ingreso de las
   diez cuentas y pasaron **86/86 comprobaciones de API**: la matriz anterior más
   seis consultas de perfil con identidad, roles y permisos coherentes con el
-  ingreso. Los tres accesos de plataforma conservan el paso MFA pendiente;
-  esta pasada no lo salta ni lo acredita como completado.
+  ingreso. En esa pasada los tres accesos de plataforma conservaron el paso MFA
+  pendiente;
+  el ingreso posterior de superadmin y soporte se documenta abajo.
 
 ### Estado del correo durante esta revisión
 
@@ -488,3 +491,47 @@ Brevo respondió correctamente desde el API de staging. Los cuatro remitentes
 `contact@angaes.com` aparecen registrados y activos; `angaes.com` aparece
 registrado, verificado y autenticado. Esta comprobación fue de lectura y no
 certifica entrega al buzón: no se envió un correo de prueba en esta ronda.
+
+### Ingreso completo de las cuentas de plataforma existentes
+
+Tras la indicación del propietario de usar el secreto TOTP registrado, se
+comprobó el ingreso real desde el navegador de las cuentas entregadas de
+superadmin y soporte: contraseña, desafío MFA y código temporal por
+`/auth/mfa/verify`, seguido de `/auth/me` con identidad coincidente. El código
+se generó dentro del servicio de staging; la clave del autenticador no salió
+del servicio ni se publicó. No se firmaron sesiones manualmente, no se
+restableció MFA y no se consumieron códigos de respaldo. Reutilizar el mismo
+código en un nuevo desafío fue rechazado con HTTP 401 para ambas cuentas.
+
+Esta prueba acredita el flujo del sistema con la clave registrada; no acredita
+la disponibilidad ni la sincronización del autenticador físico del propietario.
+Cobranza sigue pendiente del alta inicial de su propio autenticador; no se
+inscribió silenciosamente durante las pruebas.
+
+Con esas sesiones reales pasaron **20/20 comprobaciones de API**: superadmin
+puede consultar sus áreas; soporte puede consultar negocios/tickets y recibe
+403 al intentar acceder a equipo, métricas, cobranza, catálogo, plantillas de
+roles, observabilidad, incidentes y auditoría, además de las escrituras probadas
+de equipo, negocios, catálogo y roles. No hubo escrituras de negocio exitosas.
+Dos comprobaciones adicionales de `/auth/me` confirmaron identidad, rol y
+permisos exactos de los valores predeterminados, sin privilegios adicionales.
+
+Con la sesión real de superadmin también pasaron las cuatro comprobaciones
+de recuperación: desconexión, JSON inválido, tiempo de espera agotado y cancelar
+el rechazo de un perfil sintético sin enviar escritura. Los tres errores de
+lectura mostraron aviso y se recuperaron al reintentar.
+
+El recorrido publicado con estas dos cuentas completó **46/46 comprobaciones**
+(32 visitas a pantallas en escritorio de 1280 px y móvil de 320 px, y 14
+escenarios de error/reintento de superadmin). También abrió y canceló los siete
+formularios de administración en ambos tamaños: **14 comprobaciones de
+formularios**, sin recortes de ventana ni desbordamiento horizontal. Se
+comprobaron menús de 14 secciones para superadmin y dos para soporte, pestañas,
+filtros, ausencia de errores JavaScript y ausencia de respuestas API fallidas
+fuera de los errores inyectados. Las escrituras de negocio fueron bloqueadas
+por el navegador de prueba. No aparecieron fallos nuevos en este recorrido.
+
+Al finalizar se eliminaron los archivos temporales de entrada con contraseñas
+y los tokens de acceso utilizados por la auditoría. El archivo original de
+accesos de staging conserva permisos de lectura/escritura solo para su dueño.
+No se modificó producción ni se activó MFA en la cuenta de cobranza.
