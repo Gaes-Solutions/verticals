@@ -604,3 +604,20 @@ sesión válida del navegador de prueba.
   esperan confirmar el destinatario: el historial contiene dos direcciones
   distintas. No se marca como entrega verificada. Los eventos se consultan con
   el [reporte oficial de Brevo](https://developers.brevo.com/reference/get-email-event-report).
+
+### Verificación del despliegue de la corrección
+
+La corrección `191034c6254f6aeddb1fca8f06f155221c63f554` se publicó solo en
+staging y en la rama de trabajo. Railway completó el despliegue del panel
+`787ea960-3898-4292-8fab-4fb7f53a812f` con estado SUCCESS. La misma regresión
+se ejecutó después contra `https://web-superadmin-staging.up.railway.app` y
+pasaron sus cuatro comprobaciones, incluida la revocación efectiva del refresh
+al pulsar Salir. Build del panel, lint sin errores y typecheck 30/30 correctos
+(lint conserva avisos de complejidad). No se desplegó producción.
+
+Se retiraron el contenedor Nginx y el proxy locales usados en la prueba. La
+limpieza de sesiones QA se limita al usuario de cobranza y al user-agent
+exclusivo de esta auditoría; no cierra sesiones de otros usuarios o dispositivos.
+Se revocaron cuatro sesiones QA remanentes y se eliminaron las copias
+temporales de credenciales, claves y cookies. La configuración del autenticador
+queda únicamente en el archivo privado del escritorio para que el propietario pueda importarla; no se cambió su contraseña.
