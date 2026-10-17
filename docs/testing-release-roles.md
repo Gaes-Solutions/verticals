@@ -1446,3 +1446,44 @@ Archivo temporal de credenciales eliminado; navegadores/contextos y fixtures
 locales cerrados. Sin migraciones, APKs nuevos ni cambios en producción. Este lote
 es web-tienda y no modifica el servicio API. Para revisar: Mi cuenta → campana de
 Notificaciones → Actualizar avisos. Marcar leída y Ver detalle son acciones separadas.
+
+## Perfil y cambio de contraseña — confirmación y recuperación (17 de octubre)
+
+Fuente: `f02b52aa2e6a0a7128861d117568c91fedf2c87f`, solo `web-tienda`
+en staging. No cambia el APK, producción ni la política de vigencia/revocación
+de sesiones del backend.
+
+- Los dos BFF autentican con un plazo compartido de 15 segundos, deshabilitan
+  caché privada y redirecciones, filtran los campos permitidos y validan sus
+  límites antes de enviar una escritura. Solo `{ok:true}` confirma el guardado;
+  una respuesta vacía, malformada o `{ok:false}` produce 502. Los fallos de red
+  producen 503 y los mensajes no exponen detalles del proveedor.
+- Los formularios evitan envíos simultáneos, cancelan al desmontarse y se reinician
+  por identidad del comprador. Un fallo de refresco no invalida un guardado
+  confirmado. El nombre no acepta solo espacios y los botones miden al menos
+  44 px de alto.
+- Cambiar contraseña exige repetirla. Tras un resultado incierto conserva los
+  campos y bloquea otro envío en esa instancia: el usuario debe comprobar el
+  acceso con la nueva contraseña; si falla, probar la anterior o recuperar el
+  acceso. No hay reintentos automáticos, persistencia local de contraseñas ni
+  afirmación de cambio sin comprobante válido. Un rechazo explícito de contraseña
+  actual permite corregirla y volver a enviar.
+- **430/430 pruebas web** (42 nuevas de estas rutas), compilación y **30/30 tareas
+  de tipos**. **11 grupos de navegador local** con el componente real: confirmación
+  diferente, éxito y doble envío, respuesta inválida, red caída, timeout, contraseña
+  incorrecta/corrección, sesión vencida, borrador de perfil, fallo de refresco,
+  nombre vacío y cambio de cuenta durante una solicitud.
+- Scripts reproducibles: `scripts/staging/check-perfil-ui.cjs` (escrituras
+  exclusivamente en fixtures locales) y `scripts/staging/check-perfil-access.cjs`
+  (lecturas publicadas y rechazo de entradas incompletas; bloquea las escrituras
+  del navegador). No se cambió la contraseña ni el perfil de usuarios entregados.
+- Despliegue web verificado **SUCCESS**: `36d0473c-d586-43ed-8d59-2bd31bc35ef3`,
+  con el SHA fuente anterior. **Cuatro grupos publicados en verde**: las dos
+  mutaciones sin sesión devuelven 401 privado/no-store; ambas entradas autenticadas
+  incompletas devuelven 400 antes de persistir; Mi cuenta muestra los datos leídos
+  del comprador y la confirmación de contraseña; móvil a 390 px conserva controles
+  de 44 px, valida nombre de espacios y no desborda ni registra errores JavaScript.
+  Las credenciales temporales de entrada se eliminaron al terminar. La persistencia
+  exitosa y los errores de escritura se ejercieron en fixtures locales, sin cambiar
+  datos/contraseñas reales en staging. No certifica cierre de otras sesiones tras
+  cambiar la contraseña ni entrega de correos de recuperación.
