@@ -1,6 +1,7 @@
 "use client";
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
+import { CuponCheckout } from "@/components/cupon-checkout";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type PagoStripeHandle, PagoTarjetaStripe } from "@/components/pago-tarjeta-stripe";
 import {
@@ -29,6 +30,7 @@ import {
   leerPagoPendiente,
 } from "@/lib/checkout-pending-payment";
 import type { MedioPagoGuardado } from "@/lib/cliente";
+import { useCuponCheckout } from "@/lib/use-cupon-checkout";
 import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -136,13 +138,6 @@ export default function CheckoutPage() {
   const [ciudad, setCiudad] = useState("");
   const [estado, setEstado] = useState("");
   const [cp, setCp] = useState("");
-  const [cupon, setCupon] = useState("");
-  const [cuponInfo, setCuponInfo] = useState<{
-    valido: boolean;
-    mensaje: string;
-    descuentoSubtotal: string;
-    envioGratis: boolean;
-  } | null>(null);
   const [direcciones, setDirecciones] = useState<DireccionGuardada[]>([]);
   const [direccionId, setDireccionId] = useState("");
   const [modoDir, setModoDir] = useState<"guardada" | "nueva">("nueva");
@@ -363,6 +358,21 @@ export default function CheckoutPage() {
   }
 
   const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
+  const cupon = useCuponCheckout({
+    owner: draftScope?.owner ?? "",
+    contexto: JSON.stringify([
+      items
+        .map((i) => [i.varianteId, i.cantidad, i.precio])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      modoEntrega,
+      cp,
+      estado,
+      tarifaId,
+      sucursalId,
+    ]),
+    subtotal: subtotal.toFixed(4),
+    habilitado: config?.cuponEnCheckout === true,
+  });
   useEffect(() => {
     if (!config || pickupSubtotal == null || entregaInicial.current) return;
     entregaInicial.current = true;
@@ -443,26 +453,11 @@ export default function CheckoutPage() {
       ? pickupSubtotal === subtotal && pickups.some((p) => p.sucursalId === sucursalId)
       : cotizacionKey === entregaKey && !cotizando && Boolean(envioSeleccionado);
   const costoEnvioBase = modoEntrega === "pickup" ? 0 : Number(envioSeleccionado?.costo ?? 0);
-  const cuponOk = cuponInfo?.valido ?? false;
-  const descuentoCupon = cuponOk ? Number(cuponInfo?.descuentoSubtotal ?? 0) : 0;
-  const costoEnvio = cuponOk && cuponInfo?.envioGratis ? 0 : costoEnvioBase;
+  const cuponOk = cupon.info?.valido ?? false;
+  const descuentoCupon = cuponOk ? Number(cupon.info?.descuentoSubtotal ?? 0) : 0;
+  const costoEnvio = cuponOk && cupon.info?.envioGratis ? 0 : costoEnvioBase;
   const total = Math.max(0, subtotal - descuentoCupon) + costoEnvio;
 
-  async function aplicarCupon() {
-    if (!cupon.trim()) {
-      setCuponInfo(null);
-      return;
-    }
-    const r = (await fetch(
-      `/api/cupon?codigo=${encodeURIComponent(cupon.trim())}&subtotal=${subtotal}`,
-    ).then((x) => x.json())) as {
-      valido: boolean;
-      mensaje: string;
-      descuentoSubtotal: string;
-      envioGratis: boolean;
-    };
-    setCuponInfo(r);
-  }
   const conStripe = config?.proveedorPago === "stripe";
   const stripeKey = conStripe ? config?.pagoPublicKey : null;
   const conektaKey = config?.proveedorPago === "conekta" ? (config.pagoPublicKey ?? "") : "";
@@ -475,6 +470,10 @@ export default function CheckoutPage() {
       : [];
 
   function validar(): boolean {
+    if (cupon.bloquea) {
+      setError("Aplica o quita el cupón antes de continuar con tu compra.");
+      return false;
+    }
     if (!entregaLista) {
       setError("Selecciona una opción de entrega disponible antes de pagar.");
       return false;
@@ -649,7 +648,7 @@ export default function CheckoutPage() {
           items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
           metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
           metodoPago: metodo,
-          ...(cupon.trim() ? { cuponCodigo: cupon.trim() } : {}),
+          ...(cupon.codigoAplicado ? { cuponCodigo: cupon.codigoAplicado } : {}),
           ...(cardTokenId ? { cardTokenId } : {}),
           ...(extra?.medioPagoGuardadoId ? { medioPagoGuardadoId: extra.medioPagoGuardadoId } : {}),
           ...(extra?.guardarTarjeta ? { guardarTarjeta: true } : {}),
@@ -749,7 +748,7 @@ export default function CheckoutPage() {
   }
 
   const pagoDeshabilitado =
-    requiereSesion || !entregaLista || !attempt || attempt.submitted || procesando;
+    requiereSesion || !entregaLista || !attempt || attempt.submitted || procesando || cupon.bloquea;
   const maxMsi = msiOfrecibles.length > 0 ? Math.max(...msiOfrecibles) : 0;
   // Métodos que el tenant ofrece (los anuncia el API según su proveedor). El
   // método activo siempre pertenece a la lista: si la config aún no carga, solo
@@ -1307,29 +1306,7 @@ export default function CheckoutPage() {
             )}
 
             {config?.cuponEnCheckout && (
-              <div className="mt-3">
-                <span className="gx-label">¿Tienes un cupón?</span>
-                <div className="flex gap-2">
-                  <input
-                    value={cupon}
-                    onChange={(e) => {
-                      setCupon(e.target.value.toUpperCase());
-                      setCuponInfo(null);
-                    }}
-                    placeholder="CODIGO"
-                    className="gx-input flex-1 uppercase"
-                  />
-                  <button type="button" onClick={aplicarCupon} className="gx-btn-secondary">
-                    Aplicar
-                  </button>
-                </div>
-                {cuponInfo && (
-                  <p className={`mt-1 text-sm ${cuponOk ? "text-ok" : "text-danger"}`}>
-                    {cuponOk ? "✓ " : "✕ "}
-                    {cuponInfo.mensaje}
-                  </p>
-                )}
-              </div>
+              <CuponCheckout cupon={cupon} disabled={procesando || !!attempt?.submitted} />
             )}
 
             <div className="mt-4 border-t pt-3">
@@ -1339,7 +1316,7 @@ export default function CheckoutPage() {
               </div>
               {descuentoCupon > 0 && (
                 <div className="mb-1 flex justify-between text-ok text-sm">
-                  <span>Descuento ({cupon})</span>
+                  <span>Descuento ({cupon.codigoAplicado})</span>
                   <span>−${descuentoCupon.toFixed(2)}</span>
                 </div>
               )}
@@ -1354,7 +1331,13 @@ export default function CheckoutPage() {
                 </span>
               </div>
               <div className="flex justify-between font-bold text-lg">
-                <span>{entregaLista ? "Total con envío" : "Subtotal con descuentos"}</span>
+                <span>
+                  {cupon.bloquea
+                    ? "Total antes de validar cupón"
+                    : entregaLista
+                      ? "Total con envío"
+                      : "Subtotal con descuentos"}
+                </span>
                 <span className="text-marca">${total.toFixed(2)}</span>
               </div>
             </div>
@@ -1383,7 +1366,11 @@ export default function CheckoutPage() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
             <p className="text-white/70 text-xs">
-              {entregaLista ? "Total con envío" : "Subtotal (envío por confirmar)"}
+              {cupon.bloquea
+                ? "Cupón por validar"
+                : entregaLista
+                  ? "Total con envío"
+                  : "Subtotal (envío por confirmar)"}
             </p>
             <p className="font-bold text-xl leading-tight">${total.toFixed(2)}</p>
           </div>

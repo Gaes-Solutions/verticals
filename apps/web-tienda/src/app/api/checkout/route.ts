@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
           canal: "web",
           items: body.items,
           emailAnonimo: body.emailComprador,
-          ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
+          cuponCodigo: body.cuponCodigo ?? "",
         },
       });
     }

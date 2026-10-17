@@ -224,7 +224,7 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
         total: calc.total,
         ...(body.clienteId ? { clienteId: body.clienteId } : {}),
         ...(body.emailAnonimo ? { emailAnonimo: body.emailAnonimo } : {}),
-        ...(body.cuponCodigo ? { cuponCodigo: body.cuponCodigo } : {}),
+        ...(body.cuponCodigo !== undefined ? { cuponCodigo: body.cuponCodigo || null } : {}),
       };
       const existing = body.sessionIdAnonimo
         ? await req.tenantPrisma.carritoEcommerce.findFirst({

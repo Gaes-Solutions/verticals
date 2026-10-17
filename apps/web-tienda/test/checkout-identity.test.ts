@@ -116,6 +116,7 @@ describe("checkout BFF: propiedad y reintentos", () => {
         canal: "web",
         items: body.items,
         emailAnonimo: body.emailComprador,
+        cuponCodigo: "", // Explicitly clear any old coupon on the reused guest cart.
       },
     });
   });
