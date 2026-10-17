@@ -224,6 +224,71 @@ describe("retail users: least privilege and immediate revocation", () => {
         .statusCode,
     ).toBe(403);
   });
+  it("archiving a custom role removes its permissions from live sessions and new logins", async () => {
+    const client = getTenantClient(slug);
+    const created = await app.inject({
+      method: "POST",
+      url: "/t/roles",
+      headers: auth("dueno"),
+      payload: {
+        codigo: "qa-archived-report",
+        nombre: "QA archived report",
+        permisos: ["reportes.ventas"],
+      },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const roleId = created.json().id;
+    const granted = await app.inject({
+      method: "POST",
+      url: `/t/usuarios/${users.cajero.id}/roles`,
+      headers: auth("dueno"),
+      payload: { rolId: roleId },
+    });
+    expect(granted.statusCode).toBe(204);
+    const reports = () =>
+      app.inject({ method: "GET", url: "/t/reportes/resumen", headers: auth("cajero") });
+    try {
+      expect((await reports()).statusCode).toBe(200);
+      const archived = await app.inject({
+        method: "DELETE",
+        url: `/t/roles/${roleId}`,
+        headers: auth("dueno"),
+      });
+      expect(archived.statusCode).toBe(200);
+      expect((await reports()).statusCode).toBe(403);
+      const me = await app.inject({
+        method: "GET",
+        url: "/auth/tenant/me",
+        headers: auth("cajero"),
+      });
+      expect(me.statusCode).toBe(200);
+      expect(me.json().roleCodes).not.toContain("qa-archived-report");
+      expect(me.json().permissions).not.toContain("reportes.ventas");
+      const login = await app.inject({
+        method: "POST",
+        url: "/auth/tenant/login",
+        payload: {
+          tenantSlug: slug,
+          email: "cajero-matrix@example.invalid",
+          password: "RoleMatrixQA!2026",
+        },
+      });
+      expect(login.statusCode).toBe(200);
+      expect(login.json().user.roleCodes).not.toContain("qa-archived-report");
+      expect(login.json().user.permissions).not.toContain("reportes.ventas");
+      const restored = await app.inject({
+        method: "PATCH",
+        url: `/t/roles/${roleId}`,
+        headers: auth("dueno"),
+        payload: { isActive: true },
+      });
+      expect(restored.statusCode).toBe(200);
+      expect((await reports()).statusCode).toBe(200);
+    } finally {
+      await client.usuarioRol.deleteMany({ where: { usuarioId: users.cajero.id, rolId: roleId } });
+      await client.rol.delete({ where: { id: roleId } });
+    }
+  });
   it("deactivating an employee invalidates its already-issued access token", async () => {
     const client = getTenantClient(slug);
     await client.usuario.update({ where: { id: users.vendedor.id }, data: { isActive: false } });

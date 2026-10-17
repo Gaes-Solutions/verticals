@@ -56,6 +56,7 @@ export async function loadTenantUserForLogin(
     where: { email },
     include: {
       roles: {
+        where: { rol: { isActive: true } },
         include: { rol: true },
       },
     },
@@ -79,7 +80,7 @@ export async function loadTenantUserById(
 ): Promise<LoadedUser | null> {
   const user = await tenantPrisma.usuario.findUnique({
     where: { id: userId },
-    include: { roles: { include: { rol: true } } },
+    include: { roles: { where: { rol: { isActive: true } }, include: { rol: true } } },
   });
   if (!user) return null;
   return {

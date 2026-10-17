@@ -11,6 +11,7 @@ import {
   enableTenantMfa,
   findTenantBySlug,
   generateTenantTotpSecret,
+  loadTenantUserById,
   loadTenantUserForLogin,
   loadTenantUserMfa,
   recordTenantMfaStep,
@@ -67,24 +68,9 @@ const authTenantRoutes: FastifyPluginAsync = async (app) => {
     tenantSlug: string,
     userId: string,
   ): Promise<TenantPrincipal | null> {
-    const u = await tenantPrisma.usuario.findUnique({
-      where: { id: userId },
-      include: { roles: { include: { rol: true } } },
-    });
+    const u = await loadTenantUserById(userId, tenantPrisma);
     if (!u || !u.isActive) return null;
-    return buildTenantPrincipal(
-      {
-        id: u.id,
-        email: u.email,
-        nombre: u.nombre,
-        apellidos: u.apellidos,
-        tipoUsuario: u.tipoUsuario,
-        passwordHash: u.passwordHash,
-        isActive: u.isActive,
-        roles: u.roles.map((r) => ({ codigo: r.rol.codigo, permisos: r.rol.permisos })),
-      },
-      tenantSlug,
-    );
+    return buildTenantPrincipal(u, tenantSlug);
   }
 
   /** Valida el token intermedio (kind tenant_mfa) y devuelve el contexto del usuario. */
