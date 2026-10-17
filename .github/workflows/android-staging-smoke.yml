@@ -51,7 +51,7 @@ jobs:
           script: |
             mkdir -p "$RUNNER_TEMP/native/results"
             adb install -r "$RUNNER_TEMP/native/client.apk" > "$RUNNER_TEMP/native/results/install.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/install.log"; exit 1; }
-            maestro test --format junit --output "$RUNNER_TEMP/native/results/results.xml" .maestro/native-guest.yml > "$RUNNER_TEMP/native/results/maestro.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/maestro.log"; exit 1; }
+            maestro test --format junit --output "$RUNNER_TEMP/native/results/results.xml" .maestro/native-guest.yml > "$RUNNER_TEMP/native/results/maestro.log" 2>&1 || { cat "$RUNNER_TEMP/native/results/maestro.log"; adb exec-out screencap -p > gaesland-native-failure.png; adb shell uiautomator dump /sdcard/native-ui.xml >/dev/null 2>&1; adb pull /sdcard/native-ui.xml "$RUNNER_TEMP/native/results/view-hierarchy.xml" >/dev/null 2>&1; adb logcat -d -s AndroidRuntime:E ReactNativeJS:E > "$RUNNER_TEMP/native/results/crash.log"; exit 1; }
             cat "$RUNNER_TEMP/native/results/maestro.log"
       - name: Save native test evidence
         if: always()

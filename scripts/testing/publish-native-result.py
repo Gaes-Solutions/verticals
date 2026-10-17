@@ -34,7 +34,7 @@ files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
-for name in ("install.log", "maestro.log"):
+for name in ("install.log", "maestro.log", "view-hierarchy.xml", "crash.log"):
     file = results.parent / name
     if file.is_file():
         files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]
