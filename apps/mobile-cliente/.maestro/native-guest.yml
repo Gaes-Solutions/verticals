@@ -28,6 +28,8 @@ name: Gaesland guest catalog, image controls and login recovery
 - tapOn: Restablecer imagen
 - assertVisible: 100% · Restablecer
 - tapOn: Cerrar imagen
+- scrollUntilVisible:
+    element: Agregar al carrito
 - tapOn: Agregar al carrito
 - extendedWaitUntil:
     visible: Tu artículo te espera. Entra para guardarlo en tu carrito.
