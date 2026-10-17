@@ -17,6 +17,12 @@ const config: ExpoConfig = {
     supportsTablet: true,
   },
   android: {
+    // La tienda no lee archivos del dispositivo ni dibuja sobre otras apps.
+    blockedPermissions: [
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+    ],
     package: staging ? "com.gaessoft.cliente.staging" : "com.gaessoft.cliente",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
