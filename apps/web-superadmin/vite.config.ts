@@ -9,6 +9,7 @@ export default defineConfig({
       "/api": {
         target: process.env.VITE_API_URL ?? "http://localhost:3000",
         changeOrigin: true,
+        cookiePathRewrite: { "/auth": "/api/auth" },
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },

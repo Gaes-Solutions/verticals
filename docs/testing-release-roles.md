@@ -8,7 +8,9 @@ procesos. Cada ejecución elimina su base, procesos y sesiones al terminar.
 
 También se ejerció el storefront publicado de **Gaesland en staging** con compradores
 QA y pedidos para pagar al recoger, sin cargos con tarjeta ni dinero real. No se
-modificaron producción ni las credenciales/MFA de usuarios existentes.
+modificó producción. Las primeras rondas conservaron las credenciales/MFA de
+usuarios existentes; el alta posterior autorizada de 2FA de cobranza en staging
+se documenta al final.
 
 ## Usuarios revisados
 
@@ -535,3 +537,70 @@ Al finalizar se eliminaron los archivos temporales de entrada con contraseñas
 y los tokens de acceso utilizados por la auditoría. El archivo original de
 accesos de staging conserva permisos de lectura/escritura solo para su dueño.
 No se modificó producción ni se activó MFA en la cuenta de cobranza.
+
+## Pendientes de lanzamiento: cobranza y sesiones de plataforma
+
+### Cobranza real de staging
+
+Por indicación del propietario de probar los pendientes, se completó el alta
+inicial de MFA de la cuenta de cobranza entregada, desde la pantalla web real.
+La clave TOTP y los códigos de respaldo se guardaron en un archivo privado del
+escritorio del propietario con permisos 0600; no se incluyen en el repositorio
+ni en los registros. Se comprobó un segundo ingreso con contraseña y TOTP,
+identidad correcta y exactamente `tenants.read`, `billing.read`, `billing.manage`.
+El propietario todavía debe importar esa clave en su propio autenticador.
+
+Pasaron **8/8 visitas de pantallas** (cuatro secciones en escritorio y móvil) y
+**14/14 comprobaciones de API**: consultas de negocios/cobranza/facturas/
+suscripciones permitidas; equipo, tickets, métricas, catálogo, plantillas y
+observabilidad bloqueados; escrituras ajenas al rol rechazadas. No se realizaron
+escrituras de negocio exitosas.
+
+### Fallo confirmado en la cookie de plataforma y el cierre de sesión
+
+La cookie de renovación emitida por el API usaba `Path=/auth`, pero el navegador
+accede a esos endpoints por `/api/auth`. Un navegador real reprodujo HTTP 401
+al renovar porque no enviaba esa cookie. Además, el botón Salir solo borraba
+el token local y no llamaba al cierre del servidor.
+
+Se corrige el alcance de cookies en el proxy Nginx compartido para conservar
+el prefijo `/api`; el proxy Vite del panel adapta `/auth` a `/api/auth`. Salir
+llama ahora a `/auth/logout` antes de borrar el acceso local, evita dobles clics
+y muestra un error reintentable si el cierre no pudo confirmarse. No cambia
+la duración del access JWT ni incorpora renovación automática.
+
+La regresión reproducible `scripts/staging/check-platform-session.cjs` recibe
+un JSON privado `{email,password,totpSecret}` mediante `PLATFORM_SESSION_ACCOUNT`.
+Solo permite el panel staging o localhost. Con Nginx real en contenedor, el
+frontend compilado y el API staging, pasaron las cuatro comprobaciones:
+
+- Cookie con ruta `/api/auth`, HttpOnly y Secure.
+- Renovación desde el navegador con rotación y rechazo del token anterior.
+- Fallo de cierre simulado: aviso visible y posibilidad de reintentar.
+- Cierre real: token local y cookie eliminados, refresh revocado en el servidor.
+
+No se publican claves ni cookies. Las comprobaciones de replay usan un cliente
+HTTP independiente para que la limpieza de una cookie inválida no altere la
+sesión válida del navegador de prueba.
+
+### Servicios externos todavía pendientes
+
+- Stripe sandbox respondió HTTP 200 para Gaesland: `charges_enabled=false`,
+  `payouts_enabled=false`, `details_submitted=false`, estado
+  `requirements.past_due`; faltan cinco campos de dirección y la fecha/IP de
+  aceptación de términos. No se inventaron datos legales ni se aceptaron
+  términos en nombre del propietario. El registro se continúa en el panel de
+  staging, Mi suscripción → Continuar registro.
+- Las **12 comprobaciones publicadas de límites de pagos** pasaron: webhooks sin
+  firma/con firma inválida rechazados, endpoint simulado ausente, rutas privadas
+  protegidas y tarjeta oculta mientras el comercio no puede cobrar. Esto no
+  acredita una compra de tienda con tarjeta exitosa.
+- La base de Gaesland no contiene configuración fiscal (`CfdiConfig`: cero
+  registros). Pasaron **13/13 pruebas del paquete fiscal**, incluidas diez del
+  contrato Facturama, pero no se emitió ni canceló un CFDI externo. Se requiere
+  una cuenta sandbox y su configuración de emisor/CSD; el procedimiento está
+  descrito en el [SDK oficial de Facturama](https://github.com/Facturama/facturama-javascript-sdk).
+- Brevo sigue configurado. El envío nuevo y la revisión de su evento de entrega
+  esperan confirmar el destinatario: el historial contiene dos direcciones
+  distintas. No se marca como entrega verificada. Los eventos se consultan con
+  el [reporte oficial de Brevo](https://developers.brevo.com/reference/get-email-event-report).

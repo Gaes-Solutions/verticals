@@ -31,6 +31,9 @@ server {
     set $api_upstream ${API_UPSTREAM};
     rewrite ^/api/(.*)$ /$1 break;
     proxy_pass http://$api_upstream;
+    # Las cookies del API deben conservar su alcance tras añadir /api en el navegador.
+    # Sin esto, Path=/auth no llega a /api/auth/refresh ni a /api/auth/logout.
+    proxy_cookie_path / /api/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

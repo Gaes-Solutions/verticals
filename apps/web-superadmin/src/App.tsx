@@ -71,6 +71,8 @@ export function App() {
   const [seccion, setSeccion] = useState<Seccion>("dashboard");
   const [restoring, setRestoring] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -129,9 +131,19 @@ export function App() {
     };
   }, []);
 
-  function handleLogout() {
-    setToken(null);
-    setSession(null);
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(null);
+    try {
+      await api("/auth/logout", { method: "POST", auth: false });
+      setToken(null);
+      setSession(null);
+    } catch {
+      setLogoutError("No se pudo cerrar la sesión. Revisa tu conexión e inténtalo de nuevo.");
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   if (restoring) {
@@ -228,10 +240,16 @@ export function App() {
           <button
             type="button"
             onClick={handleLogout}
+            disabled={loggingOut}
             className="rounded bg-slate-800 px-3 py-1 text-slate-200 hover:bg-slate-700"
           >
-            Salir
+            {loggingOut ? "Saliendo…" : "Salir"}
           </button>
+          {logoutError && (
+            <p role="alert" className="mt-2 text-red-300">
+              {logoutError}
+            </p>
+          )}
         </div>
       </aside>
 
