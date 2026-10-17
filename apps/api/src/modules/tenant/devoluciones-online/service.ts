@@ -38,7 +38,9 @@ export interface SolicitarDevolucionInput {
   fotos?: string[] | undefined;
 }
 
-async function nextFolioSolicitud(client: TenantClient): Promise<string> {
+async function nextFolioSolicitud(
+  client: Pick<TenantClient, "solicitudDevolucion">,
+): Promise<string> {
   const count = await client.solicitudDevolucion.count();
   return `SD-${String(count + 1).padStart(5, "0")}`;
 }
@@ -106,26 +108,36 @@ export async function solicitarDevolucion(
       );
     seleccionadas.add(item.varianteId);
   }
-  // No permitir una nueva solicitud si ya hay una abierta para el pedido.
-  const abierta = await client.solicitudDevolucion.findFirst({
-    where: { pedidoEcommerceId: pedido.id, estado: { in: ["solicitada", "aprobada"] } },
-  });
-  if (abierta) {
-    throw new DevolucionOnlineError(409, "Ya existe una solicitud de devolución para este pedido");
-  }
+  // Serialize request creation and numeric folio allocation within this tenant.
+  // Checking outside the transaction lets two tabs create the same request.
+  const solicitud = await client.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ':solicitud_devolucion', 7710024))`;
+      const abierta = await tx.solicitudDevolucion.findFirst({
+        where: { pedidoEcommerceId: pedido.id, estado: { in: ["solicitada", "aprobada"] } },
+      });
+      if (abierta) {
+        throw new DevolucionOnlineError(
+          409,
+          "Ya existe una solicitud de devolución para este pedido",
+        );
+      }
 
-  const folioSolicitud = await nextFolioSolicitud(client);
-  const solicitud = await client.solicitudDevolucion.create({
-    data: {
-      folio: folioSolicitud,
-      pedidoEcommerceId: pedido.id,
-      clienteId,
-      motivo: input.motivo,
-      ...(input.descripcion ? { descripcion: input.descripcion } : {}),
-      items: input.items as object,
-      fotos: (input.fotos ?? []) as object,
+      const folioSolicitud = await nextFolioSolicitud(tx);
+      return await tx.solicitudDevolucion.create({
+        data: {
+          folio: folioSolicitud,
+          pedidoEcommerceId: pedido.id,
+          clienteId,
+          motivo: input.motivo,
+          ...(input.descripcion ? { descripcion: input.descripcion } : {}),
+          items: input.items as object,
+          fotos: (input.fotos ?? []) as object,
+        },
+      });
     },
-  });
+    { isolationLevel: "ReadCommitted" },
+  );
 
   await notificarUsuariosConPermiso(client, PERMISSIONS.VENTAS_DEVOLVER, {
     tipo: "devolucion_solicitada",

@@ -1189,3 +1189,52 @@ El archivo temporal de credenciales de esta prueba fue eliminado; contextos y
 navegadores cerrados. No se modificaron producción, APKs, pagos, correos ni base
 de datos mediante migraciones. Para revisar la interfaz publicada: Mi cuenta →
 Mis pedidos → abrir un pedido propio → Mensajes con la tienda.
+
+## Cancelaciones y devoluciones recuperables — 17 de octubre de 2026
+
+Veinte de 32 pruebas iniciales del límite web fallaron con las rutas anteriores:
+HTTP 200 incompleto confirmaba operaciones, no se limitaban las esperas, faltaba
+caché privada y se reenviaban campos ajenos al formulario. La revisión del servidor
+además encontró la comprobación de devolución abierta y asignación de folio fuera
+de una transacción, vulnerables a solicitudes simultáneas.
+
+- Ambas acciones tienen confirmaciones verificadas: cancelar exige el folio
+  correspondiente y `reembolsado` booleano; devolver exige ID, folio y estado
+  `solicitada`. No se anuncia un reembolso por enviar una solicitud.
+- El BFF valida y selecciona los campos admitidos, cantidades enteras positivas,
+  variantes sin duplicados y límites de motivo/descripción. No acepta IDs de
+  cliente/autor ni datos adicionales del navegador. Escape del folio, caché
+  `private, no-store`, redirects rechazados y presupuesto de 15 s compartido
+  entre sesión y consultas. Red caída es 503; éxito inválido, 502.
+- Nuevos GET en las mismas rutas consultan el estado sin escribir. Devoluciones
+  verifica primero el pedido del comprador y después su historial; solo devuelve
+  el estado correspondiente a ese folio. Una consulta inválida no desbloquea un
+  reintento ni se interpreta como ausencia de solicitud.
+- La interfaz conserva campos ante errores y bloquea reenvío hasta una consulta
+  correcta. Si ya se aplicó, lo muestra sin otro POST. Si cambió la elegibilidad,
+  mantiene bloqueada la acción. No se reintentan escrituras automáticamente.
+- Protección inmediata contra submits simultáneos, espera cliente de 20 s y aborto
+  al cambiar de pedido/desmontar. La confirmación permanece localmente aunque
+  falle la actualización del router, para no ofrecer de nuevo la operación.
+- Modales con botones de al menos 44 px, cantidades editables sin recortes
+  silenciosos, mensajes largos ajustados y borradores separados por folio.
+- API: una transacción `ReadCommitted` con `pg_advisory_xact_lock` por esquema/tienda protege
+  comprobación de devolución abierta, conteo del folio y creación. Las
+  notificaciones se hacen después de confirmar esa transacción. La prueba unitaria
+  modela la serialización y comprueba que se solicite el bloqueo antes de consultar
+  o crear; no pretende ser dos POST concurrentes contra una base real.
+
+Validación local: **290/290 pruebas web** (45 nuevas), **4/4 pruebas unitarias del
+API** enfocadas en concurrencia, asignación de folios, fallo de bloqueo y pertenencia
+al comprador. **20 grupos de navegador** con componentes React reales y respuestas
+simuladas: validación local, red, timeout, sesión vencida, respuestas inválidas,
+consulta fallida/denegada, doble submit, confirmación recuperada, elegibilidad
+cambiada, navegación durante envío, diseño a 320×420/390×844/1280×800, Escape y
+retorno del foco. Capturas móviles de ambos modales revisadas.
+
+Scripts: `check-order-actions.cjs`, `check-order-actions-access.cjs` y
+`check-return-request-lock.cjs`. El primero nunca contacta servicios externos;
+el segundo solo hace POST de invitado y consultas autenticadas a un folio
+inexistente; el tercero usa SELECT y transacciones, sin crear ni modificar
+pedidos/devoluciones. No se cancelan compras, solicitan devoluciones reales,
+reembolsan cobros ni envían notificaciones como parte de estas pruebas.
