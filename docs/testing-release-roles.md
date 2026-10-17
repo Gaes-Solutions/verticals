@@ -1753,3 +1753,60 @@ No se canjearon cupones ni se crearon pedidos/cargos reales.
   certifica pagos OXXO/SPEI recibidos, SCA, webhooks bancarios ni cobros Stripe.
   No actualiza APK ni producción. Los pendientes externos de Stripe Connect y
   facturación documentados anteriormente continúan abiertos.
+
+## 17 de octubre: estimación de entrega ligada a la selección — web staging
+
+- Fuentes: `77960878041af2073dc86c8d0eb4aafe4b1eea8a` y
+  `615b6d42ddcf7312c28924d172b720512c92f510`. Último despliegue web **SUCCESS**,
+  deployment `48c169d9-3ffd-4d97-8a6f-f7c8d4f9b69c`, con el segundo SHA verificado.
+- El estimador de producto conservaba costos/plazos de un CP anterior, aceptaba
+  campos de tarifas sin validar y podía quedarse cargando indefinidamente. Ahora
+  cada resultado pertenece al CP, estado e importe consultados. Editar el destino
+  o cambiar el importe retira la cotización y cancela la solicitud anterior;
+  volver al dato anterior exige consultar otra vez. Respuestas tardías no pueden
+  reemplazar un resultado nuevo. Un bloqueo inmediato evita consultas duplicadas.
+- La calculadora está dentro de `ProductoCompra`, que le pasa precio de la opción
+  elegida multiplicado por la cantidad, incluyendo el precio promocional/override
+  que muestra la compra. Antes recibía un importe fijo del servidor separado de
+  esos controles. Una cantidad mal formada no solicita cotización; conserva el
+  destino para corregirla. La estimación es informativa y no reserva inventario;
+  agregar al carrito conserva sus comprobaciones de disponibilidad.
+- Campos del estimador deshabilitados hasta su activación en el navegador para
+  evitar aceptar entradas antes de que sus controladores estén disponibles.
+  Texto explícito de estimación, CP consultado visible, estados de carga/error,
+  cantidades/plazos válidos, ETA opcional y controles de al menos 44 px. Selectores
+  de variante también de 44 px; vista sintética de 320 px inspeccionada.
+- El BFF valida destino e importe, comparte un límite de 12 segundos con la
+  autenticación y consulta de API, filtra los campos que necesita la web y marca
+  todas sus respuestas `private, no-store`. Solo dos arreglos válidos vacíos
+  significan falta de cobertura. Tarifas corruptas producen 502; fallo de red o
+  plazo agotado, 503; entrada inválida, 400; demasiadas consultas, 429. No muestra
+  detalles internos ni inventa envío gratis si el costo contradice esa bandera.
+- El subtotal admite números finitos que JavaScript produce con cantidades
+  fraccionarias, incluida notación científica, sin redondearlo prematuramente.
+  Se rechazan importes negativos/no finitos, costos corruptos, IDs duplicados y
+  plazos inválidos. El checkout continúa recalculando la tarifa elegida en API.
+  Sus consultas de tarifas y sucursales también tienen límite de 20 segundos en
+  navegador y muestran reintento manual al agotarse.
+- **646/646 pruebas web** (41 adicionales netas), compilación de producción web y
+  **30/30 tareas de tipos** aprobadas. **19 grupos locales de navegador** con los
+  componentes reales: costo/ETA, ceros iniciales, cambios de destino/importe,
+  doble envío, respuesta tardía, CP inválido, estado opcional/Enter, ocho fallos
+  recuperables, cobertura vacía real, desmontaje, cantidad, variante y móvil.
+- `scripts/staging/check-shipping-estimate.cjs`: **19 grupos publicados aprobados**
+  sobre producto y checkout. Las tarifas/errores de los recorridos son fixtures
+  GET; los dos casos de checkout verifican agotamiento del plazo y reintento para
+  recogida y envío, conservando el carrito sin enviar pedidos. Se incluye un grupo
+  de lecturas reales del BFF: entrada inválida y consulta válida con caché privada.
+  Consulta real final de CP 06000/importe 100: HTTP 200, cero tarifas y una opción
+  de recogida. Esto describe ese destino; no certifica cobertura en otras zonas.
+- Durante una corrida publicada, un formulario no se activó dentro de 10 segundos.
+  Su causa no quedó confirmada. Se añadieron diagnósticos de JS y assets; la
+  repetición completa aprobó los 19 grupos. Adicionalmente,
+  `scripts/staging/check-product-hydration.cjs` aprobó **ocho aperturas nuevas** del
+  producto, activación en aproximadamente 0.99–1.12 s desde la navegación, entradas
+  conservadas y cero errores registrados. Son mediciones de este navegador/red,
+  no una garantía de rendimiento ni una afirmación de causa resuelta.
+- No se crearon pedidos, guías ni cargos ni se enviaron avisos/correos. No se
+  cambiaron las tarifas de la tienda ni se validó emisión de guías/cotización en
+  vivo con paquetería. Esta entrega actualiza la web de staging, no APK/producción.

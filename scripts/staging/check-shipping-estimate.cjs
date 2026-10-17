@@ -15,6 +15,7 @@ const rate = {
 };
 const quote = { opcionesEnvio: [rate], pickup: [] };
 let stage = "setup";
+let diagnostic;
 (async () => {
   let server;
   let browser;
@@ -113,7 +114,18 @@ let stage = "setup";
       });
       const page = await context.newPage();
       page.setDefaultTimeout(10000);
-      const f = { mode: "standard", reads: [], writes: 0, errors: [], release: null };
+      const f = { mode: "standard", reads: [], writes: 0, errors: [], release: null, assets: [] };
+      diagnostic = f;
+      page.on("requestfailed", (req) => {
+        const url = new URL(req.url());
+        if (url.pathname.startsWith("/_next/"))
+          f.assets.push({ path: url.pathname, failure: req.failure()?.errorText });
+      });
+      page.on("response", (res) => {
+        const url = new URL(res.url());
+        if (url.pathname.startsWith("/_next/") && res.status() >= 400)
+          f.assets.push({ path: url.pathname, status: res.status() });
+      });
       page.on("pageerror", (e) => f.errors.push(e.message));
       await page.route("**/api/**", async (route) => {
         const req = route.request();
@@ -491,6 +503,9 @@ let stage = "setup";
     );
   } catch (e) {
     console.error(`FAIL ${stage}: ${e.message}`);
+    console.error(
+      JSON.stringify({ clientErrors: diagnostic?.errors, assetErrors: diagnostic?.assets }),
+    );
     process.exitCode = 1;
   } finally {
     if (context) await context.close();
