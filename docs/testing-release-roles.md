@@ -1968,3 +1968,81 @@ rechazos reales 400/404 del BFF (código inválido y código aleatorio inexisten
 ambos sin caché. Se inspeccionó la captura publicada de 320 px. El script acota
 los avisos al formulario para no confundirlos con el anunciador de navegación
 accesible de Next.js. No se utilizó un enlace privado real ni se enviaron correos.
+
+
+## Carrito: revisión vigente antes del checkout — 17 de octubre de 2026
+
+Se cerró el pendiente de la entrega de recuperación: el carrito de invitado
+sumaba directamente los precios históricos guardados y permitía ir al checkout
+sin consultar vigencia. Ahora `/carrito` verifica la selección mediante un endpoint
+nuevo de solo lectura, `/t/tienda/carrito/verificar`, consumido por el BFF privado
+`/api/carrito/verificar`:
+
+- Selección de 1–100 variantes únicas, identificadores acotados y cantidades
+  positivas hasta 100000 con tres decimales. Solo variantes/productos activos,
+  visibles y publicados; una tienda cerrada rechaza la consulta. No utiliza el
+  endpoint de alta del carrito, no reserva stock, no crea pedidos ni notifica.
+- Los precios se calculan con `calcularCarrito`, el motor existente usado al
+  guardar un carrito, incluyendo precios públicos/promociones y reglas vigentes.
+  La respuesta no incluye nombres internos, identidad, correos ni stock exacto;
+  las variantes no publicadas tienen precio nulo.
+- Si la tienda publica inventario, se compara la cantidad con el agregado por
+  variante menos reservas y buffer, usando Decimal para no rechazar por error
+  cantidades fraccionarias como `1 - 0.9 = 0.1`. Si oculta inventario, no se
+  consulta ni se expone; `publicado` solo indica publicación, no promete stock.
+  El agregado no garantiza una sucursal concreta ni reemplaza la validación final.
+- La web muestra antes/después de cambios de precio, subtotal estimado y avisos
+  para artículos retirados o cantidades superiores al inventario público. Conserva
+  esos artículos para que el usuario los corrija o quite; no reduce cantidades
+  ni borra selección automáticamente. Sin revisión válida no habilita el botón
+  de continuar de esta pantalla; entrar directamente al checkout sigue sujeto a
+  sus comprobaciones existentes.
+- La consulta no modifica el carrito guardado. Al continuar, aplica los precios
+  verificados únicamente si la selección completa y el contexto siguen iguales.
+  Un cambio entre render/clic, otra cuenta o una revisión mayor a 60 segundos
+  obliga a consultar otra vez. El bloqueo inmediato evita doble navegación.
+- Debounce de 300 ms, cancelación y descarte de respuestas anteriores al editar
+  o desmontar, reconsulta al volver a la pestaña/conexión, límite de 20 segundos
+  en navegador y de 15 segundos para la operación upstream completa del BFF.
+  Recibos exactos por variante/cantidad, origen/JSON comprobados, errores genéricos,
+  `private, no-store`, campos de entrada/salida filtrados y reintento explícito.
+- Solo el POST de lectura con ruta exacta y token de tienda verificado comparte
+  el cupo de lecturas del storefront. Checkout y otras escrituras conservan sus
+  límites; peticiones sin identidad firmada mantienen el límite por IP. Prueba
+  HTTP con JWT sintético demuestra separación y agotamiento de ambos cupos.
+- La prueba de dos clics síncronos descubrió un fallo previo: `+` reutilizaba la
+  cantidad del render y perdía uno de los toques. Ambos controles ahora leen la
+  cantidad actual en cada evento. Acciones de cantidad/quitar de al menos 44 px,
+  etiquetas por producto y captura móvil a 320 px inspeccionada sin desbordamiento.
+
+Validación local: **763/763 pruebas web** (32 nuevas), **13 pruebas API aisladas**
+sin setup destructivo compartido, compilaciones de web/API y **30/30 tareas de
+tipos**. **20 escenarios de navegador locales** con página/hook reales y recibos
+simulados: precios nuevos sin edición automática, continuación/doble clic, ocho
+fallos recuperables, producto retirado/inventario insuficiente, edición rápida,
+modificación inmediata antes de clic, cambio de cuenta simulado, respuesta tardía,
+desmontaje, revisión vencida, almacenamiento fallido y layout móvil. Las pruebas
+no compran, no pagan, no reservan ni envían correos.
+
+
+### Cierre publicado de revisión de carrito
+
+Fuente `a463f0287ea030b8b89e7e8254254c6ca491cf95`, con ambos despliegues de staging
+confirmados en `SUCCESS`: web `e4bda8af-8c4f-4c5a-ba90-4fdf77f6df83` y API
+`e1e8528f-d73c-4fe9-9acc-d0d3a0336314`.
+
+**19 escenarios publicados** aprobados mediante
+`scripts/staging/check-cart-verification-ui.cjs`, con recibos de error/éxito
+simulados y carrito invitado local al navegador. No se reenviaron escrituras de
+pedido, cuenta ni carrito. La prueba real adicional consultó el catálogo, verificó
+un precio finito y la identidad de una variante pública mediante el BFF nuevo,
+comprobó una variante aleatoria inexistente como `no_publicado` y verificó rechazos
+400/403 para selección vacía/origen ajeno. Todas esas llamadas solo leen datos.
+Se inspeccionó la captura publicada a 320 px sin desbordamientos.
+
+Límites: no se reservó inventario ni se validó una sucursal de entrega; con
+inventario oculto la publicación no constituye garantía de existencia. No se
+repitió una compra completa autenticada, y los cambios de contexto de cuenta
+se dispararon como eventos controlados del navegador. No hubo pedidos, cobros ni
+correos solicitados por estas pruebas. Esta entrega actualiza web/API de staging;
+no actualiza el APK ni producción.
