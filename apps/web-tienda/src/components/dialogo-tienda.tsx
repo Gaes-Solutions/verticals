@@ -8,11 +8,13 @@ export function DialogoTienda({
   bloqueado = false,
   onCerrar,
   children,
+  className,
 }: {
   titulo: string;
   bloqueado?: boolean;
   onCerrar: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -27,7 +29,7 @@ export function DialogoTienda({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className="store-action-dialog"
+      className={`store-action-dialog ${className ?? ""}`}
       onClose={onCerrar}
       onCancel={(e) => {
         if (bloqueado) e.preventDefault();

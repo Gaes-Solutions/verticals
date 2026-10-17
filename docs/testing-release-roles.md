@@ -1356,3 +1356,62 @@ Archivo temporal de credenciales eliminado, navegadores/contextos cerrados y
 repositorio sin archivos privados nuevos. Sin migraciones ni cambios en
 producción. Para revisar: Mi cuenta → Mi lista de deseos / Califica tus compras,
 y «Guardar» en la página de un producto del ambiente de pruebas.
+
+## Campana y conexión de avisos recuperables — 17 de octubre de 2026
+
+**30 de 34 pruebas iniciales del BFF fallaron** con el código anterior: historial
+sin validar, ausencia de caché privada/presupuesto, respuestas incompletas
+aceptadas y errores internos propagados. La interfaz silenciaba la carga fallida,
+aceptaba cualquier 2xx al marcar y modificaba contadores sin consultar el resultado.
+La apertura SSE tampoco tenía deadline, validación de MIME ni cancelación completa.
+
+- Contratos verifican campos, fechas, IDs únicos y contador entero no negativo.
+  El total puede superar las filas visibles porque el API pagina los avisos.
+  Leer uno exige `ok` booleano (false se conserva para reconciliar), leer todos
+  exige `marcadas` entero no negativo. Un éxito incompleto es 502, red caída 503.
+- Las tres rutas verifican sesión con el mismo presupuesto de 15 s que la llamada
+  al API, rechazan redirects, escapan el ID y devuelven `private, no-store` también
+  en errores. No reenvían identidad ni cuerpo de marcado elegido por navegador.
+- Cada escritura se confirma consultando después el historial con el presupuesto
+  cliente compartido de 20 s. No se restan contadores ni se pone todo en cero sin
+  una respuesta verificada. Un aviso nuevo que llega durante «Marcar todas» puede
+  seguir sin leer. `ok:false` nunca se interpreta como una resta local automática.
+- Una referencia impide escrituras simultáneas; comenzar a marcar cancela lecturas
+  previas. Respuestas tardías no reponen el estado anterior. Una operación incierta
+  bloquea otro marcado hasta actualizar correctamente; no hay reintentos POST
+  automáticos. Fallar la carga no se muestra como bandeja vacía.
+- Perder autorización borra el historial visible y cierra SSE. La cuenta monta
+  la campana con su ID como clave; cambiar de comprador cancela operaciones y
+  descarta datos anteriores. La recuperación válida vuelve a abrir el stream.
+- SSE más consulta alternativa cada 45 s en pestaña visible, actualización al
+  recuperar conexión o visibilidad y botón manual. Un fallo de stream no impide
+  consultar la lista. Navegar a «Ver detalle» es independiente de «Marcar leída»;
+  no oculta un error de lectura al cambiar de página. Links externos, de esquemas
+  activos, relativos a protocolo o con barras inversas/controles no son navegables.
+- El panel usa el diálogo nativo de la tienda: controles de al menos 44 px,
+  navegación con teclado, Escape y retorno del foco a la campana. Tras marcar,
+  el foco vuelve a Actualizar. Lista desplazable, encabezado y acciones visibles
+  incluso con un aviso largo a 320×420; `DialogoTienda` acepta una clase opcional
+  de presentación, sin cambiar el aspecto por defecto de los demás formularios.
+- El proxy SSE limita solo autenticación/apertura a 15 s. Comprueba HTTP, cuerpo
+  y `text/event-stream`, mantiene una conexión sana después del deadline, copia
+  bytes sin alterar y no reenvía cookies del proveedor. Cancelar el cuerpo o
+  desconectar el request aborta la conexión y libera reader/listeners/timer.
+  Caché del stream: `private, no-store, no-transform`.
+
+Validación local: **388/388 pruebas web** (56 nuevas: 34 de rutas, 10 de enlaces y
+12 del ciclo SSE). Las del stream incluyen apertura bloqueada con reloj simulado,
+conexión sana después de 20 s, bytes intactos, cancelación, request desconectado,
+HTML/JSON 200, cuerpo vacío y fallos de autenticación/proveedor.
+
+**14 grupos de navegador**, con componente real y datos sintéticos: carga fallida,
+contador paginado, red/malformed/timeout/401, reconciliación fallida y recuperada
+sin segundo POST, `ok:false`, doble marcado, aviso entrante, consulta tardía,
+SSE/poll/visibilidad, links seguros, cambio de cuenta y diseño/teclado. Captura
+móvil final revisada. Los deadlines se acortan a 1 s solo dentro del fixture.
+
+Scripts: `check-notificaciones-ui.cjs` y `check-notificaciones-access.cjs`.
+Las escrituras de marcado del primero son simuladas. El segundo solo hace POST
+sin sesión, lecturas autenticadas y abre/cancela el handshake SSE. No envía avisos,
+push ni correos y no marca notificaciones reales como leídas. Este lote no
+certifica entrega de un evento real generado por una compra ni entrega push/email.

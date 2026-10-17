@@ -68,7 +68,7 @@ export default async function CuentaPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <NotificacionesCliente />
+          <NotificacionesCliente key={me.id} />
           <LogoutBoton />
         </div>
       </div>

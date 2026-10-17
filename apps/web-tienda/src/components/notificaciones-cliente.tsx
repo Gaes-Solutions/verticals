@@ -1,188 +1,263 @@
 "use client";
-
-import type { NotificacionCliente } from "@/lib/cliente";
+import {
+  type HistorialNotificaciones,
+  enlaceNotificacion,
+  errorNotificacion,
+  esHistorialNotificaciones,
+  esLecturaNotificacion,
+  esLecturaTodas,
+} from "@/lib/notificaciones-contract";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const POLL_MS = 45_000;
-
-/** Campana del cliente: avisa cambios de estado de sus pedidos. */
+import { DialogoTienda } from "./dialogo-tienda";
+class FalloNotificacion extends Error {
+  constructor(readonly status: number) {
+    super(errorNotificacion(status));
+  }
+}
+async function obtenerHistorial(signal: AbortSignal): Promise<HistorialNotificaciones> {
+  const res = await fetch("/api/cuenta/notificaciones", { cache: "no-store", signal });
+  if (!res.ok) throw new FalloNotificacion(res.status);
+  const data: unknown = await res.json();
+  if (!esHistorialNotificaciones(data)) throw new FalloNotificacion(502);
+  signal.throwIfAborted();
+  return data;
+}
+/** Counts change only after a verified snapshot, including after mark-as-read. */
 export function NotificacionesCliente() {
-  const [items, setItems] = useState<NotificacionCliente[]>([]);
-  const [noLeidas, setNoLeidas] = useState(0);
+  const [historial, setHistorial] = useState<HistorialNotificaciones | null>(null);
   const [abierto, setAbierto] = useState(false);
+  const [ocupado, setOcupado] = useState<"cargando" | "marcando" | null>("cargando");
+  const [valido, setValido] = useState(false);
+  const [incierto, setIncierto] = useState(false);
+  const [conSesion, setConSesion] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [marcandoTodas, setMarcandoTodas] = useState(false);
-  const pendientes = useRef(new Set<string>());
-  const revision = useRef(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const cargar = useCallback(async () => {
-    try {
-      const version = revision.current;
-      const res = await fetch("/api/cuenta/notificaciones", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { items: NotificacionCliente[]; noLeidas: number };
-      if (version !== revision.current) return;
-      setItems(data.items ?? []);
-      setNoLeidas(data.noLeidas ?? 0);
-    } catch {
-      // silencioso
+  const control = useRef<AbortController | null>(null);
+  const vivo = useRef(false);
+  const escribiendo = useRef(false);
+  const actualizarButton = useRef<HTMLButtonElement>(null);
+  const devolverFoco = useRef(false);
+  const activo = useCallback(
+    (c: AbortController) => vivo.current && control.current === c && !c.signal.aborted,
+    [],
+  );
+  const aplicar = useCallback((data: HistorialNotificaciones) => {
+    setHistorial(data);
+    setValido(true);
+    setIncierto(false);
+    setConSesion(true);
+    setError(null);
+  }, []);
+  const fallar = useCallback((e: unknown) => {
+    setValido(false);
+    setIncierto(true);
+    setError(e instanceof FalloNotificacion ? e.message : errorNotificacion(503));
+    if (e instanceof FalloNotificacion && [401, 403].includes(e.status)) {
+      setHistorial(null);
+      setConSesion(false);
     }
   }, []);
-
+  const cargar = useCallback(async () => {
+    if (escribiendo.current) return;
+    control.current?.abort();
+    const c = new AbortController();
+    control.current = c;
+    setOcupado("cargando");
+    try {
+      const data = await obtenerHistorial(AbortSignal.any([c.signal, AbortSignal.timeout(20000)]));
+      if (activo(c)) aplicar(data);
+    } catch (e) {
+      if (activo(c)) fallar(e);
+    } finally {
+      if (activo(c)) setOcupado(null);
+    }
+  }, [activo, aplicar, fallar]);
   useEffect(() => {
-    cargar();
-    // Tiempo real (SSE) + polling de respaldo por si la conexión se cae.
-    const es = new EventSource("/api/cuenta/realtime");
-    es.onmessage = () => cargar();
-    const t = setInterval(cargar, POLL_MS);
+    vivo.current = true;
+    void cargar();
+    const refrescar = () => {
+      if (document.visibilityState === "visible") void cargar();
+    };
+    const timer = window.setInterval(refrescar, 45000);
+    window.addEventListener("online", refrescar);
+    document.addEventListener("visibilitychange", refrescar);
     return () => {
-      es.close();
-      clearInterval(t);
+      vivo.current = false;
+      control.current?.abort();
+      escribiendo.current = false;
+      window.clearInterval(timer);
+      window.removeEventListener("online", refrescar);
+      document.removeEventListener("visibilitychange", refrescar);
     };
   }, [cargar]);
-
   useEffect(() => {
-    if (!abierto) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setAbierto(false);
-        ref.current?.querySelector("button")?.focus();
-      }
+    if (!conSesion) return;
+    const es = new EventSource("/api/cuenta/realtime");
+    es.onmessage = () => {
+      void cargar();
     };
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [abierto]);
-
-  async function marcar(n: NotificacionCliente) {
-    if (!n.leida && !marcandoTodas && !pendientes.current.has(n.id)) {
-      pendientes.current.add(n.id);
-      setError(null);
-      try {
-        const res = await fetch(`/api/cuenta/notificaciones/${n.id}/leer`, {
-          method: "POST",
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!res.ok) throw new Error("No pudimos marcar el aviso como leído. Reintenta.");
-        revision.current += 1;
-        setNoLeidas((c) => Math.max(0, c - 1));
-        setItems((arr) => arr.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
-      } catch {
-        setError("No pudimos marcar el aviso como leído. Reintenta.");
-      } finally {
-        pendientes.current.delete(n.id);
-      }
-    }
-  }
-
-  async function marcarTodas() {
-    if (marcandoTodas || pendientes.current.size > 0) return;
-    setMarcandoTodas(true);
+    return () => es.close();
+  }, [cargar, conSesion]);
+  async function marcar(id?: string) {
+    if (escribiendo.current || !valido || incierto || !historial?.noLeidas) return;
+    if (id && !historial.items.some((n) => n.id === id && !n.leida)) return;
+    escribiendo.current = true;
+    control.current?.abort();
+    const c = new AbortController();
+    control.current = c;
+    setOcupado("marcando");
     setError(null);
+    const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
     try {
-      const res = await fetch("/api/cuenta/notificaciones/leer-todas", {
-        method: "POST",
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) throw new Error("No pudimos marcar los avisos como leídos. Reintenta.");
-      revision.current += 1;
-      setItems((arr) => arr.map((x) => ({ ...x, leida: true })));
-      setNoLeidas(0);
-    } catch {
-      setError("No pudimos marcar los avisos como leídos. Reintenta.");
+      const res = await fetch(
+        `/api/cuenta/notificaciones/${id ? `${encodeURIComponent(id)}/leer` : "leer-todas"}`,
+        { method: "POST", cache: "no-store", signal },
+      );
+      if (!res.ok) throw new FalloNotificacion(res.status);
+      const data: unknown = await res.json().catch(() => null);
+      if (!(id ? esLecturaNotificacion(data) : esLecturaTodas(data)))
+        throw new FalloNotificacion(502);
+      // ok:false can mean already read or unavailable. Always reconcile, never decrement blindly.
+      const actual = await obtenerHistorial(signal);
+      if (activo(c)) aplicar(actual);
+    } catch (e) {
+      if (activo(c)) fallar(e);
     } finally {
-      setMarcandoTodas(false);
+      escribiendo.current = false;
+      if (activo(c)) {
+        devolverFoco.current = true;
+        setOcupado(null);
+      }
     }
   }
-
+  useEffect(() => {
+    if (!ocupado && abierto && devolverFoco.current) {
+      devolverFoco.current = false;
+      actualizarButton.current?.focus();
+    }
+  }, [ocupado, abierto]);
+  const noLeidas = historial?.noLeidas ?? 0;
+  const bloquear = !!ocupado || !valido || incierto;
   return (
-    <div ref={ref} className="sm:relative">
+    <>
       <button
         type="button"
-        onClick={() => setAbierto((v) => !v)}
-        aria-label="Notificaciones"
+        onClick={() => setAbierto(true)}
+        aria-label={noLeidas ? `Notificaciones, ${noLeidas} sin leer` : "Notificaciones"}
+        aria-haspopup="dialog"
         aria-expanded={abierto}
-        className="relative flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
+        className="relative flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
       >
         <Bell size={20} strokeWidth={1.75} />
         {noLeidas > 0 && (
-          <span className="-right-0.5 -top-0.5 absolute flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 font-bold text-[11px] text-white">
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold text-white"
+          >
             {noLeidas > 9 ? "9+" : noLeidas}
           </span>
         )}
       </button>
-
       {abierto && (
-        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-white shadow-lg">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <span className="font-semibold text-slate-700 text-sm">Notificaciones</span>
-            {noLeidas > 0 && (
+        <DialogoTienda
+          titulo="Notificaciones"
+          onCerrar={() => setAbierto(false)}
+          className="open:flex open:flex-col open:overflow-hidden"
+        >
+          <div aria-busy={!!ocupado} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-500">
+                {historial ? `${noLeidas} sin leer` : "Consulta tus avisos de la tienda."}
+              </p>
               <button
                 type="button"
-                disabled={marcandoTodas}
-                onClick={marcarTodas}
-                className="gx-btn-ghost !px-2 text-marca"
+                ref={actualizarButton}
+                onClick={() => void cargar()}
+                disabled={!!ocupado}
+                className="gx-btn-secondary min-h-11"
               >
-                {marcandoTodas ? "Guardando…" : "Marcar todas"}
+                Actualizar avisos
+              </button>
+            </div>
+            {ocupado && (
+              <output className="mb-2 block text-sm text-slate-600">
+                {ocupado === "marcando" ? "Guardando y actualizando…" : "Cargando notificaciones…"}
+              </output>
+            )}
+            {error && (
+              <p role="alert" className="mb-3 text-sm text-danger">
+                {error}
+              </p>
+            )}
+            {!conSesion && (
+              <Link href="/cuenta/login" className="gx-btn-secondary mb-3 min-h-11">
+                Iniciar sesión
+              </Link>
+            )}
+            {historial && historial.noLeidas > 0 && (
+              <button
+                type="button"
+                onClick={() => void marcar()}
+                disabled={bloquear}
+                className="gx-btn-secondary mb-3 min-h-11 w-full shrink-0"
+              >
+                Marcar todas como leídas
               </button>
             )}
-          </div>
-          {error && (
-            <p role="alert" className="px-4 py-2 text-sm text-danger">
-              {error}
-            </p>
-          )}
-          <div className="max-h-96 overflow-y-auto">
-            {items.length === 0 ? (
-              <p className="px-4 py-8 text-center text-slate-400 text-sm">Sin notificaciones</p>
-            ) : (
-              items.map((n) => <FilaNotificacion key={n.id} n={n} onMarcar={marcar} />)
+            {valido && historial?.items.length === 0 && (
+              <p className="py-6 text-center text-sm text-slate-500">Sin notificaciones</p>
+            )}
+            <ul
+              aria-label="Avisos recientes"
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain"
+            >
+              {historial?.items.map((n) => {
+                const href = enlaceNotificacion(n.link);
+                return (
+                  <li
+                    key={n.id}
+                    className={`rounded-xl border p-3 ${n.leida ? "bg-white" : "bg-marca/5"}`}
+                  >
+                    <p className="break-words text-sm font-semibold text-slate-800">{n.titulo}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm text-slate-600">
+                      {n.cuerpo}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {new Date(n.createdAt).toLocaleString("es-MX")}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {href && (
+                        <Link href={href} className="gx-btn-secondary min-h-11">
+                          Ver detalle<span className="sr-only"> de {n.titulo}</span>
+                        </Link>
+                      )}
+                      {n.leida ? (
+                        <span className="text-xs text-slate-500">Leída</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void marcar(n.id)}
+                          disabled={bloquear}
+                          aria-label={`Marcar como leída: ${n.titulo}`}
+                          className="gx-btn-ghost min-h-11 text-marca"
+                        >
+                          Marcar leída
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {!!historial?.items.length && (
+              <p className="mt-3 shrink-0 text-xs text-slate-500">
+                Se muestran los avisos más recientes.
+              </p>
             )}
           </div>
-        </div>
+        </DialogoTienda>
       )}
-    </div>
-  );
-}
-
-function FilaNotificacion({
-  n,
-  onMarcar,
-}: {
-  n: NotificacionCliente;
-  onMarcar: (n: NotificacionCliente) => void;
-}) {
-  const contenido = (
-    <div className="flex items-start gap-2">
-      {!n.leida && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-marca" />}
-      <div className={n.leida ? "pl-4" : ""}>
-        <p className="font-medium text-slate-800 text-sm">{n.titulo}</p>
-        <p className="text-slate-500 text-xs">{n.cuerpo}</p>
-        <p className="mt-0.5 text-[11px] text-slate-400">
-          {new Date(n.createdAt).toLocaleString("es-MX")}
-        </p>
-      </div>
-    </div>
-  );
-  const cls = `block w-full border-b px-4 py-3 text-left hover:bg-slate-50 ${
-    n.leida ? "" : "bg-marca/5"
-  }`;
-  return n.link ? (
-    <Link href={n.link} onClick={() => onMarcar(n)} className={cls}>
-      {contenido}
-    </Link>
-  ) : (
-    <button type="button" onClick={() => onMarcar(n)} className={cls}>
-      {contenido}
-    </button>
+    </>
   );
 }
