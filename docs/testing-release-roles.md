@@ -1326,3 +1326,33 @@ El fixture acorta solo sus deadlines a 1 s para simular timeout.
 Scripts: `check-preferencias-ui.cjs` (no contacta servicios externos) y
 `check-preferencias-access.cjs` (denegación de invitados y lecturas reales de
 la cuenta). No se publican reseñas ni se agregan/quitan favoritos reales en QA.
+
+### Verificación publicada de favoritos y reseñas
+
+Build final web-tienda y API correcto; lint sin errores (avisos de complejidad
+existentes del detalle de pedido y nuevos del proxy, carga de fotos, hook y QA);
+typecheck **30/30**. Fuente staging
+`4667de32219b9d1d23485b03542952a5e8ae68e2`. Ambos deployments en SUCCESS:
+
+- Web-tienda: `0f7f29ed-dc56-4271-83ce-9836413fbd9a`.
+- API verticals: `7181152b-d570-43cc-aa7c-33d7255b2f36`.
+
+`check-preferencias-access.cjs` pasó tres grupos reales, sin simular respuestas:
+las cinco rutas de invitado (GET/POST wishlist, DELETE item y GET/POST reseñas)
+devuelven 401 con caché privada; la cuenta compradora entregada inicia sesión,
+verifica su identidad y obtiene listas válidas en ambos GET; la página publicada
+de Mi cuenta muestra «Actualizar lista de deseos» y completa la actualización
+contra el API real sin alerta de error en ese componente. Las escrituras del
+navegador estuvieron bloqueadas durante la revisión de la página.
+
+Los 22 grupos de UI locales usan respuestas sintéticas y una foto PNG creada en
+canvas para comprobar el selector por teclado y compresión real a JPEG. No se
+publicaron reseñas ni se agregaron o eliminaron favoritos reales. Tampoco se
+certifica aquí publicación/moderación de una reseña de compra real.
+
+El cambio del DTO de variantes conserva su nulabilidad; el consumidor móvil
+actual no utiliza ese campo para añadir al carrito. No se cambió el APK.
+Archivo temporal de credenciales eliminado, navegadores/contextos cerrados y
+repositorio sin archivos privados nuevos. Sin migraciones ni cambios en
+producción. Para revisar: Mi cuenta → Mi lista de deseos / Califica tus compras,
+y «Guardar» en la página de un producto del ambiente de pruebas.
