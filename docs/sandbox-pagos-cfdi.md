@@ -1,83 +1,71 @@
-# 🧪 Sandbox — Pagos (Conekta) y Facturación (Facturama)
+# Validación de pagos y CFDI en pruebas
 
-> Cómo conectar y probar **cobros reales** y **timbrado CFDI** en modo prueba,
-> sin tocar dinero ni timbres reales. Cuando funcione en sandbox, pasar a prod es
-> cambiar llaves + ambiente. El código ya está listo: esto es solo "pegar llaves".
+Este documento corresponde al flujo actual de tienda. Probar una suscripción SaaS
+no valida el cobro de un pedido: usan rutas y secretos de webhook separados.
 
----
+## Stripe: suscripción y cobros de cada tienda
 
-## 💳 Conekta (pagos de la tienda) — llaves **globales** (env)
+Las variables privadas pertenecen al servicio API, nunca al frontend ni a una APK:
 
-Conekta es, en V1, una integración **a nivel plataforma** (una cuenta para la
-tienda). El cobro por tenant con cuentas separadas (Conekta/Stripe Connect) es V1.5.
+| Variable de API | Uso |
+| --- | --- |
+| `STRIPE_API_KEY` | Credencial privada del proveedor. |
+| `STRIPE_PUBLISHABLE_KEY` | Llave pública para el formulario de tarjeta. |
+| `STRIPE_WEBHOOK_SECRET` | Firma del webhook de suscripciones. |
+| `STRIPE_COMMERCE_WEBHOOK_SECRET` | Firma de eventos de pedidos de la plataforma. |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Firma de eventos de cuentas conectadas. |
 
-### Pasos
-1. Crear cuenta en https://conekta.com → activar **modo prueba** (toggle test).
-2. En **Desarrolladores → API Keys** (modo prueba), copiar:
-   - **Llave privada de prueba** → `CONEKTA_API_KEY` (backend / API)
-   - **Llave pública de prueba** → `NEXT_PUBLIC_CONEKTA_PUBLIC_KEY` (tienda)
-3. En **Webhooks** crear un endpoint apuntando a `https://<api>/t/checkout/webhook`
-   y copiar el secreto → `CONEKTA_WEBHOOK_SECRET`.
-   - En local, exponer la API con un túnel (`cloudflared tunnel` o `ngrok http 3000`)
-     y registrar esa URL pública en Conekta.
-4. Poner las vars en `.env` (API) y en el env del contenedor de la tienda
-   (o `apps/web-tienda/.env.local` en dev). Reiniciar API + tienda.
+Rutas actuales:
 
-### Cómo se comporta
-- **Sin** `NEXT_PUBLIC_CONEKTA_PUBLIC_KEY`: la tienda usa el flujo demo (mock, sin cobro).
-- **Con** la llave pública: el checkout muestra el formulario de tarjeta de Conekta.js
-  (la tarjeta nunca toca nuestro backend; se envía solo el token — PCI).
-- El cargo se crea con el token; **MSI** aparece si el total ≥ el mínimo configurado
-  por el tenant (Admin → Tienda → Funciones).
-- El webhook `order.paid` confirma el pedido y genera la venta (descuenta stock).
+- Suscripciones: `/webhooks/stripe`.
+- Pedidos, incluidos eventos Connect: `/webhooks/stripe/commerce`.
+- `/billing/webhook` es un simulador exclusivo de desarrollo/test; no debe existir
+  en el despliegue de staging ni en producción.
 
-### Probar
-- Tarjeta de prueba Conekta: **4242 4242 4242 4242**, fecha futura, cualquier CVV.
-- Verificar: el pedido pasa a `pago_confirmado`, se genera la venta y baja el stock.
-- MSI: usar un total ≥ mínimo y elegir un plazo (3/6/12…).
+El dueño conecta su comercio desde **Mi suscripción → Cobros a tus clientes
+(Stripe) → Continuar registro**. Tener las llaves de plataforma no termina el
+registro del comercio. Mientras Stripe no habilite los cobros de su cuenta, la
+configuración pública no debe ofrecer tarjeta ni publicar una llave para cobrar.
+Pagar al recoger sigue siendo un pedido sin cobro online; no acredita dinero.
 
----
+## Conekta, si el negocio elige ese proveedor
 
-## 🧾 Facturama (CFDI 4.0) — config **por tenant** (UI)
+La API utiliza `CONEKTA_API_KEY`, `CONEKTA_PUBLIC_KEY` y
+`CONEKTA_WEBHOOK_SECRET`. El webhook actual es `/webhooks/conekta`.
+La llave pública llega a web y móvil mediante la configuración de pago de la
+API; `NEXT_PUBLIC_CONEKTA_PUBLIC_KEY` no sustituye esa configuración actual.
 
-Facturama es **por tenant**: cada negocio pone su API key + ambiente desde el
-panel. La UI ya existe: **web-admin → Facturación** (permiso `cfdi.configurar`).
+El proveedor se selecciona por negocio. La API calcula los métodos que puede
+ofrecer y ambos clientes deben respetarlos. La ausencia de proveedor no habilita
+un cobro simulado en producción. Los mocks requieren un ambiente de pruebas y
+la autorización explícita correspondiente.
 
-### Pasos
-1. Crear cuenta **sandbox** en https://facturama.mx (apisandbox.facturama.mx) y
-   obtener la **API key de pruebas**.
-2. En **web-admin → Facturación**:
-   - **Datos del emisor**: RFC, razón social, régimen SAT (ej. `601`), CP, serie.
-     - Para pruebas, Facturama provee RFCs de demo con CSD precargado
-       (RFC genérico SAT de pruebas: `EKU9003173C9`). Verificar el vigente en la
-       doc de Facturama sandbox.
-   - **Ambiente**: `Sandbox (pruebas)`.
-   - **API key de Facturama**: pegar la de pruebas. Guardar.
-3. (La app usa automáticamente `https://apisandbox.facturama.mx` en sandbox y
-   `https://api.facturama.mx` en prod — sin tocar código.)
+## Facturación del negocio
 
-### Probar
-- Hacer una venta en el POS (`web-pos`) y **emitir CFDI** → debe timbrar y
-  devolver UUID de prueba + PDF/XML.
-- **Autofactura**: si está activa, el cliente factura su ticket desde la tienda
-  con su RFC. La factura self-service del pedido online ya usa este mismo flujo.
+El dueño configura **Facturación** con permiso `cfdi.configurar`: datos del emisor,
+ambiente y credencial de Facturama. Los roles con `cfdi.leer` pueden consultar los
+datos públicos de esa configuración, sin recibir su llave ni poder modificarla.
 
-### Pasar a producción
-1. Cuenta Facturama de **producción** + subir el **CSD real** del cliente
-   (.cer/.key + contraseña) en el panel de Facturama (no se guarda en GaesSoft).
-2. En **web-admin → Facturación**: cambiar **Ambiente → Producción**, pegar la
-   **API key de producción**, verificar RFC/razón social/régimen reales. Guardar.
-3. Emitir un CFDI de prueba real (a `XAXX010101000`) y validar el UUID en el SAT.
+Antes de certificar el recorrido externo, hace falta una cuenta sandbox y un
+emisor válido para ella. La prueba debe comprobar emisión, PDF/XML, consulta del
+estado y cancelación admitida por el proveedor. Las pruebas con un cliente mock
+no sustituyen ese recorrido. La facturación de las suscripciones SaaS tiene su
+propio alcance; ver [validación de plataforma](testing-platform-workflows.md).
 
----
+## Estado comprobado de Gaesland staging — 16 de octubre de 2026
 
-## Resumen de variables / dónde van
+- Stripe Connect vinculado, con estado pendiente: registro sin enviar y cobros y
+  depósitos deshabilitados. Faltan campos de domicilio y aceptar términos.
+- El checkout público no anuncia tarjeta mientras la cuenta no esté habilitada.
+- Webhooks Stripe sin firma o con firma inválida: rechazados con 401.
+- Webhook de simulación `/billing/webhook`: 404 en el despliegue.
+- Sin configuración de emisor fiscal del negocio: no se certificó timbrado externo.
 
-| Qué | Dónde | Variable / lugar |
-|-----|-------|------------------|
-| Conekta privada (test) | API (env) | `CONEKTA_API_KEY` |
-| Conekta webhook secret | API (env) | `CONEKTA_WEBHOOK_SECRET` |
-| Conekta pública (test) | Tienda (env) | `NEXT_PUBLIC_CONEKTA_PUBLIC_KEY` |
-| Facturama API key + ambiente | Por tenant (UI) | web-admin → Facturación |
+Se pueden repetir las comprobaciones públicas, sin credenciales ni pagos, con:
 
-> Ver `.env.example` para el bloque completo de variables de pagos.
+```sh
+node scripts/staging/check-payment-boundaries.cjs
+```
+
+El script tiene destinos fijos de staging. Para la evidencia completa y los límites
+restantes, ver [validación de roles y tienda](testing-release-roles.md).

@@ -148,3 +148,40 @@ no deben apuntarse a producción.
   notificaciones del sistema o comportamiento de cada teléfono físico.
 - Tener esta batería en verde no significa seguridad absoluta ni todas las
   combinaciones posibles. Los resultados corresponden a los recorridos descritos.
+
+## Continuación de la validación — Android y servicios externos
+
+- Cliente móvil: **102/102 pruebas** repetidas y exportación Android/Hermes del
+  código actual completada. Esto verifica el empaquetado JavaScript y sus assets,
+  no una instalación en un teléfono.
+- APK publicada versión 8: firma Android válida, paquete separado de staging,
+  API de staging y tienda fija Gaesland presentes en el bundle. El código de la
+  app y `api-client` coincide con el commit del artefacto; los cambios posteriores
+  del lockfile eran del panel superadmin. No se detectaron patrones de llaves
+  privadas Stripe o secretos de webhook en el bundle; no es una auditoría completa
+  de secretos del archivo ni sustituye las verificaciones de servidor.
+- Se encontraron permisos heredados de lectura/escritura de almacenamiento y
+  superposición sobre otras apps, que la tienda no utiliza. Se bloquearon los
+  tres en `app.config.ts`. La introspección de Expo verifica su eliminación y
+  mantiene ubicación, biometría y vibración. La nueva APK versión 9 se solicitó
+  desde `72c817e`, perfil `gaesland-staging-phone`.
+- **12 comprobaciones públicas de staging** aprobadas: cuatro rechazos de firma
+  Stripe (suscripciones y pedidos), inexistencia del webhook de simulación,
+  seis rutas financieras/administrativas sin sesión y coherencia de la
+  configuración pública de tarjeta. Script repetible:
+  `node scripts/staging/check-payment-boundaries.cjs`.
+- Lectura guardada de la base de staging: sin `CfdiConfig` de Gaesland; dominio
+  propio sin configurar; solo está registrado/verificado el host de Railway.
+  Stripe confirma cuenta vinculada, registro sin enviar y cobros/depósitos
+  deshabilitados. No se cambiaron estos datos ni se fabricaron habilitaciones.
+- Se corrigió la documentación de sandbox y `.env.example`: el cliente obtiene
+  la llave pública desde la API, el webhook actual de Conekta es
+  `/webhooks/conekta`, y los cobros de pedidos Stripe/Connect tienen firma y ruta
+  distintas de las suscripciones. La ausencia de proveedor no acredita pagos
+  simulados en producción.
+
+No hay un teléfono conectado por ADB. El emulador disponible es x86_64 y la APK
+para teléfonos contiene ARM; además la máquina no dispone de `/dev/kvm`. Un
+intento de emulador desechable sin aceleración no habilitó ADB durante esta
+revisión. La ejecución nativa, permisos interactivos, biometría, ubicación,
+notificaciones y cierre brusco con cambios pendientes siguen sin certificarse.
