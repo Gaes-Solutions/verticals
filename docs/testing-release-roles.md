@@ -939,3 +939,33 @@ cuentas sintéticas, solo localhost) y `scripts/staging/check-cart-tabs.cjs`
 El segundo permite una lectura opcional del carrito de una cuenta entregada
 mediante `STOREFRONT_CART_ACCOUNT`, archivo privado con email/password; nunca
 modifica ese carrito ni envía checkout. No se generó APK en este lote.
+
+### Verificación publicada de coherencia del carrito
+
+Build de web-tienda y typecheck **30/30** correctos; lint sin errores, con
+advertencias de complejidad en el proxy/sincronizador y el interceptor de QA.
+Fuente staging `72fe55f9036024c30c829781dd287367aba3a6ef`, deployment web-tienda
+`09b7f51d-efac-4892-be2f-a965e4c4fd8c`, estado SUCCESS.
+
+La prueba `check-cart-tabs.cjs` pasó las tres operaciones contra el frontend
+publicado: agregar en una ficha actualiza encabezado/carrito de otra pestaña;
+aumentar desde el carrito actualiza la ficha e invalida Deshacer; quitar deja
+ambas vistas vacías sin recarga. Fue un contexto invitado aislado, con escrituras
+de API del navegador bloqueadas y selección únicamente local.
+
+Además se repitió `check-storefront-cart-reload.cjs` con escrituras reales del
+carrito en staging y una cuenta temporal de QA:
+
+- Navegación rápida al checkout y recarga con POST de carrito bloqueado:
+  se conserva el artículo pendiente.
+- Al restablecer POST, se guarda correctamente el carrito y se retira su copia
+  pendiente. Esto verifica también el contrato real de respuesta del API.
+- Una modificación remota posterior gana sobre una edición local con versión
+  antigua; la selección local queda disponible para combinar sin sobrescritura
+  silenciosa. La vista móvil no tiene desbordamiento horizontal.
+
+El script eliminó su propio carrito y comprador después de comprobar que no
+tenían ventas ni pedidos, con guardas del proyecto, ambiente staging y tenant.
+Los navegadores fueron cerrados. No se crearon pedidos, cobros ni correos;
+no se utilizaron ni copiaron las credenciales de los usuarios entregados.
+No hubo migraciones, despliegue de producción ni generación de APK.
