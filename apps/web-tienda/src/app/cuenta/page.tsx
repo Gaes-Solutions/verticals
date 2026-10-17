@@ -109,6 +109,7 @@ export default async function CuentaPage() {
       </h2>
       <div className="mb-10">
         <PerfilCuenta
+          key={me.id}
           me={{
             nombre: me.nombre,
             apellidos: me.apellidos ?? null,

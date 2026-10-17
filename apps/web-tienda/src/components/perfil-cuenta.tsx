@@ -1,7 +1,8 @@
 "use client";
 
+import { errorPerfil, esGuardadoCuenta } from "@/lib/perfil-contract";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 interface Me {
   nombre: string;
@@ -10,98 +11,97 @@ interface Me {
   telefono: string | null;
 }
 
+/** A password timeout is ambiguous: never retry it automatically. */
+function useGuardarCuenta(password: boolean) {
+  const pendiente = useRef<AbortController | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [incierto, setIncierto] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  useEffect(
+    () => () => {
+      pendiente.current?.abort();
+      pendiente.current = null;
+    },
+    [],
+  );
+  async function guardar(body: Record<string, string>) {
+    if (pendiente.current || incierto) return false;
+    const c = new AbortController();
+    pendiente.current = c;
+    setBusy(true);
+    setMsg(null);
+    let status = 503;
+    try {
+      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
+      const res = await fetch(`/api/cuenta/${password ? "cambiar-password" : "perfil"}`, {
+        method: password ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        signal,
+        body: JSON.stringify(body),
+      });
+      const data: unknown = await res.json().catch(() => null);
+      signal.throwIfAborted();
+      status = res.ok ? 502 : res.status;
+      if (!res.ok || !esGuardadoCuenta(data)) throw new Error("unconfirmed");
+      setMsg({ ok: true, texto: password ? "Contraseña actualizada" : "Datos guardados" });
+      return true;
+    } catch {
+      if (!c.signal.aborted && pendiente.current === c) {
+        setMsg({ ok: false, texto: errorPerfil(status, password) });
+        if (password && status !== 400 && status !== 401 && status !== 403 && status !== 429)
+          setIncierto(true);
+      }
+      return false;
+    } finally {
+      if (pendiente.current === c) {
+        pendiente.current = null;
+        setBusy(false);
+      }
+    }
+  }
+  return { busy, incierto, msg, guardar };
+}
+
 /** Editar perfil + cambiar contraseña desde la cuenta del cliente. */
 export function PerfilCuenta({ me }: { me: Me }) {
   const router = useRouter();
-  const perfilPending = useRef(false);
-  const pwPending = useRef(false);
-  const [perfilBusy, setPerfilBusy] = useState(false);
-  const [pwBusy, setPwBusy] = useState(false);
+  const perfil = useGuardarCuenta(false);
+  const pw = useGuardarCuenta(true);
+  const { busy: perfilBusy, msg: perfilMsg } = perfil;
+  const { busy: pwBusy, msg: pwMsg } = pw;
   const [nombre, setNombre] = useState(me.nombre);
   const [apellidos, setApellidos] = useState(me.apellidos ?? "");
   const [telefono, setTelefono] = useState(me.telefono ?? "");
-  const [perfilMsg, setPerfilMsg] = useState<{ ok: boolean; texto: string } | null>(null);
-
   const [actual, setActual] = useState("");
   const [nueva, setNueva] = useState("");
-  const [pwMsg, setPwMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [confirmacion, setConfirmacion] = useState("");
 
   async function guardarPerfil(e: FormEvent) {
     e.preventDefault();
-    if (perfilPending.current) return;
-    perfilPending.current = true;
-    setPerfilBusy(true);
-    setPerfilMsg(null);
-    try {
-      const res = await fetch("/api/cuenta/perfil", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({
-          nombre: nombre.trim(),
-          apellidos: apellidos.trim(),
-          telefono: telefono.trim(),
-        }),
-      });
-      if (!res.ok)
-        throw new Error(
-          res.status === 401
-            ? "Tu sesión venció. Inicia sesión de nuevo para guardar."
-            : "No pudimos guardar tus datos. Vuelve a intentarlo.",
-        );
-      setPerfilMsg({ ok: true, texto: "Datos guardados" });
-      router.refresh();
-    } catch (error) {
-      setPerfilMsg({
-        ok: false,
-        texto:
-          error instanceof Error && error.name === "Error"
-            ? error.message
-            : "No pudimos confirmar el guardado. Revisa tu conexión y vuelve a intentarlo.",
-      });
-    } finally {
-      perfilPending.current = false;
-      setPerfilBusy(false);
+    if (!nombre.trim()) return;
+    if (
+      await perfil.guardar({
+        nombre: nombre.trim(),
+        apellidos: apellidos.trim(),
+        telefono: telefono.trim(),
+      })
+    ) {
+      // Refresh is separate from persistence: a failed refresh must not negate a confirmed save.
+      try {
+        router.refresh();
+      } catch {
+        /* The confirmed receipt remains visible. */
+      }
     }
   }
-
   async function cambiarPassword(e: FormEvent) {
     e.preventDefault();
-    if (pwPending.current) return;
-    pwPending.current = true;
-    setPwBusy(true);
-    setPwMsg(null);
-    try {
-      const res = await fetch("/api/cuenta/cambiar-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({ actual, nueva }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => null);
-        setPwMsg({
-          ok: false,
-          texto:
-            res.status === 401
-              ? "Tu sesión venció. Inicia sesión de nuevo."
-              : typeof d?.message === "string"
-                ? d.message
-                : "No pudimos cambiar la contraseña. Verifica tu contraseña actual.",
-        });
-        return;
-      }
-      setPwMsg({ ok: true, texto: "Contraseña actualizada" });
+    if (nueva !== confirmacion) return;
+    if (await pw.guardar({ actual, nueva })) {
       setActual("");
       setNueva("");
-    } catch {
-      setPwMsg({
-        ok: false,
-        texto: "No pudimos confirmar el cambio. Revisa tu conexión y vuelve a intentarlo.",
-      });
-    } finally {
-      pwPending.current = false;
-      setPwBusy(false);
+      setConfirmacion("");
     }
   }
 
@@ -117,7 +117,10 @@ export function PerfilCuenta({ me }: { me: Me }) {
               maxLength={120}
               disabled={perfilBusy}
               value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+              onChange={(e) => {
+                setNombre(e.target.value);
+                e.target.setCustomValidity(e.target.value.trim() ? "" : "Escribe tu nombre.");
+              }}
               required
               className="gx-input"
             />
@@ -150,7 +153,7 @@ export function PerfilCuenta({ me }: { me: Me }) {
         <button
           type="submit"
           disabled={perfilBusy}
-          className="gx-btn-primary mt-3 disabled:opacity-50"
+          className="gx-btn-primary mt-3 min-h-11 disabled:opacity-50"
         >
           {perfilBusy ? "Guardando…" : "Guardar"}
         </button>
@@ -172,7 +175,7 @@ export function PerfilCuenta({ me }: { me: Me }) {
             <input
               type="password"
               autoComplete="current-password"
-              disabled={pwBusy}
+              disabled={pwBusy || pw.incierto}
               value={actual}
               onChange={(e) => setActual(e.target.value)}
               required
@@ -185,7 +188,7 @@ export function PerfilCuenta({ me }: { me: Me }) {
               type="password"
               autoComplete="new-password"
               maxLength={100}
-              disabled={pwBusy}
+              disabled={pwBusy || pw.incierto}
               value={nueva}
               onChange={(e) => setNueva(e.target.value)}
               required
@@ -193,14 +196,47 @@ export function PerfilCuenta({ me }: { me: Me }) {
               className="gx-input"
             />
           </label>
+          <label className="block">
+            <span className="gx-label">Confirma la nueva contraseña</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              maxLength={100}
+              disabled={pwBusy || pw.incierto}
+              value={confirmacion}
+              required
+              minLength={8}
+              onChange={(e) => {
+                setConfirmacion(e.target.value);
+                e.target.setCustomValidity(
+                  e.target.value === nueva ? "" : "Las contraseñas no coinciden.",
+                );
+              }}
+              ref={(el) => {
+                if (el)
+                  el.setCustomValidity(
+                    confirmacion === nueva ? "" : "Las contraseñas no coinciden.",
+                  );
+              }}
+              className="gx-input"
+            />
+          </label>
         </div>
         <button
           type="submit"
-          disabled={pwBusy}
-          className="gx-btn-secondary mt-3 disabled:opacity-50"
+          disabled={pwBusy || pw.incierto}
+          className="gx-btn-secondary mt-3 min-h-11 disabled:opacity-50"
         >
           {pwBusy ? "Actualizando…" : "Actualizar"}
         </button>
+        {pw.incierto && (
+          <a
+            href="/cuenta/login?next=%2Fcuenta"
+            className="mt-3 flex min-h-11 items-center underline"
+          >
+            Verificar mi acceso
+          </a>
+        )}
         {pwMsg && (
           <p
             role={pwMsg.ok ? "status" : "alert"}
