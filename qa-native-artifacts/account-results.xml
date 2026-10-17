@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="1" failures="1" time="185.128" timestamp="2026-10-17T03:58:46">
+    <testcase id="Synthetic shopper registration, durable cart and saved address" name="Synthetic shopper registration, durable cart and saved address" classname="Synthetic shopper registration, durable cart and saved address" file=".maestro/native-account.yml" time="185.08" timestamp="2026-10-17T03:58:46" status="ERROR">
+      <failure>maestro.js.JsEvaluationException: SyntaxError: &lt;eval>:1:0 Expected an operand but found /
+/^0[0-9]{4
+^
+	at maestro.js.GraalJsEngine.evalWithIIFE(GraalJsEngine.kt:142)
+	at maestro.js.GraalJsEngine.evaluateScript(GraalJsEngine.kt:108)
+	at maestro.js.GraalJsEngine.evaluateScript(GraalJsEngine.kt:28)
+	at maestro.js.JsEngine.evaluateScript$default(JsEngine.kt:9)
+	at maestro.orchestra.util.Env.evaluateScripts$lambda$0(Env.kt:16)
+	at kotlin.text.Regex.replace(Regex.kt:196)
+	at maestro.orchestra.util.Env.evaluateScripts(Env.kt:12)
+	at maestro.orchestra.Condition.evaluateScripts(Condition.kt:19)
+	at maestro.orchestra.AssertConditionCommand.evaluateScripts(Commands.kt:447)
+	at maestro.orchestra.MaestroCommand.evaluateScripts(MaestroCommand.kt:204)
+	at maestro.orchestra.Orchestra.executeCommands(Orchestra.kt:312)
+	at maestro.orchestra.Orchestra.access$executeCommands(Orchestra.kt:133)
+	at maestro.orchestra.Orchestra$executeCommands$1.invokeSuspend(Orchestra.kt)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at maestro.cli.command.TestCommand.runShardSuite$lambda$10(TestCommand.kt:502)
+	at maestro.cli.session.MaestroSessionManager.newSession(MaestroSessionManager.kt:133)
+	at maestro.cli.session.MaestroSessionManager.newSession$default(MaestroSessionManager.kt:64)
+	at maestro.cli.command.TestCommand.runShardSuite(TestCommand.kt:477)
+	at maestro.cli.command.TestCommand.access$runShardSuite(TestCommand.kt:81)
+	at maestro.cli.command.TestCommand$handleSessions$1$results$1$1.invokeSuspend(TestCommand.kt:438)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
