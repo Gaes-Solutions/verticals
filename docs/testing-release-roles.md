@@ -202,5 +202,93 @@ no deben apuntarse a producción.
 No hay un teléfono conectado por ADB. El emulador disponible es x86_64 y la APK
 para teléfonos contiene ARM; además la máquina no dispone de `/dev/kvm`. Un
 intento de emulador desechable sin aceleración no habilitó ADB durante esta
-revisión. La ejecución nativa, permisos interactivos, biometría, ubicación,
-notificaciones y cierre brusco con cambios pendientes siguen sin certificarse.
+revisión. La ejecución nativa de invitado se validó después en un emulador de GitHub
+Actions (resultado abajo). Los permisos interactivos, biometría, ubicación,
+notificaciones y cierre brusco con cambios pendientes aún requieren validación
+específica; el recorrido de invitado no los certifica.
+
+## Cierre de pendientes que sí se pudieron avanzar
+
+- Se verificó el dominio de plataforma que ya existía:
+  `https://gaesland.shop.angaes.com`. DNS, HTTPS y nombre de negocio correctos;
+  un subdominio aleatorio sin negocio devuelve 503. Fue una consulta pública,
+  sin cambiar producción. Esto corrige la impresión anterior de que faltaba
+  cualquier dominio: lo pendiente es conectar uno de marca diferente, si se desea,
+  y validar la aplicación/cobro de la versión que se libere.
+- La ejecución nativa mediante EAS Maestro fue rechazada por la cuenta gratuita
+  antes de crear el job: requiere un plan de pago. No se contrató ni actualizó
+  ninguna suscripción. Se preparó una alternativa en GitHub Actions usando la
+  APK 10 universal verificada, un emulador desechable y un flujo Maestro sin cuenta ni
+  pedidos. El flujo revisa navegación inicial sin selector de tienda, búsqueda,
+  producto, zoom, giro, entrada desde Agregar al carrito y recuperación de acceso.
+  Su resultado se registra en una rama `qa-native/` separada; nunca modifica
+  `main`, `staging` ni datos del negocio. La ejecución aprobó: ver resultado abajo.
+- Se reintentó el registro oficial de la cuenta Stripe sandbox, con el botón
+  oficial de teléfono de prueba. Stripe presentó un desafío hCaptcha que
+  interceptó la continuación. No se resolvió ni eludió automáticamente. Se
+  preparó un enlace nuevo y privado para que el dueño complete ese paso; el
+  enlace y las sesiones de Stripe no se guardan en el repositorio.
+- No se encontraron credenciales de Facturama ni del administrador DNS en las
+  configuraciones local y de staging consultadas. El dominio existente no
+  necesitó cambios DNS. Facturación externa sigue pendiente de una conexión
+  válida al proveedor.
+
+### Contrato de Facturama corregido durante la revisión
+
+- La autenticación utiliza `usuario:contraseña` (Basic) y el encabezado
+  `User-Agent` con el usuario. La pantalla ya explica este formato y enlaza el
+  registro sandbox, sin mostrar credenciales guardadas. También aclara el alta
+  del CSD en API-Lite; guardar la configuración local no registra el certificado.
+- Se conserva emisión API-Lite y se corrigen las descargas a
+  `/api/Cfdi/{xml|pdf}/issuedLite/{id}` y cancelación a
+  `/api-lite/cfdis/{id}`. El código anterior mezclaba API Web con API-Lite.
+- Las descargas se reciben como JSON con `Content` Base64: se decodifica el XML
+  y se conserva el PDF Base64. El timbre y sellos se leen del XML con un parser,
+  rechazando DTD y documentos sin timbre, en lugar de exigir un campo de respuesta
+  `Complemento.TimbreFiscalDigital` que no representa el contrato del proveedor.
+  Se corrige el CP receptor a `TaxZipCode`.
+- Validación local: 13/13 pruebas del paquete fiscal; 31/31 pruebas relacionadas
+  de API en base desechable migrada, con limpieza al terminar. No se emitió ni
+  canceló ningún CFDI externo. La conexión sandbox real sigue pendiente de
+  credenciales y certificado de pruebas del dueño.
+
+Referencia técnica primaria: [colecciones oficiales de Facturama](https://github.com/Facturama/facturama-api-collections),
+incluidas las solicitudes de la carpeta API-Lite.
+
+### APK universal para ejecutar la validación nativa
+
+- Build EAS `2907f640-d7ff-4589-9ef5-42d95776c791`, versión Android 10,
+  perfil `gaesland-staging`, fuente `0407587dd41e525990a69678d8b251809f160921`.
+- Firma válida y mismo certificado que la versión 9: permite actualizarla.
+  Incluye React Native y Hermes para ARM32, ARM64, x86 y x86_64; sin los tres
+  permisos innecesarios retirados en la versión 9. Paquete de staging fijo a
+  Gaesland y API de pruebas verificados.
+- SHA256 APK: `0359997e95ee90b593b99d22a2aa3af0172936742366e910d846eddea47c9d3e`.
+- El bundle JavaScript de las APK 9 y 10 es idéntico: SHA256
+  `86ed0767067ba4e45d8c574d4113de6c2c3aebb847b21772522d2ac780367a39`.
+  El cambio de arquitectura no altera las pantallas ni los flujos.
+- La APK 9 se instaló en el emulador x86_64, pero se cerró antes de mostrar la
+  interfaz: SoLoader no encontró la biblioteca x86_64 `libreactnative.so`. La
+  traducción ARM del emulador no resolvió esa configuración de React Native.
+  No se omitió el fallo: se compiló la versión universal para poder probarla
+  con bibliotecas nativas del emulador Android 15.
+- [Descargar APK 10 de staging](https://expo.dev/artifacts/eas/9VMjiNMARcgEsBWhAavocn039okqGQwclbNNI-cJdyY.apk).
+
+### Resultado nativo ejecutado: aprobado
+
+- [GitHub Actions 38999197173](https://github.com/Gaes-Solutions/verticals/actions/runs/38999197173):
+  APK 10 instalada y un recorrido Maestro completo aprobado en Android 15
+  x86_64, sin fallos (46.2 segundos de recorrido). No son múltiples casos
+  independientes: es un escenario encadenado.
+- Pasos ejecutados: abrir Gaesland sin selector de tienda; buscar Licuadora;
+  abrir producto; ampliar imagen al 150%; girar; restablecer al 100%; cerrar
+  galería; tocar Agregar al carrito sin sesión; comprobar mensaje de retorno al
+  artículo; abrir recuperación de contraseña sin pedir tienda.
+- Cinco capturas revisadas visualmente: inicio, producto, imagen girada, acceso
+  y recuperación. No hay envío de correo, creación de cuentas, pedidos ni
+  operaciones de dinero en este recorrido. No certifica compra con sesión,
+  tarjeta, sensores, huella ni notificaciones del teléfono.
+- Evidencia pública anónima y acotada en rama separada
+  `qa-native/19cda0d1954a-38999197173-1`, con resumen, JUnit y capturas.
+  La rama fuente del job es `19cda0d1954a3858548e169c9e0fcce8e4ad4289`;
+  la fuente del artefacto APK se identifica por separado arriba.

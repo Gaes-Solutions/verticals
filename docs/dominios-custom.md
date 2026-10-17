@@ -52,7 +52,7 @@ dominio ya comprado (angaes.com, Hostinger). Tres pasos, una sola vez:
 `shop.angaes.com` sin subdominio sigue sirviendo el tenant por env
 (`TIENDA_TENANT_SLUG`), igual que hoy.
 
-## Lo que falta (Piezas 3 y 4 — requieren infra/decisión de Gaby)
+## Validación de infraestructura por dominio
 
 3. **SSL + DNS**: emisión automática de certificado por dominio y apuntado real
    (Cloudflare for SaaS / "Custom Domains" de Railway / wildcard). El CNAME target
@@ -60,5 +60,19 @@ dominio ya comprado (angaes.com, Hostinger). Tres pasos, una sola vez:
 4. **Deploy**: una instancia de web-tienda multi-tenant detrás de ese CNAME, con
    `STOREFRONT_SERVICE_KEY` (resuelto en ADR 026: sin credenciales por tenant).
 
-Hasta cerrar 3 y 4, el flujo end-to-end no enruta tráfico real de un dominio
-externo; las Piezas 1 y 2 dejan toda la lógica de aplicación lista y probada.
+### Dominio existente de Gaesland
+
+La comprobación pública adicional verificó que `gaesland.shop.angaes.com` ya
+resuelve por CNAME, responde por HTTPS con certificado válido y devuelve la
+configuración del negocio **GAESLAND**. Un hostname aleatorio no asignado bajo
+el comodín devuelve 503 y no muestra otro negocio.
+
+```sh
+node scripts/testing/check-live-shop-domain.cjs
+```
+
+El script solo consulta DNS y endpoints públicos; no cambia producción. Esto
+confirma el dominio de plataforma existente. La configuración `dominioPropio`
+de Gaesland staging sigue vacía: un dominio externo de marca requiere sus
+propios registros y certificado. La prueba del dominio no certifica el checkout
+ni que el último código de staging esté desplegado en ese sitio público.
