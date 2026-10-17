@@ -28,7 +28,7 @@ export async function slugActual(): Promise<string> {
 
 const tokenCache = new Map<string, { token: string; expira: number }>();
 
-async function getToken(slug: string): Promise<string> {
+async function getToken(slug: string, signal?: AbortSignal): Promise<string> {
   const hit = tokenCache.get(slug);
   if (hit && hit.expira > Date.now()) return hit.token;
   const res = await fetch(`${API_URL}/public/storefront/token`, {
@@ -36,6 +36,7 @@ async function getToken(slug: string): Promise<string> {
     headers: { "Content-Type": "application/json", "x-storefront-key": STOREFRONT_KEY },
     body: JSON.stringify({ tenantSlug: slug }),
     cache: "no-store",
+    ...(signal ? { signal } : {}),
   });
   if (!res.ok) throw new Error(`Acceso de tienda (${slug}) falló: ${res.status}`);
   const body = (await res.json()) as { accessToken: string };
@@ -48,6 +49,7 @@ export interface ApiOpts {
   body?: unknown;
   method?: string;
   revalidate?: number;
+  signal?: AbortSignal;
 }
 
 export class ApiError extends Error {
@@ -61,7 +63,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
-  const token = await getToken(await slugActual());
+  const token = await getToken(await slugActual(), opts.signal);
   const res = await fetch(`${API_URL}/t${path}`, {
     method: opts.method ?? (opts.body ? "POST" : "GET"),
     headers: {
@@ -69,6 +71,7 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
       ...(opts.body ? { "Content-Type": "application/json" } : {}),
     },
     ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.revalidate !== undefined
       ? { next: { revalidate: opts.revalidate } }
       : { cache: "no-store" }),

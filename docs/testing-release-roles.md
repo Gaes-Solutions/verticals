@@ -1050,3 +1050,47 @@ copiaron contraseñas de las cuentas entregadas. No hubo pedidos, cobros ni
 correos, migraciones, cambios en producción o generación de APK. Las pruebas
 de errores/timeout fueron locales con respuestas simuladas; la comprobación
 publicada ejerció el flujo positivo contra los servicios reales de staging.
+
+## Seguimiento y confirmación de pedido verificados — 17 de octubre de 2026
+
+Se reprodujeron ocho fallos con nueve pruebas iniciales del BFF: errores de
+conexión se convertían en 404, el folio se interpolaba sin escape en la ruta
+interna, se aceptaban respuestas incompletas/de otro folio y faltaba la cabecera
+de caché privada. En navegador se reprodujeron confirmaciones originadas solo
+por parámetros del enlace, resultados tardíos, errores de render y pantallas
+de resumen sin recuperación ante un fallo.
+
+- El BFF escapa el folio como un único segmento y separa el email; rechaza
+  identificadores de puntos, controles y longitudes inválidas antes del API.
+  Solo conserva 404 cuando el servicio confirma que no existe/coincide el pedido;
+  fallos de conexión/autorización del servicio son 503 y un éxito inválido es 502.
+  Todas las respuestas son `private, no-store`.
+- Se comprueban folio coincidente, estado, total finito no negativo, guía y
+  eventos con fechas válidas antes de mostrar datos. No se acepta un resumen
+  incompleto ni se renderizan importes NaN. Se conserva la etiqueta pública
+  configurada por la tienda, con el mismo respaldo en rastreo y resumen.
+- Una consulta cliente compartida conserva folio/email para reintentar,
+  limita la espera a 15 s, impide envíos simultáneos y cancela al cambiar datos
+  o desmontar. Una respuesta anterior no puede completar otra búsqueda.
+- El presupuesto de 12 s del BFF llega a ambas llamadas: obtención del token
+  de tienda y consulta de seguimiento. La señal es opcional en `api()` y no
+  altera los clientes que no la proporcionan. Dos pruebas verifican propagación
+  y que abortar autenticación impide continuar con seguimiento.
+- La página de gracias muestra espera o error/reintento hasta verificar el
+  pedido. `recogida=1` y `ok=1` no confirman una compra. Faltar email no deja un
+  resumen cargando indefinidamente, y un pedido cancelado se muestra cancelado.
+  Reintentar solo consulta; no vuelve a enviar checkout.
+
+La suite web pasó **223/223** (14 pruebas nuevas). Doce grupos de navegador
+local pasaron con respuestas controladas: enlace sin evidencia, JSON inválido,
+timeout, cambio de identificadores durante consulta, concurrencia, etiquetas y
+limpieza del resultado, espera/404, fallo de red/reintento, email ausente,
+cancelación, resumen inválido y diseño a 320/1280 px con guía/estado largos.
+Captura móvil revisada sin desbordamiento; Buscar mide al menos 44 px.
+
+Las alertas se comprueban dentro de `main`: el anunciador interno de rutas de
+Next también usa role=alert y no constituye un mensaje de error del formulario.
+Regresión: `scripts/staging/check-order-status.cjs`. No envía compras ni mensajes;
+las escrituras de API del navegador se bloquean. Se identificó mediante lectura
+protegida de staging un pedido invitado `checkout-qa-*`, ya existente y pendiente,
+para verificar después el servicio real sin crear pedidos ni notificaciones.
