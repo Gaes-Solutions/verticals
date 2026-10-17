@@ -22,8 +22,8 @@ export function checkoutKey(
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`;
 }
 
-export async function checkoutOwner(allowCreate = false) {
-  const session = await getClienteSession();
+export async function checkoutOwner(allowCreate = false, signal?: AbortSignal) {
+  const session = await getClienteSession(signal);
   const tenant = await slugActual();
   if (!tenant) throw new ClienteSessionError(503, "La tienda no está disponible.");
   const store = await cookies();
@@ -46,8 +46,8 @@ export async function checkoutOwner(allowCreate = false) {
   };
 }
 
-export async function checkoutIdentity(context: unknown, publicKey: unknown) {
-  const identity = await checkoutOwner();
+export async function checkoutIdentity(context: unknown, publicKey: unknown, signal?: AbortSignal) {
+  const identity = await checkoutOwner(false, signal);
   if (
     typeof publicKey !== "string" ||
     !UUID_PATTERN.test(publicKey) ||

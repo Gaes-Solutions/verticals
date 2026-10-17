@@ -48,4 +48,25 @@ describe("pending payment ownership", () => {
     );
     expect(leerPagoPendiente("account-a")).toBeNull();
   });
+  it.each([
+    { folioPublico: "" },
+    { folioPublico: "x".repeat(101) },
+    { total: "NaN" },
+    { total: "-10" },
+    { total: "1e3" },
+    { total: "10.001" },
+    { referenciaPago: " " },
+    { referenciaPago: "x".repeat(513) },
+    { referenciaPago: "123\n456" },
+  ])("ignores invalid instructions without deleting the recovery record %#", (patch) => {
+    const raw = JSON.stringify({ ...payment, ...patch });
+    values.set("gaespos_pago_pendiente_v2:account-a", raw);
+    expect(leerPagoPendiente("account-a")).toBeNull();
+    expect(values.get("gaespos_pago_pendiente_v2:account-a")).toBe(raw);
+  });
+  it("does not overwrite a valid recovery record with invalid new instructions", () => {
+    guardarPagoPendiente("account-a", payment);
+    guardarPagoPendiente("account-a", { ...payment, total: "NaN" });
+    expect(leerPagoPendiente("account-a")).toEqual(payment);
+  });
 });

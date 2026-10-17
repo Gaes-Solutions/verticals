@@ -1,5 +1,7 @@
 "use client";
 
+import { textoCheckout, totalCheckout } from "./checkout-response";
+
 export interface PagoPendiente {
   folioPublico: string;
   total: string;
@@ -16,21 +18,21 @@ export function leerPagoPendiente(owner: string): PagoPendiente | null {
     const raw = localStorage.getItem(key(owner));
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (
-      typeof p?.folioPublico !== "string" ||
-      typeof p.total !== "string" ||
-      typeof p.referenciaPago !== "string" ||
-      !["oxxo", "spei"].includes(p.metodo)
-    )
-      return null;
-    return p as PagoPendiente;
+    return esPagoPendiente(p)
+      ? {
+          folioPublico: p.folioPublico,
+          total: p.total,
+          referenciaPago: p.referenciaPago,
+          metodo: p.metodo,
+        }
+      : null;
   } catch {
     return null;
   }
 }
 
 export function guardarPagoPendiente(owner: string, pago: PagoPendiente): void {
-  if (!owner) return;
+  if (!owner || !esPagoPendiente(pago)) return;
   try {
     localStorage.setItem(key(owner), JSON.stringify(pago));
   } catch {}
@@ -41,4 +43,16 @@ export function borrarPagoPendiente(owner: string): void {
   try {
     localStorage.removeItem(key(owner));
   } catch {}
+}
+
+/** Validate persisted data just as strictly as fresh payment instructions. */
+export function esPagoPendiente(value: unknown): value is PagoPendiente {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    textoCheckout(p.folioPublico, 100) &&
+    totalCheckout(p.total) &&
+    textoCheckout(p.referenciaPago, 512) &&
+    (p.metodo === "oxxo" || p.metodo === "spei")
+  );
 }

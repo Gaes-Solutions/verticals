@@ -152,6 +152,7 @@ describe("checkout BFF: propiedad y reintentos", () => {
     expect(api).toHaveBeenCalledTimes(1);
     expect(api).toHaveBeenCalledWith(
       `/checkout/intentos/${checkoutKey(secret, "tienda-a", "guest", publicKey)}`,
+      { signal: expect.any(AbortSignal) },
     );
   });
   it("GET sin respuesta del servidor conserva la incertidumbre y no permite reiniciar", async () => {
@@ -160,6 +161,31 @@ describe("checkout BFF: propiedad y reintentos", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ code: "CHECKOUT_UNCERTAIN" });
     expect(await (await GET(recovery())).json()).not.toHaveProperty("safeToRetry");
+  });
+  it("shares the recovery deadline across buyer identity and order lookup", async () => {
+    vi.mocked(api).mockReset().mockResolvedValue(result);
+    const response = await GET(recovery());
+    const signal = vi.mocked(getClienteSession).mock.calls[0]?.[0];
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(api).toHaveBeenCalledWith(expect.stringContaining("/checkout/intentos/"), { signal });
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+  it("keeps a timed out recovery uncertain and private, with no safe retry flag", async () => {
+    vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(AbortSignal.abort());
+    vi.mocked(api)
+      .mockReset()
+      .mockImplementation(async (_path, options) => {
+        options?.signal?.throwIfAborted();
+        return result;
+      });
+    try {
+      const response = await GET(recovery());
+      expect(response.status).toBe(503);
+      expect(await response.json()).not.toHaveProperty("safeToRetry");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
   it("solo identifica como pago al recoger un resultado pendiente del servidor", async () => {
     vi.mocked(api)

@@ -69,13 +69,16 @@ function publicResult(result: CheckoutResult) {
         : {}),
       ...(result.referenciaPago ? { referenciaPago: result.referenciaPago } : {}),
     },
-    { headers: { "Cache-Control": "no-store" } },
+    { headers: { "Cache-Control": "private, no-store" } },
   );
 }
 
 function checkoutError(err: unknown) {
   if (err instanceof ClienteSessionError)
-    return NextResponse.json({ message: err.message }, { status: err.statusCode });
+    return NextResponse.json(
+      { message: err.message },
+      { status: err.statusCode, headers: { "Cache-Control": "private, no-store" } },
+    );
   const code = err instanceof ApiError ? err.code : undefined;
   const message =
     code === "CHECKOUT_FAILED"
@@ -85,17 +88,24 @@ function checkoutError(err: unknown) {
         : "Estamos verificando el resultado del pago. Consulta este mismo intento; no vuelvas a pagar.";
   return NextResponse.json(
     { message, code: code ?? "CHECKOUT_UNCERTAIN" },
-    { status: err instanceof ApiError && err.statusCode === 409 ? 409 : 503 },
+    {
+      status: err instanceof ApiError && err.statusCode === 409 ? 409 : 503,
+      headers: { "Cache-Control": "private, no-store" },
+    },
   );
 }
 
 export async function GET(req: NextRequest) {
+  const signal = AbortSignal.any([req.signal, AbortSignal.timeout(15_000)]);
   try {
     const identity = await checkoutIdentity(
       req.nextUrl.searchParams.get("context"),
       req.nextUrl.searchParams.get("idempotencyKey"),
+      signal,
     );
-    return publicResult(await api<CheckoutResult>(`/checkout/intentos/${identity.key}`));
+    return publicResult(
+      await api<CheckoutResult>(`/checkout/intentos/${identity.key}`, { signal }),
+    );
   } catch (err) {
     if (err instanceof ApiError && err.statusCode === 404)
       return NextResponse.json(
@@ -105,7 +115,7 @@ export async function GET(req: NextRequest) {
           message:
             "No hay un pedido registrado para este intento. Revisa tus datos para continuar.",
         },
-        { status: 404, headers: { "Cache-Control": "no-store" } },
+        { status: 404, headers: { "Cache-Control": "private, no-store" } },
       );
     return checkoutError(err);
   }

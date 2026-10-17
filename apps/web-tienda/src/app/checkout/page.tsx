@@ -2,6 +2,7 @@
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
 import { CuponCheckout } from "@/components/cupon-checkout";
+import { PantallaPagoPendiente } from "@/components/pago-pendiente";
 import { PagoTarjetaConekta } from "@/components/pago-tarjeta-conekta";
 import { type PagoStripeHandle, PagoTarjetaStripe } from "@/components/pago-tarjeta-stripe";
 import {
@@ -26,12 +27,14 @@ import {
 import {
   type PagoPendiente,
   borrarPagoPendiente,
+  esPagoPendiente,
   guardarPagoPendiente,
   leerPagoPendiente,
 } from "@/lib/checkout-pending-payment";
+import { esRespuestaCheckout } from "@/lib/checkout-response";
 import type { MedioPagoGuardado } from "@/lib/cliente";
 import { useCuponCheckout } from "@/lib/use-cupon-checkout";
-import { Barcode, Clock, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
+import { Barcode, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -117,12 +120,13 @@ function resolverPagoPendiente(
       : metodoSeleccionado === "spei"
         ? "spei"
         : "oxxo";
-  return {
+  const pendiente = {
     folioPublico: data.folioPublico ?? "",
     total: data.total ?? "",
     referenciaPago: data.referenciaPago,
     metodo,
   };
+  return esPagoPendiente(pendiente) ? pendiente : null;
 }
 
 export default function CheckoutPage() {
@@ -155,6 +159,8 @@ export default function CheckoutPage() {
   const [pickupSubtotal, setPickupSubtotal] = useState<number | null>(null);
   const [reintentoEntrega, setReintentoEntrega] = useState(0);
   const [procesando, setProcesando] = useState(false);
+  const [consultaRealizada, setConsultaRealizada] = useState(false);
+  const checkoutOperation = useRef<AbortController | null>(null);
   const [attempt, setAttempt] = useState<CheckoutAttempt | null>(null);
   const [sessionRetry, setSessionRetry] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +177,22 @@ export default function CheckoutPage() {
   const [borradorListo, setBorradorListo] = useState<string | null>(null);
   const borradorRestaurado = useRef(false);
   const entregaInicial = useRef(false);
+  useEffect(() => {
+    setProcesando(false);
+    setConsultaRealizada(false);
+    return () => {
+      checkoutOperation.current?.abort();
+      checkoutOperation.current = null;
+    };
+  }, [draftScope?.owner]);
+
+  async function checkoutFetch(url: string, signal: AbortSignal, options?: RequestInit) {
+    return fetch(url, {
+      ...options,
+      signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+    });
+  }
+
   useEffect(() => {
     const actualizar = () => setItems(leerCarrito());
     actualizar();
@@ -458,6 +480,16 @@ export default function CheckoutPage() {
   const costoEnvio = cuponOk && cupon.info?.envioGratis ? 0 : costoEnvioBase;
   const total = Math.max(0, subtotal - descuentoCupon) + costoEnvio;
 
+  // Pagar al recoger no depende del proveedor: se ofrece cuando el pedido se
+  // recoge en tienda, porque el cobro ocurre en el mostrador.
+  const metodosDisponibles = [
+    ...(config?.metodosPago ?? ["tarjeta"]),
+    ...(modoEntrega === "pickup" ? ["cod"] : []),
+  ];
+  const metodoActivo = (
+    metodosDisponibles.includes(metodoPago) ? metodoPago : (metodosDisponibles[0] ?? "tarjeta")
+  ) as MetodoPago;
+
   const conStripe = config?.proveedorPago === "stripe";
   const stripeKey = conStripe ? config?.pagoPublicKey : null;
   const conektaKey = config?.proveedorPago === "conekta" ? (config.pagoPublicKey ?? "") : "";
@@ -509,19 +541,45 @@ export default function CheckoutPage() {
     );
   }
 
-  async function handleCheckoutResponse(response: Response, current: CheckoutAttempt) {
-    const data = (await response.json()) as RespuestaCheckout;
+  async function handleCheckoutResponse(
+    response: Response,
+    current: CheckoutAttempt,
+    signal: AbortSignal,
+  ) {
+    signal.throwIfAborted();
     if (response.status === 401 || response.status === 403) {
       setRequiereSesion(true);
       throw new Error("Inicia sesión para verificar y retomar este mismo intento de compra.");
     }
+    const raw: unknown = await response.json().catch(() => null);
+    signal.throwIfAborted();
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+      throw new Error(
+        "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
+      );
+    const data = raw as RespuestaCheckout;
+    if (response.ok && !esRespuestaCheckout(raw))
+      throw new Error(
+        "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
+      );
     if (response.status === 404 && data.code === "ATTEMPT_NOT_FOUND" && data.safeToRetry === true) {
-      setAttempt(await recuperarIntentoSinPedido(current));
-      setError(data.message ?? "Revisa tus datos y continúa con el mismo intento.");
+      const recovered = await recuperarIntentoSinPedido(current);
+      signal.throwIfAborted();
+      limpiarPendiente();
+      setAttempt(recovered);
+      setError("No hay un pedido registrado para este intento. Revisa tus datos para continuar.");
       return;
     }
     if (!response.ok)
-      throw new Error(data.message ?? "Estamos verificando el pago. No vuelvas a pagar.");
+      throw new Error(
+        typeof data.message === "string" && data.message.length <= 500
+          ? data.message
+          : "Estamos verificando el pago. No vuelvas a pagar.",
+      );
+    if (pagoPendiente && data.folioPublico !== pagoPendiente.folioPublico)
+      throw new Error(
+        "El resultado no corresponde al pedido apartado. Conserva tu referencia y contacta a la tienda antes de pagar.",
+      );
     if (
       data.paymentProvider === "stripe" &&
       data.clientSecret &&
@@ -531,13 +589,16 @@ export default function CheckoutPage() {
         throw new Error("Espera a que cargue el formulario seguro para retomar tu pago.");
       await stripeForm.current.confirmar(data.clientSecret, data.stripeAccountId ?? null);
       const params = new URLSearchParams({ context: current.context, idempotencyKey: current.key });
-      const verified = await fetch(`/api/checkout?${params}`, { cache: "no-store" });
+      const verified = await checkoutFetch(`/api/checkout?${params}`, signal, {
+        cache: "no-store",
+      });
       const result = (await verified.json()) as RespuestaCheckout;
-      if (!verified.ok || result.intentStatus !== "confirmado")
+      signal.throwIfAborted();
+      if (!verified.ok || !esRespuestaCheckout(result) || result.intentStatus !== "confirmado")
         throw new Error(
           "Estamos verificando tu pago. Consulta este mismo pedido; no vuelvas a pagar.",
         );
-      return handleCheckoutResponse(new Response(JSON.stringify(result)), current);
+      return handleCheckoutResponse(new Response(JSON.stringify(result)), current, signal);
     }
     // Pago referenciado (OXXO/SPEI): NO es error; el pedido queda apartado
     // esperando el pago offline y el proveedor confirma por webhook.
@@ -554,6 +615,7 @@ export default function CheckoutPage() {
     limpiarPendiente();
     if (guardarDir && modoEntrega === "envio") {
       await fetch("/api/cuenta/direcciones", {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -567,7 +629,9 @@ export default function CheckoutPage() {
         }),
       }).catch(() => {});
     }
+    signal.throwIfAborted();
     await completeAttempt(current, vaciar);
+    signal.throwIfAborted();
     borrarBorradorCompra();
     router.push(
       `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}${reservadoParaRecoger ? "&recogida=1" : ""}`,
@@ -575,21 +639,32 @@ export default function CheckoutPage() {
   }
 
   async function consultarPedido() {
-    if (!attempt) return;
+    if (!attempt || checkoutOperation.current || requiereSesion) return;
+    const controller = new AbortController();
+    checkoutOperation.current = controller;
+    setConsultaRealizada(false);
     setProcesando(true);
     setError(null);
     try {
       const params = new URLSearchParams({ context: attempt.context, idempotencyKey: attempt.key });
-      const response = await fetch(`/api/checkout?${params}`, { cache: "no-store" });
-      await handleCheckoutResponse(response, attempt);
+      const response = await checkoutFetch(`/api/checkout?${params}`, controller.signal, {
+        cache: "no-store",
+      });
+      await handleCheckoutResponse(response, attempt, controller.signal);
+      controller.signal.throwIfAborted();
+      setConsultaRealizada(true);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo consultar el pago. Tu intento se conserva.",
-      );
+      if (!controller.signal.aborted)
+        setError(
+          err instanceof Error && err.name === "Error"
+            ? err.message
+            : "No se pudo consultar el pago. Tu intento se conserva; no vuelvas a pagar.",
+        );
     } finally {
-      setProcesando(false);
+      if (checkoutOperation.current === controller) {
+        checkoutOperation.current = null;
+        setProcesando(false);
+      }
     }
   }
 
@@ -599,7 +674,7 @@ export default function CheckoutPage() {
     meses?: number | null,
     extra?: { medioPagoGuardadoId?: string; guardarTarjeta?: boolean },
   ) {
-    if (!attempt || procesando) return;
+    if (!attempt || checkoutOperation.current || requiereSesion) return;
     if (attempt.submitted) {
       await consultarPedido();
       return;
@@ -619,11 +694,15 @@ export default function CheckoutPage() {
       return;
     }
     if (!validar()) return;
+    const controller = new AbortController();
+    checkoutOperation.current = controller;
     setProcesando(true);
     setError(null);
     try {
       await esperarCarritoGuardado();
+      controller.signal.throwIfAborted();
       const firstSubmission = await submitAttempt(attempt);
+      controller.signal.throwIfAborted();
       const current = { ...attempt, submitted: true };
       setAttempt(current);
       if (!firstSubmission) {
@@ -632,12 +711,13 @@ export default function CheckoutPage() {
           idempotencyKey: current.key,
         });
         await handleCheckoutResponse(
-          await fetch(`/api/checkout?${params}`, { cache: "no-store" }),
+          await checkoutFetch(`/api/checkout?${params}`, controller.signal, { cache: "no-store" }),
           current,
+          controller.signal,
         );
         return;
       }
-      const response = await fetch("/api/checkout", {
+      const response = await checkoutFetch("/api/checkout", controller.signal, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -661,13 +741,19 @@ export default function CheckoutPage() {
               }),
         }),
       });
-      await handleCheckoutResponse(response, current);
+      await handleCheckoutResponse(response, current, controller.signal);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Estamos verificando el pago. No vuelvas a pagar.",
-      );
+      if (!controller.signal.aborted)
+        setError(
+          err instanceof Error && err.name === "Error"
+            ? err.message
+            : "Estamos verificando el pago. Consulta este mismo intento; no vuelvas a pagar.",
+        );
     } finally {
-      setProcesando(false);
+      if (checkoutOperation.current === controller) {
+        checkoutOperation.current = null;
+        setProcesando(false);
+      }
     }
   }
 
@@ -711,8 +797,11 @@ export default function CheckoutPage() {
       <PantallaPagoPendiente
         pago={pagoPendiente}
         email={email}
-        procesando={procesando}
+        procesando={procesando || !attempt}
         onConsultar={consultarPedido}
+        error={error}
+        requiereSesion={requiereSesion}
+        consultaRealizada={consultaRealizada}
       />
     );
   }
@@ -753,15 +842,6 @@ export default function CheckoutPage() {
   // Métodos que el tenant ofrece (los anuncia el API según su proveedor). El
   // método activo siempre pertenece a la lista: si la config aún no carga, solo
   // existe tarjeta (comportamiento previo a OXXO/SPEI).
-  // Pagar al recoger no depende del proveedor: se ofrece cuando el pedido se
-  // recoge en tienda, porque el cobro ocurre en el mostrador.
-  const metodosDisponibles = [
-    ...(config?.metodosPago ?? ["tarjeta"]),
-    ...(modoEntrega === "pickup" ? ["cod"] : []),
-  ];
-  const metodoActivo = (
-    metodosDisponibles.includes(metodoPago) ? metodoPago : (metodosDisponibles[0] ?? "tarjeta")
-  ) as MetodoPago;
   const mostrarSelector = metodosDisponibles.length > 1;
   const opcionesPago = (
     [
@@ -1446,121 +1526,6 @@ export default function CheckoutPage() {
               Pagar
             </button>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Resultado de OXXO/SPEI: el intento queda "pendiente" y el proveedor confirma
- * por webhook al recibir el pago. Mostramos folio, total y la referencia/CLABE
- * para que el comprador pague offline; NO es un error ni se descarta el pedido.
- */
-function PantallaPagoPendiente({
-  pago,
-  email,
-  procesando,
-  onConsultar,
-}: {
-  pago: PagoPendiente;
-  email: string;
-  procesando: boolean;
-  onConsultar: () => Promise<void>;
-}) {
-  const [copiado, setCopiado] = useState(false);
-  const [errorCopia, setErrorCopia] = useState(false);
-  const esSpei = pago.metodo === "spei";
-
-  async function copiar() {
-    try {
-      await navigator.clipboard.writeText(pago.referenciaPago);
-      setCopiado(true);
-      setErrorCopia(false);
-      setTimeout(() => setCopiado(false), 2500);
-    } catch {
-      setErrorCopia(true);
-    }
-  }
-
-  return (
-    <div className="mx-auto max-w-2xl">
-      <div className="gx-card !p-6 text-center">
-        <span className="gx-badge-warn inline-flex items-center gap-1.5">
-          <Clock size={14} strokeWidth={2} /> Pago pendiente
-        </span>
-        <h1 className="mt-3 font-bold text-2xl text-slate-900">Tu pedido quedó apartado</h1>
-        <p className="mt-1 text-slate-600 text-sm">
-          Realiza tu pago para que la tienda confirme tu pedido.
-        </p>
-
-        <div className="mx-auto mt-5 flex max-w-md justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-          <div className="text-left">
-            <p className="gx-label">Folio del pedido</p>
-            <p className="font-semibold">{pago.folioPublico || "—"}</p>
-          </div>
-          <div className="text-right">
-            <p className="gx-label">Total a pagar</p>
-            <p className="font-semibold">{pago.total ? `$${pago.total}` : "—"}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-lg border border-marca/30 bg-marca/5 p-4">
-          <p className="gx-label">
-            {esSpei ? "CLABE interbancaria (18 dígitos)" : "Referencia OXXO"}
-          </p>
-          <p className="mt-1 flex items-center justify-center gap-2 font-mono text-xl font-bold tracking-wider text-marca">
-            {esSpei ? (
-              <Landmark size={20} strokeWidth={2} />
-            ) : (
-              <Barcode size={20} strokeWidth={2} />
-            )}
-            {pago.referenciaPago}
-          </p>
-          <button type="button" onClick={copiar} className="gx-btn-secondary mt-3 w-full sm:w-auto">
-            {copiado ? "Copiado ✓" : "Copiar"}
-          </button>
-          {errorCopia && (
-            <p role="alert" className="mt-2 text-danger text-xs">
-              No se pudo copiar automáticamente; anota la {esSpei ? "CLABE" : "referencia"}.
-            </p>
-          )}
-        </div>
-
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-sm text-slate-600">
-          {esSpei ? (
-            <p>
-              Transfiere el monto exacto desde la app o la banca en línea de tu banco usando la
-              CLABE de arriba. Como concepto puedes indicar el folio de tu pedido.
-            </p>
-          ) : (
-            <p>Ve a cualquier OXXO, muestra la referencia en caja y paga el monto en efectivo.</p>
-          )}
-        </div>
-
-        <p className="mt-4 text-slate-600 text-sm">
-          La tienda confirma tu pago al recibirlo y te avisará por correo. Conserva tu folio para el
-          seguimiento.
-        </p>
-
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <button
-            type="button"
-            onClick={onConsultar}
-            disabled={procesando}
-            className="gx-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {procesando ? "Consultando…" : "Ya pagué · consultar estado"}
-          </button>
-          <Link
-            href={`/seguimiento?folio=${encodeURIComponent(pago.folioPublico)}&email=${encodeURIComponent(email)}`}
-            className="gx-btn-secondary"
-          >
-            Seguir mi pedido
-          </Link>
-          <Link href="/cuenta" className="gx-btn-ghost">
-            Mis pedidos
-          </Link>
         </div>
       </div>
     </div>
