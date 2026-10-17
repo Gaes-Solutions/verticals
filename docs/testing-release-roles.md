@@ -1134,7 +1134,8 @@ fallaron con el código anterior. La corrección incorpora:
   devuelve una fila sin relación `usuario`, lo cual se acepta explícitamente.
 - El BFF envía únicamente `cuerpo` recortado, de 1 a 2000 caracteres; no permite
   que el navegador elija autor, cliente u otros campos. Escapa el folio y mantiene
-  401/403/404/429 con mensajes propios, sin exponer errores internos. Todas las
+  401/403/404/429 con mensajes propios, sin exponer errores internos. Perder autorización borra el historial visible,
+  incluso si antes se había cargado. Todas las
   respuestas son `private, no-store`; un éxito inválido es 502 y fallo de red 503.
 - Un presupuesto de 15 segundos compartido entre verificación de sesión y
   solicitud del chat, conectado al aborto del request. La señal opcional añadida
@@ -1153,10 +1154,10 @@ fallaron con el código anterior. La corrección incorpora:
   actualizan el pedido siguiente. Los mensajes largos conservan saltos y se
   ajustan al ancho; límite de 2000 caracteres y controles de al menos 44 px.
 
-Validación local: **245/245 pruebas web** (22 nuevas), diez grupos de navegador
+Validación local: **245/245 pruebas web** (22 nuevas), once grupos de navegador
 con el componente React real y respuestas sintéticas. Incluyen red caída,
 timeout, éxito inválido, 401, doble submit, edición durante envío, SSE y callback
-de consulta alternativa, historial inválido conservando conversación, navegación
+de consulta alternativa, historial inválido conservando conversación, sesión vencida ocultando historial, navegación
 con consulta pendiente y diseño a 320/390/1280 px. Captura de 320 px revisada.
 El límite cliente se reduce solo en el fixture para probar timeout en 1 s.
 Regresiones: `scripts/staging/check-order-chat.cjs` y

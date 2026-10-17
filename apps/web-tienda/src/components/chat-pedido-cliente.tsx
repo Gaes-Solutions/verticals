@@ -61,6 +61,7 @@ function HiloPedido({ folio }: { folio: string }) {
       } catch (error) {
         if (!vivo.current || controller.signal.aborted) return;
         setListo(false);
+        if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) setMensajes([]);
         setErrorCarga(
           error instanceof ChatFailure && [401, 403, 404, 429].includes(error.status)
             ? error.message
@@ -129,6 +130,10 @@ function HiloPedido({ folio }: { folio: string }) {
     } catch (error) {
       if (!vivo.current || controller.signal.aborted) return;
       setIncierto(true);
+      if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) {
+        setMensajes([]);
+        setListo(false);
+      }
       setErrorEnvio(error instanceof ChatFailure ? error.message : mensajeChatError(503));
     } finally {
       escribiendo.current = false;

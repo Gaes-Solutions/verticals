@@ -177,6 +177,16 @@ const esbuild = require(
     console.log(
       "PASS malformed refresh preserves existing bubbles and blocks sending until recovered",
     );
+    stage = "expired read clears private history";
+    read = "unauthorized";
+    await refresh().click();
+    await expect(page.getByRole("alert")).toContainText("sesión");
+    assert.equal(await page.getByText("Mi borrador", { exact: true }).count(), 0);
+    await expect(send()).toBeDisabled();
+    await recover();
+    console.log(
+      "PASS expired read clears private history; keeps draft and requires successful session recheck",
+    );
     stage = "order navigation race";
     read = "delayed";
     history = [row("old", "PRIVATE OLD ORDER")];
@@ -213,7 +223,7 @@ const esbuild = require(
     console.log(
       "PASS long messages/2000-character limit; styled 320/390/1280px layout with 44px controls when CSS supplied",
     );
-    console.log("PASS 10 browser groups: synthetic responses only; no staff notified");
+    console.log("PASS 11 browser groups: synthetic responses only; no staff notified");
   } catch (e) {
     console.error(`FAIL ${stage}: ${e.stack}`);
     process.exitCode = 1;
