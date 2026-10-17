@@ -1,0 +1,36 @@
+--------- beginning of system
+--------- beginning of main
+--------- beginning of kernel
+--------- beginning of crash
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: FATAL EXCEPTION: main
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: Process: com.gaessoft.cliente.staging, PID: 5574
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: com.facebook.soloader.SoLoaderDSONotFoundError: couldn't find DSO to load: libreactnative.so
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	existing SO sources: 
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 		SoSource 0: ApplicationSoSource[DirectorySoSource[root = /data/app/~~Lx6Lxhj8K_UXWrnWELrEHg==/com.gaessoft.cliente.staging-qHLYb13R24mRfsJe9f3c_Q==/lib/arm64 flags = 0]]
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 		SoSource 1: DirectApkSoSource[root = [/data/app/~~Lx6Lxhj8K_UXWrnWELrEHg==/com.gaessoft.cliente.staging-qHLYb13R24mRfsJe9f3c_Q==/base.apk!/lib/x86_64]]
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 		SoSource 2: DirectorySoSource[root = /system/lib64 flags = 3]
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 		SoSource 3: DirectorySoSource[root = /vendor/lib64 flags = 3]
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	Native lib dir: /data/app/~~Lx6Lxhj8K_UXWrnWELrEHg==/com.gaessoft.cliente.staging-qHLYb13R24mRfsJe9f3c_Q==/lib/arm64
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.doLoadLibraryBySoName(SoLoader.java:1216)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.loadLibraryBySoNameImpl(SoLoader.java:1078)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.loadLibraryBySoName(SoLoader.java:943)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.loadLibraryOnAndroid(SoLoader.java:859)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.loadLibrary(SoLoader.java:842)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.soloader.SoLoader.loadLibrary(SoLoader.java:812)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.react.internal.featureflags.ReactNativeFeatureFlagsCxxInterop.<clinit>(ReactNativeFeatureFlagsCxxInterop.kt:28)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.react.internal.featureflags.ReactNativeFeatureFlagsCxxAccessor.override(ReactNativeFeatureFlagsCxxAccessor.kt:465)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.react.internal.featureflags.ReactNativeFeatureFlags.override(ReactNativeFeatureFlags.kt:310)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load(DefaultNewArchitectureEntryPoint.kt:57)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load$default(DefaultNewArchitectureEntryPoint.kt:35)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.gaessoft.cliente.staging.MainApplication.onCreate(MainApplication.kt:48)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.app.Instrumentation.callApplicationOnCreate(Instrumentation.java:1192)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:6712)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.app.ActivityThread.access$1300(ActivityThread.java:237)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:1913)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:106)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:223)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:7656)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:592)
+10-17 03:19:58.978  5574  5574 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:947)
