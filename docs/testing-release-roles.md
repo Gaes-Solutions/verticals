@@ -700,3 +700,19 @@ identidad, cookie HttpOnly y rechazo del perfil después de salir. No se creó
 ninguna cuenta, pedido, dirección o cobro; no se envió un correo ni se cambió
 una contraseña real. Los éxitos simulados de recuperación no acreditan entrega
 SMTP ni un canje de token de correo real. Esos límites externos siguen vigentes.
+
+### Verificación publicada de acceso y recuperación
+
+Build de web-tienda, lint sin errores y typecheck **30/30** correctos; lint
+conserva avisos de complejidad. Se desplegó únicamente staging, fuente
+`e228886dfb356593239d0a9a6e7a8f555ff74b66`, deployment de web-tienda
+`eaa85020-7661-4d79-b893-380914e9fe95`, estado SUCCESS. Las **26 comprobaciones
+de formularios** se repitieron contra la tienda publicada y pasaron. También
+pasó el ingreso real del comprador entregado, consulta de identidad y cierre
+con perfil privado rechazado después de salir. No se publicaron credenciales
+ni tokens; el servidor local de pruebas fue detenido.
+
+Alcance de esta ronda: web de staging. No se generó un nuevo APK ni se
+certificó su comportamiento equivalente. La entrega de correo y el canje real
+de recuperación siguen pendientes de probar con el buzón confirmado por el
+propietario. Producción no se modificó.
