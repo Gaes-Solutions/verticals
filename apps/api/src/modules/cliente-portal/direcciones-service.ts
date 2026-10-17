@@ -74,7 +74,10 @@ export async function actualizarDireccion(
   const existe = await prisma.clienteDireccion.findFirst({ where: { id, clienteId } });
   if (!existe) return false;
   await prisma.clienteDireccion.update({
-    data: { ...data(input), ...(input.isDefaultEnvio ? { isDefaultEnvio: true } : {}) },
+    data: {
+      ...data(input),
+      ...(input.isDefaultEnvio !== undefined ? { isDefaultEnvio: input.isDefaultEnvio } : {}),
+    },
     where: { id },
   });
   if (input.isDefaultEnvio) await aplicarDefault(prisma, clienteId, id);

@@ -4,17 +4,36 @@ import { type ResultadoMapa, camposDireccionMapa } from "@/lib/direccion-mapa";
 import { Check, House, LocateFixed, MapPin, Pencil, Plus, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-export interface Direccion {
-  id: string;
-  etiqueta: string;
-  calle: string;
-  numeroExterior: string | null;
-  colonia: string | null;
-  municipio: string | null;
-  estado: string | null;
-  codigoPostal: string | null;
-  referencias: string | null;
-  isDefaultEnvio: boolean;
+import {
+  type DireccionGuardada as Direccion,
+  direccionConfirmada,
+  esListaDirecciones,
+  esObjeto,
+} from "@/lib/direcciones-contract";
+export type { DireccionGuardada as Direccion } from "@/lib/direcciones-contract";
+
+type ConsultaMapa = { controller: AbortController; ediciones: Record<string, number> };
+
+function resultadoMapa(value: unknown): value is ResultadoMapa {
+  if (!esObjeto(value) || typeof value.lat !== "string" || typeof value.lon !== "string")
+    return false;
+  const lat = Number(value.lat);
+  const lon = Number(value.lon);
+  if (
+    !value.lat.trim() ||
+    !value.lon.trim() ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lon) > 180
+  )
+    return false;
+  if (value.display_name !== undefined && typeof value.display_name !== "string") return false;
+  return (
+    value.address === undefined ||
+    (esObjeto(value.address) &&
+      Object.values(value.address).every((item) => typeof item === "string"))
+  );
 }
 
 const VACIA = {
@@ -32,8 +51,19 @@ const VACIA = {
 /** CRUD de direcciones guardadas del cliente (checkout rápido). */
 export function DireccionesCuenta() {
   const dialog = useRef<HTMLDialogElement>(null);
+  const consultaMapa = useRef<ConsultaMapa | null>(null);
+  const ediciones = useRef<Record<string, number>>({});
+  const carga = useRef<AbortController | null>(null);
+  const escritura = useRef<AbortController | null>(null);
+  const ocupado = useRef(false);
+  const montado = useRef(true);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [borrando, setBorrando] = useState<string | null>(null);
   const [dirs, setDirs] = useState<Direccion[]>([]);
   const [form, setForm] = useState({ ...VACIA });
+  const formActual = useRef(form);
+  formActual.current = form;
   const [editId, setEditId] = useState<string | null>(null);
   const [abierto, setAbierto] = useState(false);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
@@ -49,23 +79,55 @@ export function DireccionesCuenta() {
     if (abierto && dialog.current && !dialog.current.open) dialog.current.showModal();
   }, [abierto]);
 
+  const cancelarMapa = useCallback(() => {
+    consultaMapa.current?.controller.abort();
+    consultaMapa.current = null;
+    setCargandoMapa(false);
+  }, []);
+
+  function cerrar() {
+    cancelarMapa();
+    setAbierto(false);
+  }
+
   const cargar = useCallback(async () => {
+    carga.current?.abort();
+    const controller = new AbortController();
+    carga.current = controller;
+    setCargando(true);
+    setErrorCarga(null);
     try {
-      const res = await fetch("/api/cuenta/direcciones", { cache: "no-store" });
-      if (!res.ok) throw new Error("No pudimos cargar tus direcciones. Reintenta.");
-      const r = await res.json();
-      if (!Array.isArray(r)) throw new Error("No pudimos cargar tus direcciones. Reintenta.");
-      setDirs(r as Direccion[]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No hay conexión. Tus datos se conservan.");
+      const res = await fetch("/api/cuenta/direcciones", {
+        cache: "no-store",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
+      });
+      if (!res.ok) throw new Error("load");
+      const data = await res.json();
+      if (!esListaDirecciones(data)) throw new Error("invalid");
+      if (!controller.signal.aborted && montado.current) setDirs(data);
+    } catch {
+      if (!controller.signal.aborted && montado.current)
+        setErrorCarga("No pudimos cargar tus direcciones. Reintenta; tus datos se conservan.");
+    } finally {
+      if (!controller.signal.aborted && montado.current) setCargando(false);
     }
   }, []);
 
   useEffect(() => {
-    cargar();
+    montado.current = true;
+    void cargar();
+    return () => {
+      montado.current = false;
+      carga.current?.abort();
+      escritura.current?.abort();
+      consultaMapa.current?.controller.abort();
+      consultaMapa.current = null;
+    };
   }, [cargar]);
 
   function editar(d: Direccion) {
+    cancelarMapa();
+    setError(null);
     setEditId(d.id);
     setForm({
       etiqueta: d.etiqueta,
@@ -85,15 +147,41 @@ export function DireccionesCuenta() {
     setAbierto(true);
   }
 
-  function aplicarResultadoMapa(item: ResultadoMapa) {
+  function vigente(consulta: ConsultaMapa) {
+    return consultaMapa.current === consulta && !consulta.controller.signal.aborted;
+  }
+
+  function iniciarMapa(): ConsultaMapa | null {
+    if (ocupado.current) return null;
+    cancelarMapa();
+    const consulta = { controller: new AbortController(), ediciones: { ...ediciones.current } };
+    consultaMapa.current = consulta;
+    setCargandoMapa(true);
+    setErrorMapa(null);
+    setAvisoMapa(null);
+    return consulta;
+  }
+
+  function terminarMapa(consulta: ConsultaMapa) {
+    if (!vigente(consulta)) return;
+    consultaMapa.current = null;
+    setCargandoMapa(false);
+  }
+
+  function aplicarResultadoMapa(item: ResultadoMapa, consulta: ConsultaMapa) {
+    if (!vigente(consulta)) return;
     setMapa({ lat: Number(item.lat), lon: Number(item.lon) });
     const campos = camposDireccionMapa(item);
-    setForm((actual) => ({
-      ...actual,
-      ...campos,
-    }));
+    const cambios = Object.fromEntries(
+      Object.entries(campos).filter(
+        ([key]) => (ediciones.current[key] ?? 0) === (consulta.ediciones[key] ?? 0),
+      ),
+    );
+    const completos = { ...formActual.current, ...cambios };
+    setForm((actual) => ({ ...actual, ...cambios }));
     setBusquedaMapa(item.display_name ?? "");
     const faltantes = Object.entries(campos)
+      .map(([key]) => [key, completos[key as keyof typeof completos]])
       .filter(([, valor]) => !valor)
       .map(
         ([key]) =>
@@ -113,29 +201,29 @@ export function DireccionesCuenta() {
     );
   }
 
-  async function consultarMapa(url: string) {
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  async function consultarMapa(url: string, consulta: ConsultaMapa) {
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.any([consulta.controller.signal, AbortSignal.timeout(20_000)]),
+    });
     const resultado = await res.json();
-    if (!res.ok) throw new Error(resultado.message || "No pudimos consultar el mapa.");
-    aplicarResultadoMapa(resultado as ResultadoMapa);
+    if (!res.ok || !resultadoMapa(resultado))
+      throw new Error("No pudimos consultar el mapa. Puedes llenar los campos manualmente.");
+    aplicarResultadoMapa(resultado, consulta);
   }
 
   async function buscarEnMapa() {
-    const consulta = busquedaMapa.trim();
+    const texto = busquedaMapa.trim();
+    if (!texto) return;
+    const consulta = iniciarMapa();
     if (!consulta) return;
-    setCargandoMapa(true);
-    setErrorMapa(null);
-    setAvisoMapa(null);
     try {
-      await consultarMapa(`/api/cuenta/ubicacion?q=${encodeURIComponent(consulta)}`);
-    } catch (err) {
-      setErrorMapa(
-        err instanceof Error
-          ? err.message
-          : "No pudimos consultar el mapa. Puedes llenar los campos manualmente.",
-      );
+      await consultarMapa(`/api/cuenta/ubicacion?q=${encodeURIComponent(texto)}`, consulta);
+    } catch {
+      if (vigente(consulta))
+        setErrorMapa("No pudimos consultar el mapa. Puedes llenar los campos manualmente.");
     } finally {
-      setCargandoMapa(false);
+      terminarMapa(consulta);
     }
   }
 
@@ -144,38 +232,39 @@ export function DireccionesCuenta() {
       setErrorMapa("Tu dispositivo no permite obtener la ubicación.");
       return;
     }
-    setCargandoMapa(true);
-    setErrorMapa(null);
-    setAvisoMapa(null);
+    const consulta = iniciarMapa();
+    if (!consulta) return;
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
+        if (!vigente(consulta)) return;
         setMapa({ lat: coords.latitude, lon: coords.longitude });
         try {
           await consultarMapa(
             `/api/cuenta/ubicacion?lat=${coords.latitude}&lon=${coords.longitude}`,
+            consulta,
           );
-          if (coords.accuracy > 100)
+          if (vigente(consulta) && coords.accuracy > 100)
             setAvisoMapa(
               (aviso) =>
                 `${aviso ?? ""} Tu ubicación es aproximada; confirma que sea tu domicilio.`,
             );
-        } catch (err) {
-          setErrorMapa(
-            err instanceof Error ? err.message : "No pudimos leer la dirección de tu ubicación.",
-          );
+        } catch {
+          if (vigente(consulta))
+            setErrorMapa(
+              "No pudimos leer la dirección de tu ubicación. Puedes completar los campos manualmente.",
+            );
         } finally {
-          setCargandoMapa(false);
+          terminarMapa(consulta);
         }
       },
       (err) => {
+        if (!vigente(consulta)) return;
         setErrorMapa(
           err.code === 1
             ? "Permite el acceso a ubicación en la configuración de este sitio y vuelve a intentarlo."
-            : err.code === 3
-              ? "Tu dispositivo tardó en obtener la ubicación. Vuelve a intentar o busca tu calle."
-              : "No pudimos obtener tu ubicación. Activa la ubicación del dispositivo o busca tu calle.",
+            : "No pudimos obtener tu ubicación. Actívala o busca tu calle.",
         );
-        setCargandoMapa(false);
+        terminarMapa(consulta);
       },
       { enableHighAccuracy: false, timeout: 20_000, maximumAge: 60_000 },
     );
@@ -183,26 +272,37 @@ export function DireccionesCuenta() {
 
   async function guardar(e: FormEvent) {
     e.preventDefault();
-    if (guardando) return;
+    if (ocupado.current) return;
+    ocupado.current = true;
+    cancelarMapa();
+    const controller = new AbortController();
+    escritura.current = controller;
     setError(null);
     setGuardando(true);
-    const url = editId ? `/api/cuenta/direcciones/${editId}` : "/api/cuenta/direcciones";
+    const url = editId
+      ? `/api/cuenta/direcciones/${encodeURIComponent(editId)}`
+      : "/api/cuenta/direcciones";
     try {
       const res = await fetch(url, {
         method: editId ? "PUT" : "POST",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      const data = await res.json().catch(() => null);
+      if (!montado.current) return;
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(
           res.status === 401
             ? "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a guardar; tus campos permanecen aquí."
-            : (data.message ?? "Revisa los datos (CP de 5 dígitos, estado y calle)."),
+            : typeof data?.message === "string"
+              ? data.message
+              : "Revisa los datos (CP de 5 dígitos, estado y calle).",
         );
         return;
       }
-      setAbierto(false);
+      if (!direccionConfirmada(data, !!editId)) throw new Error("unconfirmed");
+      cerrar();
       setEditId(null);
       setForm({ ...VACIA });
       await cargar();
@@ -211,27 +311,49 @@ export function DireccionesCuenta() {
         "No pudimos confirmar que se guardó. Tus campos se conservan; revisa la lista antes de reintentar.",
       );
     } finally {
-      setGuardando(false);
+      ocupado.current = false;
+      escritura.current = null;
+      if (montado.current) setGuardando(false);
     }
   }
 
   async function borrar(id: string) {
+    if (ocupado.current) return;
+    ocupado.current = true;
+    setBorrando(id);
     setError(null);
+    const controller = new AbortController();
+    escritura.current = controller;
     try {
-      const res = await fetch(`/api/cuenta/direcciones/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("No pudimos eliminar la dirección. Reintenta.");
+      const res = await fetch(`/api/cuenta/direcciones/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
+      });
+      if (!montado.current) return;
+      if (res.status === 401) {
+        setError(
+          "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a consultar tus direcciones.",
+        );
+        return;
+      }
+      if (res.status !== 204) throw new Error("unconfirmed");
       setConfirmandoId(null);
       await cargar();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No hay conexión. La dirección se conserva.");
+    } catch {
+      if (montado.current)
+        setError("No pudimos confirmar la eliminación. Revisa la lista antes de reintentar.");
+    } finally {
+      ocupado.current = false;
+      escritura.current = null;
+      if (montado.current) setBorrando(null);
     }
   }
 
   return (
     <div>
-      {!abierto && error && (
+      {!abierto && (error || errorCarga) && (
         <div role="alert" className="mb-4 rounded-lg bg-danger-light p-3 text-sm text-danger">
-          <p>{error}</p>
+          <p>{error || errorCarga}</p>
           <button
             type="button"
             onClick={() => {
@@ -253,7 +375,10 @@ export function DireccionesCuenta() {
         </div>
         <button
           type="button"
+          disabled={guardando || !!borrando}
           onClick={() => {
+            cancelarMapa();
+            setError(null);
             setEditId(null);
             setForm({ ...VACIA });
             setMapa(null);
@@ -268,7 +393,11 @@ export function DireccionesCuenta() {
         </button>
       </div>
 
-      {dirs.length === 0 ? (
+      {dirs.length === 0 && (cargando || errorCarga) ? (
+        <output className="block py-8 text-center text-slate-500 text-sm">
+          {cargando ? "Cargando direcciones…" : "No pudimos consultar tu lista de direcciones."}
+        </output>
+      ) : dirs.length === 0 ? (
         <div className="tienda-surface flex flex-col items-center px-6 py-12 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-marca/10 text-marca">
             <MapPin size={26} />
@@ -302,17 +431,28 @@ export function DireccionesCuenta() {
                 {d.codigoPostal}
               </p>
               <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
-                <button type="button" onClick={() => editar(d)} className="gx-btn-ghost !px-3">
+                <button
+                  type="button"
+                  disabled={guardando || !!borrando}
+                  onClick={() => editar(d)}
+                  className="gx-btn-ghost !px-3"
+                >
                   <Pencil size={14} />
                   Editar
                 </button>
                 {confirmandoId === d.id ? (
-                  <button type="button" onClick={() => borrar(d.id)} className="gx-btn-danger">
-                    ¿Seguro? Sí, eliminar
+                  <button
+                    type="button"
+                    disabled={guardando || !!borrando}
+                    onClick={() => borrar(d.id)}
+                    className="gx-btn-danger"
+                  >
+                    {borrando === d.id ? "Eliminando…" : "¿Seguro? Sí, eliminar"}
                   </button>
                 ) : (
                   <button
                     type="button"
+                    disabled={guardando || !!borrando}
                     onClick={() => setConfirmandoId(d.id)}
                     className="gx-btn-danger"
                   >
@@ -329,7 +469,7 @@ export function DireccionesCuenta() {
         <dialog
           ref={dialog}
           aria-labelledby="direccion-modal-title"
-          onClose={() => setAbierto(false)}
+          onClose={cerrar}
           onCancel={(event) => {
             if (guardando) event.preventDefault();
           }}
@@ -347,9 +487,9 @@ export function DireccionesCuenta() {
               </div>
               <button
                 type="button"
-                onClick={() => setAbierto(false)}
+                onClick={cerrar}
                 disabled={guardando}
-                className="gx-btn-ghost !h-9 !w-9 !rounded-full !p-0"
+                className="gx-btn-ghost !h-11 !w-11 !rounded-full !p-0"
                 aria-label="Cerrar"
               >
                 <X size={18} />
@@ -370,6 +510,7 @@ export function DireccionesCuenta() {
                 </div>
                 <div className="flex gap-2">
                   <input
+                    disabled={guardando}
                     value={busquedaMapa}
                     onChange={(e) => setBusquedaMapa(e.target.value)}
                     onKeyDown={(e) => {
@@ -386,7 +527,7 @@ export function DireccionesCuenta() {
                     type="button"
                     onClick={buscarEnMapa}
                     className="gx-btn-secondary !rounded-xl !px-3"
-                    disabled={cargandoMapa}
+                    disabled={cargandoMapa || guardando}
                   >
                     Buscar
                   </button>
@@ -395,7 +536,7 @@ export function DireccionesCuenta() {
                   type="button"
                   onClick={usarUbicacion}
                   className="gx-btn-ghost w-full !rounded-xl !border !border-slate-200 !bg-white"
-                  disabled={cargandoMapa}
+                  disabled={cargandoMapa || guardando}
                 >
                   <LocateFixed size={16} />{" "}
                   {cargandoMapa ? "Buscando…" : "Usar mi ubicación actual"}
@@ -409,7 +550,11 @@ export function DireccionesCuenta() {
                   />
                 )}
                 {avisoMapa && <output className="block text-sm text-marca">{avisoMapa}</output>}
-                {errorMapa && <p className="text-danger text-xs">{errorMapa}</p>}
+                {errorMapa && (
+                  <p role="alert" className="text-danger text-xs">
+                    {errorMapa}
+                  </p>
+                )}
                 <p className="text-xs text-slate-500">
                   Puedes corregir cualquier campo antes de guardar. Datos del mapa:{" "}
                   <a
@@ -439,8 +584,12 @@ export function DireccionesCuenta() {
                   <label key={key} className="block">
                     <span className="gx-label">{label}</span>
                     <input
+                      disabled={guardando}
                       value={form[key] as string}
-                      onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        ediciones.current[key] = (ediciones.current[key] ?? 0) + 1;
+                        setForm((f) => ({ ...f, [key]: e.target.value }));
+                      }}
                       required={["etiqueta", "calle", "estado", "codigoPostal"].includes(key)}
                       className="gx-input !rounded-xl"
                     />
@@ -450,6 +599,7 @@ export function DireccionesCuenta() {
               <label className="mx-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
                 <input
                   type="checkbox"
+                  disabled={guardando}
                   checked={form.isDefaultEnvio}
                   onChange={(e) => setForm((f) => ({ ...f, isDefaultEnvio: e.target.checked }))}
                 />
@@ -465,7 +615,7 @@ export function DireccionesCuenta() {
               <div className="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setAbierto(false)}
+                  onClick={cerrar}
                   disabled={guardando}
                   className="gx-btn-ghost"
                 >

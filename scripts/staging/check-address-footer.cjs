@@ -99,12 +99,33 @@ fs.mkdirSync("/tmp/gaes-design", { recursive: true });
     assert((await response).ok(), "Address creation failed");
     await dialog.waitFor({ state: "hidden" });
     console.log("PASS real geolocation autofill and address save with leading-zero postal code");
+
+    // Exercise address selection without permitting an order submission.
+    await page.route("**/api/checkout", (route) => route.abort());
+    await page.goto(`${base}/producto/demo-lampara`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Agregar al carrito", exact: true }).click();
+    await page.goto(`${base}/checkout`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Finalizar compra", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Envío a domicilio", exact: true }).click();
+    const savedAddress = page.getByRole("radio", { name: /Prueba web sin entrega/ });
+    await savedAddress.waitFor();
+    assert.equal(await savedAddress.getAttribute("aria-checked"), "true");
+    assert((await savedAddress.innerText()).includes("CP 06060"));
+    await page.getByRole("radio", { name: "Nueva dirección", exact: true }).click();
+    assert.equal(await page.getByLabel("Código postal", { exact: true }).inputValue(), "");
+    await savedAddress.click();
+    assert.equal(await savedAddress.getAttribute("aria-checked"), "true");
+    console.log(
+      "PASS saved address preselected in checkout; leading-zero CP retained; switching to new address clears the fields; no order submitted",
+    );
+    await page.goto(`${base}/cuenta`, { waitUntil: "networkidle" });
     const card = page
       .locator(".tienda-surface")
       .filter({ has: page.getByText("Prueba web sin entrega", { exact: true }) });
     await card.getByRole("button", { name: "Editar", exact: true }).click();
     dialog = page.getByRole("dialog", { name: "Editar dirección", exact: true });
     await dialog.getByLabel("Calle", { exact: true }).fill("Calle de prueba editada");
+    await dialog.getByLabel("Usar como predeterminada", { exact: true }).uncheck();
     response = page.waitForResponse(
       (r) => r.url().includes("/api/cuenta/direcciones/") && r.request().method() === "PUT",
     );
@@ -112,6 +133,22 @@ fs.mkdirSync("/tmp/gaes-design", { recursive: true });
     assert((await response).ok(), "Address update failed");
     await dialog.waitFor({ state: "hidden" });
     await card.getByText(/Calle de prueba editada.*CP 06060/).waitFor();
+    assert.equal(await card.getByText("Predeterminada", { exact: true }).count(), 0);
+    await page.reload({ waitUntil: "networkidle" });
+    assert.equal(await card.getByText("Predeterminada", { exact: true }).count(), 0);
+    await card.getByRole("button", { name: "Editar", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Editar dirección", exact: true });
+    assert.equal(
+      await dialog.getByLabel("Usar como predeterminada", { exact: true }).isChecked(),
+      false,
+    );
+    await dialog.getByLabel("Usar como predeterminada", { exact: true }).check();
+    await dialog.getByRole("button", { name: "Guardar dirección", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await card.getByText("Predeterminada", { exact: true }).waitFor();
+    console.log(
+      "PASS default-address preference persists unchecked after reload and can be checked again",
+    );
     await card.getByRole("button", { name: "Eliminar", exact: true }).click();
     response = page.waitForResponse(
       (r) => r.url().includes("/api/cuenta/direcciones/") && r.request().method() === "DELETE",

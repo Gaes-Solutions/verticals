@@ -194,7 +194,7 @@ export default async function CuentaPage() {
       )}
 
       <div id="direcciones" className="mt-10 scroll-mt-44">
-        <DireccionesCuenta />
+        <DireccionesCuenta key={me.id} />
       </div>
 
       <div className="mt-10">

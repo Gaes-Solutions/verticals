@@ -969,3 +969,56 @@ tenían ventas ni pedidos, con guardas del proyecto, ambiente staging y tenant.
 Los navegadores fueron cerrados. No se crearon pedidos, cobros ni correos;
 no se utilizaron ni copiaron las credenciales de los usuarios entregados.
 No hubo migraciones, despliegue de producción ni generación de APK.
+
+## Recuperación de direcciones y búsquedas tardías — 17 de octubre de 2026
+
+Se reprodujeron once fallos de contrato del BFF antes de corregirlo: listas o
+respuestas incompletas se aceptaban como éxito, un DELETE 200 podía confirmar
+un borrado sin evidencia y las excepciones de red escapaban sin respuesta segura.
+También fallaron ocho escenarios de navegador contra el componente anterior.
+Una búsqueda pendiente completaba el formulario de una dirección abierta
+después de cerrar la original, o sobrescribía una corrección manual reciente.
+
+- Cada consulta de mapa tiene un controlador y pertenece a una apertura del
+  formulario. Se cancela al cerrar, reemplazar la consulta, guardar o desmontar.
+  Los callbacks de geolocalización tardíos se descartan. Las correcciones hechas
+  durante la búsqueda se conservan; los campos anteriores sin corrección se
+  reemplazan, incluyendo vaciar un CP anterior si el nuevo mapa no lo informa,
+  para evitar mezclar domicilios. Se validan coordenadas y respuesta del mapa.
+- Lectura y escrituras del formulario tienen límite de 20 s; el BFF limita su
+  llamada al proveedor/API a 15 s y desactiva caché privada. La lectura distingue
+  fallo/carga de una lista realmente vacía y conserva las tarjetas anteriores.
+- POST requiere ID confirmado, PUT `ok: true`, DELETE 204 y la lista debe tener
+  filas completas sin IDs duplicados. Las respuestas inválidas devuelven 502;
+  los fallos de red devuelven 503 sin detalles internos. El contrato de invitado
+  para leer sigue siendo una lista vacía; mutar exige sesión verificada.
+- Una referencia inmediata impide escrituras concurrentes. Los controles se
+  bloquean al guardar/eliminar, y se conservan los campos o tarjeta si no se
+  confirma la operación. No hay reenvío automático; un timeout no demuestra que
+  el servidor haya cancelado la escritura, por lo que se pide revisar la lista.
+- La pantalla de cuenta remonta este componente por ID de comprador al cambiar
+  la cuenta renderizada y cancela sus consultas al desmontarlo. El cierre del
+  diálogo se amplió a 44 px y se conserva el pie fijo de guardar.
+
+Se corrigió además que desmarcar `isDefaultEnvio` se ignoraba en el API. Ahora
+se conserva un `false` explícito, omitir el campo mantiene la preferencia, y al
+marcar `true` solo se desmarcan otras direcciones del mismo comprador. La
+comprobación de propiedad sigue siendo previa a la actualización.
+
+Validación previa al despliegue:
+
+- Web-tienda **209/209** pruebas; 22 nuevas de contratos de direcciones.
+- API: **4/4** unitarias del servicio. Una fallaba con la implementación anterior.
+  Configuración aislada `test/direcciones-unit.config.ts`, sin base de datos.
+  El intento de usar el runner de integración no se pudo iniciar por falta de
+  `DATABASE_URL_MASTER`; no se inyectaron credenciales de staging a ese runner.
+- Doce grupos de navegador local con componente real y API/mapa sintéticos:
+  respuesta de mapa tras reabrir, edición durante consulta, GPS tardío, éxito
+  inválido, timeout de guardado, envío repetido, fallo inicial y reintento,
+  timeout de borrado, CP ausente en mapa parcial, coordenadas inválidas, 401
+  con campos conservados y alta/edición/borrado confirmados. Las esperas se
+  acortan solo en el navegador de QA. No hay llamadas externas en estos grupos.
+
+Regresión local `scripts/staging/check-address-recovery.cjs`. La regresión real
+de staging `check-address-footer.cjs` añade selección de dirección en checkout
+con envío de pedido bloqueado y persistencia de marcar/desmarcar predeterminada.
