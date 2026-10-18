@@ -1,10 +1,11 @@
 "use client";
 
 import { type CarritoLineaLocal, actualizarCantidad, leerCarrito } from "@/lib/carrito-store";
-import { ArrowRight, Check, ShoppingBag, X } from "lucide-react";
+import { ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ImagenCompra } from "./imagen-compra";
 
 export function CarritoFlotante() {
   const pathname = usePathname();
@@ -69,11 +70,7 @@ export function CarritoFlotante() {
       )}
       <div className="store-floating-cart-content">
         <div className="store-cart-preview" aria-hidden="true">
-          {items[0]?.imagenUrl ? (
-            <img src={items[0].imagenUrl} alt="" />
-          ) : (
-            <ShoppingBag size={24} />
-          )}
+          <ImagenCompra src={items[0]?.imagenUrl} alt="" />
           <b>{unidades}</b>
         </div>
         <div className="min-w-0 flex-1">

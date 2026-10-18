@@ -1,99 +1,158 @@
 "use client";
-
-import type { CatalogoResponse, ProductoPublicado } from "@/lib/api";
 import { agregar, leerCarrito } from "@/lib/carrito-store";
-import { ImageOff, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  type SugerenciaCompra,
+  leerSugerencias,
+  sugerenciasFueraDelCarrito,
+} from "@/lib/sugerencias-contract";
+import { Plus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { ImagenCompra } from "./imagen-compra";
 
-function precioDe(p: ProductoPublicado): number {
-  const base = Number(
-    p.precioDesde || p.precioPublicoOverride || p.producto.variantes[0]?.precioBase || 0,
-  );
-  return p.enOferta && p.precioPromocion ? Number(p.precioPromocion) : base;
-}
-
-/**
- * "Sueles comprar con esto": hasta 4 productos populares que NO están en el
- * carrito, con quick-add. Sin datos → no renderiza nada.
- */
+/** Popular public products; never implies personal purchase history. */
 export function SugerenciasCarrito() {
-  const [sugerencias, setSugerencias] = useState<ProductoPublicado[]>([]);
-
+  const [sugerencias, setSugerencias] = useState<SugerenciaCompra[]>([]);
+  const [aviso, setAviso] = useState("");
+  const revision = useRef(0);
+  const [version, setVersion] = useState(0);
+  const [resultadoVersion, setResultadoVersion] = useState(-1);
   useEffect(() => {
     let activo = true;
-    async function cargar() {
+    let controller: AbortController | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let seleccion = "";
+    const cargar = async (generation: number) => {
+      const cancel = new AbortController();
+      controller = cancel;
       try {
+        const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(15000)]);
         const res = await fetch("/api/catalogo?orden=populares&pageSize=24", {
           cache: "no-store",
+          signal,
+          redirect: "error",
         });
-        if (!res.ok) return;
-        const cat = (await res.json()) as CatalogoResponse;
-        if (!activo) return;
-        const enCarrito = new Set(leerCarrito().map((i) => i.varianteId));
-        setSugerencias(
-          cat.items
-            .filter((p) => p.producto.variantes[0] && !enCarrito.has(p.producto.variantes[0].id))
-            .slice(0, 4),
+        const data = res.ok ? leerSugerencias(await res.json()) : null;
+        signal.throwIfAborted();
+        if (!data) throw new Error("Invalid catalog");
+        if (activo && revision.current === generation) {
+          setSugerencias(sugerenciasFueraDelCarrito(data, leerCarrito()));
+          setResultadoVersion(generation);
+        }
+      } catch {
+        if (activo && revision.current === generation) setSugerencias([]);
+      }
+    };
+    const refresh = (event?: Event) => {
+      let next: string;
+      try {
+        next = JSON.stringify(
+          leerCarrito()
+            .map((i) => i.varianteId)
+            .sort(),
         );
       } catch {
-        // Sin sugerencias: el carrito sigue funcionando igual.
+        revision.current++;
+        controller?.abort();
+        clearTimeout(timer);
+        setVersion(revision.current);
+        setSugerencias([]);
+        return;
       }
-    }
-    cargar();
-    window.addEventListener("carrito-actualizado", cargar);
+      if (event?.type === "carrito-actualizado" && seleccion === next) return;
+      seleccion = next;
+      const generation = ++revision.current;
+      controller?.abort();
+      clearTimeout(timer);
+      setVersion(generation);
+      setSugerencias([]);
+      setAviso("");
+      timer = setTimeout(() => void cargar(generation), 300);
+    };
+    refresh();
+    window.addEventListener("carrito-actualizado", refresh);
+    window.addEventListener("carrito-contexto-cambiado", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
     return () => {
       activo = false;
-      window.removeEventListener("carrito-actualizado", cargar);
+      controller?.abort();
+      clearTimeout(timer);
+      window.removeEventListener("carrito-actualizado", refresh);
+      window.removeEventListener("carrito-contexto-cambiado", refresh);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
-
-  if (sugerencias.length === 0) return null;
-
+  function anadir(p: SugerenciaCompra) {
+    if (resultadoVersion !== revision.current || p.variantes.length !== 1) return;
+    try {
+      if (!sugerenciasFueraDelCarrito([p], leerCarrito()).length) return;
+      agregar({
+        varianteId: p.variantes[0] as string,
+        titulo: p.titulo,
+        precio: p.precio,
+        cantidad: 1,
+        slugSeo: p.slug,
+        ...(p.imagen ? { imagenUrl: p.imagen } : {}),
+      });
+    } catch {
+      setAviso("No pudimos confirmar que se agregó. Revisa tu carrito antes de volver a intentar.");
+    }
+  }
+  if (resultadoVersion !== version || !sugerencias.length) return null;
   return (
-    <section className="mt-8">
-      <h2 className="mb-3 font-bold text-slate-900 text-lg">Sueles comprar con esto</h2>
+    <section className="mt-8" aria-labelledby="sugerencias-titulo">
+      <h2 id="sugerencias-titulo" className="mb-3 font-bold text-slate-900 text-lg">
+        También te puede gustar
+      </h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {sugerencias.map((p) => {
-          const variante = p.producto.variantes[0];
-          const precio = precioDe(p).toFixed(2);
-          return (
-            <div key={p.id} className="flex items-center gap-3 gx-card !p-3">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                {p.fotosArray[0] ? (
-                  <img
-                    src={p.fotosArray[0]}
-                    alt={p.tituloPublico}
-                    className="h-full w-full rounded-lg object-cover"
-                  />
-                ) : (
-                  <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-sm">{p.tituloPublico}</p>
-                <p className="font-bold text-slate-900">${precio}</p>
-              </div>
+        {sugerencias.map((p) => (
+          <div key={p.id} className="flex items-center gap-3 gx-card !p-3">
+            <Link
+              href={`/producto/${p.slug}`}
+              aria-label={`Ver ${p.titulo}`}
+              className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100"
+            >
+              <ImagenCompra src={p.imagen} alt={p.titulo} />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/producto/${p.slug}`}
+                className="line-clamp-2 break-words font-medium text-sm"
+              >
+                {p.titulo}
+              </Link>
+              <p className="font-bold text-slate-900">
+                {p.variantes.length > 1 ? "Precio según opción" : `$${p.precio}`}
+              </p>
+              {p.variantes.length > 1 && (
+                <Link
+                  href={`/producto/${p.slug}`}
+                  className="mt-1 inline-flex min-h-11 items-center font-semibold text-marca text-sm"
+                >
+                  Elegir opciones →
+                </Link>
+              )}
+            </div>
+            {p.variantes.length === 1 && (
               <button
                 type="button"
-                aria-label={`Agregar ${p.tituloPublico}`}
-                onClick={() =>
-                  agregar({
-                    varianteId: variante.id,
-                    titulo: p.tituloPublico,
-                    precio,
-                    cantidad: 1,
-                    ...(p.fotosArray[0] ? { imagenUrl: p.fotosArray[0] } : {}),
-                    slugSeo: p.slugSeo,
-                  })
-                }
-                className="gx-btn-primary flex-shrink-0 !rounded-full !p-0 h-10 w-10"
+                aria-label={`Agregar ${p.titulo}`}
+                onClick={() => anadir(p)}
+                className="gx-btn-primary h-11 w-11 shrink-0 !rounded-full !p-0"
               >
-                <Plus size={18} strokeWidth={2.5} />
+                <Plus size={18} />
               </button>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        ))}
       </div>
+      {aviso && (
+        <p role="alert" className="mt-3 text-sm">
+          {aviso}
+        </p>
+      )}
     </section>
   );
 }

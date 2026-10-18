@@ -1,6 +1,7 @@
 "use client";
 
 import { BarraEnvioGratis } from "@/components/barra-envio-gratis";
+import { ImagenCompra } from "@/components/imagen-compra";
 import { SugerenciasCarrito } from "@/components/sugerencias-carrito";
 import {
   type CarritoLineaLocal,
@@ -9,7 +10,7 @@ import {
   quitar,
 } from "@/lib/carrito-store";
 import { useCarritoVerificado } from "@/lib/use-carrito-verificado";
-import { CheckCircle2, ImageOff, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCircle2, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -101,15 +102,11 @@ export default function CarritoPage() {
             {visibles.map((i) => (
               <div key={i.varianteId} className="flex gap-3 gx-card !p-3 sm:!p-4">
                 <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded bg-slate-100">
-                  {i.imagenUrl ? (
-                    <img
-                      src={i.imagenUrl}
-                      alt={i.titulo}
-                      className="h-full w-full rounded object-cover"
-                    />
-                  ) : (
-                    <ImageOff size={24} strokeWidth={1.5} className="text-slate-300" />
-                  )}
+                  <ImagenCompra
+                    src={i.imagenUrl}
+                    alt={i.titulo}
+                    className="h-full w-full rounded object-cover"
+                  />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col justify-between">
                   <div className="flex items-start justify-between gap-2">
