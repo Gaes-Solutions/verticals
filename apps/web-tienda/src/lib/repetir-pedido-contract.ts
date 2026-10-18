@@ -42,20 +42,25 @@ export function leerPedidoRepetible(value: unknown): PedidoRepetible | null {
     return null;
   const items: LineaRepetible[] = [];
   for (const item of value.items) {
+    if (!objetoRegistro(item)) return null;
+    // Persisted checkout snapshots use decimal strings; the browser preview uses numbers.
+    const cantidad =
+      typeof item.cantidad === "string" && /^\d{1,6}(?:\.\d{1,3})?$/.test(item.cantidad)
+        ? Number(item.cantidad)
+        : item.cantidad;
     if (
-      !objetoRegistro(item) ||
       typeof item.nombre !== "string" ||
       !item.nombre.trim() ||
       item.nombre.length > 300 ||
-      !seleccionCarritoValida([item])
+      !seleccionCarritoValida([{ varianteId: item.varianteId, cantidad }])
     )
       return null;
     const id = item.varianteId as string;
-    const cantidad = item.cantidad as number;
+    const unidades = cantidad as number;
     const previo = items.find((i) => i.varianteId === id);
     if (previo)
-      previo.cantidad = (Math.round(previo.cantidad * 1000) + Math.round(cantidad * 1000)) / 1000;
-    else items.push({ varianteId: id, nombre: item.nombre.trim(), cantidad });
+      previo.cantidad = (Math.round(previo.cantidad * 1000) + Math.round(unidades * 1000)) / 1000;
+    else items.push({ varianteId: id, nombre: item.nombre.trim(), cantidad: unidades });
   }
   return seleccionCarritoValida(items) ? { folioPublico: value.folioPublico, items } : null;
 }

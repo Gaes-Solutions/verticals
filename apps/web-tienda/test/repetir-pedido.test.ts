@@ -69,13 +69,48 @@ describe("repeat order selection and atomic merge", () => {
       }),
     ).toEqual({ folioPublico: "PED-QA", items: [{ ...item, cantidad: 0.3 }] });
   });
+  it.each(["1", "0.125", "100000.000"])(
+    "accepts the persisted checkout decimal string %s",
+    (cantidad) => {
+      expect(
+        leerPedidoRepetible({
+          ...pedido,
+          items: [{ ...item, cantidad, precioUnitario: "999.00" }],
+        }),
+      ).toEqual({ folioPublico: "PED-QA", items: [{ ...item, cantidad: Number(cantidad) }] });
+    },
+  );
+  it("sums persisted fractional strings arithmetically rather than concatenating them", () => {
+    expect(
+      leerPedidoRepetible({
+        ...pedido,
+        items: [
+          { ...item, cantidad: "0.100" },
+          { ...item, cantidad: "0.200" },
+        ],
+      }),
+    ).toEqual({ folioPublico: "PED-QA", items: [{ ...item, cantidad: 0.3 }] });
+  });
   it.each([
     null,
     {},
     { ...pedido, folioPublico: "../x" },
     { ...pedido, items: [] },
     { ...pedido, items: Array(101).fill(item) },
-    ...[0, -1, 100001, 0.0001, "2", null, Number.POSITIVE_INFINITY].map((cantidad) => ({
+    ...[
+      0,
+      -1,
+      100001,
+      0.0001,
+      "2e0",
+      "0x10",
+      "0.0001",
+      "100001",
+      "",
+      " 2 ",
+      null,
+      Number.POSITIVE_INFINITY,
+    ].map((cantidad) => ({
       ...pedido,
       items: [{ ...item, cantidad }],
     })),
@@ -126,7 +161,11 @@ describe("private repeat read boundary", () => {
     vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([order()])))
-      .mockResolvedValueOnce(new Response(JSON.stringify(pedido)));
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ...pedido, items: [{ ...item, cantidad: String(item.cantidad) }] }),
+        ),
+      );
   it("reads only with the verified account, bounds all reads together and filters the receipt", async () => {
     const fetch = fixture();
     vi.stubGlobal("fetch", fetch);
