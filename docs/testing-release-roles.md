@@ -2172,3 +2172,76 @@ Captura publicada a 320 px inspeccionada. Los eventos de contexto/pestaña son
 simulados; no se probó una compra autenticada completa ni una reserva por sucursal.
 No se solicitaron pedidos, cobros ni correos. Esta entrega cambia únicamente la
 web de staging; no actualiza API, APK ni producción.
+
+
+## Filtros de precio y recuperación móvil del catálogo — 17 de octubre de 2026
+
+Se encontró que el formulario admitía rangos negativos/invertidos, no etiquetaba
+sus campos y utilizaba inputs numéricos con paso entero para importes decimales.
+El panel móvil era un overlay sin semántica modal. Si fallaba la consulta del
+catálogo, la vista móvil perdía el acceso a filtros.
+
+- Validación antes de navegar: admite cero, límites opcionales y hasta dos
+  decimales con punto o coma; normaliza el querystring sin notación exponencial,
+  negativos, hexadecimales o valores fuera del formato acotado. Un rango invertido
+  se explica junto al formulario, conservando inputs y URL. Los campos tienen
+  etiquetas, inputMode decimal, aria-invalid/describedby y controles de 44 px.
+- Al navegar, los borradores de precio se vuelven a leer desde toda la URL: se
+  elimina un borrador sin aplicar también cuando cambia el orden manteniendo el
+  mismo precio aplicado. Se conserva búsqueda/orden al aplicar o quitar precios,
+  reiniciando paginación como antes. «Limpiar filtros» sigue conservando el orden.
+- Chips de ofertas/stock solo aparecen con `true`, no con el string `false`.
+  Chips, categorías, etiquetas checkbox, selector, aplicar/limpiar/cerrar y links
+  de paginación tienen targets de al menos 44 px; paginación y selector tienen
+  nombres accesibles explícitos.
+- Panel móvil con `DialogoTienda`/dialog nativo: fondo inerte, Escape y restauración
+  de foco. La prueba encontró que la X desmontaba antes de cerrar y no devolvía
+  el foco; el diálogo compartido ahora cierra nativamente y restaura el elemento
+  previo si sigue conectado. Al pasar a escritorio se desmonta el panel, evitando
+  una modalidad invisible. En Chromium se permite salir a controles del navegador
+  mediante Tab, pero no enfocar controles de la página detrás del modal.
+- El estado de error del catálogo conserva la barra de filtros también en móvil,
+  con total desconocido y botón «Cerrar filtros», sin afirmar cero resultados.
+  Mensaje público genérico, sin detalles de excepciones. Se normalizan a página 1
+  páginas fraccionarias/no finitas/no seguras o mayores al tope de 1000000 antes
+  de consultar el API, evitando el error que producía `page=Infinity`.
+
+Validación local: **833/833 pruebas web** (23 de rango/página y dos pruebas del
+componente servidor con API simulado, incluyendo ocultar detalles internos y
+conservar filtros móviles), compilación de producción y **30/30 tareas de tipos**.
+**17 escenarios de navegador locales** con filtros/dialog/paginación reales y
+adaptadores de navegación: Tab/fondo inerte/Escape/X, tres formatos inválidos,
+rango invertido/corrección, coma/ceros, chips, limpieza, resize, borrador descartado
+al ordenar, volver atrás, 320 px, total desconocido y paginación. Captura inspeccionada.
+No se hicieron pedidos, cobros ni escrituras remotas de carrito.
+
+
+### Revisión de ancho del catálogo
+
+La comprobación adicional de toda la página (no solo del diálogo) detectó que el
+selector de orden podía ensanchar la barra a 320 px. Se permitió reducir el ancho
+del contenedor y se acotó el select a su espacio disponible. Los **17 escenarios
+locales** se repitieron correctamente incluyendo el ancho global de la página.
+
+
+### Cierre publicado de filtros
+
+Fuente inicial `701a69b57f875740aa3afecbe235b2eb0d1491a2`; corrección final de ancho
+`d78e2ebc792888c077a53f28cec673cc4e61d48b`. Web de staging confirmada en `SUCCESS`
+con esta última versión, despliegue `6f4b2771-99a1-46ce-a52b-ad448f5e77b7`.
+
+**17 escenarios publicados** aprobados mediante
+`scripts/staging/check-catalog-filters-ui.cjs`: modal/foco/Escape/X, validación de
+precios y decimales, ceros, conservación de búsqueda/orden, chips, limpieza,
+resize, borrador descartado al ordenar, atrás y ancho global/dialog a 320 px.
+Además se abrió una consulta real con precio negativo: el servidor mostró el
+estado de error conservando filtros móviles y permitió corregirla a cero; también
+`page=Infinity` volvió a mostrar catálogo sin error. Son navegaciones/lecturas del
+catálogo; se bloquearon las escrituras API del navegador. La paginación con varias
+páginas se comprobó localmente con datos controlados, no creando productos reales.
+
+Captura publicada inspeccionada. No se solicitaron pedidos, cobros ni emails. Esta
+entrega actualiza web de staging; no modifica API, APK ni producción. No equivale
+a una prueba completa de compra autenticada ni a certificar todos los fallos de
+red de configuración del storefront; el caso real de error probado fue el rechazo
+controlado de la consulta del catálogo.
