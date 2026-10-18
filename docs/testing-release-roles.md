@@ -2107,3 +2107,68 @@ sus fixtures de prueba.
 Los eventos de cuenta y selección en otra pestaña se simularon; no se repitió un
 flujo autenticado completo. No se solicitaron pedidos, cobros, cambios de stock ni
 emails. API/APK/producción no se modificaron por esta entrega.
+
+
+## Tarjetas del catálogo: cantidades y gesto de compra — 17 de octubre de 2026
+
+Los controles `+`/`−` del catálogo reutilizaban la cantidad del último render:
+dos clics síncronos perdían uno de los cambios. La imagen de una tarjeta también
+conservaba el estado de fallo después de recibir una URL distinta.
+
+- Cada evento lee ahora la cantidad actual del almacenamiento antes de editarla.
+  La política de incremento/decremento conserva tres decimales, impide cantidades
+  negativas y respeta el tope local de 100000 y el stock público al incrementar,
+  incluso antes de que React actualice el estado deshabilitado. Permite reducir
+  una cantidad que ya está por encima del nuevo stock. Stock oculto no constituye
+  promesa de disponibilidad: siguen vigentes los controles de carrito/checkout.
+- No se permite agregar una unidad con inventario público inferior a uno. Datos
+  no finitos de stock/precio bloquean el incremento. Los controles esperan a leer
+  el carrito del navegador; no se habilita una compra desde el HTML previo a esa
+  lectura. Fallos de almacenamiento muestran un aviso sin afirmar éxito.
+- Las lecturas y controles se reinician al cambiar el conjunto de variantes.
+  Controles desmontados no pueden editar. Un evento de cuenta invalida el callback
+  anterior inmediatamente y reemplaza los nodos de control: un swipe comenzado en
+  una cuenta no se completa sobre el carrito de otra. Son guardas locales de
+  contexto; no reemplazan la autorización del servidor.
+- Se conserva «toca o desliza» y el acceso por teclado. El click compatible que
+  sigue al swipe no duplica el alta. Multi-variante sigue enlazando al detalle
+  para elegir opciones, sin seleccionar la primera automáticamente.
+- Artículo con nombre accesible y cantidades agrupadas mediante fieldset; `+` y
+  `−` de 44 × 44 px, sin reducir el tamaño en columnas estrechas. Las cifras largas
+  pueden partirse para no desbordar la tarjeta. Se conservaron los nombres de los
+  botones usados por las comprobaciones anteriores.
+- Las tarjetas utilizan `ImagenCompra`: reemplazo accesible para URL ausente o
+  rota, dimensiones reservadas y recuperación al cambiar la URL del mismo
+  producto. No modifica imágenes reales del catálogo.
+
+Validación local: **808/808 pruebas web** (16 nuevas de límites/cantidades),
+**19 escenarios de navegador** con tarjeta real y carrito únicamente local.
+Incluyen pares de clics, quitar última unidad, alta/metadata, teclado, almacenamiento
+fallido, contexto, selección modificada desde otra pestaña, swipe interrumpido al
+cambiar de cuenta, cap público/fracciones/cap oculto, tarjeta de 140 px con cifra
+larga, variantes, imagen nueva, desmontaje, swipe+click y layout de 320 px. Captura
+local inspeccionada. Los eventos de cuenta/pestaña son controlados y no equivalen
+a repetir una compra autenticada completa. No hubo pedidos, cobros ni correos.
+
+
+### Cierre publicado de controles del catálogo
+
+Fuente `9d1ec7a29c0c322c7f8d275dee9c79ffdf16edac`, compilación de producción y
+**30/30 tareas de tipos** aprobadas. Web de staging en `SUCCESS`, despliegue
+`034611cd-f404-45b2-8ead-d68806fe80d7`.
+
+**12 escenarios publicados** aprobados usando un producto real del catálogo con
+una variante y suficiente stock público para la comprobación. El script
+`scripts/staging/check-catalog-card-ui.cjs` lee el catálogo, utiliza un navegador
+nuevo sin cuenta y solo edita su almacenamiento local; bloquea cualquier POST
+remoto del navegador. Se comprobaron clics síncronos, decrementos, última unidad,
+metadata, teclado, errores de almacenamiento, invalidación de contexto, selección
+modificada externamente, swipe+click, targets de 44 × 44 px y reemplazo de una
+imagen real cuya respuesta se hizo fallar en el navegador. La misma referencia
+aparece en varias secciones: se comprobó que todas sus tarjetas muestran la misma
+cantidad. La imagen lazy se comprobó al desplazar la tarjeta a la vista.
+
+Captura publicada a 320 px inspeccionada. Los eventos de contexto/pestaña son
+simulados; no se probó una compra autenticada completa ni una reserva por sucursal.
+No se solicitaron pedidos, cobros ni correos. Esta entrega cambia únicamente la
+web de staging; no actualiza API, APK ni producción.

@@ -111,7 +111,8 @@ let stage = "setup";
     const variant = () => product.producto.variantes[0].id;
     const cart = (p) =>
       p.evaluate(() => JSON.parse(localStorage.getItem("gaespos_carrito") || "[]"));
-    const article = (p) => p.getByRole("article", { name: product.tituloPublico, exact: true });
+    const article = (p) =>
+      p.getByRole("article", { name: product.tituloPublico, exact: true }).first();
     const setup = async (qty = 2, brokenImage = false) => {
       if (context) await context.close();
       context = await browser.newContext({
@@ -178,6 +179,16 @@ let stage = "setup";
     await expect.poll(() => quantity(p)).toBe(4);
     safe(f);
     pass();
+    if (published) {
+      stage = "every displayed copy of the product stays synchronized across catalog sections";
+      for (const copy of await p
+        .getByRole("article", { name: product.tituloPublico, exact: true })
+        .all()) {
+        await expect(copy.locator('fieldset span[aria-live="polite"]')).toHaveText("4");
+      }
+      safe(f);
+      pass();
+    }
     stage = "two synchronous decrements each count without stale render quantities";
     await article(p)
       .getByRole("button", { name: "Quitar uno", exact: true })
@@ -411,6 +422,7 @@ let stage = "setup";
     if (published && product.fotosArray[0]) {
       stage = "a real published card replaces a broken image instead of keeping the browser error";
       ({ p, f } = await setup(2, true));
+      await article(p).scrollIntoViewIfNeeded();
       await expect(
         article(p).getByRole("img", {
           name: `Imagen no disponible: ${product.tituloPublico}`,
