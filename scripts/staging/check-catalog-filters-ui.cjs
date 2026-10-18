@@ -261,6 +261,11 @@ let stage = "setup";
     pass();
     stage = "320px dialog has no horizontal overflow and usable 44px apply/close targets";
     await p.setViewportSize({ width: 320, height: 740 });
+    assert.equal(
+      await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      true,
+      "mobile catalog must not overflow horizontally",
+    );
     assert.equal(await d.evaluate((el) => el.scrollWidth <= el.clientWidth), true);
     for (const name of ["Aplicar rango de precio", "Cerrar"]) {
       const size = await d.getByRole("button", { name, exact: true }).boundingBox();

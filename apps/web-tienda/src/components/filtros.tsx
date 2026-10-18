@@ -264,7 +264,7 @@ export function BarraFiltros({
             : `${total.toLocaleString("es-MX")} resultados`}
         </span>
 
-        <label className="ml-auto flex items-center gap-2 text-sm">
+        <label className="ml-auto flex min-w-0 items-center gap-2 text-sm">
           <span className="hidden text-slate-500 sm:inline">Ordenar</span>
           <select
             aria-label="Ordenar productos"
@@ -272,7 +272,7 @@ export function BarraFiltros({
             onChange={(e) =>
               setParam({ orden: e.target.value === "relevancia" ? null : e.target.value })
             }
-            className="gx-input min-h-11 min-w-0 !w-auto !rounded-xl !bg-white"
+            className="gx-input min-h-11 min-w-0 max-w-full !w-auto !rounded-xl !bg-white"
           >
             {ORDENES.map((o) => (
               <option key={o.value} value={o.value}>
