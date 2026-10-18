@@ -2046,3 +2046,64 @@ repitió una compra completa autenticada, y los cambios de contexto de cuenta
 se dispararon como eventos controlados del navegador. No hubo pedidos, cobros ni
 correos solicitados por estas pruebas. Esta entrega actualiza web/API de staging;
 no actualiza el APK ni producción.
+
+
+## Sugerencias e imágenes del carrito — 17 de octubre de 2026
+
+Se encontraron dos problemas: las sugerencias agregaban la primera variante de
+un producto sin elección y podían conservar resultados anteriores tras fallos o
+carreras de consultas. El carrito y su franja flotante tampoco reemplazaban las
+miniaturas rotas.
+
+- Las recomendaciones públicas ahora dicen «También te puede gustar», sin
+  atribuir al comprador un historial que no se consultó. Los productos de varias
+  variantes enlazan a elegir opciones y no muestran un precio como si una opción
+  ya estuviera seleccionada. La incorporación directa se limita a una variante.
+- Se omiten datos inválidos, precios no numéricos/negativos, productos agotados o
+  con menos de una unidad pública y productos con cualquier variante ya presente.
+  Se filtran campos del catálogo, se rechazan esquemas de imagen inseguros y se
+  conservan precios cero/promociones válidas sin convertir datos faltantes en cero.
+- Consulta con debounce de 300 ms, plazo de 15 segundos incluyendo lectura del
+  cuerpo, cancelación al renovar/desmontar y generación comprobada antes de
+  mostrar o incorporar. Los errores retiran sugerencias antiguas sin alterar el
+  carrito; al volver a la pestaña o conexión se vuelve a consultar. El catálogo
+  existente conserva su política de caché: esta UI no promete stock reservado ni
+  sustituye la revisión de precio/disponibilidad del carrito y del checkout.
+- Cambios de cuenta invalidan inmediatamente los controles anteriores. Antes de
+  agregar se lee el carrito actual, evitando incorporar de nuevo un producto
+  agregado en otra pestaña. Dos clics síncronos incorporan una sola unidad. Los
+  errores de almacenamiento muestran un aviso sin afirmar éxito.
+- La sincronización que no cambia los identificadores del carrito no recarga ni
+  hace parpadear las sugerencias. Se conservan hasta cuatro recomendaciones y
+  todos los controles de incorporar/seleccionar opciones tienen al menos 44 px.
+- `ImagenCompra` mantiene el espacio reservado y muestra un reemplazo accesible
+  cuando falta/falla la imagen. Se utiliza en carrito, sugerencias y franja flotante.
+  El fallo se asocia a la URL: cambiarla permite cargar la nueva imagen.
+- **792/792 pruebas web** (29 nuevas), compilación de producción y **30/30 tareas
+  de tipos** aprobadas. **18 escenarios locales de navegador** con componentes
+  reales, catálogo ficticio y carrito local: variantes, filtros, doble clic,
+  sincronización sin cambios, seis fallos/vacío, contexto, selección cambiada en
+  otra pestaña, fallo de almacenamiento, respuesta tardía, desmontaje, recuperación
+  de imagen al cambiar URL, reemplazos y targets/layout de 320 px. Captura local
+  inspeccionada. Ninguna prueba creó pedidos ni escribió carritos en el API.
+
+Alcance: web de staging; no cambia API, APK ni producción. Se preserva el diseño
+existente de cuenta/carrito y su validación final de precios e inventario.
+
+
+### Cierre publicado de sugerencias e imágenes
+
+Fuente `61ac85f2b7f25f662c25ecbac33c982915df1e7d`, web de staging en `SUCCESS`,
+despliegue `c5851274-75e6-41f5-911d-e4386f69507e`.
+
+**18 escenarios publicados** aprobados. Los casos de fallo/variantes/carrera usan
+catálogo simulado y un carrito exclusivamente local del navegador, bloqueando
+escrituras remotas. Se comprobaron también los reemplazos reales de imágenes en
+carrito y franja flotante, así como la presentación de sugerencias con el catálogo
+real (GET del BFF sin interceptar), sin incorporar productos reales. Se inspeccionó
+la captura publicada de 320 px. El script distingue el modo de catálogo real de
+sus fixtures de prueba.
+
+Los eventos de cuenta y selección en otra pestaña se simularon; no se repitió un
+flujo autenticado completo. No se solicitaron pedidos, cobros, cambios de stock ni
+emails. API/APK/producción no se modificaron por esta entrega.

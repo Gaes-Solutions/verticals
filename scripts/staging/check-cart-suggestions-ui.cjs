@@ -152,6 +152,7 @@ let stage = "setup";
           return r.fulfill({ status: 200, json: { envioGratisDesde: null } });
         if (pathname !== "/api/catalogo") return r.continue();
         f.gets++;
+        if (f.mode === "real") return r.continue();
         if (f.mode === "hold")
           await new Promise((resolve) => {
             f.release = resolve;
