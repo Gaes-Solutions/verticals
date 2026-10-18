@@ -163,7 +163,8 @@ export function ProductoCompra({
       <div className="mt-1 flex flex-wrap gap-2 text-sm">
         {envioGratis && (
           <span className="gx-badge-ok flex items-center gap-1">
-            <Truck size={14} strokeWidth={2} /> Envío gratis
+            <Truck aria-hidden="true" className="shrink-0" size={14} strokeWidth={2} /> Envío gratis
+            según zona y tarifa
           </span>
         )}
         {(stockPorVariante

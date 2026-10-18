@@ -34,16 +34,31 @@ export default function CarritoPage() {
   const [envioGratisDesde, setEnvioGratisDesde] = useState<number | null>(null);
 
   useEffect(() => {
+    const cancel = new AbortController();
     const refresh = () => setItems(leerCarrito());
     refresh();
     window.addEventListener("carrito-actualizado", refresh);
-    fetch("/api/tienda-config")
-      .then((r) => r.json())
+    fetch("/api/tienda-config", {
+      cache: "no-store",
+      signal: AbortSignal.any([cancel.signal, AbortSignal.timeout(20000)]),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Configuración no disponible");
+        return r.json();
+      })
       .then((c: { envioGratisDesde: string | null }) => {
-        if (c.envioGratisDesde) setEnvioGratisDesde(Number(c.envioGratisDesde));
+        if (
+          !cancel.signal.aborted &&
+          typeof c?.envioGratisDesde === "string" &&
+          c.envioGratisDesde.trim()
+        )
+          setEnvioGratisDesde(Number(c.envioGratisDesde));
       })
       .catch(() => {});
-    return () => window.removeEventListener("carrito-actualizado", refresh);
+    return () => {
+      cancel.abort();
+      window.removeEventListener("carrito-actualizado", refresh);
+    };
   }, []);
 
   const total = visibles.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
@@ -92,7 +107,7 @@ export default function CarritoPage() {
       </div>
       <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="min-w-0">
-          {envioGratisDesde && verificacion.listo && (
+          {envioGratisDesde != null && verificacion.listo && (
             <div className="mb-4">
               <BarraEnvioGratis subtotal={total} umbral={envioGratisDesde} />
             </div>

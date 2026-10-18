@@ -4,7 +4,7 @@ import type { ProductoPublicado } from "@/lib/api";
 import { siguienteCantidadCatalogo } from "@/lib/cantidad-catalogo";
 import { actualizarCantidad, agregar, leerCarrito } from "@/lib/carrito-store";
 import { ariaCalificacion, estrellasDe, etiquetaUnidad, lineaEntrega } from "@/lib/etiquetas";
-import { Clock, Store, Truck } from "lucide-react";
+import { Clock, Store } from "lucide-react";
 import Link from "next/link";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { BotonAgregar } from "./boton-agregar";
@@ -72,11 +72,6 @@ export function ProductoCard({
           -{p.descuentoPct}%
         </span>
       )}
-      {p.envioGratis && (
-        <span className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md bg-ok px-2 py-0.5 font-bold text-white text-xs shadow">
-          <Truck size={12} strokeWidth={2.5} /> Envío gratis
-        </span>
-      )}
       <Link href={`/producto/${p.slugSeo}`} aria-label={`Ver ${p.tituloPublico}`}>
         <div className="store-product-image flex aspect-square items-center justify-center overflow-hidden">
           <ImagenCompra
@@ -111,6 +106,9 @@ export function ProductoCard({
           entrega={entrega}
         />
         <div className="mt-1.5 flex min-h-[20px] flex-wrap gap-1">
+          {p.envioGratis && (
+            <span className="text-ok text-xs">Envío gratis según zona y tarifa</span>
+          )}
           {p.stockBajo && p.stockPublico != null && (
             <span className="gx-badge-warn text-[11px]">¡Últimas {p.stockPublico}!</span>
           )}
