@@ -27,7 +27,9 @@ export function hayFiltrosActivos(sp: SearchParams = {}): boolean {
 
 /** Querystring del API de catálogo a partir de los searchParams de la URL. */
 export function queryCatalogo(sp: SearchParams): string {
-  const pageActual = Math.max(1, Number(sp.page) || 1);
+  const rawPage = Number(sp.page);
+  const pageActual =
+    Number.isSafeInteger(rawPage) && rawPage >= 1 && rawPage <= 1000000 ? rawPage : 1;
   const qs = new URLSearchParams({ pageSize: String(PAGE_SIZE), page: String(pageActual) });
   if (sp.q) qs.set("q", sp.q);
   // El filtro de la UI usa `cat` con el id público; el API lo recibe como categoriaPublicaId.

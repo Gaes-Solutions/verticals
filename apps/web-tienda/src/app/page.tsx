@@ -95,7 +95,6 @@ export default async function CatalogoPage({
     }
     // Error con reintento: conservamos el shell (incluidos los filtros activos
     // en la URL) para que el usuario ajuste filtros o reintente sin perder contexto.
-    const detalle = err instanceof Error ? err.message : "Error desconocido. Inténtalo de nuevo.";
     return (
       <div className="lg:flex lg:gap-6">
         <aside className="hidden w-60 shrink-0 lg:block">
@@ -104,9 +103,10 @@ export default async function CatalogoPage({
           </div>
         </aside>
         <div className="min-w-0 flex-1">
+          <BarraFiltros categorias={categorias} total={null} />
           <EstadoError
             titulo="No se pudo cargar el catálogo"
-            descripcion={`${detalle} Revisa tu conexión o inténtalo de nuevo.`}
+            descripcion="No pudimos consultar los productos. Revisa tu conexión o vuelve a intentarlo; tus filtros se conservan."
           />
         </div>
       </div>

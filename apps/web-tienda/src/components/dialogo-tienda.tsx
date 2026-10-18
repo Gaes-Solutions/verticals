@@ -20,9 +20,11 @@ export function DialogoTienda({
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog?.showModal();
     return () => {
       if (dialog?.open) dialog.close();
+      if (previous?.isConnected) previous.focus();
     };
   }, []);
   return (
@@ -41,7 +43,7 @@ export function DialogoTienda({
         </h2>
         <button
           type="button"
-          onClick={onCerrar}
+          onClick={() => ref.current?.close()}
           disabled={bloqueado}
           aria-label="Cerrar"
           className="min-h-11 min-w-11 rounded-lg p-2 text-slate-500 disabled:opacity-40"

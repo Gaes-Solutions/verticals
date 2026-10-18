@@ -24,10 +24,13 @@ export function Paginacion({
   const paginas: number[] = [];
   for (let p = Math.max(1, hasta - 4); p <= hasta; p++) paginas.push(p);
 
-  const btn = "flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm";
+  const btn = "flex h-11 min-w-11 items-center justify-center rounded-lg border px-3 text-sm";
 
   return (
-    <nav className="mt-8 flex flex-wrap items-center justify-center gap-2">
+    <nav
+      aria-label="Páginas del catálogo"
+      className="mt-8 flex flex-wrap items-center justify-center gap-2"
+    >
       {page > 1 && (
         <Link href={href(page - 1)} className={`${btn} border-slate-200 hover:border-marca`}>
           ← Anterior
