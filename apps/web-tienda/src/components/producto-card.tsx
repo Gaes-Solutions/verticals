@@ -1,12 +1,14 @@
 "use client";
 
 import type { ProductoPublicado } from "@/lib/api";
+import { siguienteCantidadCatalogo } from "@/lib/cantidad-catalogo";
 import { actualizarCantidad, agregar, leerCarrito } from "@/lib/carrito-store";
 import { ariaCalificacion, estrellasDe, etiquetaUnidad, lineaEntrega } from "@/lib/etiquetas";
-import { Clock, ImageOff, Store, Truck } from "lucide-react";
+import { Clock, Store, Truck } from "lucide-react";
 import Link from "next/link";
-import { type MouseEvent, useEffect, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { BotonAgregar } from "./boton-agregar";
+import { ImagenCompra } from "./imagen-compra";
 
 /** MSI configurable del tenant (viene de getTiendaConfig). */
 export interface MsiConfigPublica {
@@ -61,7 +63,10 @@ export function ProductoCard({
   const precio = promo ?? base;
 
   return (
-    <article className="store-product-card group relative flex flex-col overflow-hidden">
+    <article
+      aria-label={p.tituloPublico}
+      className="store-product-card group relative flex flex-col overflow-hidden"
+    >
       {p.enOferta && p.descuentoPct > 0 && (
         <span className="absolute left-2.5 top-2.5 z-10 rounded-md bg-offer px-2 py-0.5 font-bold text-offer-dark text-xs shadow">
           -{p.descuentoPct}%
@@ -74,7 +79,11 @@ export function ProductoCard({
       )}
       <Link href={`/producto/${p.slugSeo}`} aria-label={`Ver ${p.tituloPublico}`}>
         <div className="store-product-image flex aspect-square items-center justify-center overflow-hidden">
-          <ImagenProducto src={p.fotosArray[0]} alt={p.tituloPublico} />
+          <ImagenCompra
+            src={p.fotosArray[0]}
+            alt={p.tituloPublico}
+            className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105"
+          />
         </div>
       </Link>
       <div className="flex flex-1 flex-col p-4">
@@ -111,21 +120,6 @@ export function ProductoCard({
         </div>
       </div>
     </article>
-  );
-}
-
-function ImagenProducto({ src, alt }: { src?: string; alt: string }) {
-  const [fallo, setFallo] = useState(false);
-  if (!src || fallo) return <ImageOff size={40} strokeWidth={1.5} className="text-slate-300" />;
-  return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      decoding="async"
-      onError={() => setFallo(true)}
-      className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105"
-    />
   );
 }
 
@@ -185,20 +179,60 @@ function PrecioProducto({
  * stepper (− n ＋) sin salir del grid. Sincronizado con el carrito real.
  */
 function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
+  return (
+    <CantidadProducto
+      key={JSON.stringify([p.id, p.producto.variantes.map((v) => v.id)])}
+      p={p}
+      precio={precio}
+    />
+  );
+}
+function CantidadProducto({ p, precio }: { p: ProductoPublicado; precio: string }) {
   const variante = p.producto.variantes[0];
-  const [cant, setCant] = useState(0);
+  const varianteId = variante?.id;
+  const [lectura, setLectura] = useState({ cantidad: 0, contexto: 0, lista: false });
+  const [error, setError] = useState("");
+  const contexto = useRef(0);
+  const activo = useRef(false);
+  const cant = lectura.cantidad;
 
   useEffect(() => {
-    if (!variante) return;
-    const leer = () =>
-      setCant(leerCarrito().find((i) => i.varianteId === variante.id)?.cantidad ?? 0);
+    activo.current = true;
+    if (!varianteId)
+      return () => {
+        activo.current = false;
+      };
+    const leer = () => {
+      try {
+        setLectura({
+          cantidad: leerCarrito().find((i) => i.varianteId === varianteId)?.cantidad ?? 0,
+          contexto: contexto.current,
+          lista: true,
+        });
+      } catch {
+        setLectura({ cantidad: 0, contexto: contexto.current, lista: false });
+        setError("No pudimos leer tu carrito. Revisa que el navegador permita guardar datos.");
+      }
+    };
+    const cambiarContexto = () => {
+      contexto.current++;
+      setError("");
+      leer();
+    };
     leer();
     window.addEventListener("carrito-actualizado", leer);
-    return () => window.removeEventListener("carrito-actualizado", leer);
-  }, [variante?.id]);
+    window.addEventListener("carrito-contexto-cambiado", cambiarContexto);
+    return () => {
+      activo.current = false;
+      window.removeEventListener("carrito-actualizado", leer);
+      window.removeEventListener("carrito-contexto-cambiado", cambiarContexto);
+    };
+  }, [varianteId]);
 
   if (!variante) return null;
-  const sinStock = p.stockPublico != null && p.stockPublico <= 0;
+  const sinStock =
+    p.stockPublico != null && (!Number.isFinite(p.stockPublico) || p.stockPublico < 1);
+  const precioValido = Number.isFinite(Number(precio)) && Number(precio) >= 0;
   const linea = {
     varianteId: variante.id,
     titulo: p.tituloPublico,
@@ -206,6 +240,21 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
     ...(p.fotosArray[0] ? { imagenUrl: p.fotosArray[0] } : {}),
     slugSeo: p.slugSeo,
   };
+
+  function cambiar(cambio: 1 | -1) {
+    if (!variante || !activo.current || !lectura.lista || lectura.contexto !== contexto.current)
+      return;
+    try {
+      const actual = leerCarrito().find((i) => i.varianteId === variante.id);
+      const next = siguienteCantidadCatalogo(actual?.cantidad ?? 0, cambio, p.stockPublico);
+      if (next === null || (cambio > 0 && !precioValido)) return;
+      setError("");
+      if (actual) actualizarCantidad(variante.id, next);
+      else if (next > 0) agregar({ ...linea, cantidad: next });
+    } catch {
+      setError("No pudimos confirmar el cambio. Revisa tu carrito antes de volver a intentar.");
+    }
+  }
 
   function alTocar(e: MouseEvent<HTMLElement>) {
     e.preventDefault();
@@ -221,42 +270,70 @@ function QuickAdd({ p, precio }: { p: ProductoPublicado; precio: string }) {
 
   if (cant === 0) {
     return (
-      <BotonAgregar disabled={sinStock} onAgregar={() => agregar({ ...linea, cantidad: 1 })} />
+      <div>
+        <BotonAgregar
+          key={lectura.contexto}
+          disabled={sinStock || !lectura.lista || !precioValido}
+          textoDeshabilitado={
+            !lectura.lista ? "Preparando…" : !precioValido ? "No disponible" : "Agotado"
+          }
+          onAgregar={() => cambiar(1)}
+        />
+        {error && (
+          <p role="alert" className="mt-2 text-danger text-xs">
+            {error}
+          </p>
+        )}
+      </div>
     );
   }
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: backdrop que solo detiene propagacion del click hacia la tarjeta-link; los botones internos (-/+) son focusables y operables con teclado, el contador en si no es un control
-    <div
-      className="flex w-full items-center justify-between rounded-lg bg-marca/10 ring-1 ring-marca/40"
-      onClick={alTocar}
-    >
-      <button
-        type="button"
-        aria-label="Quitar uno"
-        onClick={(e) => {
-          alTocar(e);
-          actualizarCantidad(variante.id, cant - 1);
-        }}
-        className="flex h-10 w-10 items-center justify-center rounded-l-lg font-bold text-lg text-marca transition hover:bg-marca/20"
+    <div>
+      <fieldset
+        key={lectura.contexto}
+        className="flex min-w-0 w-full items-center justify-between rounded-lg bg-marca/10 ring-1 ring-marca/40"
+        aria-label={`Cantidad de ${p.tituloPublico}`}
       >
-        −
-      </button>
-      <span className="font-bold text-marca text-sm" aria-live="polite">
-        {cant}
-      </span>
-      <button
-        type="button"
-        aria-label="Agregar uno"
-        disabled={p.stockPublico != null && cant >= p.stockPublico}
-        onClick={(e) => {
-          alTocar(e);
-          actualizarCantidad(variante.id, cant + 1);
-        }}
-        className="flex h-10 w-10 items-center justify-center rounded-r-lg font-bold text-lg text-marca transition hover:bg-marca/20 disabled:opacity-30"
-      >
-        +
-      </button>
+        <button
+          type="button"
+          aria-label="Quitar uno"
+          onClick={(e) => {
+            alTocar(e);
+            cambiar(-1);
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-l-lg font-bold text-lg text-marca transition hover:bg-marca/20"
+        >
+          −
+        </button>
+        <span
+          className="min-w-0 flex-1 break-all text-center font-bold text-marca text-sm"
+          aria-live="polite"
+        >
+          {cant}
+        </span>
+        <button
+          type="button"
+          aria-label="Agregar uno"
+          disabled={
+            !lectura.lista ||
+            !precioValido ||
+            siguienteCantidadCatalogo(cant, 1, p.stockPublico) === null
+          }
+          onClick={(e) => {
+            alTocar(e);
+            cambiar(1);
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-r-lg font-bold text-lg text-marca transition hover:bg-marca/20 disabled:opacity-30"
+        >
+          +
+        </button>
+      </fieldset>
+      {error && (
+        <p role="alert" className="text-danger text-xs">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -7,7 +7,8 @@ import { useRef, useState } from "react";
 export function BotonAgregar({
   disabled = false,
   onAgregar,
-}: { disabled?: boolean; onAgregar: () => void }) {
+  textoDeshabilitado = "Agotado",
+}: { disabled?: boolean; onAgregar: () => void; textoDeshabilitado?: string }) {
   const [avance, setAvance] = useState(0);
   const inicio = useRef<{ x: number; y: number; umbral: number; pointerId: number } | null>(null);
   const omitirClick = useRef(false);
@@ -15,7 +16,7 @@ export function BotonAgregar({
     <button
       type="button"
       disabled={disabled}
-      aria-label={disabled ? "Agotado" : "Agregar"}
+      aria-label={disabled ? textoDeshabilitado : "Agregar"}
       title="Toca para agregar o desliza este botón hacia la derecha"
       className="store-add-button store-swipe-button w-full disabled:cursor-not-allowed disabled:opacity-40"
       style={{ touchAction: "pan-y" }}
@@ -78,7 +79,7 @@ export function BotonAgregar({
       <span aria-hidden="true" className="store-swipe-fill" style={{ width: `${avance}%` }} />
       <span className="relative flex flex-col items-center">
         <span className="flex items-center gap-1.5">
-          <Plus size={15} /> {disabled ? "Agotado" : "Agregar"}
+          <Plus size={15} /> {disabled ? textoDeshabilitado : "Agregar"}
         </span>
         {!disabled && (
           <small className="flex items-center gap-1 text-[9px] font-normal opacity-75">
