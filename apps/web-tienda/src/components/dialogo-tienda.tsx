@@ -1,6 +1,6 @@
 "use client";
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
 
 /** Native modal: traps focus, supports Escape and returns focus to its trigger. */
 export function DialogoTienda({
@@ -9,24 +9,28 @@ export function DialogoTienda({
   onCerrar,
   children,
   className,
+  focoAlCerrar,
 }: {
   titulo: string;
   bloqueado?: boolean;
   onCerrar: () => void;
   children: ReactNode;
   className?: string;
+  focoAlCerrar?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previous =
+      focoAlCerrar?.current ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     dialog?.showModal();
     return () => {
       if (dialog?.open) dialog.close();
       if (previous?.isConnected) previous.focus();
     };
-  }, []);
+  }, [focoAlCerrar]);
   return (
     <dialog
       ref={ref}

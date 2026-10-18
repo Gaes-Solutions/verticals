@@ -1,163 +1,199 @@
 "use client";
-
-import type { CatalogoResponse } from "@/lib/api";
-import { agregar } from "@/lib/carrito-store";
-import type { PedidoCliente, PedidoDetalleCliente } from "@/lib/cliente";
+import type { LineaRepetible } from "@/lib/repetir-pedido-contract";
+import { useRepetirPedido } from "@/lib/use-repetir-pedido";
+import type { LineaVerificada } from "@/lib/verificar-carrito-contract";
 import { Check, ShoppingBasket } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
+import { DialogoTienda } from "./dialogo-tienda";
 
-/** Pedidos que cuentan como "despensa" repetible (ya entregados al cliente). */
-const ESTADOS_ENTREGADOS = ["entregado", "recogido"];
-/** Tope del catálogo público para validar disponibilidad antes de re-agregar. */
-const TOPE_CATALOGO = 100;
-
-type Fase = "cargando" | "listo" | "agregando" | "exito";
-
-interface LineaRepetible {
-  varianteId: string;
-  nombre: string;
-  cantidad: number;
-  precioUnitario: string;
-}
-
-/**
- * Franja "Repetir tu despensa": trae el último pedido entregado y, con un
- * toque, vuelve a poner sus líneas en el carrito. Sin sesión o sin pedidos
- * no renderiza nada.
- */
+/** A delivered order is a starting selection, never a promise of historical prices or stock. */
 export function RepetirDespensa() {
-  const [folio, setFolio] = useState<string | null>(null);
-  const [total, setTotal] = useState(0);
-  const [lineas, setLineas] = useState<LineaRepetible[]>([]);
-  const [fase, setFase] = useState<Fase>("cargando");
-  const [aviso, setAviso] = useState<string | null>(null);
-
+  const p = useRepetirPedido();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const resultado = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
-    let activo = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/cuenta/pedidos", { cache: "no-store" });
-        if (!res.ok) return;
-        const pedidos = (await res.json()) as PedidoCliente[];
-        if (!Array.isArray(pedidos)) return;
-        const ultimo = pedidos
-          .filter((p) => ESTADOS_ENTREGADOS.includes(p.statusPedido))
-          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-        if (!ultimo) return;
-        const detRes = await fetch(
-          `/api/cuenta/pedidos/${encodeURIComponent(ultimo.folioPublico)}`,
-          { cache: "no-store" },
-        );
-        if (!detRes.ok) return;
-        const detalle = (await detRes.json()) as PedidoDetalleCliente;
-        if (!activo || !detalle?.items?.length) return;
-        setFolio(detalle.folioPublico);
-        setTotal(Number(detalle.total));
-        setLineas(
-          detalle.items.map((it) => ({
-            varianteId: it.varianteId,
-            nombre: it.nombre,
-            cantidad: it.cantidad,
-            precioUnitario: it.precioUnitario,
-          })),
-        );
-        setFase("listo");
-      } catch {
-        // Sin franja: el home sigue funcionando igual.
-      }
-    })();
-    return () => {
-      activo = false;
-    };
-  }, []);
-
-  async function repetir() {
-    if (fase !== "listo") return;
-    setFase("agregando");
-    setAviso(null);
-    try {
-      // Validar disponibilidad contra el catálogo público; si el catálogo es
-      // mayor al tope no se puede verificar todo y se agrega igual.
-      const disponibles = new Set<string>();
-      const catRes = await fetch(`/api/catalogo?soloDisponibles=true&pageSize=${TOPE_CATALOGO}`, {
-        cache: "no-store",
-      });
-      let verificado = false;
-      if (catRes.ok) {
-        const cat = (await catRes.json()) as CatalogoResponse;
-        if (cat.total <= TOPE_CATALOGO) {
-          verificado = true;
-          for (const item of cat.items) {
-            for (const v of item.producto.variantes) disponibles.add(v.id);
-          }
-        }
-      }
-      const faltantes = verificado
-        ? lineas.filter((l) => !disponibles.has(l.varianteId)).length
-        : 0;
-      for (const l of lineas) {
-        if (verificado && !disponibles.has(l.varianteId)) continue;
-        agregar({
-          varianteId: l.varianteId,
-          titulo: l.nombre,
-          precio: l.precioUnitario,
-          cantidad: l.cantidad,
-        });
-      }
-      if (lineas.length > 0 && faltantes / lineas.length > 0.2) {
-        setAviso("Algunos productos ya no están disponibles y se omitieron.");
-      }
-      setFase("exito");
-    } catch {
-      setFase("listo");
-      setAviso("No se pudo repetir el pedido. Inténtalo de nuevo.");
-    }
-  }
-
-  if (fase === "cargando" || !folio) return null;
-
+    if (p.fase === "exito") resultado.current?.focus();
+  }, [p.fase]);
+  if (!p.datos && !p.aviso) return null;
+  const ocupado = p.fase === "consultando" || p.fase === "confirmando";
+  const precios = new Map(p.vista?.precios.map((i) => [i.varianteId, i]));
+  const total =
+    p.datos?.pedido.items.reduce(
+      (sum, i) =>
+        sum +
+        (p.vista?.seleccionadas.includes(i.varianteId)
+          ? Number(precios.get(i.varianteId)?.precio ?? 0) * i.cantidad
+          : 0),
+      0,
+    ) ?? 0;
   return (
-    <section className="mb-8 flex flex-col gap-2 rounded-xl bg-gradient-to-r from-brand-dark to-brand p-4 text-white shadow-lg sm:flex-row sm:items-center sm:gap-4">
-      <div className="flex flex-1 items-center gap-3">
-        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white/15">
-          <ShoppingBasket size={22} strokeWidth={2} />
-        </span>
-        <div className="min-w-0">
-          <p className="font-bold">Repetir tu despensa</p>
-          <p className="truncate text-white/85 text-sm">
-            Pedido #{folio} · {lineas.length} producto{lineas.length === 1 ? "" : "s"} · $
-            {total.toFixed(2)}
-          </p>
+    <section
+      aria-label="Repetir tu despensa"
+      className="mb-8 rounded-xl bg-gradient-to-r from-brand-dark to-brand p-4 text-white shadow-lg"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
+            <ShoppingBasket aria-hidden="true" size={22} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-bold">Repetir tu despensa</h2>
+            {p.datos && (
+              <p className="break-words text-sm text-white/85">
+                Pedido #{p.datos.pedido.folioPublico} · {p.datos.pedido.items.length} productos
+              </p>
+            )}
+            <p className="text-sm text-white/85">
+              Elige qué volver a comprar con precios actuales.
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        {fase === "exito" ? (
-          <span className="flex items-center gap-2 font-semibold text-sm">
-            <Check size={16} strokeWidth={2.5} /> Listo ·
-            <Link href="/carrito" className="underline underline-offset-2">
+        {p.fase === "exito" ? (
+          <output className="flex items-center gap-2 text-sm font-semibold">
+            <Check aria-hidden="true" size={16} /> Selección agregada ·{" "}
+            <Link
+              ref={resultado}
+              href="/carrito"
+              className="inline-flex min-h-11 items-center underline underline-offset-2"
+            >
               Ver carrito
             </Link>
-          </span>
+          </output>
         ) : (
           <button
+            ref={trigger}
             type="button"
-            onClick={repetir}
-            disabled={fase === "agregando"}
-            className="rounded-full bg-white px-5 py-2.5 font-bold text-brand-dark text-sm shadow transition hover:scale-105 disabled:cursor-wait disabled:opacity-70"
+            disabled={ocupado}
+            onClick={
+              p.actualizarPagina
+                ? () => window.location.reload()
+                : p.datos
+                  ? p.revisar
+                  : p.reintentar
+            }
+            className="min-h-11 shrink-0 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-brand-dark shadow disabled:cursor-wait disabled:opacity-70"
           >
-            {fase === "agregando" ? "Agregando…" : "1 toque"}
+            {ocupado
+              ? "Consultando…"
+              : p.actualizarPagina
+                ? "Actualizar página"
+                : p.datos
+                  ? "Revisar productos"
+                  : "Volver a intentar"}
           </button>
         )}
       </div>
-      <div aria-live="polite" className="sr-only">
-        {fase === "agregando"
-          ? "Agregando productos al carrito…"
-          : fase === "exito"
-            ? "Pedido agregado al carrito"
-            : ""}
-      </div>
-      {aviso && <p className="text-white/90 text-xs sm:basis-full">{aviso}</p>}
+      {!p.vista && p.aviso && (
+        <p role="alert" className="mt-3 text-sm">
+          {p.aviso}
+        </p>
+      )}
+      {p.vista && p.datos && (
+        <DialogoTienda
+          titulo="Revisa los productos para repetir"
+          bloqueado={ocupado}
+          focoAlCerrar={trigger}
+          onCerrar={p.cerrar}
+        >
+          <p className="mb-3 text-sm text-slate-600">
+            Se sumarán a tu carrito actual. Los productos sin disponibilidad no se agregan. Esta
+            revisión no reserva existencias.
+          </p>
+          <ul className="divide-y divide-slate-100">
+            {p.datos.pedido.items.map((item) => (
+              <LineaPedido
+                key={item.varianteId}
+                item={item}
+                precio={precios.get(item.varianteId)}
+                previa={p.vista?.base.find((i) => i.varianteId === item.varianteId)?.cantidad ?? 0}
+                seleccionada={p.vista?.seleccionadas.includes(item.varianteId) ?? false}
+                ocupado={ocupado}
+                seleccionar={() => p.seleccionar(item.varianteId)}
+              />
+            ))}
+          </ul>
+          {!p.vista.seleccionadas.length && (
+            <p className="mt-3 text-sm text-slate-600">
+              No hay productos seleccionados para agregar.
+            </p>
+          )}
+          <p className="mt-4 font-semibold">Subtotal a agregar: ${total.toFixed(2)}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Envío y descuentos se confirman al pagar. Los precios se vuelven a revisar al confirmar.
+          </p>
+          {p.aviso && (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {p.aviso}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={p.confirmar}
+              disabled={ocupado || !p.vista.seleccionadas.length}
+              className="gx-btn-primary min-h-11"
+            >
+              {p.fase === "confirmando" ? "Verificando…" : "Agregar selección"}
+            </button>
+            <Link
+              href="/carrito"
+              aria-disabled={ocupado}
+              className="gx-btn-secondary min-h-11"
+              onClick={(e) => {
+                if (ocupado) e.preventDefault();
+              }}
+            >
+              Revisar mi carrito
+            </Link>
+          </div>
+        </DialogoTienda>
+      )}
     </section>
+  );
+}
+
+function LineaPedido({
+  item,
+  precio,
+  previa,
+  seleccionada,
+  ocupado,
+  seleccionar,
+}: {
+  item: LineaRepetible;
+  precio: LineaVerificada | undefined;
+  previa: number;
+  seleccionada: boolean;
+  ocupado: boolean;
+  seleccionar: () => void;
+}) {
+  const disponible = precio?.estado === "publicado";
+  return (
+    <li className="py-2">
+      <label className="flex min-h-11 items-start gap-3 py-2">
+        <input
+          type="checkbox"
+          checked={seleccionada}
+          disabled={!disponible || ocupado}
+          onChange={seleccionar}
+          className="mt-1 h-5 w-5 shrink-0"
+        />
+        <span className="min-w-0 flex-1 break-words">
+          <span className="block font-medium">{item.nombre}</span>
+          <span className="block text-sm text-slate-600">
+            Agregar {item.cantidad}
+            {previa > 0 ? ` · Ya tienes ${previa}` : ""}
+          </span>
+          <span className={`block text-sm ${disponible ? "text-marca" : "text-danger"}`}>
+            {disponible
+              ? `$${Number(precio.precio).toFixed(2)} c/u`
+              : precio?.estado === "insuficiente"
+                ? "Sin existencia suficiente para sumar esta cantidad"
+                : "Ya no está disponible"}
+          </span>
+        </span>
+      </label>
+    </li>
   );
 }

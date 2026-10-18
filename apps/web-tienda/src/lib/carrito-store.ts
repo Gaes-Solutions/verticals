@@ -10,6 +10,9 @@ export interface CarritoLineaLocal {
 }
 
 let KEY = "gaespos_carrito";
+let propietario: string | null = null;
+/** Includes the tenant as well as the buyer; never infer ownership from a response alone. */
+export const propietarioCarrito = () => propietario;
 function recibirCambioExterno(event: StorageEvent) {
   if (event.storageArea !== localStorage || (event.key !== null && event.key !== KEY)) return;
   window.dispatchEvent(new Event("carrito-actualizado"));
@@ -33,6 +36,7 @@ export function configurarCarrito(
   const nextKey = owner ? `gaespos_carrito_cuenta:${owner}` : "gaespos_carrito";
   const changed = nextKey !== KEY;
   KEY = nextKey;
+  propietario = owner;
   onEdit = edit;
   onFlush = flush;
   window.removeEventListener("storage", recibirCambioExterno);
