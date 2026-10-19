@@ -86,7 +86,7 @@ artefactos de la versión anterior. El ejecutor y el juez usan `-a never` con
 sandbox y `--ephemeral`: no se deshabilita el aislamiento para evitar prompts.
 Además de `CODEX_HOME`, el HOME del proceso es su directorio temporal privado.
 Se comprueban propietario, rutas sin symlinks, ubicación temporal fuera del
-checkout y permisos privados (directorio0700/archivo0600). La clave de auth se
+checkout y permisos privados (directorio 0700 / archivo 0600). La clave de auth se
 captura solo en el controlador antes de ejecutar al agente; el filtro de
 artefactos sigue detectándola aunque el agente borre su archivo de login.
 
@@ -100,11 +100,37 @@ La última falla cerrada; las dos intermedias no instalan ni autentican agentes.
 
 Se instaló y probó la CLI oficial real 0.130.0 únicamente con `--help` y un login
 local de clave sintética no funcional. Se verificaron opciones, formato de
-`auth.json` y permisos0600; no se invocó inferencia ni se usó una clave real.
+`auth.json` y permisos 0600; no se invocó inferencia ni se usó una clave real.
 Esto verifica compatibilidad del arranque, no disponibilidad de crédito,
 autenticación del proveedor o calidad de respuesta de un modelo real.
 
-El script antiguo `autonomous-front-cycle.sh` termina siempre con código2,
+El script antiguo `autonomous-front-cycle.sh` termina siempre con código 2,
 incluso con su antigua variable de opt-in; no existe un camino alterno que
 vuelva a habilitar al ejecutor retirado. La activación y promoción permanecen
 separadas: esta migración no cambia main, producción ni las variables de GitHub.
+
+### Comprobación en GitHub
+
+La corrida [39263903443](https://github.com/Gaes-Solutions/verticals/actions/runs/39263903443)
+sobre `49484d3627126ff26b8be65ef0358c2498acaf04` terminó success:
+retiro 1/1, fases 16/16 e integración con Docker 18/18 sin omisiones, más
+sintaxis, actionlint y privacidad de evidencia. El job independiente de evidencia
+también terminó success. Se descargaron los resultados por Git y se verificaron
+commit, códigos de salida y SHA-256 de logs. No se ejecutaron modelos reales,
+no se enviaron correos ni se crearon PR de producto en estas pruebas.
+
+### Ejecutor opcional de incidentes
+
+`apps/api/src/scripts/run-approved-incident.ts` también rechaza cualquier
+proveedor distinto de `codex` antes de consultar incidentes o iniciar una CLI.
+Ocho pruebas aisladas verifican desactivación, proveedor retirado/inválido y el
+camino Codex con salida marcada como pendiente de revisión. No usan DB, claves
+ni modelos reales. Se repiten explícitamente en PR Verify con:
+
+```bash
+pnpm --filter @gaespos/api exec vitest run --config test/run-approved-incident-unit.config.ts
+```
+
+El archivo `.unit.ts` usa una configuración sin el setup de DB de la suite API;
+no cambia ese setup global ni se suma a los 1401 casos API de la ronda anterior.
+Esta retirada no activa el ejecutor de incidentes ni acredita una ejecución real.

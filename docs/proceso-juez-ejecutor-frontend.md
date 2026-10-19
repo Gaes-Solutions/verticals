@@ -141,7 +141,7 @@ revisa sin escritura, con validación aislada entre ambos. El script antiguo se
 retiró permanentemente. Ya no se necesita CLI ni clave de Kimi. El preflight
 omite login/instalación cuando no hay tarea o existe un PR esperando revisión.
 
-Regresiones locales aprobadas: fases16/16, retiro1/1 e integración Docker18/18.
-La CLI real0.130.0 se comprobó con ayuda y autenticación local sintética, sin
+Regresiones locales aprobadas: fases 16/16, retiro 1/1 e integración Docker 18/18.
+La CLI real 0.130.0 se comprobó con ayuda y autenticación local sintética, sin
 inferencia. Sigue pendiente una corrida con proveedor real para declarar activo
 el proceso; no se cambió la activación ni main en esta sustitución.

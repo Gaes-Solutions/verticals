@@ -99,6 +99,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Verify incident runner rejects retired providers without DB or model calls
+        run: pnpm --filter @gaespos/api exec vitest run --config test/run-approved-incident-unit.config.ts
+
       - name: Platform workflows in disposable environment
         run: node scripts/testing/run-platform-workflows.cjs
 
