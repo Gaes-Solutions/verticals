@@ -1,0 +1,23 @@
+{
+  "sourceCommit": "e09b15d7a33d3bcd9c3a435d6269919bdd7823a8",
+  "runId": "39214567265",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/Gaes-Solutions/verticals/actions/runs/39214567265",
+  "jobResult": "success",
+  "evidenceComplete": true,
+  "testExitCode": 0,
+  "exitCodes": {
+    "syntax": 0,
+    "legacy": 0,
+    "phase": 0,
+    "integration": 0
+  },
+  "scope": "Synthetic agents, local bare Git and isolated Docker; no real models, mail or GitHub publication by tests.",
+  "logSha256": {
+    "qa-autonomy-artifacts/syntax.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "qa-autonomy-artifacts/legacy.log": "b154c61ca6930c45bd0a693408474947c7a93c51a0572ead611e1d781432a771",
+    "qa-autonomy-artifacts/phase.log": "f46c3660e19fccfa45e31ef8136bae5e57acb8a40d420a7e7128a3f19c2ddfc7",
+    "qa-autonomy-artifacts/integration.log": "3547efa410f72085eb21d29f0edeec01d0605dd2f65439f73246607371e5e0f3",
+    "qa-autonomy-artifacts/diagnostics.json": "8a24ca9607d09cd90f68313b268a2297587d58adbaaccea118cd1052c055514f"
+  }
+}
