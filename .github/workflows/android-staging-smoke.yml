@@ -13,6 +13,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: android-staging-smoke-${{ github.ref }}
   cancel-in-progress: true
@@ -56,12 +57,20 @@ jobs:
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
           find "$RUNNER_TEMP/native/cli" -path '*/bin/maestro' -printf '%h\n' >> "$GITHUB_PATH"
+      - name: Check immutable proof before repeating the same Android tests
+        id: proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/testing/verify-native-smoke-proof.py
       - name: Prepare isolated synthetic shopper credentials
+        if: steps.proof.outputs.reusable != 'true'
         run: python3 scripts/testing/prepare-native-fixture.py
       - name: Enable KVM for the disposable runner
+        if: steps.proof.outputs.reusable != 'true'
         run: |
           sudo chmod 666 /dev/kvm
       - uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
+        if: steps.proof.outputs.reusable != 'true'
         with:
           # Universal APK includes native x86_64 React Native and Hermes libraries.
           api-level: 35

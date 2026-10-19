@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
 const { publish } = require("./publish-staging-apks.cjs");
 
 function fixture(t, mode) {
@@ -48,6 +49,7 @@ if(a[0]==='api') {
  else if(a[1].includes('/git/ref/')) {if(!s.tag)fail();out({object:{type:'commit',sha:s.tag}});}
  else throw Error('unexpected api');
 } else if(a[1]==='create') {
+ if(s.mode==='create-failure'){save();console.error('HTTP 403 https://private.example/signed?token=secret-token');process.exit(1);}
  s.release={tag_name:a[2],name:'Approved QA',target_commitish:'a'.repeat(40),prerelease:true,draft:true,assets:[]};
  s.tag=s.mode==='badtarget'?'f'.repeat(40):'a'.repeat(40);save();
 } else if(a[1]==='upload') {
@@ -138,3 +140,66 @@ test("local artifact tamper fails before any GitHub call", (t) => {
   assert.throws(f.run, /Local APK integrity/);
   assert.equal(f.state().commands.length, 0);
 });
+
+test("CLI diagnostics expose only operation and status, never private stderr", (t) => {
+  const f = fixture(t, "create-failure");
+  assert.throws(f.run, (error) => {
+    assert.match(error.message, /release create; HTTP 403; exit 1/);
+    assert.doesNotMatch(error.message, /private\.example|secret-token|signed/);
+    return true;
+  });
+  assert.equal(
+    f.state().commands.some((c) => c[1] === "upload"),
+    false,
+  );
+});
+
+for (const mode of ["happy", "create-failure"]) {
+  test(`CLI persists safe publication evidence for ${mode}`, (t) => {
+    const f = fixture(t, mode);
+    fs.mkdirSync(path.join(f.dir, "native"));
+    for (const name of ["client.apk", "kiosk.apk"]) {
+      fs.copyFileSync(path.join(f.dir, name), path.join(f.dir, "native", name));
+    }
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(__dirname, "publish-staging-apks.cjs"),
+        path.join(f.dir, "manifest.json"),
+        path.join(f.dir, "notes.md"),
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          RUNNER_TEMP: f.dir,
+          GITHUB_REPOSITORY: "owner/repo",
+          PATH: `${f.dir}${path.delimiter}${process.env.PATH}`,
+        },
+        timeout: 10000,
+      },
+    );
+    const raw = fs.readFileSync(path.join(f.dir, "native", "results", "publication.json"), "utf8");
+    const report = JSON.parse(raw);
+    assert.doesNotMatch(
+      raw + result.stdout + result.stderr,
+      /private\.example|secret-token|signed\?/,
+    );
+    if (mode === "happy") {
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(report.status, "success");
+      assert.equal(report.published, true);
+      assert.equal(Object.keys(report.assets).length, 4);
+    } else {
+      assert.equal(result.status, 1);
+      assert.equal(report.status, "failure");
+      assert.deepEqual(report.diagnostic, {
+        operation: "release create",
+        httpStatus: "403",
+        exitCode: 1,
+        terminated: false,
+      });
+      assert.equal(f.state().release, null);
+    }
+  });
+}

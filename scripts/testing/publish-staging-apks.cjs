@@ -106,8 +106,22 @@ function publish({ manifestPath, notesPath, nativeDir, repo, gh = "gh" }) {
       });
     } catch (error) {
       // Never echo CLI stderr: it may include private transport details.
-      const safe = new Error("GitHub CLI operation failed");
-      safe.notFound = /(?:HTTP 404|\(404\))/.test(String(error.stderr));
+      const stderr = String(error.stderr);
+      const httpStatus = /(?:HTTP\s+|\()(\d{3})(?:\)|\b)/.exec(stderr)?.[1];
+      const operation = args[0] === "api" ? "api" : `release ${args[1]}`;
+      const exitCode = Number.isInteger(error.status) ? error.status : null;
+      const exitStatus = String(exitCode ?? "unavailable");
+      const reason = error.signal ? ", terminated" : "";
+      const safe = new Error(
+        `GitHub CLI operation failed (${operation}; HTTP ${httpStatus || "unavailable"}; exit ${exitStatus}${reason})`,
+      );
+      safe.githubDiagnostic = {
+        operation,
+        httpStatus: httpStatus || null,
+        exitCode,
+        terminated: Boolean(error.signal),
+      };
+      safe.notFound = httpStatus === "404";
       throw safe;
     }
   };
@@ -222,6 +236,16 @@ function publish({ manifestPath, notesPath, nativeDir, repo, gh = "gh" }) {
   }
 }
 
+function writePublicationReport(report) {
+  if (!process.env.RUNNER_TEMP) return;
+  const directory = path.join(process.env.RUNNER_TEMP, "native", "results");
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(
+    path.join(directory, "publication.json"),
+    `${JSON.stringify(report, null, 2)}\n`,
+  );
+}
+
 module.exports = { publish };
 if (require.main === module) {
   try {
@@ -231,9 +255,19 @@ if (require.main === module) {
       nativeDir: path.join(process.env.RUNNER_TEMP || os.tmpdir(), "native"),
       repo: process.env.GITHUB_REPOSITORY,
     });
+    writePublicationReport({ status: "success", ...result });
     console.log(JSON.stringify(result));
   } catch (error) {
-    console.error(error.message);
+    const diagnostic = error.githubDiagnostic || {
+      operation: "verification",
+      reason: "Publication verification or local preparation failed",
+    };
+    try {
+      writePublicationReport({ status: "failure", diagnostic });
+    } catch {
+      console.error("Could not save publication diagnostic report");
+    }
+    console.error(error.githubDiagnostic ? error.message : diagnostic.reason);
     process.exitCode = 1;
   }
 }
