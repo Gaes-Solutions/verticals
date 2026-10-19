@@ -21,26 +21,63 @@ jobs:
   safety:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      evidence_id: ${{ steps.evidence.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: pnpm/action-setup@v4
+        id: pnpm
         with:
           version: 10.33.2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Check controller syntax and fail-closed regressions
+      - name: Validate GitHub workflow expressions with pinned actionlint
         run: |
-          bash -n scripts/autonomous-front-cycle.sh
-          bash -n scripts/autonomous-front-cycle-phase.sh
-          python3 scripts/testing/autonomous-front-cycle.test.py
-          python3 scripts/testing/autonomous-front-cycle-phase.test.py
-      - name: Exercise all phases with real isolated Docker and local-only publication
+          curl --fail --location --retry 2 https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tar.gz"
+          printf '%s  %s\n' '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8' "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck='' -pyflakes='' .github/workflows/autonomous-front-cycle.yml .github/workflows/autonomous-front-safety.yml
+      - name: Privacy regression for bounded evidence
+        run: python3 scripts/testing/autonomous-front-publish-result.py privacy-self-test
+      - name: Capture safety checks and preserve their exit code
         env:
           AUTONOMY_DOCKER_INTEGRATION: 'true'
+          PNPM_ACTION_BIN: ${{ steps.pnpm.outputs.bin_dest }}/pnpm
         run: |
           export PNPM_BIN="$(command -v pnpm)"
-          python3 scripts/testing/autonomous-front-integration.test.py
+          python3 scripts/testing/autonomous-front-publish-result.py capture
+      - uses: actions/upload-artifact@v4
+        id: evidence
+        if: ${{ always() }}
+        with:
+          name: autonomy-safety-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/autonomy-safety
+          if-no-files-found: error
+
+  publish-evidence:
+    needs: safety
+    if: ${{ always() && needs.safety.outputs.evidence_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.safety.outputs.evidence_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/autonomy-safety
+      - name: Publish sanitized evidence without executing test artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SAFETY_JOB_RESULT: ${{ needs.safety.result }}
+        run: python3 scripts/testing/autonomous-front-publish-result.py publish

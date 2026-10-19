@@ -27,7 +27,6 @@ jobs:
       KIMI_VERSION: "2.2.0"
       KIMI_MODEL_NAME: ${{ vars.KIMI_MODEL_NAME }}
       KIMI_MODEL_BASE_URL: ${{ vars.KIMI_MODEL_BASE_URL || '' }}
-      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          ARTIFACT_DIR="$RUNNER_TEMP/gaes-autonomy-artifact"
           mkdir -p "$ARTIFACT_DIR"
           pending_prs="$(gh pr list --state open --base main --json headRefName --jq '.[] | select(.headRefName | startswith("automation/front-cycle-")) | .headRefName')"
           if [[ -n "$pending_prs" ]]; then
@@ -56,6 +56,7 @@ jobs:
       - name: Detectar backlog vacío
         id: detect_work
         run: |
+          ARTIFACT_DIR="$RUNNER_TEMP/gaes-autonomy-artifact"
           if [[ -f "$ARTIFACT_DIR/no-work" || -f "$ARTIFACT_DIR/waiting-review" ]]; then
             echo "has_work=false" >> "$GITHUB_OUTPUT"
           else
@@ -79,7 +80,6 @@ jobs:
     outputs:
       artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
-      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
       AUTONOMY_VALIDATE_ISOLATED: "true"
       AUTONOMY_VALIDATE_IMAGE: "node:24-bookworm-slim@sha256:ec857ea6bb60cb3d0fa4d97495590c5fe7d51be8572c307b55957eeb06569cf7"
     steps:
@@ -125,8 +125,6 @@ jobs:
     env:
       CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
       CODEX_VERSION: ${{ vars.CODEX_VERSION || '0.130.0' }}
-      CODEX_HOME: ${{ runner.temp }}/codex-home
-      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,6 +155,7 @@ jobs:
       - name: Preparar autenticación aislada de Codex
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_HOME: ${{ runner.temp }}/codex-home
         run: |
           test -n "$OPENAI_API_KEY"
           mkdir -p -m 700 "$CODEX_HOME"
@@ -164,6 +163,7 @@ jobs:
       - name: Revisar en read-only
         env:
           CODEX_AUTH_READY: "true"
+          CODEX_HOME: ${{ runner.temp }}/codex-home
         run: AUTONOMY_PHASE=judge bash scripts/autonomous-front-cycle-phase.sh
       - uses: actions/upload-artifact@v4
         id: upload_artifact
@@ -183,7 +183,6 @@ jobs:
       pull-requests: write
     env:
       AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE || 'false' }}
-      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
     steps:
       - uses: actions/checkout@v4
         with:
