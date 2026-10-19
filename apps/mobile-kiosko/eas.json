@@ -29,6 +29,15 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://app.angaes.com/api"
       }
+    },
+    "gaesland-staging": {
+      "extends": "preview",
+      "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://verticals-staging.up.railway.app",
+        "EXPO_PUBLIC_APP_VARIANT": "staging"
+      }
     }
   },
   "submit": {

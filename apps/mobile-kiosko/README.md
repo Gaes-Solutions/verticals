@@ -23,6 +23,40 @@ pnpm --filter @gaespos/mobile-kiosko typecheck
 
 Usa una API de prueba accesible desde el dispositivo. En un teléfono, localhost apunta al teléfono. No uses tokens de producción en demostraciones o fixtures. Para distribución configura el dominio HTTPS autorizado de la API.
 
+## APK de pruebas separado de producción
+
+El perfil EAS `gaesland-staging` hereda la distribución interna APK de `preview`,
+usa el entorno EAS `preview` y apunta a
+`https://verticals-staging.up.railway.app`. No fija `EXPO_PUBLIC_TIENDA`: el negocio
+y sucursal se resuelven con el token de dispositivo generado en el panel de
+pruebas. Nunca se debe emparejar este APK con un token de producción.
+
+| Configuración | Producción (predeterminada) | Staging |
+| --- | --- | --- |
+| Nombre instalado | GaesSoft Verificador | GaesSoft Verificador · Pruebas |
+| Android package / iOS bundle | `com.gaessoft.kiosko` | `com.gaessoft.kiosko.staging` |
+| Scheme | `gaessoft-kiosko` | `gaessoft-kiosko-staging` |
+| API | `https://app.angaes.com/api` | `https://verticals-staging.up.railway.app` |
+
+La variante se selecciona con `EXPO_PUBLIC_APP_VARIANT=staging`. Los identificadores
+separados permiten instalar las dos apps sin sustituir producción ni reutilizar
+su almacenamiento seguro. El proyecto EAS permanece igual; las credenciales y
+versiones se administran mediante EAS. Los perfiles anteriores `preview` y
+`production` conservan su destino de producción.
+
+Para solicitar el APK desde `apps/mobile-kiosko`:
+
+```bash
+eas build --platform android --profile gaesland-staging
+```
+
+Validación local sin crear un APK ni ejecutar una compilación en la nube:
+
+```bash
+EXPO_PUBLIC_APP_VARIANT=staging EXPO_PUBLIC_API_URL=https://verticals-staging.up.railway.app pnpm exec expo config --type public --json
+EXPO_PUBLIC_APP_VARIANT=staging EXPO_PUBLIC_API_URL=https://verticals-staging.up.railway.app pnpm exec expo export --platform android --output-dir dist/staging-audit-20261018
+```
+
 ## Operación y límites
 
 El encargado crea un dispositivo en el panel, copia el token una sola vez y lo activa en la aplicación. Mantener pulsada la esquina abre una confirmación para configurar. Esta confirmación evita cambios accidentales; no autentica al encargado ni sustituye el modo kiosco administrado del sistema operativo.
