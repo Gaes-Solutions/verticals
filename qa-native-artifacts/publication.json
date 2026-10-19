@@ -1,0 +1,12 @@
+{
+  "status": "success",
+  "tag": "qa-android-gaesland-20261018-b12b7da",
+  "sourceCommit": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447",
+  "assets": {
+    "gaesland-pruebas-cliente-v15.apk": "84335d136755b2d40b7dd590eb5ddd7af3aa6b16525cbd5fb9837677ab2dad2d",
+    "gaesland-pruebas-kiosko-v4.apk": "25c8aad70c6502aa054f80ce416a645514eeed7581fa9ddcd97e255b30fad37a",
+    "source.json": "a6859f0058256a36348278a0153dfbfd08ec713e9b929a4c3efaa17e51145115",
+    "SHA256SUMS": "3f603bcb466f072b988f4e8b960f96b04140f1f4ca70dd1b50d879d1df9271c9"
+  },
+  "published": true
+}
