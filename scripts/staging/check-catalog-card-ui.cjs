@@ -238,6 +238,29 @@ let stage = "setup";
     assert.equal(await quantity(p), 2);
     safe(f);
     pass();
+    stage =
+      "recovering storage reads clears the stale read error and re-enables the original quantity";
+    ({ p, f } = await setup(2));
+    await p.evaluate(() => {
+      window.restoreGet = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (k) {
+        if (k === "gaespos_carrito") throw Error("PRIVATE_READ");
+        return window.restoreGet.call(this, k);
+      };
+      window.dispatchEvent(new Event("carrito-actualizado"));
+    });
+    await expect(article(p).getByRole("alert")).toContainText("No pudimos leer");
+    await p.evaluate(() => {
+      Storage.prototype.getItem = window.restoreGet;
+      window.dispatchEvent(new Event("carrito-actualizado"));
+    });
+    await expect(article(p).getByRole("alert")).toHaveCount(0);
+    await expect(
+      article(p).getByRole("button", { name: "Agregar uno", exact: true }),
+    ).toBeEnabled();
+    assert.equal(await quantity(p), 2);
+    safe(f);
+    pass();
     stage = "a context event rejects an already captured control before the new render";
     ({ p, f } = await setup(2));
     await article(p)

@@ -192,6 +192,7 @@ function CantidadProducto({ p, precio }: { p: ProductoPublicado; precio: string 
   const [error, setError] = useState("");
   const contexto = useRef(0);
   const activo = useRef(false);
+  const falloLectura = useRef(false);
   const cant = lectura.cantidad;
 
   useEffect(() => {
@@ -207,7 +208,12 @@ function CantidadProducto({ p, precio }: { p: ProductoPublicado; precio: string 
           contexto: contexto.current,
           lista: true,
         });
+        if (falloLectura.current) {
+          falloLectura.current = false;
+          setError("");
+        }
       } catch {
+        falloLectura.current = true;
         setLectura({ cantidad: 0, contexto: contexto.current, lista: false });
         setError("No pudimos leer tu carrito. Revisa que el navegador permita guardar datos.");
       }

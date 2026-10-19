@@ -115,7 +115,7 @@ let stage = "setup";
       external,
     );
     await p.getByRole("button", { name: "Deshacer", exact: true }).click();
-    await expect(p.getByRole("alert")).toContainText("Tu carrito cambió");
+    await expect(p.getByRole("alert").filter({ hasText: "Tu carrito cambió" })).toBeVisible();
     assert.deepEqual(await cart(p), external);
     await safe(p, f);
     pass();
@@ -126,19 +126,26 @@ let stage = "setup";
     await expect(
       p.getByRole("link", { name: "Carrito, cantidad no disponible", exact: true }),
     ).toBeVisible();
-    await expect(p.getByText("No pudimos leer tu carrito.", { exact: false })).toBeVisible();
+    const idError = await p
+      .getByRole("spinbutton", { name: "Cantidad", exact: true })
+      .getAttribute("aria-describedby");
+    assert(idError);
+    await expect(p.locator(`[id="${idError}"]`)).toContainText("No pudimos leer tu carrito.");
     await p.evaluate(() => {
       window.failRead = false;
     });
     await p.getByRole("button", { name: "Volver a leer carrito", exact: true }).click();
     await expect(add).toBeEnabled();
+    await expect(p.getByText("No pudimos leer tu carrito.", { exact: false })).toHaveCount(0);
     await safe(p, f);
     pass();
     stage = "published write denial never announces addition or opens checkout";
     ({ p, f, add } = await setup({ failWrite: true }));
     await expect(add).toBeEnabled();
     await add.click();
-    await expect(p.getByRole("alert")).toContainText("No pudimos confirmar el cambio");
+    await expect(
+      p.getByRole("alert").filter({ hasText: "No pudimos confirmar el cambio" }),
+    ).toBeVisible();
     await expect(p.getByText("Agregado al carrito", { exact: true })).toHaveCount(0);
     assert.deepEqual(await cart(p), []);
     await safe(p, f);
@@ -151,6 +158,7 @@ let stage = "setup";
       cantidad: 1,
     };
     ({ p, f, add } = await setup({ items: [previous] }));
+    await expect(p.getByRole("link", { name: "Carrito, 1 productos", exact: true })).toBeVisible();
     if (await add.isEnabled()) {
       await add.click();
       await expect(p.getByRole("button", { name: "Deshacer", exact: true })).toBeVisible();
