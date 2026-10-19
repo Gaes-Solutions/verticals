@@ -134,3 +134,19 @@ pnpm --filter @gaespos/api exec vitest run --config test/run-approved-incident-u
 El archivo `.unit.ts` usa una configuración sin el setup de DB de la suite API;
 no cambia ese setup global ni se suma a los 1401 casos API de la ronda anterior.
 Esta retirada no activa el ejecutor de incidentes ni acredita una ejecución real.
+
+### Comprobación adicional de readiness y Android
+
+La corrida [39263903539](https://github.com/Gaes-Solutions/verticals/actions/runs/39263903539)
+sobre 49484d3 terminó success. Se repitieron los tres flujos Android con los APK
+existentes (cliente17/kiosco4); los tres JUnit contienen un caso aprobado, sin
+fallos, errores ni omisiones. La cuenta sintética se eliminó tras comprobar
+cero pedidos y cero direcciones; no se cambió el runtime de los APK.
+
+El runner registró únicamente booleanos: enabled=false, auto_merge=false,
+openai_key=false, resend_key=true y email_sender=true. No recibió valores de
+credenciales en ese registro. Por tanto, la sustitución de código está probada,
+pero no existe evidencia de operación con modelos reales. Para arrancar fuera
+de esta conversación faltan OPENAI_API_KEY en GitHub, promoción del workflow
+nuevo y activación explícita. Ningún paso de esta migración modifica main,
+staging, producción ni las variables/secretos del repositorio.
