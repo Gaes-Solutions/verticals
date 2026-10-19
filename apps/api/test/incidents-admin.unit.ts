@@ -128,8 +128,13 @@ describe("incident decisions require a current proposal and a durable audit", ()
         auditDecision: "approved",
         auditNotes: "Reviewed regression",
         resolvedAt: null,
+        nextReviewAt: expect.any(Date),
       },
     });
+    const approvalUpdate = h.tx.systemIncident.updateMany.mock.calls[0]?.[0];
+    const reviewAt = (approvalUpdate?.data as { nextReviewAt?: Date }).nextReviewAt;
+    expect(reviewAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(reviewAt?.getTime()).toBeGreaterThan(Date.now() - 10_000);
     expect(h.tx.auditLog.create).toHaveBeenCalledWith({
       data: {
         actor: "synthetic-auditor",

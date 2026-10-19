@@ -46,7 +46,7 @@ try {
           auditDecision: "approved",
           updatedAt: incident.updatedAt,
         },
-        data: { auditDecision: "approved_handoff" },
+        data: { auditDecision: "approved_handoff", nextReviewAt: new Date() },
       });
       if (claimed.count !== 1) return false;
       await tx.systemIncidentEvent.create({

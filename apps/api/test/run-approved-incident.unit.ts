@@ -77,7 +77,7 @@ describe("approved incident handoff", () => {
         auditDecision: "approved",
         updatedAt: incident.updatedAt,
       },
-      data: { auditDecision: "approved_handoff" },
+      data: { auditDecision: "approved_handoff", nextReviewAt: expect.any(Date) },
     });
     expect(mocks.eventCreate).toHaveBeenCalledWith({
       data: {

@@ -158,3 +158,5 @@ pero no existe evidencia de operación con modelos reales. Para arrancar fuera
 de esta conversación faltan OPENAI_API_KEY en GitHub, promoción del workflow
 nuevo y activación explícita. Ningún paso de esta migración modifica main,
 staging, producción ni las variables/secretos del repositorio.
+
+El trabajador de incidentes dispone ahora de su [puente y workflow separados](testing/incident-worker-isolation-2026-10-19.md). Su código se valida sin inferencia real; la activación requiere promoción y configuración explícitas.

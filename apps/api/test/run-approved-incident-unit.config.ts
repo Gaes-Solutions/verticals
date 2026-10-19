@@ -9,6 +9,7 @@ export default defineConfig({
       "test/log-privacy.unit.ts",
       "test/incidents-admin.unit.ts",
       "test/incidents-response.unit.ts",
+      "test/incident-worker.unit.ts",
     ],
     setupFiles: [],
   },

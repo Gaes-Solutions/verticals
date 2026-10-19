@@ -1,0 +1,344 @@
+name: Isolated approved incident worker
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: approved-incident-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  broker:
+    if: ${{ vars.AUTONOMOUS_INCIDENT_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      has_work: ${{ steps.claim.outputs.has_work }}
+      base_sha: ${{ steps.base.outputs.sha }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+          path: candidate
+          persist-credentials: false
+      - name: Pin trusted staging base before any model runs
+        id: base
+        working-directory: candidate
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Claim only after all worker credentials are available
+        id: claim
+        env:
+          READY: ${{ secrets.OPENAI_API_KEY != '' && secrets.INCIDENT_WORKER_TOKEN != '' }}
+          INCIDENT_WORKER_TOKEN: ${{ secrets.INCIDENT_WORKER_TOKEN }}
+        run: |
+          if [[ "$READY" != true ]]; then
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+            echo 'Worker not configured; no incident consumed.'
+            exit 0
+          fi
+          python3 scripts/incident-worker-client.py claim --worker "$INCIDENT_WORKER_FILE"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        if: steps.claim.outputs.has_work == 'true'
+        with:
+          name: incident-claim-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/incident-artifacts/worker.json
+          if-no-files-found: error
+          retention-days: 3
+
+  executor:
+    needs: broker
+    if: ${{ needs.broker.outputs.has_work == 'true' && needs.broker.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.broker.outputs.base_sha }}
+          path: workspace
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.broker.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-artifacts
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned model CLI
+        run: npm install --global @openai/codex@0.130.0
+      - name: Create private role authentication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_HOME: ${{ runner.temp }}/codex-executor
+        run: |
+          mkdir -m 700 "$CODEX_HOME"
+          printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key
+          chmod 600 "$CODEX_HOME/auth.json"
+      - name: Run trusted executor controller
+        working-directory: workspace
+        env:
+          AUTONOMY_PHASE: executor
+          CODEX_AUTH_READY: "true"
+          CODEX_HOME: ${{ runner.temp }}/codex-executor
+        run: bash "$GITHUB_WORKSPACE/controller/scripts/autonomous-incident-cycle-phase.sh"
+      - name: Remove model authentication
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/codex-executor"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: incident-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/incident-artifacts/worker.json
+            ${{ runner.temp }}/incident-artifacts/patch
+            ${{ runner.temp }}/incident-artifacts/metadata.json
+          if-no-files-found: error
+          retention-days: 3
+
+  validate:
+    needs: [broker, executor]
+    if: ${{ needs.broker.outputs.has_work == 'true' && needs.executor.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qa
+          POSTGRES_PASSWORD: synthetic-incident-qa-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qa -d postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.broker.outputs.base_sha }}
+          path: workspace
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.executor.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-artifacts
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+          run_install: false
+      - name: Prepare pristine dependencies and synthetic QA tools
+        working-directory: workspace
+        env:
+          DATABASE_URL_MASTER: postgresql://qa:synthetic-incident-qa-only@127.0.0.1:5432/postgres
+          DATABASE_URL_TENANT: postgresql://qa:synthetic-incident-qa-only@127.0.0.1:5432/postgres
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pnpm install --frozen-lockfile
+          pnpm --filter @gaespos/db prisma:generate
+          pnpm exec playwright install --with-deps chromium
+      - name: Run trusted validate controller
+        working-directory: workspace
+        env:
+          AUTONOMY_PHASE: validate
+          FRESH_RUNNER: "true"
+          DATABASE_URL_MASTER: postgresql://qa:synthetic-incident-qa-only@127.0.0.1:5432/postgres
+        run: bash "$GITHUB_WORKSPACE/controller/scripts/autonomous-incident-cycle-phase.sh"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: incident-validate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/incident-artifacts/worker.json
+            ${{ runner.temp }}/incident-artifacts/patch
+            ${{ runner.temp }}/incident-artifacts/metadata.json
+            ${{ runner.temp }}/incident-artifacts/validation.json
+          if-no-files-found: error
+          retention-days: 3
+
+  judge:
+    needs: [broker, validate]
+    if: ${{ needs.broker.outputs.has_work == 'true' && needs.validate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.broker.outputs.base_sha }}
+          path: workspace
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.validate.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-artifacts
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned model CLI
+        run: npm install --global @openai/codex@0.130.0
+      - name: Create private role authentication
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_HOME: ${{ runner.temp }}/codex-judge
+        run: |
+          mkdir -m 700 "$CODEX_HOME"
+          printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key
+          chmod 600 "$CODEX_HOME/auth.json"
+      - name: Run trusted judge controller
+        working-directory: workspace
+        env:
+          AUTONOMY_PHASE: judge
+          CODEX_AUTH_READY: "true"
+          CODEX_HOME: ${{ runner.temp }}/codex-judge
+        run: bash "$GITHUB_WORKSPACE/controller/scripts/autonomous-incident-cycle-phase.sh"
+      - name: Remove model authentication
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/codex-judge"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: incident-judge-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/incident-artifacts/worker.json
+            ${{ runner.temp }}/incident-artifacts/patch
+            ${{ runner.temp }}/incident-artifacts/metadata.json
+            ${{ runner.temp }}/incident-artifacts/validation.json
+            ${{ runner.temp }}/incident-artifacts/judgment.json
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: [broker, judge]
+    if: ${{ needs.broker.outputs.has_work == 'true' && needs.judge.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.broker.outputs.base_sha }}
+          path: workspace
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.judge.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-artifacts
+          merge-multiple: true
+      - name: Run trusted publish controller
+        working-directory: workspace
+        env:
+          AUTONOMY_PHASE: publish
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash "$GITHUB_WORKSPACE/controller/scripts/autonomous-incident-cycle-phase.sh"
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: incident-publish-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/incident-artifacts/result.json
+          if-no-files-found: error
+          retention-days: 3
+
+  reporter:
+    needs: [broker, executor, validate, judge, publish]
+    if: ${{ always() && needs.broker.result == 'success' && needs.broker.outputs.has_work == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Set private artifact paths
+        run: |
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/incident-artifacts" >> "$GITHUB_ENV"
+          echo "INCIDENT_WORKER_FILE=$RUNNER_TEMP/incident-artifacts/worker.json" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.broker.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-artifacts
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        if: needs.publish.result == 'success'
+        with:
+          artifact-ids: ${{ needs.publish.outputs.artifact_id }}
+          path: ${{ runner.temp }}/incident-result
+          merge-multiple: true
+      - name: Record typed outcome without raw model output
+        env:
+          INCIDENT_WORKER_TOKEN: ${{ secrets.INCIDENT_WORKER_TOKEN }}
+          PUBLISHED: ${{ needs.publish.result == 'success' }}
+        run: |
+          args=()
+          if [[ "$PUBLISHED" == true ]]; then
+            args+=(--result "$RUNNER_TEMP/incident-result/result.json")
+          fi
+          python3 scripts/incident-worker-client.py report --worker "$INCIDENT_WORKER_FILE" "${args[@]}"

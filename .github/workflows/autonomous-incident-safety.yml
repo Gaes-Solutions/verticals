@@ -1,0 +1,63 @@
+name: Incident worker safety checks
+
+on:
+  push:
+    branches: [trabajo/codex-tienda-08sep]
+    paths:
+      - .github/workflows/autonomous-incident-*.yml
+      - scripts/autonomous-incident-*.sh
+      - scripts/incident-worker-client.py
+      - scripts/testing/*incident*py
+      - apps/api/src/modules/internal/**
+      - apps/api/test/incident-worker*
+      - apps/api/test/run-approved-incident-unit.config.ts
+  pull_request:
+    paths:
+      - .github/workflows/autonomous-incident-*.yml
+      - scripts/autonomous-incident-*.sh
+      - scripts/incident-worker-client.py
+      - scripts/testing/*incident*py
+      - apps/api/src/modules/internal/**
+      - apps/api/test/incident-worker*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: incident-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check workflow syntax with pinned actionlint
+        run: |
+          curl --fail --location --retry 2 https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tar.gz"
+          printf '%s  %s\n' '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8' "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck='' -pyflakes='' .github/workflows/autonomous-incident-cycle.yml .github/workflows/autonomous-incident-safety.yml
+      - name: Synthetic transport and separated role regressions
+        run: |
+          bash -n scripts/autonomous-incident-cycle-phase.sh
+          python3 scripts/testing/test_incident_worker_client.py
+          python3 scripts/testing/autonomous-incident-cycle-phase.test.py
+      - name: Install pristine dependencies and generate clients
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @gaespos/db prisma:generate
+      - name: Verify incident API without a business database or providers
+        run: |
+          pnpm --filter @gaespos/api typecheck
+          pnpm --filter @gaespos/api exec vitest run --config test/run-approved-incident-unit.config.ts

@@ -74,3 +74,7 @@ tests/e2e/test-results/
 test-results/
 playwright-report/
 .codex-runner/
+
+# Python verification helpers
+__pycache__/
+*.py[cod]

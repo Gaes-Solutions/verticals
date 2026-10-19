@@ -28,6 +28,7 @@ import comercioRoutes from "./modules/cliente-portal/comercio-routes.js";
 import customerPasskeyRoutes from "./modules/cliente-portal/passkey-routes.js";
 import { clienteAuthRoutes, clientePortalRoutes } from "./modules/cliente-portal/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import incidentWorkerRoutes from "./modules/internal/incident-worker-routes.js";
 import marketplaceTenantRoutes, {
   marketplaceAdminRoutes,
   marketplacePublicRoutes,
@@ -206,6 +207,7 @@ export async function buildApp(
   app.decorate("verticalesActivas", activas);
 
   await app.register(healthRoutes);
+  await app.register(incidentWorkerRoutes, { prefix: "/internal/incident-worker" });
   await app.register(plataformaRoutes);
   await app.register(authRoutes, { prefix: "/auth", config });
   await app.register(authTenantRoutes, { prefix: "/auth/tenant" });

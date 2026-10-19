@@ -58,7 +58,7 @@ El comando opcional `pnpm --filter @gaespos/api incident:agent` exige `AGENT_RUN
 
 El comando toma una fila `audited` con `auditDecision=approved`, crea un evento JSON saneado `agent_handoff` y cambia la decisión a `approved_handoff`, en una transacción y con comparación de versión. Así una segunda ejecución no vuelve a entregar la misma aprobación. El evento conserva `applied:false`, `requiresReview:true` y `execution:external-isolated-worker-required`.
 
-Este comando prepara la entrega; no inicia Codex, no usa claves de modelos, no crea worktrees y no ejecuta instrucciones de la propuesta. Un agente con acceso al sistema de archivos del servidor podría leer credenciales aunque su entorno se vacíe, por lo que el ejecutor debe operar en un entorno separado sin secretos del negocio. La conexión y activación de ese ejecutor no están implementadas por este comando. El flujo de mantenimiento del frontend tiene su propia configuración y no consume automáticamente estas entregas.
+Este comando prepara la entrega; no inicia Codex, no usa claves de modelos, no crea worktrees y no ejecuta instrucciones de la propuesta. Un agente con acceso al sistema de archivos del servidor podría leer credenciales aunque su entorno se vacíe, por lo que el ejecutor debe operar en un entorno separado sin secretos del negocio. La conexión del trabajador está implementada por un workflow separado; su activación real sigue pendiente. Ver [contrato, aislamiento y activación](testing/incident-worker-isolation-2026-10-19.md). El flujo de mantenimiento del frontend tiene su propia configuración y no consume automáticamente estas entregas.
 
 ## Preparación y pruebas
 
@@ -91,7 +91,7 @@ Para repetir persistencia, WebAuthn y los módulos con configuración directa de
 pnpm exec dotenv -e .env -- node scripts/testing/run-api-isolated.cjs --release-fixes-only
 ```
 
-Las seis regresiones de incidentes comprueban 25 primeras apariciones concurrentes,
+Las regresiones de incidentes comprueban 25 primeras apariciones concurrentes,
 reapertura sin aprobación heredada, diez trabajadores de correo concurrentes,
 recuperación de reserva abandonada, proveedor que rechaza y revisión IA invalidada
 por una decisión humana. Los proveedores son dobles locales sin comunicación externa.

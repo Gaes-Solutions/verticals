@@ -42,6 +42,7 @@ function decisionFields(body: z.infer<typeof decision>) {
     auditDecision: body.aprobada ? "approved" : "rejected",
     action: body.aprobada ? "incident.approved" : "incident.rejected",
     resolvedAt: body.aprobada ? null : new Date(),
+    schedule: body.aprobada ? { nextReviewAt: new Date() } : {},
   };
 }
 
@@ -83,7 +84,7 @@ const routes: FastifyPluginAsync = async (app) => {
       });
     }
     const body = parsed.data;
-    const { notes, status, auditDecision, action, resolvedAt } = decisionFields(body);
+    const { notes, status, auditDecision, action, resolvedAt, schedule } = decisionFields(body);
     const result = await app.masterPrisma.$transaction(async (tx) => {
       const current = await tx.systemIncident.findUnique({ where: { id } });
       if (!current) return { outcome: "missing" } as const;
@@ -117,6 +118,7 @@ const routes: FastifyPluginAsync = async (app) => {
           auditDecision,
           auditNotes: notes,
           resolvedAt,
+          ...schedule,
         },
       });
       if (changed.count !== 1) return { outcome: "conflict" } as const;
