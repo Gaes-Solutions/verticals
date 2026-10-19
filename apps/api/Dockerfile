@@ -37,7 +37,9 @@ RUN pnpm --filter @gaespos/api build
 
 # pnpm deploy crea un bundle standalone con solo lo que se necesita en prod
 # --legacy: workspaces sin inject-workspace-packages (default pnpm 10), válido V1
-RUN pnpm --filter @gaespos/api --prod --legacy deploy /tmp/api-bundle
+# Metro patches belong to mobile workspaces and are absent from this pruned API
+# graph. Permit unused entries only for this deploy; patch application stays strict.
+RUN pnpm --config.allow-unused-patches=true --filter @gaespos/api --prod --legacy deploy /tmp/api-bundle
 
 # ===== Stage 2: runtime =====
 FROM node:22-bookworm-slim AS runtime

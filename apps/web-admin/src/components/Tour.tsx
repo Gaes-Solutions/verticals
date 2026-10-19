@@ -35,11 +35,6 @@ export function Tour() {
 
   const cerrar = useCallback(() => {
     if (tour) marcarTourVisto(tour.id);
-    // Si el recorrido dejó un diálogo abierto, lo cerramos con su botón Cancelar.
-    const cancelar = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-      (b) => b.offsetParent !== null && b.textContent?.trim() === "Cancelar",
-    );
-    cancelar?.click();
     setTour(null);
     setRect(null);
   }, [tour]);
@@ -59,8 +54,18 @@ export function Tour() {
   useEffect(() => {
     const auto = tourPorId("bienvenida");
     if (auto?.autoOnce && !tourVisto(auto.id) && !tourDeshabilitado(auto.id)) {
-      const t = setTimeout(() => iniciar(auto), 900);
-      return () => clearTimeout(t);
+      const eventos = ["pointerdown", "keydown", "gaes-tour", "gaes-nav"] as const;
+      const cancelar = () => {
+        window.clearTimeout(timer);
+        for (const evento of eventos) window.removeEventListener(evento, cancelar, true);
+      };
+      const timer = window.setTimeout(() => {
+        cancelar();
+        iniciar(auto);
+      }, 900);
+      // A welcome offer must never interrupt work already started or a requested tour.
+      for (const evento of eventos) window.addEventListener(evento, cancelar, true);
+      return cancelar;
     }
     return undefined;
   }, [iniciar]);
