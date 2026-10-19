@@ -1,0 +1,9 @@
+{
+  "kimi_key": false,
+  "enabled": false,
+  "email_sender": true,
+  "auto_merge": false,
+  "resend_key": true,
+  "openai_key": false,
+  "brevo_key": false
+}
