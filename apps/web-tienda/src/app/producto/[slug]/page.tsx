@@ -182,6 +182,119 @@ function BreadcrumbJsonLd({ prod, slug }: { prod: ProductoDetalle; slug: string 
   );
 }
 
+function RatingProducto({ prod, mostrar }: { prod: ProductoDetalle; mostrar: boolean }) {
+  const ratings = prod.resenas.map((r) => r.rating);
+  const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+  const agg = ratingAgregadoDe(prod);
+  return (
+    <>
+      {mostrar && agg && (
+        <div className="mt-2 text-sm">
+          <EstrellasProducto promedio={agg.promedio} cuenta={agg.cuenta} />
+        </div>
+      )}
+      {mostrar && !agg && ratings.length > 0 && (
+        <div className="mt-2 flex items-center gap-2 text-sm">
+          <span className="text-warn" aria-hidden="true">
+            {"★".repeat(Math.round(ratingProm))}
+            {"☆".repeat(5 - Math.round(ratingProm))}
+          </span>
+          <span className="text-slate-500">
+            {ratingProm.toFixed(1)} · {ratings.length} reseña{ratings.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ResenasProducto({ prod, ratings }: { prod: ProductoDetalle; ratings: number[] }) {
+  return (
+    <>
+      {prod.resenas.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">Reseñas</h2>
+          <ResenasResumen ratings={ratings} />
+          <div className="space-y-4">
+            {prod.resenas.map((r) => (
+              <div key={r.id} className="gx-card p-4">
+                <div className="text-warn">
+                  {"★".repeat(r.rating)}
+                  {"☆".repeat(5 - r.rating)}
+                </div>
+                {r.titulo && <p className="mt-1 font-medium">{r.titulo}</p>}
+                {r.comentario && <p className="mt-1 text-slate-600 text-sm">{r.comentario}</p>}
+                {r.imagenesArray && r.imagenesArray.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {r.imagenesArray.map((src) => (
+                      <img
+                        key={src.slice(-16)}
+                        src={src}
+                        alt="Foto de reseña"
+                        className="h-20 w-20 rounded object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+function EntregaProducto({ config }: { config: Awaited<ReturnType<typeof getTiendaConfig>> }) {
+  const textoEntrega = lineaEntrega(config.etaEnvio, config.recogidaEnTienda);
+  return (
+    <>
+      {textoEntrega && (
+        <p className="mt-3 flex items-center gap-1.5 text-slate-500 text-sm">
+          {config.etaEnvio ? (
+            <Clock size={15} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Store size={15} strokeWidth={2} aria-hidden="true" />
+          )}
+          {textoEntrega}
+        </p>
+      )}
+    </>
+  );
+}
+
+function RelacionadosProducto({
+  prod,
+  config,
+}: {
+  prod: ProductoDetalle;
+  config: Awaited<ReturnType<typeof getTiendaConfig>>;
+}) {
+  return (
+    <>
+      {prod.relacionados.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">
+            También te puede interesar
+          </h2>
+          <ProductoGrid
+            items={prod.relacionados}
+            msi={{
+              habilitado: config.msiHabilitado,
+              meses: config.msiMeses,
+              montoMinimo: config.msiMontoMinimo,
+            }}
+            entrega={{
+              eta: config.etaEnvio ?? null,
+              recogida: config.recogidaEnTienda ?? false,
+            }}
+          />
+        </section>
+      )}
+    </>
+  );
+}
+
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const config = await getTiendaConfig();
@@ -207,9 +320,6 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
     );
   }
   const ratings = prod.resenas.map((r) => r.rating);
-  const ratingProm = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-  const agg = ratingAgregadoDe(prod);
-  const textoEntrega = lineaEntrega(config.etaEnvio, config.recogidaEnTienda);
 
   const precioActual = Number(precioDe(prod));
 
@@ -252,22 +362,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         </div>
         <div className="gx-card p-5 sm:p-6">
           <h1 className="font-bold text-2xl">{prod.tituloPublico}</h1>
-          {config.mostrarRatingProducto && agg && (
-            <div className="mt-2 text-sm">
-              <EstrellasProducto promedio={agg.promedio} cuenta={agg.cuenta} />
-            </div>
-          )}
-          {config.mostrarRatingProducto && !agg && ratings.length > 0 && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className="text-warn" aria-hidden="true">
-                {"★".repeat(Math.round(ratingProm))}
-                {"☆".repeat(5 - Math.round(ratingProm))}
-              </span>
-              <span className="text-slate-500">
-                {ratingProm.toFixed(1)} · {ratings.length} reseña{ratings.length === 1 ? "" : "s"}
-              </span>
-            </div>
-          )}
+          <RatingProducto prod={prod} mostrar={config.mostrarRatingProducto} />
           <ProductoCompra
             mostrarCotizacion
             tipoVenta={prod.producto.tipoVenta}
@@ -294,16 +389,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             slugSeo={slug}
             productoPublicadoId={prod.id}
           />
-          {textoEntrega && (
-            <p className="mt-3 flex items-center gap-1.5 text-slate-500 text-sm">
-              {config.etaEnvio ? (
-                <Clock size={15} strokeWidth={2} aria-hidden="true" />
-              ) : (
-                <Store size={15} strokeWidth={2} aria-hidden="true" />
-              )}
-              {textoEntrega}
-            </p>
-          )}
+          <EntregaProducto config={config} />
           <div className="mt-4">
             <GuardarWishlist productoPublicadoId={prod.id} />
           </div>
@@ -315,60 +401,13 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
 
-      {prod.resenas.length > 0 && (
-        <section className="mt-12">
-          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">Reseñas</h2>
-          <ResenasResumen ratings={ratings} />
-          <div className="space-y-4">
-            {prod.resenas.map((r) => (
-              <div key={r.id} className="gx-card p-4">
-                <div className="text-warn">
-                  {"★".repeat(r.rating)}
-                  {"☆".repeat(5 - r.rating)}
-                </div>
-                {r.titulo && <p className="mt-1 font-medium">{r.titulo}</p>}
-                {r.comentario && <p className="mt-1 text-slate-600 text-sm">{r.comentario}</p>}
-                {r.imagenesArray && r.imagenesArray.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {r.imagenesArray.map((src) => (
-                      <img
-                        key={src.slice(-16)}
-                        src={src}
-                        alt="Foto de reseña"
-                        className="h-20 w-20 rounded object-cover"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <ResenasProducto prod={prod} ratings={ratings} />
 
       {config.preguntasPublicas && (
         <PreguntasProducto productoPublicadoId={prod.id} preguntas={prod.preguntas} />
       )}
 
-      {prod.relacionados.length > 0 && (
-        <section className="mt-12">
-          <h2 className="mb-4 border-marca border-l-4 pl-3 font-bold text-xl">
-            También te puede interesar
-          </h2>
-          <ProductoGrid
-            items={prod.relacionados}
-            msi={{
-              habilitado: config.msiHabilitado,
-              meses: config.msiMeses,
-              montoMinimo: config.msiMontoMinimo,
-            }}
-            entrega={{
-              eta: config.etaEnvio ?? null,
-              recogida: config.recogidaEnTienda ?? false,
-            }}
-          />
-        </section>
-      )}
+      <RelacionadosProducto prod={prod} config={config} />
 
       <VistosRecientes excluir={slug} />
     </div>

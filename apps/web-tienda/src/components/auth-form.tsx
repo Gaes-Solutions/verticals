@@ -134,7 +134,7 @@ export function AuthForm({
                 type="button"
                 onClick={() => setMostrarPassword(!mostrarPassword)}
                 aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                className="absolute right-3 top-3 text-slate-500"
+                className="absolute right-1 top-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500"
               >
                 {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>

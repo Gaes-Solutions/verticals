@@ -37,6 +37,7 @@ import type { MedioPagoGuardado } from "@/lib/cliente";
 import { esListaDirecciones } from "@/lib/direcciones-contract";
 import { leerCotizacionEnvio } from "@/lib/envios-contract";
 import { listaTarjetas } from "@/lib/medios-pago-contract";
+import { navegarRadios } from "@/lib/radio-keyboard";
 import { useCuponCheckout } from "@/lib/use-cupon-checkout";
 import { Barcode, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
@@ -1055,7 +1056,12 @@ export default function CheckoutPage() {
             {modoEntrega === "envio" ? (
               <div className="mt-4 space-y-3">
                 {direcciones.length > 0 && (
-                  <div className="space-y-2" role="radiogroup" aria-label="Dirección de envío">
+                  <div
+                    className="space-y-2"
+                    role="radiogroup"
+                    onKeyDown={navegarRadios}
+                    aria-label="Dirección de envío"
+                  >
                     {direcciones.map((d) => {
                       const seleccionada = modoDir === "guardada" && direccionId === d.id;
                       return (
@@ -1065,6 +1071,7 @@ export default function CheckoutPage() {
                           // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta
                           role="radio"
                           aria-checked={seleccionada}
+                          tabIndex={seleccionada ? 0 : -1}
                           onClick={() => {
                             setModoDir("guardada");
                             setDireccionId(d.id);
@@ -1106,6 +1113,7 @@ export default function CheckoutPage() {
                       // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del button de direccion guardada
                       role="radio"
                       aria-checked={modoDir === "nueva"}
+                      tabIndex={modoDir === "nueva" ? 0 : -1}
                       onClick={() => {
                         setModoDir("nueva");
                         setDireccionId("");
@@ -1200,7 +1208,12 @@ export default function CheckoutPage() {
           {/* ② Pago */}
           <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
             {mostrarSelector ? (
-              <div className="space-y-2" role="radiogroup" aria-label="Método de pago">
+              <div
+                className="space-y-2"
+                role="radiogroup"
+                onKeyDown={navegarRadios}
+                aria-label="Método de pago"
+              >
                 {opcionesPago.map((o) => {
                   const activa = metodoActivo === o.id;
                   return (
@@ -1210,6 +1223,7 @@ export default function CheckoutPage() {
                       // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta — mismo patrón que direcciones guardadas
                       role="radio"
                       aria-checked={activa}
+                      tabIndex={activa ? 0 : -1}
                       onClick={() => setMetodoPago(o.id)}
                       className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
                         activa
@@ -1284,7 +1298,12 @@ export default function CheckoutPage() {
                 className="mt-3 min-w-0"
               >
                 {!conStripe && mediosPago.length > 0 && (
-                  <div className="mb-3 space-y-2" role="radiogroup" aria-label="Tu tarjeta">
+                  <div
+                    className="mb-3 space-y-2"
+                    role="radiogroup"
+                    onKeyDown={navegarRadios}
+                    aria-label="Tu tarjeta"
+                  >
                     <p className="gx-label">Tu tarjeta</p>
                     {mediosPago.map((m) => {
                       const seleccionada = tarjetaGuardadaSel?.id === m.id;
@@ -1295,6 +1314,7 @@ export default function CheckoutPage() {
                           // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (mismo patrón que direcciones guardadas)
                           role="radio"
                           aria-checked={seleccionada}
+                          tabIndex={seleccionada ? 0 : -1}
                           onClick={() => setMedioPagoSel(m.id)}
                           className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
                             seleccionada
@@ -1325,6 +1345,7 @@ export default function CheckoutPage() {
                       // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del selector de tarjetas guardadas
                       role="radio"
                       aria-checked={pagarConTarjetaNueva}
+                      tabIndex={pagarConTarjetaNueva ? 0 : -1}
                       onClick={() => setMedioPagoSel("")}
                       className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
                         pagarConTarjetaNueva

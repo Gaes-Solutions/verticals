@@ -58,6 +58,29 @@ function Seccion({
   );
 }
 
+function CatalogoVacio({ filtrando }: { filtrando: boolean }) {
+  return (
+    <div className="gx-card py-16 text-center">
+      <PackageSearch size={48} strokeWidth={1.5} className="mx-auto text-slate-300" />
+      <p className="mt-3 font-medium text-slate-700">No encontramos productos</p>
+      {filtrando ? (
+        <>
+          <p className="mt-1 text-slate-400 text-sm">
+            Prueba con otros filtros o términos de búsqueda.
+          </p>
+          <Link href="/" className="gx-btn-primary mt-6">
+            Limpiar filtros y ver todo
+          </Link>
+        </>
+      ) : (
+        <p className="mt-1 text-slate-400 text-sm">
+          Vuelve pronto, estamos agregando productos nuevos.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default async function CatalogoPage({
   searchParams,
 }: {
@@ -191,24 +214,7 @@ export default async function CatalogoPage({
         <div className="min-w-0 flex-1">
           <BarraFiltros categorias={categorias} total={data.total} />
           {data.items.length === 0 ? (
-            <div className="gx-card py-16 text-center">
-              <PackageSearch size={48} strokeWidth={1.5} className="mx-auto text-slate-300" />
-              <p className="mt-3 font-medium text-slate-700">No encontramos productos</p>
-              {filtrando ? (
-                <>
-                  <p className="mt-1 text-slate-400 text-sm">
-                    Prueba con otros filtros o términos de búsqueda.
-                  </p>
-                  <Link href="/" className="gx-btn-primary mt-6">
-                    Limpiar filtros y ver todo
-                  </Link>
-                </>
-              ) : (
-                <p className="mt-1 text-slate-400 text-sm">
-                  Vuelve pronto, estamos agregando productos nuevos.
-                </p>
-              )}
-            </div>
+            <CatalogoVacio filtrando={filtrando} />
           ) : (
             <>
               <ProductoGrid items={data.items} msi={msiCfg} entrega={entregaCfg} />
