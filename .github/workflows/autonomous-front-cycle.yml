@@ -9,64 +9,222 @@ concurrency:
   group: autonomous-front-cycle
   cancel-in-progress: false
 
+# Las fases están separadas por jobs y artefactos. Ninguna CLI de modelo se
+# ejecuta en el job que tiene GH_TOKEN o credenciales de correo.
 jobs:
-  execute-review-merge:
-    if: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' }}
-    # Runner propio con `kimi`, `codex` y `gh` instalados. Las CLIs nunca se
-    # descargan desde el repositorio ni se reciben por entrada del usuario.
-    runs-on: [self-hosted, kimi-codex]
-    timeout-minutes: 25
+  executor:
+    if: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
+    outputs:
+      has_work: ${{ steps.detect_work.outputs.has_work }}
     env:
       KIMI_BIN: ${{ vars.KIMI_BIN || 'kimi' }}
-      CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
-      AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE || 'false' }}
-      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
-      INCIDENT_ALERT_EMAIL: gaessoft@gmail.com
-      EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE || 'no-reply@gaessoft.com' }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      KIMI_VERSION: "2.2.0"
+      KIMI_MODEL_NAME: ${{ vars.KIMI_MODEL_NAME }}
+      KIMI_MODEL_BASE_URL: ${{ vars.KIMI_MODEL_BASE_URL || '' }}
+      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - name: Bloquear duplicados con PR pendiente
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$ARTIFACT_DIR"
+          if gh pr list --state open --base main --json headRefName --jq '.[] | select(.headRefName | startswith("automation/front-cycle-")) | .headRefName' | grep -q .; then
+            printf '%s\n' waiting-review > "$ARTIFACT_DIR/waiting-review"
+          fi
+      - name: Instalar Kimi Code CLI fijado
+        run: |
+          npm install --global "@moonshot-ai/kimi-code@2.2.0"
+          command -v "$KIMI_BIN"
+      - name: Ejecutar tarea sin credenciales de publicación
+        env:
+          KIMI_MODEL_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: AUTONOMY_PREFLIGHT_WAITING=true AUTONOMY_PHASE=executor bash scripts/autonomous-front-cycle-phase.sh
+      - name: Detectar backlog vacío
+        id: detect_work
+        run: |
+          if [[ -f "$ARTIFACT_DIR/no-work" || -f "$ARTIFACT_DIR/waiting-review" ]]; then
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_work=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
+          include-hidden-files: true
+          if-no-files-found: error
 
+  validate:
+    needs: executor
+    if: ${{ needs.executor.result == 'success' && needs.executor.outputs.has_work == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
+      AUTONOMY_VALIDATE_ISOLATED: "true"
+      AUTONOMY_VALIDATE_IMAGE: "node:24-bookworm-slim@sha256:ec857ea6bb60cb3d0fa4d97495590c5fe7d51be8572c307b55957eeb06569cf7"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.2
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Preparar imagen de validación fijada
+        run: docker pull "$AUTONOMY_VALIDATE_IMAGE"
+      - name: Validar patch y ejecutar checks
+        run: AUTONOMY_PHASE=validate bash scripts/autonomous-front-cycle-phase.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-front-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
+          include-hidden-files: true
+          if-no-files-found: error
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install agent CLIs
+  judge:
+    needs: [executor, validate]
+    if: ${{ needs.validate.result == 'success' && needs.executor.outputs.has_work == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
+      CODEX_VERSION: ${{ vars.CODEX_VERSION || '0.130.0' }}
+      CODEX_HOME: ${{ runner.temp }}/codex-home
+      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomous-front-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-validated
+      - name: Transferir solo metadata validada
         run: |
-          # Las versiones y comandos se controlan desde el runner/variables del repo.
-          # El job falla cerrado si una CLI no está instalada.
-          command -v "$KIMI_BIN"
+          cp "$RUNNER_TEMP/gaes-autonomy-validated/validated-base.sha" "$RUNNER_TEMP/gaes-autonomy-artifact/validated-base.sha"
+          cp "$RUNNER_TEMP/gaes-autonomy-validated/validation.json" "$RUNNER_TEMP/gaes-autonomy-artifact/validation.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar Codex CLI fijado
+        run: |
+          npm install --global "@openai/codex@${CODEX_VERSION}"
           command -v "$CODEX_BIN"
-          # El runner es dedicado; evita que una sesión Kimi huérfana de una
-          # cancelación anterior bloquee el siguiente ciclo no interactivo.
-          stale_kimi=$(pgrep -u "$(id -u)" -f 'kimi-code/bin/kimi' || true)
-          if [[ -n "$stale_kimi" ]]; then
-            kill $stale_kimi 2>/dev/null || true
-            sleep 2
-            kill -9 $stale_kimi 2>/dev/null || true
-          fi
-          CODEX_HOME="$GITHUB_WORKSPACE/.codex-runner"
-          mkdir -p "$CODEX_HOME"
-          if [[ -f "$HOME/.codex/auth.json" ]]; then cp "$HOME/.codex/auth.json" "$CODEX_HOME/auth.json"; fi
-          if [[ -f "$HOME/.codex/config.toml" ]]; then cp "$HOME/.codex/config.toml" "$CODEX_HOME/config.toml"; fi
-          chmod 700 "$CODEX_HOME"
-          echo "CODEX_HOME=$CODEX_HOME" >> "$GITHUB_ENV"
+      - name: Preparar autenticación aislada de Codex
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          test -n "$OPENAI_API_KEY"
+          mkdir -p -m 700 "$CODEX_HOME"
+          printf '%s' "$OPENAI_API_KEY" | "$CODEX_BIN" login --with-api-key
+      - name: Revisar en read-only
+        env:
+          CODEX_AUTH_READY: "true"
+        run: AUTONOMY_PHASE=judge bash scripts/autonomous-front-cycle-phase.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-front-final-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
+          include-hidden-files: true
+          if-no-files-found: error
 
-      - name: Kimi ejecuta, Codex juzga y publica solo si aprueba
-        run: timeout --signal=TERM --kill-after=30s 20m bash scripts/autonomous-front-cycle.sh
+  publish:
+    needs: [executor, judge]
+    if: ${{ needs.judge.result == 'success' && needs.executor.outputs.has_work == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE || 'false' }}
+      ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomous-front-final-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gaes-autonomy-artifact
+      - name: Publicar solo patch aprobado
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          INCIDENT_ALERT_EMAIL: gaessoft@gmail.com
+          EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE }}
+        run: AUTONOMY_PHASE=publish bash scripts/autonomous-front-cycle-phase.sh
+
+  notify:
+    needs: [executor, validate, judge, publish]
+    if: ${{ always() && (needs.executor.result == 'failure' || needs.validate.result == 'failure' || needs.judge.result == 'failure' || needs.publish.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Notificar fallo sin exponer logs ni secretos
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          INCIDENT_ALERT_EMAIL: gaessoft@gmail.com
+          EMAIL_REMITENTE: ${{ vars.EMAIL_REMITENTE }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXECUTOR_STATUS: ${{ needs.executor.result }}
+          VALIDATE_STATUS: ${{ needs.validate.result }}
+          JUDGE_STATUS: ${{ needs.judge.result }}
+          PUBLISH_STATUS: ${{ needs.publish.result }}
+        run: |
+          if [[ -z "$EMAIL_REMITENTE" || -z "${RESEND_API_KEY}${BREVO_API_KEY}" ]]; then
+            echo "Notificación omitida: proveedor o remitente no configurado" >&2
+            exit 0
+          fi
+          python3 - <<'PY' | python3 scripts/send-system-email.py
+          import json, os
+          json.dump({
+              'subject': 'GaesSoft automation: fallo en ciclo autónomo',
+            'text': (f'Pantalla: storefront frontend\nEstado: el ciclo no completó; revisa el estado de publicación en el run enlazado.\n'
+                       f'Run: {os.environ["RUN_URL"]}\n'
+                       f'Fases: executor={os.environ["EXECUTOR_STATUS"]}, validate={os.environ["VALIDATE_STATUS"]}, '
+                       f'judge={os.environ["JUDGE_STATUS"]}, publish={os.environ["PUBLISH_STATUS"]}.\n'
+                       'Para revisar: abre el run enlazado y consulta el resumen de cada fase; no se incluyen logs ni secretos en este correo.'),
+          }, __import__('sys').stdout)
+          PY

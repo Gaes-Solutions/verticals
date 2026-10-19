@@ -35,16 +35,16 @@ if name=='git':
 elif name=='pnpm':
     if ' '.join(args)==os.environ['FAIL_CHECK']:sys.exit(42)
 elif name=='kimi':
-    if os.environ['COMMITTING_AGENT']=='kimi':Path('fake-head').write_text('b'*40)
-    sys.exit(int(os.environ['KIMI_STATUS']))
+    if os.environ.get('AUTONOMY_TEST_COMMITTING_AGENT')=='kimi':Path('fake-head').write_text('b'*40)
+    sys.exit(int(os.environ.get('AUTONOMY_TEST_KIMI_STATUS','0')))
 elif name=='codex':
-    if os.environ['COMMITTING_AGENT']=='codex':Path('fake-head').write_text('c'*40)
-    if os.environ['JUDGE_EDITS']=='true':
+    if os.environ.get('AUTONOMY_TEST_COMMITTING_AGENT')=='codex':Path('fake-head').write_text('c'*40)
+    if os.environ.get('AUTONOMY_TEST_JUDGE_EDITS')=='true':
         target=Path('apps/web-tienda/src/judge.ts');target.parent.mkdir(parents=True,exist_ok=True)
         target.write_text(target.read_text()+'edited' if target.exists() else 'edited')
-    Path(args[args.index('--output-last-message')+1]).write_text(os.environ['JUDGE_ANSWER'])
+    Path(args[args.index('--output-last-message')+1]).write_text(os.environ.get('AUTONOMY_TEST_JUDGE_ANSWER','APPROVED\\nEvidence'))
     print('APPROVED') # CLI logs must never authorize a rejected final answer.
-    sys.exit(int(os.environ['JUDGE_STATUS']))
+    sys.exit(int(os.environ.get('AUTONOMY_TEST_JUDGE_STATUS','0')))
 elif name=='gh':print('https://github.com/example/repo/pull/1')
 ''')
             tool.chmod(0o700)
@@ -53,7 +53,8 @@ elif name=='gh':print('https://github.com/example/repo/pull/1')
             env = {**os.environ, 'PATH': str(root) + os.pathsep + os.environ['PATH'],
                    'KIMI_BIN': str(root / 'kimi'), 'CODEX_BIN': str(root / 'codex'),
                    'KIMI_TIMEOUT': '1s', 'CODEX_TIMEOUT': '2s', 'AUTO_MERGE': 'true',
-                   'COMMITTING_AGENT': committing_agent, 'JUDGE_EDITS': str(judge_edits).lower(), 'KIMI_STATUS': str(kimi_status), 'FAIL_CHECK': failure, 'JUDGE_STATUS': str(judge_status), 'JUDGE_ANSWER': answer,
+                   'AUTONOMY_TEST_COMMITTING_AGENT': committing_agent, 'AUTONOMY_TEST_JUDGE_EDITS': str(judge_edits).lower(), 'AUTONOMY_TEST_KIMI_STATUS': str(kimi_status), 'FAIL_CHECK': failure, 'AUTONOMY_TEST_JUDGE_STATUS': str(judge_status), 'AUTONOMY_TEST_JUDGE_ANSWER': answer,
+                   'AUTONOMY_LEGACY_CONTROLLER': 'true',
                    'BREVO_API_KEY': '', 'RESEND_API_KEY': '', 'CODEX_HOME': '',
                    'BACKLOG_FILE': 'automation/front-backlog.md'}
             result = subprocess.run(['bash', str(script)], cwd=root, env=env,

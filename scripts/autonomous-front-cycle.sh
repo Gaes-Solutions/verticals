@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${AUTONOMY_LEGACY_CONTROLLER:-false}" != "true" ]]; then
+  echo "Controlador legacy deshabilitado; usa scripts/autonomous-front-cycle-phase.sh" >&2
+  exit 2
+fi
+
 : "${KIMI_BIN:=kimi}"
 : "${CODEX_BIN:=codex}"
 : "${AUTO_MERGE:=false}"
@@ -170,7 +175,9 @@ EOF
   )
   set +e
   kimi_output_file=$(mktemp)
-  run_agent_with_timeout "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text >"$kimi_output_file" 2>&1
+  run_agent_with_timeout "$KIMI_TIMEOUT" env -i PATH="$PATH" HOME="${HOME:-}" KIMI_API_KEY="${KIMI_API_KEY:-}" \
+    AUTONOMY_TEST_COMMITTING_AGENT="${AUTONOMY_TEST_COMMITTING_AGENT:-}" AUTONOMY_TEST_KIMI_STATUS="${AUTONOMY_TEST_KIMI_STATUS:-}" \
+    "$KIMI_BIN" -p "$kimi_prompt" --output-format text >"$kimi_output_file" 2>&1
   kimi_status=$?
   cat "$kimi_output_file"
   rm -f "$kimi_output_file"
@@ -204,7 +211,9 @@ EOF
   fi
   judge_message_file=$(mktemp)
   set +e
-  judge_cli_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral --output-last-message "$judge_message_file" "$judge_prompt" 2>&1)
+  judge_cli_output=$(env -i PATH="$PATH" HOME="${HOME:-}" CODEX_HOME="${CODEX_HOME:-}" OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+    AUTONOMY_TEST_COMMITTING_AGENT="${AUTONOMY_TEST_COMMITTING_AGENT:-}" AUTONOMY_TEST_JUDGE_EDITS="${AUTONOMY_TEST_JUDGE_EDITS:-}" AUTONOMY_TEST_JUDGE_STATUS="${AUTONOMY_TEST_JUDGE_STATUS:-}" AUTONOMY_TEST_JUDGE_ANSWER="${AUTONOMY_TEST_JUDGE_ANSWER:-}" \
+    timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox read-only --ephemeral --output-last-message "$judge_message_file" "$judge_prompt" 2>&1)
   judge_status=$?
   set -e
   judge_output=$(cat "$judge_message_file")

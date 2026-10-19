@@ -1,0 +1,46 @@
+name: Autonomous storefront safety checks
+
+on:
+  push:
+    branches: [trabajo/codex-tienda-08sep]
+    paths:
+      - .github/workflows/autonomous-front-*.yml
+      - scripts/autonomous-front-*.sh
+      - scripts/testing/autonomous-front-*.py
+      - scripts/send-system-email.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autonomous-front-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check controller syntax and fail-closed regressions
+        run: |
+          bash -n scripts/autonomous-front-cycle.sh
+          bash -n scripts/autonomous-front-cycle-phase.sh
+          python3 scripts/testing/autonomous-front-cycle.test.py
+          python3 scripts/testing/autonomous-front-cycle-phase.test.py
+      - name: Exercise all phases with real isolated Docker and local-only publication
+        env:
+          AUTONOMY_DOCKER_INTEGRATION: 'true'
+        run: |
+          export PNPM_BIN="$(command -v pnpm)"
+          python3 scripts/testing/autonomous-front-integration.test.py
