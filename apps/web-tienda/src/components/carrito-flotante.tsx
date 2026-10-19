@@ -20,6 +20,7 @@ export function CarritoFlotante() {
   const recibo = useRef<AdicionCarrito | null>(null);
   const [aviso, setAviso] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panel = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const invalidarConfirmacion = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -82,7 +83,21 @@ export function CarritoFlotante() {
   const visible = items.length > 0 && (pathname === "/" || pathname.startsWith("/producto/"));
   useEffect(() => {
     document.body.classList.toggle("store-has-cart", visible);
-    return () => document.body.classList.remove("store-has-cart");
+    const actualizarEspacio = () => {
+      if (panel.current)
+        document.body.style.setProperty(
+          "--store-cart-height",
+          `${Math.ceil(panel.current.getBoundingClientRect().height)}px`,
+        );
+    };
+    actualizarEspacio();
+    const observador = new ResizeObserver(actualizarEspacio);
+    if (panel.current) observador.observe(panel.current);
+    return () => {
+      observador.disconnect();
+      document.body.classList.remove("store-has-cart");
+      document.body.style.removeProperty("--store-cart-height");
+    };
   }, [visible]);
   if (!visible) return null;
   const unidades = items.reduce((n, p) => n + Math.round(p.cantidad * 1000), 0) / 1000;
@@ -125,7 +140,7 @@ export function CarritoFlotante() {
   }
 
   return (
-    <aside className="store-floating-cart" aria-label="Tu compra">
+    <aside ref={panel} className="store-floating-cart" aria-label="Tu compra">
       {ultimo && (
         <div className="store-cart-feedback">
           <output className="flex min-w-0 items-center gap-2">

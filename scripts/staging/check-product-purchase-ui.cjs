@@ -180,6 +180,22 @@ let stage = "setup";
     await expect(p.getByRole("button", { name: "Deshacer", exact: true })).toBeVisible();
     assert.equal(await p.evaluate(() => window.cartWrites), 1);
     await safe(p, f);
+    await expect
+      .poll(() =>
+        p.evaluate(() => {
+          const panel = document.querySelector(".store-floating-cart");
+          const amount = panel.querySelector(".text-lg");
+          const range = document.createRange();
+          range.selectNodeContents(amount);
+          const lines = new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top)));
+          return (
+            lines.size === 1 &&
+            Number.parseFloat(getComputedStyle(document.body).paddingBottom) >=
+              panel.getBoundingClientRect().height + 20
+          );
+        }),
+      )
+      .toBe(true);
     await p.screenshot({ path: "/tmp/gaes-purchase-local-320.png", fullPage: true });
     pass();
     stage = "undo restores the whole earlier line including its price and metadata exactly once";

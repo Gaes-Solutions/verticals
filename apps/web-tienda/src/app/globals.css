@@ -915,7 +915,7 @@ body {
   color: #453618;
 }
 .store-has-cart {
-  padding-bottom: 120px;
+  padding-bottom: calc(var(--store-cart-height, 120px) + 24px + env(safe-area-inset-bottom));
 }
 @media (max-width: 700px) {
   .store-floating-cart {
@@ -925,10 +925,13 @@ body {
     width: auto;
   }
   .store-floating-cart-content {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
     gap: 10px;
     padding: 12px;
   }
   .store-floating-cart .store-button {
+    grid-column: 1 / -1;
     font-size: 11px;
     padding: 12px;
     gap: 6px;

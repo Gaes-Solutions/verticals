@@ -81,7 +81,24 @@ let stage = "setup";
     ])
       assert((await button.boundingBox()).height >= 44);
     await safe(p, f);
+    await expect
+      .poll(() =>
+        p.evaluate(() => {
+          const panel = document.querySelector(".store-floating-cart");
+          const amount = panel.querySelector(".text-lg");
+          const range = document.createRange();
+          range.selectNodeContents(amount);
+          const lines = new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top)));
+          return (
+            lines.size === 1 &&
+            Number.parseFloat(getComputedStyle(document.body).paddingBottom) >=
+              panel.getBoundingClientRect().height + 20
+          );
+        }),
+      )
+      .toBe(true);
     await p.screenshot({ path: "/tmp/gaes-purchase-published-320.png", fullPage: true });
+    await p.screenshot({ path: "/tmp/gaes-purchase-published-viewport320.png" });
     pass();
     stage = "published undo can only restore the exact latest addition once";
     await undo.evaluate((e) => {
@@ -90,6 +107,15 @@ let stage = "setup";
     });
     assert.deepEqual(await cart(p), []);
     await expect(p.getByRole("complementary", { name: "Tu compra", exact: true })).toHaveCount(0);
+    await expect
+      .poll(() =>
+        p.evaluate(
+          () =>
+            !document.body.classList.contains("store-has-cart") &&
+            !document.body.style.getPropertyValue("--store-cart-height"),
+        ),
+      )
+      .toBe(true);
     await safe(p, f);
     pass();
     stage = "published storage changes invalidate undo without deleting the changed quantity";
