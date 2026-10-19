@@ -89,3 +89,27 @@ el seguimiento de límites previos en [dependencias](dependency-security-2026-10
 y en la [auditoría integrada](retail-integrated-audit-2026-10-18.md).
 
 Contrato y comandos reproducibles: [automatización de incidentes](../automatizacion-incidentes.md).
+
+## Comprobación publicada en staging
+
+Se promovió `c04b6e41463fed5cf00a873497ef6ea2b4d18586` únicamente a staging.
+Railway confirmó **SUCCESS en los cinco servicios** para ese mismo commit:
+API, tienda, administración, POS y superadmin.
+
+La comprobación posterior obtuvo:
+
+- API `/health`: 200.
+- Tienda, administración, POS y superadmin: 200 en sus dominios configurados.
+- API `/admin/incidents` sin sesión: 401.
+
+La URL de administración de este ambiente es
+`https://web-admin-staging-84b0.up.railway.app/`; se verificó contra la configuración
+de dominios de Railway. La tienda está en `https://web-tienda-staging.up.railway.app/`.
+
+Evidencia filtrada: `/tmp/gaes-incident-staging-final.json` y
+`/tmp/gaes-incident-staging-health.json`. El build adicional de imágenes de GitHub
+[39284636145](https://github.com/Gaes-Solutions/verticals/actions/runs/39284636145)
+seguía en cola al cerrar esta comprobación; no se cuenta como aprobado.
+
+`main` permaneció en `d14694ed31cebcb1c70cec55dd3b9fd8ca985aca`; no hubo push a
+producción. Este registro posterior de resultados no requiere otro despliegue.
