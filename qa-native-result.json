@@ -1,0 +1,10 @@
+{
+  "status": "failure",
+  "sourceCommit": "fc40c8a6d64d4bbe1c0f0e510ecc1d4d43051a20",
+  "runUrl": "https://github.com/Gaes-Solutions/verticals/actions/runs/39208697447",
+  "apkVersion": 16,
+  "apkSourceCommit": "e448f21bc51798f1777a6735c3da12e66c045f17",
+  "kioskVersion": 4,
+  "environment": "staging",
+  "account": "anonymous-and-synthetic"
+}
