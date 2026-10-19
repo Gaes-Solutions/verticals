@@ -22,16 +22,19 @@ el runner self-hosted esté encendido.
 Cada ciclo envía a `gaessoft@gmail.com` el resultado, las pantallas/áreas
 afectadas, la resolución solicitada, las pruebas, el dictamen de Codex y la
 rama o PR generado. Los fallos del ciclo y los relanzamientos del watchdog
-también se notifican por Resend.
+usan el proveedor configurado en `scripts/send-system-email.py` (Brevo o Resend).
+No se da un correo por recibido solo porque el script intentó enviarlo.
 
 ## Roles
 
 - **Kimi, ejecutor:** toma una tarea aprobada, implementa el cambio en un
-  worktree aislado, agrega o ajusta las pruebas necesarias y entrega evidencia.
+  checkout del runner dedicado y una rama de tarea; agrega o ajusta las pruebas
+  necesarias y entrega evidencia.
   No hace `push`, despliegues, migraciones ni cambia secretos.
 - **Codex, juez:** convierte la petición en criterios comprobables, revisa el
-  diff, prueba los flujos completos y decide `aprobado`, `corregir` o
-  `rechazado`. También verifica que el cambio no rompa otras verticales.
+  diff y emite el dictamen final; en la implementación actual no vuelve a ejecutar
+  las pruebas. Las comprobaciones mecánicas previas son obligatorias; un dictamen
+  no demuestra por sí solo todos los flujos ni otras verticales.
 
 ## Ciclo por cambio
 
@@ -68,3 +71,42 @@ también se notifican por Resend.
 Cada entrega debe incluir resultado de pruebas, rutas revisadas, capturas o
 artefactos visuales cuando aplique, y una lista explícita de pendientes. Una
 propuesta visual sin pruebas de flujo no se considera terminada.
+
+
+## Estado verificado el 18 de octubre de 2026
+
+El código corregido bloquea la publicación si falla cualquier validación o agente,
+si el juez no termina con exit 0 y dictamen final `APPROVED`, si se cambia HEAD,
+si aparecen archivos fuera del alcance, o si el juez altera el estado ya probado.
+No se extrae una aprobación de los logs ni se acepta un timeout con cambios.
+Pruebas de regresión: `python3 scripts/testing/autonomous-front-cycle.test.py`.
+
+Las validaciones automáticas actuales son diff sin errores, tipos, Vitest y build
+de tienda web; ST-006 añade tipos y pruebas cliente. No ejecutan por sí mismas
+todos los E2E, dispositivos físicos, proveedores reales ni chequeos globales de
+seguridad. Las revisiones integradas de esta ronda se documentan aparte en
+`testing/retail-integrated-audit-2026-10-18.md`.
+
+La consulta pública de las últimas cinco corridas del workflow mostró `skipped`,
+incluida la ejecución 39200815748. No hay evidencia de trabajo autónomo activo en
+esas corridas. El código corregido está en la rama de trabajo; no se promovió a
+main ni se cambiaron variables del repositorio. El cron es cada cuatro horas;
+el watchdog revisa cada quince minutos. Esto no equivale a ejecución continua ni
+a garantía de que no se detenga. Se necesita una corrida real en el runner y
+evidencia de entrega antes de declarar el servicio activo.
+
+## Comprobación de configuración del 19 de octubre
+
+El runner Android 39208697447 registró solo presencia booleana de configuración:
+`AUTONOMOUS_FRONT_ENABLED=false`, auto merge desactivado, claves Kimi y OpenAI
+no presentes, Resend presente y remitente configurado. No se transfirieron
+secretos al proceso que escribió esa evidencia. No se declara operativo el
+servicio Kimi/Codex con esa configuración.
+
+La nueva separación de ejecución, validación aislada, juez y publicación se
+está comprobando con repositorios desechables, modelos simulados y Docker real.
+Estas pruebas comprueban el controlador; no demuestran autenticación, cuotas ni
+calidad de respuesta de proveedores reales. El workflow de seguridad de la rama
+de trabajo no recibe claves de modelos/correo ni permiso de publicación: prueba
+el flujo sobre un origin Git local. No activa el cron de main ni despliega
+producción.

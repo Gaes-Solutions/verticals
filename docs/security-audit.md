@@ -697,3 +697,14 @@ Rama: `seguridad/auditoria`. 4 vulnerabilidades aprobadas por el panel y aplicad
 - Cambiar de rol limpia las concesiones anteriores salvo que el superadministrador envíe explícitamente las nuevas. Las modificaciones se registran con valores anteriores y nuevos en auditoría.
 - El panel obtiene los accesos de `/auth/me`, filtra los menús y controles y actualiza los permisos al volver a la ventana o periódicamente. Al retirar un acceso abandona la pantalla que dejó de estar autorizada.
 - Validación: pruebas de matriz de roles, concesión/revocación con el mismo JWT, suplantación de rol/permisos en claims, autoasignación rechazada, códigos desconocidos, cambios de rol y desactivación. Recorrido con TOTP real en navegador y revisión a 320 px. Esta entrada documenta este alcance; no certifica toda la plataforma.
+
+
+### Rectificación de confianza por número de proxies — 18-oct-2026
+
+La recomendación histórica de `TRUST_PROXY_HOPS=1` no es suficiente para
+acreditar un proxy. Fastify >=5.12.1 ahora ignora encabezados reenviados bajo
+confianza numérica, evitando el bypass por conexión directa. El comportamiento
+nuevo y el efecto operativo pendiente en Railway se registran en
+[la auditoría de dependencias](testing/dependency-security-2026-10-18.md#proxy-e-identidad-de-cliente-tras-actualizar-fastify).
+No se debe reutilizar la afirmación anterior de que contar saltos garantiza
+por sí solo una IP de cliente no falsificable.
