@@ -471,3 +471,38 @@ las repeticiones con CSS y la suite integral final están aprobadas.
 No se cambió runtime nativo en esta limpieza: el cliente Android recomendado
 sigue siendo 17, ya publicado y probado. Tampoco se declara seguridad absoluta,
 proveedores/biometría físicos probados, ni automatización con modelos activa.
+
+## Comprobación final publicada en testing
+
+Staging se promovió por avance directo a
+`931875730e618d9c882f8cc19f24833342b7f881`, que contiene d39e736 sin cambios de
+runtime posteriores. No se modificó main ni se desplegó producción.
+
+- Railway: API verticals, web-tienda, web-admin, web-pos y web-superadmin en
+  **SUCCESS**, metadata de commit y rama comprobadas individualmente. Health API
+  y las cuatro superficies web responden HTTP200.
+- [Build staging 39216532771](https://github.com/Gaes-Solutions/verticals/actions/runs/39216532771):
+  matriz Docker/GHCR **5/5 success**. Webhook Coolify opcional omitido; no se
+  presenta como un despliegue Coolify ejecutado.
+- Compra pública **7/7**, galería **5/5** y arranque de checkout **13/13**.
+  Checkout intercepta identidad/configuración/envío sintéticos; no es un cobro
+  real ni una confirmación end-to-end del proveedor.
+- Teclado publicado **14 pantallas**, 453 paradas Tab/Shift+Tab, 46 campos,
+  **0 hallazgos / 0 intentos de mutación** en 390/1280 px.
+- Ocho cargas frías públicas, interacción lista en **953–1513 ms**, sin errores
+  JS/assets ni escrituras. No constituye una garantía de rendimiento global.
+
+Evidencia local: `/tmp/gaes-st010-final-staging-deployments.json`,
+`/tmp/gaes-st010-github-deploy-status.json`,
+`/tmp/gaes-st010-published-{purchase,media,checkout,hydration,keyboard}.log` y
+`/tmp/gaes-st010-published-keyboard-report.json`. El último commit documental de
+la rama de trabajo no requiere otro despliegue: no cambia fuente ejecutable.
+
+No quedan hallazgos funcionales reproducidos sin corregir dentro de estos
+recorridos. Permanecen los límites externos ya documentados: activación y
+credenciales reales de modelos del proceso autónomo, proveedores/dispositivos
+físicos, promoción/configuración de producción y contrato del ingreso proxy.
+Los siete avisos por versión de dependencias tampoco se ocultan: tres tienen
+backport local probado y cuatro pertenecen a herramientas con actualización
+incompatible o sin parche publicado en la auditoría. Véase
+[el inventario de dependencias](dependency-security-2026-10-18.md#avisos-pendientes-sin-excepciones-ni-ocultamiento).

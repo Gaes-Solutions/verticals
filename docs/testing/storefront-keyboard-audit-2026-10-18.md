@@ -41,3 +41,12 @@ Las señales iniciales del comparador inverso y del foco del diálogo se aislaro
 El helper `scripts/staging/storefront-keyboard-browser.cjs` exporta `auditKeyboardPage(page, nombre, {coverage, findings})` sin iniciar un navegador ni manejar credenciales. Permite ampliar la evidencia con una página de cuenta SSR real ya autenticada por el E2E local y su base desechable, sin compartir sesiones ni usar usuarios de producción. La integración retail se ejecutó tras un login real de comprador fixture contra una base desechable y Next local: cuenta SSR a 390 y 1280 px, 73 paradas Tab y 14 campos etiquetados, cero hallazgos, sin errores JS/red. Evidencia: `/tmp/gaes-shopper-account-keyboard.json`; E2E `/tmp/gaes-shopper-e2e-final-keyboard.log` terminó con código 0.
 
 Esto no equivale a una matriz exhaustiva de accesibilidad: no se probó lector de pantalla, contraste de todos los estados, cuenta de producción, dispositivos físicos ni todos los productos y combinaciones del negocio. `/cuenta` sin sesión en staging solo verifica su redirección a login; la cuenta SSR autenticada se verificó por separado en el fixture local. La detección CSS de foco comprueba un indicador declarado; no certifica su contraste. ST-007 queda cerrada únicamente para los recorridos y tamaños descritos, con la cuenta SSR autenticada cubierta por el E2E local. Los demás límites anteriores permanecen explícitos.
+
+## Repetición final publicada después de ST-010
+
+Testing 9318757 (contiene d39e736): 14 pantallas a 390/1280 px, 453 paradas,
+46 campos etiquetados, cero hallazgos y cero intentos de mutación. Exit0; reporte
+`/tmp/gaes-st010-published-keyboard-report.json` y log
+`/tmp/gaes-st010-published-keyboard.log`. La cuenta autenticada también se repitió
+con Next/API/DB locales reales dentro de los 22 grupos shopper posteriores al
+build final. No modifica las limitaciones sobre hardware, contraste o lector.
