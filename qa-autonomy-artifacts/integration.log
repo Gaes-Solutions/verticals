@@ -1,0 +1,73 @@
+Controller snapshot SHA256: 0a7bc304f6effb30a8cadea954844e72ffc345bbb1b29cf12830667f1b57e2aa
+test_real_docker_allows_generated_incremental_cache (__main__.AutonomousDockerIntegrationTests.test_real_docker_allows_generated_incremental_cache) ... FAIL
+test_real_docker_four_phases (__main__.AutonomousDockerIntegrationTests.test_real_docker_four_phases) ... FAIL
+test_real_docker_rejects_source_copy_mutation (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_copy_mutation) ... FAIL
+test_real_docker_rejects_source_directory_named_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_directory_named_build) ... FAIL
+test_real_docker_type_failure_cannot_be_masked_by_passing_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_type_failure_cannot_be_masked_by_passing_build) ... FAIL
+test_empty_backlog_never_invokes_models_or_publisher (__main__.AutonomousIntegrationTests.test_empty_backlog_never_invokes_models_or_publisher) ... ok
+test_four_phase_local_bare_git_and_pending_pr_email (__main__.AutonomousIntegrationTests.test_four_phase_local_bare_git_and_pending_pr_email) ... ok
+test_judge_cannot_change_only_index_flags (__main__.AutonomousIntegrationTests.test_judge_cannot_change_only_index_flags) ... ok
+test_judge_cannot_rewrite_validation_evidence (__main__.AutonomousIntegrationTests.test_judge_cannot_rewrite_validation_evidence) ... ok
+test_pending_task_rejects_no_work_marker (__main__.AutonomousIntegrationTests.test_pending_task_rejects_no_work_marker) ... ok
+test_rejected_judge_cannot_publish (__main__.AutonomousIntegrationTests.test_rejected_judge_cannot_publish) ... ok
+test_sensitive_path_is_rejected_before_it_is_written (__main__.AutonomousIntegrationTests.test_sensitive_path_is_rejected_before_it_is_written) ... ok
+test_validator_rejects_self_consistent_artifact_replacement (__main__.AutonomousIntegrationTests.test_validator_rejects_self_consistent_artifact_replacement) ... ok
+
+[REDACTED]
+FAIL: test_real_docker_allows_generated_incremental_cache (__main__.AutonomousDockerIntegrationTests.test_real_docker_allows_generated_incremental_cache)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 343, in test_real_docker_allows_generated_incremental_cache
+    fixture.validate(self)
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 187, in validate
+    testcase.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : scope-ok
+autonomy: entrada pnpm no soportada para Docker: /home/runner/setup-pnpm/node_modules/.bin/pnpm
+
+
+[REDACTED]
+FAIL: test_real_docker_four_phases (__main__.AutonomousDockerIntegrationTests.test_real_docker_four_phases)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 314, in test_real_docker_four_phases
+    PhaseFixture(self, real_docker=True).full_cycle(self)
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 195, in full_cycle
+    self.validate(testcase)
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 187, in validate
+    testcase.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : scope-ok
+autonomy: entrada pnpm no soportada para Docker: /home/runner/setup-pnpm/node_modules/.bin/pnpm
+
+
+[REDACTED]
+FAIL: test_real_docker_rejects_source_copy_mutation (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_copy_mutation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 326, in test_real_docker_rejects_source_copy_mutation
+    self.assert_copy_mutation_rejected('mutate')
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 336, in assert_copy_mutation_rejected
+    self.assertIn('copia fuente aislada', result.stderr)
+AssertionError: 'copia fuente aislada' not found in 'autonomy: entrada pnpm no soportada para Docker: /home/runner/setup-pnpm/node_modules/.bin/pnpm\n'
+
+[REDACTED]
+FAIL: test_real_docker_rejects_source_directory_named_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_directory_named_build)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 329, in test_real_docker_rejects_source_directory_named_build
+    self.assert_copy_mutation_rejected('mutate-build-path')
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 336, in assert_copy_mutation_rejected
+    self.assertIn('copia fuente aislada', result.stderr)
+AssertionError: 'copia fuente aislada' not found in 'autonomy: entrada pnpm no soportada para Docker: /home/runner/setup-pnpm/node_modules/.bin/pnpm\n'
+
+[REDACTED]
+FAIL: test_real_docker_type_failure_cannot_be_masked_by_passing_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_type_failure_cannot_be_masked_by_passing_build)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/runner/work/verticals/verticals/scripts/testing/autonomous-front-integration.test.py", line 321, in test_real_docker_type_failure_cannot_be_masked_by_passing_build
+    self.assertIn('QA_typecheck', result.stdout)
+AssertionError: 'QA_typecheck' not found in 'scope-ok\n'
+
+----------------------------------------------------------------------
+Ran 13 tests in 7.684s
+
+FAILED (failures=5)
