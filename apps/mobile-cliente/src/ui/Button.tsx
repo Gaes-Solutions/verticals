@@ -11,8 +11,10 @@ export function Button({
   icon,
   busy = false,
   disabled = false,
+  testID,
 }: {
   label: string;
+  testID?: string;
   onPress: () => void;
   variant?: Variant;
   icon?: IconName;
@@ -28,6 +30,7 @@ export function Button({
       : colors.brand;
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: off, busy }}

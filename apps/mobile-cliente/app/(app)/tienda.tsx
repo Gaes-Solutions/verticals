@@ -1,20 +1,32 @@
 import { useAuth } from "@/lib/auth-store";
 import { cartCount } from "@/lib/cart-feedback";
 import { accountCartKey, useCart } from "@/lib/cart-store";
+import {
+  catalogFilterCount,
+  catalogOrders,
+  catalogReducer,
+  initialCatalogState,
+} from "@/lib/catalog-state";
 import { checkoutBlocksCart, useCheckout } from "@/lib/checkout-store";
 import { money } from "@/lib/format";
 import { addAvailableProduct, canAddQuantity } from "@/lib/product-selection";
 import { tiendaActual } from "@/lib/tienda";
-import { type StoreProduct, listStoreProducts, storeConfig } from "@/services/comercio";
+import {
+  type StoreProduct,
+  listStoreCategories,
+  listStoreProducts,
+  storeConfig,
+} from "@/services/comercio";
 import { colors, commerce, space } from "@/theme";
 import { Button, CommerceError, EmptyState, Icon, Loading } from "@/ui";
 import { CartButton } from "@/ui/CartButton";
 import { CartDock } from "@/ui/CartDock";
+import { CatalogFilters } from "@/ui/CatalogFilters";
 import { ProductPhoto } from "@/ui/ProductPhoto";
 import { SwipeAddButton } from "@/ui/SwipeAddButton";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -28,9 +40,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Tienda() {
   const { tenantSlug, user, status } = useAuth();
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
+  const [catalog, dispatch] = useReducer(catalogReducer, initialCatalogState);
+  const { search, query, page, filters } = catalog;
+  const filterCount = catalogFilterCount(filters);
   const [error, setError] = useState("");
   const list = useRef<FlatList<StoreProduct>>(null);
   const columns = useWindowDimensions().width >= 700 ? 3 : 2;
@@ -39,21 +51,40 @@ export default function Tienda() {
   const owner = tenantSlug && user ? accountCartKey(tenantSlug, user.id) : "";
   const ready = cart.owner === owner && cart.ready && !checkoutBlocksCart(checkout, owner);
   const store = tiendaActual();
+  const previousStore = useRef(store);
+  useEffect(() => {
+    if (previousStore.current !== store) {
+      previousStore.current = store;
+      dispatch({ type: "resetStore" });
+    }
+  }, [store]);
+  const selection = JSON.stringify([query, filters]);
+  const previousSelection = useRef(selection);
+  useEffect(() => {
+    if (previousSelection.current !== selection) {
+      previousSelection.current = selection;
+      list.current?.scrollToOffset({ offset: 0, animated: false });
+    }
+  }, [selection]);
+  const categories = useQuery({
+    queryKey: ["store-categories", store, tenantSlug, user?.id, status],
+    queryFn: listStoreCategories,
+    enabled: catalog.open && Boolean(store),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   const config = useQuery({
     queryKey: ["store-config", store, user?.id],
     queryFn: storeConfig,
     retry: false,
   });
   const products = useQuery({
-    queryKey: ["store", store, user?.id, query, page],
-    queryFn: () => listStoreProducts(query, page),
+    queryKey: ["store", store, tenantSlug, user?.id, status, query, filters, page],
+    queryFn: () => listStoreProducts(query, page, filters),
     retry: false,
   });
   const name = config.data?.nombre || (store === "gaesland" ? "Gaesland" : "Tu tienda");
-  const find = () => {
-    setPage(1);
-    setQuery(search.trim());
-  };
+  const find = () => dispatch({ type: "find" });
   const open = (item: StoreProduct) =>
     router.push({ pathname: "/(app)/producto", params: { slug: item.slugSeo } });
   const add = (item: StoreProduct) => {
@@ -109,7 +140,7 @@ export default function Tienda() {
           placeholder="¿Qué estás buscando hoy?"
           placeholderTextColor={colors.muted}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={(value) => dispatch({ type: "search", value })}
           maxLength={120}
           onSubmitEditing={find}
           returnKeyType="search"
@@ -121,9 +152,7 @@ export default function Tienda() {
             accessibilityLabel="Limpiar búsqueda"
             hitSlop={8}
             onPress={() => {
-              setSearch("");
-              setQuery("");
-              setPage(1);
+              dispatch({ type: "clearSearch" });
             }}
           >
             <Icon name="close" size={18} />
@@ -138,7 +167,56 @@ export default function Tienda() {
           <Icon name="arrow-forward" color={commerce.forest} size={22} />
         </Pressable>
       </View>
-      {!query && page === 1 ? (
+      <View style={s.filterBar}>
+        <Pressable
+          testID="catalog-filter-open"
+          accessibilityRole="button"
+          accessibilityLabel={`Filtrar y ordenar${filterCount ? `, ${filterCount} activos` : ""}`}
+          accessibilityState={{ expanded: catalog.open }}
+          onPress={() => dispatch({ type: "open" })}
+          style={[s.filterButton, filterCount > 0 && s.filterButtonActive]}
+        >
+          <Icon
+            name="options-outline"
+            size={20}
+            color={filterCount ? colors.white : commerce.forest}
+          />
+          <Text style={[s.filterText, filterCount > 0 && { color: colors.white }]}>
+            Filtrar y ordenar{filterCount ? ` · ${filterCount}` : ""}
+          </Text>
+        </Pressable>
+        {filterCount > 0 ? (
+          <Pressable
+            testID="catalog-filter-clear-active"
+            accessibilityRole="button"
+            accessibilityLabel="Quitar todos los filtros"
+            onPress={() => dispatch({ type: "clearFilters" })}
+            style={s.clearFilters}
+          >
+            <Text style={s.clearText}>Quitar filtros</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {filterCount > 0 ? (
+        <Text accessibilityLiveRegion="polite" style={s.filterSummary}>
+          {[
+            filters.categoriaPublicaId
+              ? (categories.data?.find((c) => c.id === filters.categoriaPublicaId)?.nombre ??
+                "Categoría seleccionada")
+              : "",
+            filters.precioMin ? `Desde ${money(filters.precioMin)}` : "",
+            filters.precioMax ? `Hasta ${money(filters.precioMax)}` : "",
+            filters.soloOfertas ? "Solo ofertas" : "",
+            filters.soloDisponibles ? "Solo disponibles" : "",
+            filters.orden !== "relevancia"
+              ? catalogOrders.find((o) => o.value === filters.orden)?.label
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+      ) : null}
+      {!query && !filterCount && page === 1 ? (
         <View style={s.hero}>
           <View style={s.heroTag}>
             <Text style={s.heroTagText}>DESCUBRE ALGO PARA TI</Text>
@@ -162,7 +240,11 @@ export default function Tienda() {
       <View style={s.section}>
         <View style={{ flex: 1 }}>
           <Text style={s.sectionTitle}>
-            {query ? `Resultados para “${query}”` : "Encuentra tu próximo favorito"}
+            {query
+              ? `Resultados para “${query}”`
+              : filterCount
+                ? "Una selección a tu medida"
+                : "Encuentra tu próximo favorito"}
           </Text>
           <Text style={s.sectionSubtitle}>
             {products.data
@@ -198,10 +280,19 @@ export default function Tienda() {
         onRefresh={() => void products.refetch()}
         ListEmptyComponent={
           !products.isPending && !products.isError ? (
-            <EmptyState
-              title="No encontramos artículos"
-              subtitle="Prueba con otra palabra o limpia tu búsqueda."
-            />
+            <View style={{ gap: 12, padding: 16 }}>
+              <EmptyState
+                title="No encontramos artículos"
+                subtitle="Prueba con otra palabra o ajusta tus filtros."
+              />
+              {filterCount > 0 ? (
+                <Button
+                  label="Quitar filtros"
+                  variant="outline"
+                  onPress={() => dispatch({ type: "clearFilters" })}
+                />
+              ) : null}
+            </View>
           ) : null
         }
         renderItem={({ item }) => (
@@ -296,7 +387,7 @@ export default function Tienda() {
                   disabled={page === 1}
                   variant="outline"
                   onPress={() => {
-                    setPage(page - 1);
+                    dispatch({ type: "page", value: page - 1 });
                     list.current?.scrollToOffset({ offset: 0 });
                   }}
                 />
@@ -305,7 +396,7 @@ export default function Tienda() {
                   disabled={page * products.data.pageSize >= products.data.total}
                   variant="outline"
                   onPress={() => {
-                    setPage(page + 1);
+                    dispatch({ type: "page", value: page + 1 });
                     list.current?.scrollToOffset({ offset: 0 });
                   }}
                 />
@@ -317,6 +408,14 @@ export default function Tienda() {
         }
       />
       <CartDock />
+      <CatalogFilters
+        state={catalog}
+        dispatch={dispatch}
+        categories={categories.data ?? []}
+        loading={categories.isPending}
+        error={categories.isError ? categories.error : null}
+        retry={() => void categories.refetch()}
+      />
     </SafeAreaView>
   );
 }
@@ -356,6 +455,24 @@ const s = StyleSheet.create({
   },
   searchInput: { flex: 1, minWidth: 0, color: colors.ink, fontSize: 14, paddingVertical: 15 },
   searchButton: { backgroundColor: commerce.gold, padding: 14 },
+  filterBar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  filterButton: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#d9e1da",
+    backgroundColor: colors.card,
+  },
+  filterButtonActive: { backgroundColor: commerce.forest, borderColor: commerce.forest },
+  filterText: { fontSize: 13, fontWeight: "700", color: commerce.forest },
+  clearFilters: { minHeight: 44, paddingHorizontal: 8, justifyContent: "center" },
+  clearText: { fontSize: 12, color: commerce.forest, textDecorationLine: "underline" },
+  filterSummary: { fontSize: 12, lineHeight: 19, color: colors.muted, marginTop: -10 },
   hero: {
     backgroundColor: commerce.forest,
     borderRadius: 24,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), del: vi.fn() }));
 vi.mock("@/lib/api", () => ({ api: mocks }));
 import { fijarTienda, marcarSesion } from "../src/lib/tienda";
-import { calculateCart, listStoreProducts } from "../src/services/comercio";
+import { calculateCart, listStoreCategories, listStoreProducts } from "../src/services/comercio";
 
 vi.mock("../src/lib/storage", () => ({
   secureStorage: { get: async () => null, set: async () => {}, delete: async () => {} },
@@ -71,4 +71,89 @@ it("el carrito sigue exigiendo sesión aunque el catálogo sea público", async 
     expect.anything(),
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
+});
+
+it("sends every applied filter to the authenticated API with actual catalog parameter names", async () => {
+  mocks.get.mockResolvedValue({ items: [] });
+  await listStoreProducts("café & té", 3, {
+    categoriaPublicaId: "cat/a&b",
+    precioMin: "0",
+    precioMax: "100.5",
+    soloOfertas: true,
+    soloDisponibles: true,
+    orden: "precio_desc",
+  });
+  const [path, options] = mocks.get.mock.calls[0];
+  const url = new URL(path, "http://localhost");
+  expect(url.pathname).toBe("/cliente-portal/comercio/catalogo");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    q: "café & té",
+    page: "3",
+    pageSize: "24",
+    categoriaPublicaId: "cat/a&b",
+    precioMin: "0",
+    precioMax: "100.5",
+    soloOfertas: "true",
+    soloDisponibles: "true",
+    orden: "precio_desc",
+  });
+  expect(options.signal).toBeInstanceOf(AbortSignal);
+  expect(options.auth).not.toBe(false);
+});
+it("uses identical category/filter semantics for a guest without weakening cart authorization", async () => {
+  marcarSesion(null);
+  await fijarTienda("abarrotes-lupita");
+  mocks.get.mockResolvedValue({ items: [] });
+  await listStoreProducts("pan", 1, {
+    categoriaPublicaId: "cat",
+    precioMin: "",
+    precioMax: "50",
+    soloOfertas: false,
+    soloDisponibles: true,
+    orden: "novedad",
+  });
+  const [path, options] = mocks.get.mock.calls[0];
+  const url = new URL(path, "http://localhost");
+  expect(url.pathname).toBe("/public/tiendas/abarrotes-lupita/catalogo");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    q: "pan",
+    page: "1",
+    pageSize: "24",
+    categoriaPublicaId: "cat",
+    precioMax: "50",
+    soloDisponibles: "true",
+    orden: "novedad",
+  });
+  expect(options.auth).toBe(false);
+});
+
+it.each([true, false])(
+  "loads actual category shape through the correct session path (%s)",
+  async (signedIn) => {
+    if (!signedIn) {
+      marcarSesion(null);
+      await fijarTienda("abarrotes-lupita");
+    }
+    const categories = [{ id: "cat", nombre: "Hogar", slugSeo: "hogar" }];
+    mocks.get.mockResolvedValue(categories);
+    expect(await listStoreCategories()).toEqual(categories);
+    expect(mocks.get).toHaveBeenCalledWith(
+      signedIn
+        ? "/cliente-portal/comercio/categorias"
+        : "/public/tiendas/abarrotes-lupita/categorias",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        ...(signedIn ? {} : { auth: false }),
+      }),
+    );
+  },
+);
+it.each([
+  null,
+  {},
+  [{ id: "cat", nombre: { private: "bad" }, slugSeo: "a" }],
+  [{ id: "", nombre: "A", slugSeo: "a" }],
+])("rejects malformed category responses so the sheet can offer retry %#", async (response) => {
+  mocks.get.mockResolvedValue(response);
+  await expect(listStoreCategories()).rejects.toThrow(/categorías/);
 });

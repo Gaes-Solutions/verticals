@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type { CartLine } from "@/lib/cart-store";
+import { type CatalogFilters, catalogParams, emptyCatalogFilters } from "@/lib/catalog-state";
 import { haySesion, tiendaActual } from "@/lib/tienda";
 
 export interface StoreProduct {
@@ -56,16 +57,46 @@ async function bounded<T>(request: (signal: AbortSignal) => Promise<T>): Promise
     clearTimeout(timer);
   }
 }
-export const listStoreProducts = (query: string, page: number) => {
-  const { path, auth } = catalogo(
-    `/catalogo?q=${encodeURIComponent(query)}&page=${page}&pageSize=24`,
-  );
+export const listStoreProducts = (
+  query: string,
+  page: number,
+  filters: CatalogFilters = emptyCatalogFilters,
+) => {
+  const { path, auth } = catalogo(`/catalogo?${catalogParams(query, page, filters)}`);
   return bounded((signal) =>
     api.get<{ items: StoreProduct[]; total: number; page: number; pageSize: number }>(path, {
       signal,
       ...(auth ? {} : { auth: false }),
     }),
   );
+};
+export interface StoreCategory {
+  id: string;
+  nombre: string;
+  slugSeo: string;
+}
+export const listStoreCategories = () => {
+  const { path, auth } = catalogo("/categorias");
+  return bounded(async (signal) => {
+    const categories = await api.get<StoreCategory[]>(path, {
+      signal,
+      ...(auth ? {} : { auth: false }),
+    });
+    if (
+      !Array.isArray(categories) ||
+      categories.some(
+        (c) =>
+          !c ||
+          typeof c.id !== "string" ||
+          !c.id.trim() ||
+          typeof c.nombre !== "string" ||
+          !c.nombre.trim() ||
+          typeof c.slugSeo !== "string",
+      )
+    )
+      throw new Error("No pudimos cargar las categorías. Inténtalo de nuevo.");
+    return categories;
+  });
 };
 export const getStoreProduct = (slug: string) => {
   const { path, auth } = catalogo(`/productos/${encodeURIComponent(slug)}`);
