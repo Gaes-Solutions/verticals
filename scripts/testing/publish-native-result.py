@@ -29,7 +29,7 @@ manifest = json.loads(Path("scripts/testing/android-staging-artifacts.json").rea
 summary = {
     "status": os.environ["QA_NATIVE_STATUS"], "sourceCommit": sha,
     "runUrl": f"https://github.com/{repo}/actions/runs/{run_id}",
-    "apkVersion": int(os.environ["QA_APK_VERSION"]),
+    "apkVersion": manifest["client"]["version"],
     "apkSourceCommit": manifest["source"]["commit"],
     "kioskVersion": manifest["kiosk"]["version"], "environment": "staging", "account": "anonymous-and-synthetic",
 }
@@ -37,7 +37,7 @@ files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
-for name in ("install.log", "launcher.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log", "kiosko-install.log", "kiosko-results.xml", "kiosko.log", "kiosko-view-hierarchy.xml", "kiosko-crash.log", "publication.json", "native-proof.json"):
+for name in ("install.log", "launcher.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log", "kiosko-install.log", "kiosko-results.xml", "kiosko.log", "kiosko-view-hierarchy.xml", "kiosko-crash.log", "publication.json", "native-proof.json", "automation-readiness.json"):
     file = results.parent / name
     if file.is_file():
         files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]

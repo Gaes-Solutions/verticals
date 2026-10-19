@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,6 +13,10 @@ manifest = json.loads((root / 'scripts/testing/android-staging-artifacts.json').
 native = Path(os.environ['RUNNER_TEMP']) / 'native'
 native.mkdir(parents=True, exist_ok=True)
 repo = os.environ['GITHUB_REPOSITORY']
+if (not re.fullmatch(r'[a-f0-9]{40}', manifest.get('payloadCommit', ''))
+        or type(manifest.get('client', {}).get('version')) is not int
+        or manifest['client']['version'] < 1):
+    raise SystemExit('Invalid immutable payload or APK version metadata')
 
 def gh(*args):
     try:
@@ -45,4 +50,4 @@ else:
             (native / filename).replace(native / f'{kind}.apk')
         verify()
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        output.write(f'payload={str(not published).lower()}\n')
+        output.write(f'payload={str(not published).lower()}\npayloadCommit={manifest["payloadCommit"]}\nclientVersion={manifest["client"]["version"]}\n')

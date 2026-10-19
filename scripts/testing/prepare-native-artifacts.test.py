@@ -23,7 +23,8 @@ class ArtifactResolverTests(unittest.TestCase):
         self.script = testing / SCRIPT.name
         self.manifest = {
             'release': {'tag': 'qa-android-test', 'title': 'Approved QA', 'sourceCommit': 'a' * 40},
-            'client': {'filename': 'client-v15.apk', 'sha256': hashlib.sha256(b'client').hexdigest()},
+            'payloadCommit': 'b' * 40,
+            'client': {'version': 15, 'filename': 'client-v15.apk', 'sha256': hashlib.sha256(b'client').hexdigest()},
             'kiosk': {'filename': 'kiosk-v4.apk', 'sha256': hashlib.sha256(b'kiosk').hexdigest()},
         }
         (testing / 'android-staging-artifacts.json').write_text(json.dumps(self.manifest))
@@ -64,11 +65,26 @@ else:raise RuntimeError('unexpected gh command')
         return subprocess.run([sys.executable, str(self.script), *args], env=self.env,
                               capture_output=True, text=True, timeout=10)
 
+    def test_invalid_output_metadata_fails_before_network(self):
+        target = self.root / 'scripts/testing/android-staging-artifacts.json'
+        for field, value in [('payloadCommit', 'b' * 40 + '\nreusable=true'), ('version', True), ('version', 0)]:
+            with self.subTest(field=field, value=value):
+                changed = json.loads(json.dumps(self.manifest))
+                if field == 'payloadCommit':
+                    changed[field] = value
+                else:
+                    changed['client'][field] = value
+                target.write_text(json.dumps(changed))
+                result = self.run_script()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.output.exists())
+                self.assertEqual(json.loads(self.state_path.read_text())['calls'], [])
+
     def test_published_release_downloads_both_verified_apks(self):
         self.set_state('published')
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.output.read_text(), 'payload=false\n')
+        self.assertEqual(self.output.read_text(), 'payload=false\npayloadCommit=' + 'b' * 40 + '\nclientVersion=15\n')
         self.assertEqual((self.root / 'runner/native/client.apk').read_bytes(), b'client')
         self.assertEqual((self.root / 'runner/native/kiosk.apk').read_bytes(), b'kiosk')
 
@@ -79,7 +95,7 @@ else:raise RuntimeError('unexpected gh command')
                 self.output.unlink(missing_ok=True)
                 result = self.run_script()
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.output.read_text(), 'payload=true\n')
+                self.assertEqual(self.output.read_text(), 'payload=true\npayloadCommit=' + 'b' * 40 + '\nclientVersion=15\n')
                 calls = json.loads(self.state_path.read_text())['calls']
                 self.assertFalse(any(call[:2] == ['release', 'download'] for call in calls))
 

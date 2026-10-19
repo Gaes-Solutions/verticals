@@ -8,6 +8,53 @@ name: Gaesland guest catalog, image controls and login recovery
     timeout: 60000
 - assertNotVisible: mi-tienda
 - takeScreenshot: gaesland-inicio
+# Filter UI uses stable test IDs; category IDs come from the tenant API.
+- tapOn:
+    id: catalog-filter-open
+- assertVisible: Filtrar y ordenar
+- assertVisible: Categoría
+- assertVisible: "Categoría: Todas"
+- scrollUntilVisible:
+    element: Precio mínimo
+- assertVisible: Precio máximo
+- scrollUntilVisible:
+    element:
+      id: catalog-filter-offers
+- assertVisible:
+    id: catalog-filter-offers
+- scrollUntilVisible:
+    element:
+      id: catalog-filter-in-stock
+- tapOn:
+    id: catalog-filter-in-stock
+- scrollUntilVisible:
+    element: "Orden: Recomendados"
+- assertVisible: Ordenar por
+- takeScreenshot: gaesland-filtros
+- tapOn:
+    id: catalog-filter-apply
+- assertVisible: Solo disponibles
+- assertVisible: Filtrar y ordenar, 1 activos
+- takeScreenshot: gaesland-filtro-disponibles
+# Closing discards an edited draft instead of applying it.
+- tapOn:
+    id: catalog-filter-open
+- scrollUntilVisible:
+    element:
+      id: catalog-filter-offers
+- tapOn:
+    id: catalog-filter-offers
+- tapOn: Cerrar filtros
+- assertVisible: Solo disponibles
+- assertNotVisible: Solo ofertas
+- assertVisible: Filtrar y ordenar, 1 activos
+# Clear the applied filter before the existing positive product search.
+- tapOn:
+    id: catalog-filter-open
+- tapOn:
+    id: catalog-filter-clear
+- assertNotVisible: Solo disponibles
+- assertVisible: Filtrar y ordenar
 - tapOn: Buscar artículos
 - inputText: Licuadora
 - hideKeyboard

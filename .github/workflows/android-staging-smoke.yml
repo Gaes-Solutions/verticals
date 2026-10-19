@@ -42,7 +42,7 @@ jobs:
         if: steps.artifacts.outputs.payload == 'true'
         uses: actions/checkout@v4
         with:
-          ref: 27f1624754dc73de55ce712c7ab88374eade35aa
+          ref: ${{ steps.artifacts.outputs.payloadCommit }}
           path: .native-apk-payload
           persist-credentials: false
       - name: Verify bootstrap APKs
@@ -51,7 +51,7 @@ jobs:
       - name: Inspect both signed APKs and download pinned Maestro
         run: |
           mkdir -p "$RUNNER_TEMP/native"
-          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 15 --universal --sdk "$ANDROID_HOME"
+          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version "${{ steps.artifacts.outputs.clientVersion }}" --universal --sdk "$ANDROID_HOME"
           node scripts/testing/check-kiosko-apk.cjs "$RUNNER_TEMP/native/kiosk.apk"
           curl --fail --location --retry 2 'https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip' -o "$RUNNER_TEMP/native/maestro.zip"
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
@@ -82,6 +82,26 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096 -cores 2
           script: bash ../../scripts/testing/run-native-smoke.sh
+      - name: Record automation readiness without exposing credentials
+        if: always()
+        env:
+          READY_ENABLED: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' }}
+          READY_AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE == 'true' }}
+          READY_KIMI_KEY: ${{ secrets.KIMI_API_KEY != '' }}
+          READY_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
+          READY_BREVO_KEY: ${{ secrets.BREVO_API_KEY != '' }}
+          READY_RESEND_KEY: ${{ secrets.RESEND_API_KEY != '' }}
+          READY_EMAIL_SENDER: ${{ vars.EMAIL_REMITENTE != '' }}
+        run: |
+          python3 - <<'PY_READY'
+          import json, os
+          from pathlib import Path
+          result = {key.removeprefix('READY_').lower(): value == 'true' for key, value in os.environ.items() if key.startswith('READY_')}
+          directory = Path(os.environ['RUNNER_TEMP']) / 'native/results'
+          directory.mkdir(parents=True, exist_ok=True)
+          (directory / 'automation-readiness.json').write_text(json.dumps(result, indent=2) + '\n')
+          print('Recorded boolean configuration readiness; no credentials were passed to this process')
+          PY_READY
       - name: Sanitize all publishable text evidence
         id: sanitize
         if: always()
@@ -104,5 +124,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QA_NATIVE_STATUS: ${{ job.status }}
-          QA_APK_VERSION: '15'
         run: python3 scripts/testing/publish-native-result.py
