@@ -131,3 +131,33 @@ export function catalogParams(query: string, page: number, filters: CatalogFilte
   if (filters.orden !== "relevancia") params.set("orden", filters.orden);
   return params.toString();
 }
+
+/** A changing catalog can invalidate a page; recovery must be an explicit shopper action. */
+export function catalogPagination(page: number, total: number, pageSize: number) {
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  return {
+    lastPage,
+    outOfRange: page > lastPage,
+    showControls: lastPage > 1 || page > 1,
+    canPrevious: page > 1,
+    canNext: page < lastPage,
+  };
+}
+
+/** Keep a selected category visible without treating a failed request as its deletion. */
+export function catalogCategoryOptions(
+  categories: ReadonlyArray<{ id: string; nombre: string }>,
+  selected: string,
+  confirmed = true,
+): Array<{ id: string; nombre: string }> {
+  const retained =
+    selected && !categories.some((category) => category.id === selected)
+      ? [
+          {
+            id: selected,
+            nombre: confirmed ? "Categoría seleccionada (no disponible)" : "Categoría seleccionada",
+          },
+        ]
+      : [];
+  return [{ id: "", nombre: "Todas" }, ...retained, ...categories];
+}

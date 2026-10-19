@@ -3,7 +3,9 @@ import { catalogoQuerySchema } from "../../api/src/modules/tenant/carrito/schema
 import {
   type CatalogAction,
   type CatalogState,
+  catalogCategoryOptions,
   catalogFilterCount,
+  catalogPagination,
   catalogParams,
   catalogReducer,
   initialCatalogState,
@@ -182,4 +184,95 @@ it.each([
 ])("keeps pagination valid for the actual API (%s → %s)", (requested, expected) => {
   const state = journey({ type: "page", value: requested });
   expect(catalogoQuerySchema.parse(Object.fromEntries(params(state))).page).toBe(expected);
+});
+
+it.each([
+  [0, 1],
+  [25, 2],
+])(
+  "offers explicit recovery when a live catalog shrinks to %s items while on page3",
+  (total, lastPage) => {
+    const state = journey(
+      { type: "search", value: "licuadora" },
+      { type: "find" },
+      { type: "open" },
+      { type: "edit", value: { categoriaPublicaId: "hogar", soloDisponibles: true } },
+      { type: "apply" },
+      { type: "page", value: 3 },
+    );
+    const originalRequest = params(state).toString();
+    const pagination = catalogPagination(state.page, total, 24);
+    expect(pagination).toMatchObject({
+      lastPage,
+      outOfRange: true,
+      showControls: true,
+      canNext: false,
+    });
+    // Reading the new result never resets state or fires a new request automatically.
+    expect(state.page).toBe(3);
+    expect(params(state).toString()).toBe(originalRequest);
+    const recovered = catalogReducer(state, { type: "page", value: 1 });
+    expect(catalogoQuerySchema.parse(Object.fromEntries(params(recovered)))).toMatchObject({
+      q: "licuadora",
+      page: 1,
+      categoriaPublicaId: "hogar",
+      soloDisponibles: true,
+    });
+    expect(catalogPagination(recovered.page, total, 24).outOfRange).toBe(false);
+  },
+);
+it("keeps a valid last page and a genuinely empty first page distinct from an expired page", () => {
+  expect(catalogPagination(3, 49, 24)).toMatchObject({
+    lastPage: 3,
+    outOfRange: false,
+    canPrevious: true,
+    canNext: false,
+  });
+  expect(catalogPagination(1, 0, 24)).toMatchObject({
+    lastPage: 1,
+    outOfRange: false,
+    showControls: false,
+    canPrevious: false,
+    canNext: false,
+  });
+  expect(catalogPagination(1, 25, 24)).toMatchObject({
+    lastPage: 2,
+    outOfRange: false,
+    showControls: true,
+    canNext: true,
+  });
+});
+it("retains an unavailable selected category visibly until the shopper explicitly selects Todas", () => {
+  const state = journey(
+    { type: "open" },
+    { type: "edit", value: { categoriaPublicaId: "removed", soloOfertas: true } },
+    { type: "apply" },
+    { type: "open" },
+  );
+  const options = catalogCategoryOptions(
+    [{ id: "other", nombre: "Otra" }],
+    state.draft.categoriaPublicaId,
+  );
+  expect(options.find((option) => option.id === state.draft.categoriaPublicaId)?.nombre).toBe(
+    "Categoría seleccionada (no disponible)",
+  );
+  expect(params(state).get("categoriaPublicaId")).toBe("removed");
+  const withoutCategory = catalogReducer(
+    catalogReducer(state, { type: "edit", value: { categoriaPublicaId: "" } }),
+    { type: "apply" },
+  );
+  expect(params(withoutCategory).has("categoriaPublicaId")).toBe(false);
+  expect(params(withoutCategory).get("soloOfertas")).toBe("true");
+});
+it("does not describe loading or failed category data as a deleted category", () => {
+  const options = catalogCategoryOptions([], "chosen", false);
+  expect(options.find((option) => option.id === "chosen")?.nombre).toBe("Categoría seleccionada");
+  expect(options.some((option) => option.nombre.includes("no disponible"))).toBe(false);
+});
+it("never duplicates a category that the API still returns, or invents a missing selection", () => {
+  expect(catalogCategoryOptions([{ id: "chosen", nombre: "Hogar" }], "chosen")).toEqual([
+    { id: "", nombre: "Todas" },
+    { id: "chosen", nombre: "Hogar" },
+  ]);
+  expect(catalogCategoryOptions([], "")).toEqual([{ id: "", nombre: "Todas" }]);
 });

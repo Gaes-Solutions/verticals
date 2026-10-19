@@ -1,4 +1,9 @@
-import { type CatalogAction, type CatalogState, catalogOrders } from "@/lib/catalog-state";
+import {
+  type CatalogAction,
+  type CatalogState,
+  catalogCategoryOptions,
+  catalogOrders,
+} from "@/lib/catalog-state";
 import type { StoreCategory } from "@/services/comercio";
 import { colors, commerce } from "@/theme";
 import type { Dispatch } from "react";
@@ -84,21 +89,25 @@ export function CatalogFilters({
               />
             ) : null}
             <View style={s.chips}>
-              {[{ id: "", nombre: "Todas", slugSeo: "" }, ...categories].map((category) => {
-                const selected = draft.categoriaPublicaId === category.id;
-                return (
-                  <Pressable
-                    key={category.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`Categoría: ${category.nombre}`}
-                    onPress={() => edit({ categoriaPublicaId: category.id })}
-                    style={[s.chip, selected && s.selected]}
-                  >
-                    <Text style={[s.chipText, selected && s.selectedText]}>{category.nombre}</Text>
-                  </Pressable>
-                );
-              })}
+              {catalogCategoryOptions(categories, draft.categoriaPublicaId, !loading && !error).map(
+                (category) => {
+                  const selected = draft.categoriaPublicaId === category.id;
+                  return (
+                    <Pressable
+                      key={category.id}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={`Categoría: ${category.nombre}`}
+                      onPress={() => edit({ categoriaPublicaId: category.id })}
+                      style={[s.chip, selected && s.selected]}
+                    >
+                      <Text style={[s.chipText, selected && s.selectedText]}>
+                        {category.nombre}
+                      </Text>
+                    </Pressable>
+                  );
+                },
+              )}
             </View>
             <Text accessibilityRole="header" style={s.section}>
               Precio por artículo

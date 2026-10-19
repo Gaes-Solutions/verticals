@@ -4,6 +4,7 @@ import { accountCartKey, useCart } from "@/lib/cart-store";
 import {
   catalogFilterCount,
   catalogOrders,
+  catalogPagination,
   catalogReducer,
   initialCatalogState,
 } from "@/lib/catalog-state";
@@ -83,6 +84,13 @@ export default function Tienda() {
     queryFn: () => listStoreProducts(query, page, filters),
     retry: false,
   });
+  const pagination = products.data
+    ? catalogPagination(page, products.data.total, products.data.pageSize)
+    : null;
+  const firstPage = () => {
+    dispatch({ type: "page", value: 1 });
+    list.current?.scrollToOffset({ offset: 0 });
+  };
   const name = config.data?.nombre || (store === "gaesland" ? "Gaesland" : "Tu tienda");
   const find = () => dispatch({ type: "find" });
   const open = (item: StoreProduct) =>
@@ -279,7 +287,7 @@ export default function Tienda() {
         refreshing={products.isFetching && !products.isPending}
         onRefresh={() => void products.refetch()}
         ListEmptyComponent={
-          !products.isPending && !products.isError ? (
+          !products.isPending && !products.isError && !pagination?.outOfRange ? (
             <View style={{ gap: 12, padding: 16 }}>
               <EmptyState
                 title="No encontramos artículos"
@@ -376,15 +384,30 @@ export default function Tienda() {
           </View>
         )}
         ListFooterComponent={
-          products.data && products.data.total > products.data.pageSize ? (
+          pagination?.outOfRange ? (
+            <View style={s.footer}>
+              <Text accessibilityRole="alert" style={s.sectionTitle}>
+                El catálogo se actualizó
+              </Text>
+              <Text style={s.sectionSubtitle}>
+                Vuelve a la primera página para revisar tu selección. Tu búsqueda y tus filtros se
+                conservan.
+              </Text>
+              <Button
+                testID="catalog-first-page"
+                label="Volver a la primera página"
+                onPress={firstPage}
+              />
+            </View>
+          ) : pagination?.showControls ? (
             <View style={s.footer}>
               <Text style={s.sectionSubtitle}>
-                Página {page} de {Math.ceil(products.data.total / products.data.pageSize)}
+                Página {page} de {pagination.lastPage}
               </Text>
               <View style={s.pagination}>
                 <Button
                   label="Anterior"
-                  disabled={page === 1}
+                  disabled={!pagination.canPrevious}
                   variant="outline"
                   onPress={() => {
                     dispatch({ type: "page", value: page - 1 });
@@ -393,7 +416,7 @@ export default function Tienda() {
                 />
                 <Button
                   label="Siguiente"
-                  disabled={page * products.data.pageSize >= products.data.total}
+                  disabled={!pagination.canNext}
                   variant="outline"
                   onPress={() => {
                     dispatch({ type: "page", value: page + 1 });
