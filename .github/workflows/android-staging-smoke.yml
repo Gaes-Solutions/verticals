@@ -87,7 +87,6 @@ jobs:
         env:
           READY_ENABLED: ${{ vars.AUTONOMOUS_FRONT_ENABLED == 'true' }}
           READY_AUTO_MERGE: ${{ vars.AUTONOMOUS_AUTO_MERGE == 'true' }}
-          READY_KIMI_KEY: ${{ secrets.KIMI_API_KEY != '' }}
           READY_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
           READY_BREVO_KEY: ${{ secrets.BREVO_API_KEY != '' }}
           READY_RESEND_KEY: ${{ secrets.RESEND_API_KEY != '' }}

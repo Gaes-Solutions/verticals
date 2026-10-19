@@ -23,10 +23,8 @@ jobs:
       has_work: ${{ steps.detect_work.outputs.has_work }}
       artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
-      KIMI_BIN: ${{ vars.KIMI_BIN || 'kimi' }}
-      KIMI_VERSION: "2.2.0"
-      KIMI_MODEL_NAME: ${{ vars.KIMI_MODEL_NAME }}
-      KIMI_MODEL_BASE_URL: ${{ vars.KIMI_MODEL_BASE_URL || '' }}
+      CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
+      CODEX_VERSION: "0.130.0"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,8 +32,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.19.0
-      - name: Bloquear duplicados con PR pendiente
+          node-version: 24
+      - name: Comprobar tarea pendiente antes de preparar agentes
+        id: preflight
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -44,15 +43,42 @@ jobs:
           pending_prs="$(gh pr list --state open --base main --json headRefName --jq '.[] | select(.headRefName | startswith("automation/front-cycle-")) | .headRefName')"
           if [[ -n "$pending_prs" ]]; then
             printf '%s\n' waiting-review > "$ARTIFACT_DIR/waiting-review"
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+          else
+            python3 - <<'PY_PREFLIGHT'
+          import os, re
+          from pathlib import Path
+          pending = any(re.match(r'^- \[ \] ST-[0-9]+ \|', line) for line in Path('automation/front-backlog.md').read_text().splitlines())
+          if not pending:
+              artifact = Path(os.environ['RUNNER_TEMP']) / 'gaes-autonomy-artifact'
+              (artifact / 'no-work').write_text('no-work\n')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f'has_work={str(pending).lower()}\n')
+          PY_PREFLIGHT
           fi
-      - name: Instalar Kimi Code CLI fijado
+      - name: Instalar Codex CLI fijado
+        if: steps.preflight.outputs.has_work == 'true'
         run: |
-          npm install --global "@moonshot-ai/kimi-code@2.2.0"
-          command -v "$KIMI_BIN"
-      - name: Ejecutar tarea sin credenciales de publicación
+          npm install --global "@openai/codex@${CODEX_VERSION}"
+          command -v "$CODEX_BIN"
+      - name: Preparar autenticación aislada del ejecutor
+        if: steps.preflight.outputs.has_work == 'true'
         env:
-          KIMI_MODEL_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_HOME: ${{ runner.temp }}/codex-executor-home
+        run: |
+          test -n "$OPENAI_API_KEY"
+          mkdir -p -m 700 "$CODEX_HOME"
+          printf '%s' "$OPENAI_API_KEY" | "$CODEX_BIN" login --with-api-key
+      - name: Ejecutar tarea sin credenciales de publicación
+        if: steps.preflight.outputs.has_work == 'true'
+        env:
+          CODEX_AUTH_READY: "true"
+          CODEX_HOME: ${{ runner.temp }}/codex-executor-home
         run: AUTONOMY_PREFLIGHT_WAITING=true AUTONOMY_PHASE=executor bash scripts/autonomous-front-cycle-phase.sh
+      - name: Eliminar autenticación del ejecutor
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/codex-executor-home"
       - name: Detectar backlog vacío
         id: detect_work
         run: |
@@ -98,7 +124,7 @@ jobs:
           version: 10.33.2
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Preparar imagen de validación fijada
@@ -124,7 +150,7 @@ jobs:
       artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
       CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
-      CODEX_VERSION: ${{ vars.CODEX_VERSION || '0.130.0' }}
+      CODEX_VERSION: "0.130.0"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -147,7 +173,7 @@ jobs:
           cp "$RUNNER_TEMP/gaes-autonomy-validated/validation.json" "$RUNNER_TEMP/gaes-autonomy-artifact/validation.json"
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - name: Instalar Codex CLI fijado
         run: |
           npm install --global "@openai/codex@${CODEX_VERSION}"
@@ -155,7 +181,7 @@ jobs:
       - name: Preparar autenticación aislada de Codex
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CODEX_HOME: ${{ runner.temp }}/codex-home
+          CODEX_HOME: ${{ runner.temp }}/codex-judge-home
         run: |
           test -n "$OPENAI_API_KEY"
           mkdir -p -m 700 "$CODEX_HOME"
@@ -163,8 +189,11 @@ jobs:
       - name: Revisar en read-only
         env:
           CODEX_AUTH_READY: "true"
-          CODEX_HOME: ${{ runner.temp }}/codex-home
+          CODEX_HOME: ${{ runner.temp }}/codex-judge-home
         run: AUTONOMY_PHASE=judge bash scripts/autonomous-front-cycle-phase.sh
+      - name: Eliminar autenticación del juez
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/codex-judge-home"
       - uses: actions/upload-artifact@v4
         id: upload_artifact
         with:

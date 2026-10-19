@@ -1,5 +1,12 @@
 # Bitácora — Loop autónomo de verticales pendientes
 
+> Bitácora histórica de julio de 2026. El proceso vigente de tienda usa solo
+> agentes Codex: ejecutor y juez independiente en jobs separados. Kimi fue
+> retirado. Consulta `proceso-juez-ejecutor-frontend.md` y
+> `autonomous-front-hardening.md` para configuración y límites actuales.
+> La migración de código no activa el cron, auto merge ni producción; no hay
+> operación con modelos reales comprobada hasta observar una corrida real.
+
 Rama: `autonomo/verticales-pendientes` · Base: `origin/main` (b6a23e3, incluye superadmin, NO veterinaria)
 Regla: push solo a esta rama, nunca a main. No tocar áreas en vuelo de veterinaria (web-clinical, web-marketplace, salud/*).
 

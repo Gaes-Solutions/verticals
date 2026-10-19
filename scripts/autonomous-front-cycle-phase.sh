@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # Controlador por fases. Cada fase recibe solo las credenciales que necesita:
-# executor=Kimi, judge=OpenAI, publisher=GitHub/correo. Los artefactos son un
+# executor=Codex con escritura, judge=Codex de lectura, publisher=GitHub/correo. Los artefactos son un
 # patch binario y metadata ligada por hashes; nunca se transfieren entornos.
 
 : "${AUTONOMY_PHASE:?AUTONOMY_PHASE es requerido}"
 : "${BACKLOG_FILE:=automation/front-backlog.md}"
-: "${KIMI_TIMEOUT:=8m}"
-: "${CODEX_TIMEOUT:=5m}"
+: "${EXECUTOR_TIMEOUT:=8m}"
+: "${JUDGE_TIMEOUT:=5m}"
 : "${AUTO_MERGE:=false}"
 : "${ARTIFACT_DIR:=${RUNNER_TEMP:-/tmp}/gaes-autonomy-artifact}"
-: "${CONTROLLER_VERSION:=2026-10-19-v2}"
+: "${CONTROLLER_VERSION:=2026-10-19-v3-codex-only}"
 
 die() { echo "autonomy: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null || die "no existe $1"; }
@@ -66,14 +66,63 @@ run_timeout() {
   timeout --signal=TERM --kill-after=30s "$duration" "$@"
 }
 
+
+# Each role gets a fresh temporary login created by a trusted workflow step.
+# Capture its key before executing untrusted code so removing/replacing auth.json
+# cannot defeat artifact leak checks. Never export it to the model subprocess.
+require_codex_auth() {
+  [[ "${CODEX_AUTH_READY:-false}" == true && -n "${CODEX_HOME:-}" ]] || die "autenticación aislada de Codex requerida"
+  codex_auth_secret="$(python3 - <<'PY_AUTH'
+import json, os, stat, tempfile
+from pathlib import Path
+try:
+    requested = Path(os.environ['CODEX_HOME'])
+    home = requested.resolve(strict=True)
+    root = Path.cwd().resolve()
+    temporary = Path(os.environ.get('RUNNER_TEMP') or tempfile.gettempdir()).resolve()
+    if not requested.is_absolute() or requested != home or home == root or root in home.parents:
+        raise ValueError()
+    if home == temporary or temporary not in home.parents:
+        raise ValueError()
+    if any(p.is_symlink() for p in (requested, *requested.parents)):
+        raise ValueError()
+    mode = home.stat()
+    if mode.st_uid != os.getuid() or stat.S_IMODE(mode.st_mode) & 0o077:
+        raise ValueError()
+    path = home / 'auth.json'
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'r') as file:
+        mode = os.fstat(file.fileno())
+        if not stat.S_ISREG(mode.st_mode) or mode.st_uid != os.getuid() or stat.S_IMODE(mode.st_mode) & 0o077 or not 0 < mode.st_size <= 65536:
+            raise ValueError()
+        data = json.load(file)
+    key = data.get('OPENAI_API_KEY')
+    if not isinstance(key, str) or not key.strip() or '\n' in key or '\r' in key:
+        raise ValueError()
+    print(key, end='')
+except Exception:
+    raise SystemExit('autenticación aislada de Codex inválida o permisos no privados')
+PY_AUTH
+)" || die "autenticación aislada de Codex inválida"
+}
+
+run_codex_role() {
+  local sandbox="$1" duration="$2" prompt="$3"; shift 3
+  # HOME is private too: neither role inherits personal CLI, Git or mail config.
+  # Approval never leaves failures to the controller, without disabling sandbox.
+  env -i PATH="$PATH" HOME="$CODEX_HOME" CODEX_HOME="$CODEX_HOME" CODEX_AUTH_READY=true \
+    timeout --signal=TERM --kill-after=30s "$duration" "$CODEX_BIN" -a never exec \
+      --sandbox "$sandbox" --ephemeral "$@" "$prompt"
+}
+
 reject_secret_leak() {
   local file="$1"
-  SECRET_FILE="$file" python3 - <<'PY'
+  SECRET_FILE="$file" CODEX_AUTH_SECRET="${codex_auth_secret:-}" python3 - <<'PY'
 import os
 from pathlib import Path
 p = Path(os.environ['SECRET_FILE'])
 data = p.read_bytes()
-for name in ('KIMI_MODEL_API_KEY', 'KIMI_API_KEY', 'OPENAI_API_KEY', 'GH_TOKEN', 'RESEND_API_KEY', 'BREVO_API_KEY'):
+for name in ('CODEX_AUTH_SECRET', 'OPENAI_API_KEY', 'GH_TOKEN', 'RESEND_API_KEY', 'BREVO_API_KEY'):
     value = os.environ.get(name, '')
     if value and value.encode() in data:
         raise SystemExit('contenido sensible detectado en artefacto')
@@ -155,7 +204,7 @@ a = Path(os.environ['ARTIFACT_DIR'])
 m = json.loads((a/'metadata.json').read_text())
 if m.get('base_sha') != os.environ['BASE_SHA']: raise SystemExit('base SHA no coincide')
 if not isinstance(m.get('task_id'), str) or not m['task_id'].startswith('ST-'): raise SystemExit('task id inválido')
-if m.get('controller_version') != os.environ.get('CONTROLLER_VERSION', '2026-10-19-v2'): raise SystemExit('version del controlador no coincide')
+if m.get('controller_version') != os.environ.get('CONTROLLER_VERSION', '2026-10-19-v3-codex-only'): raise SystemExit('version del controlador no coincide')
 if not isinstance(m.get('paths'), list) or not m['paths']: raise SystemExit('paths ausentes')
 h = hashlib.sha256((a/'patch').read_bytes()).hexdigest()
 if h != m.get('patch_sha256') or h != (a/'patch.sha256').read_text().strip(): raise SystemExit('hash de patch no coincide')
@@ -203,15 +252,12 @@ PY
 
 case "$AUTONOMY_PHASE" in
   executor)
-    need "${KIMI_BIN:=kimi}"
-    [[ -n "${KIMI_MODEL_API_KEY:-}" && -n "${KIMI_MODEL_NAME:-}" ]] || die "KIMI_MODEL_API_KEY y KIMI_MODEL_NAME requeridos; no se usa autenticación desde HOME"
+    need "${CODEX_BIN:=codex}"
+    require_codex_auth
     rm -rf "$ARTIFACT_DIR"
-    prompt="Tarea $task_id: ${task_line#*| }. Implementa solo esta tarea frontend y sus pruebas. No hagas commits, staging, push, deploy, migraciones ni leas secretos. Deja cambios en el worktree."
-    # Kimi conserva únicamente su propio proveedor; los tokens de publicación,
-    # correo y Codex nunca llegan al proceso del agente.
-    env -i PATH="$PATH" HOME="${HOME:-}" KIMI_MODEL_API_KEY="$KIMI_MODEL_API_KEY" KIMI_MODEL_NAME="$KIMI_MODEL_NAME" KIMI_MODEL_BASE_URL="${KIMI_MODEL_BASE_URL:-}" \
-      timeout --signal=TERM --kill-after=30s "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$prompt" --output-format text
-    [[ "$(git rev-parse HEAD)" == "$base_sha" ]] || die "Kimi cambió HEAD"
+    prompt="Eres el ejecutor Codex. Tarea $task_id: ${task_line#*| }. Implementa solo esta tarea frontend y sus pruebas. No hagas commits, staging, push, deploy, migraciones ni leas secretos. Deja cambios en el worktree. Otro agente Codex independiente revisará el patch después de las pruebas."
+    run_codex_role workspace-write "$EXECUTOR_TIMEOUT" "$prompt"
+    [[ "$(git rev-parse HEAD)" == "$base_sha" ]] || die "ejecutor Codex cambió HEAD"
     scope_gate
     # El agente no puede precrear resultados ni marcadores en el directorio de
     # transferencia. Solo el controlador confiable escribe los artefactos.
@@ -345,7 +391,7 @@ PY
     ;;
   judge)
     need git; need "${CODEX_BIN:=codex}"
-    [[ -n "${OPENAI_API_KEY:-}" || "${CODEX_AUTH_READY:-}" == true ]] || die "OPENAI_API_KEY o CODEX_AUTH_READY requerido"
+    require_codex_auth
     verify_artifact
     artifact_before="$(artifact_fingerprint)"
     git apply --index "$ARTIFACT_DIR/patch"
@@ -360,8 +406,7 @@ PY
     snapshot="$(git diff --cached --binary --no-ext-diff --no-renames HEAD -- | sha256sum | awk '{print $1}')"
     out="$ARTIFACT_DIR/judge.txt"
     prompt='Revisa solo el cambio staged de esta tarea. No modifiques archivos, no hagas commits, no hagas staging, no ejecutes pruebas/build/lint y no uses red. Responde en la primera línea exactamente APPROVED o REJECTED y después evidencia. Verifica alcance, aislamiento multi-tenant, precios, imágenes, accesibilidad y regresiones.'
-      env -i PATH="$PATH" HOME="${HOME:-}" CODEX_HOME="${CODEX_HOME:-}" CODEX_AUTH_READY="${CODEX_AUTH_READY:-}" \
-      timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --sandbox read-only --ephemeral --output-last-message "$out" "$prompt"
+    run_codex_role read-only "$JUDGE_TIMEOUT" "$prompt" --output-last-message "$out"
     [[ "$(git rev-parse HEAD)" == "$base_sha" ]] || die "juez cambió HEAD"
     after="$(git diff --cached --binary --no-ext-diff --no-renames HEAD -- | sha256sum | awk '{print $1}')"
     [[ "$snapshot" == "$after" ]] || die "juez modificó el snapshot"

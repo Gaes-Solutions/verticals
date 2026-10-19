@@ -35,6 +35,15 @@ class PhaseFixture:
         self.scenario = self.temp / 'scenario.json'
         self.scenario.write_text('{}')
         self.model_env = self.temp / 'model-env.json'
+        self.judge_model_env = self.temp / 'judge-model-env.json'
+        self.auth_homes = {}
+        for role in ('executor', 'judge'):
+            home = self.temp / ('codex-' + role)
+            home.mkdir(mode=0o700)
+            auth = home / 'auth.json'
+            auth.write_text(json.dumps({'OPENAI_API_KEY': 'synthetic-' + role + '-key'}))
+            auth.chmod(0o600)
+            self.auth_homes[role] = home
         self.mail = self.temp / 'mail.json'
         self.package_env = self.temp / 'package-env.jsonl'
         self.remote = self.temp / 'remote.git'
@@ -50,10 +59,9 @@ class PhaseFixture:
         self.env = {
             'PATH': f'{self.bin}:{host_path}', 'HOME': str(self.home), 'LANG': 'C.UTF-8',
             'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null',
-            'ARTIFACT_DIR': str(self.artifact), 'KIMI_BIN': str(self.bin / 'kimi'),
+            'ARTIFACT_DIR': str(self.artifact),
             'CODEX_BIN': str(self.bin / 'codex'),
-            'KIMI_MODEL_NAME': 'synthetic-model', 'KIMI_MODEL_BASE_URL': 'https://example.invalid/v1',
-            'KIMI_TIMEOUT': '3s', 'CODEX_TIMEOUT': '3s', 'CODEX_HOME': str(self.temp / 'codex'),
+            'EXECUTOR_TIMEOUT': '3s', 'JUDGE_TIMEOUT': '3s',
             'GITHUB_RUN_ID': 'integration-test', 'GITHUB_REPOSITORY': 'qa/synthetic',
             'AUTO_MERGE': 'false', 'AUTONOMY_VALIDATE_ISOLATED': 'true',
             'AUTONOMY_VALIDATE_TEST_MODE': 'false' if real_docker else 'true',
@@ -106,27 +114,40 @@ class PhaseFixture:
         self.scenario.write_text(json.dumps(scenario))
 
     def write_tools(self):
-        self.tool('kimi', f'''from pathlib import Path
-import os,json
-Path({str(self.model_env)!r}).write_text(json.dumps(dict(os.environ)))
-Path('apps/web-tienda/src/base.ts').write_text('export const price = 101;\\n')
-''')
         self.tool('codex', f'''from pathlib import Path
-import json,sys,subprocess
+import json,sys,subprocess,os
 scenario=json.loads(Path({str(self.scenario)!r}).read_text())
+assert sys.argv[1:4]==['-a','never','exec']
+assert '--ephemeral' in sys.argv
+sandbox=sys.argv[sys.argv.index('--sandbox')+1]
+assert sandbox in ('workspace-write','read-only')
+if sandbox=='workspace-write':
+    Path({str(self.model_env)!r}).write_text(json.dumps(dict(os.environ)))
+    if scenario.get('executor_status'): sys.exit(scenario['executor_status'])
+    if scenario.get('executor_leak'):
+        key=json.loads((Path(os.environ['CODEX_HOME'])/'auth.json').read_text())['OPENAI_API_KEY']
+        (Path(os.environ['CODEX_HOME'])/'auth.json').unlink()
+        Path('apps/web-tienda/src/base.ts').write_text('export const key = '+json.dumps(key)+';\\n')
+    else:
+        Path('apps/web-tienda/src/base.ts').write_text('export const price = 101;\\n')
+    sys.exit(0)
+Path({str(self.judge_model_env)!r}).write_text(json.dumps(dict(os.environ)))
 if scenario.get('judge_index_flag'):
     subprocess.run(['git','update-index',scenario['judge_index_flag'],'apps/web-tienda/src/base.ts'],check=True)
 if scenario.get('judge_mutate_validation'):
     file=Path({str(self.artifact / 'validation.json')!r})
     data=json.loads(file.read_text()); data['state_fingerprint']='forged'; file.write_text(json.dumps(data))
 out=Path(sys.argv[sys.argv.index('--output-last-message')+1])
-out.write_text(('REJECTED' if scenario.get('reject') else 'APPROVED')+'\\nSynthetic review; no real model.\\n')
+answer=('REJECTED' if scenario.get('reject') else 'APPROVED')+'\\nSynthetic review; no real model.\\n'
+if scenario.get('judge_leak'):
+    answer+=json.loads((Path(os.environ['CODEX_HOME'])/'auth.json').read_text())['OPENAI_API_KEY']
+out.write_text(answer)
 ''')
         if not self.real_docker:
             self.tool('pnpm', f'''from pathlib import Path
 import hashlib,json,os,sys
 with Path({str(self.package_env)!r}).open('a') as log:
-    log.write(json.dumps([key for key in ('GH_TOKEN','KIMI_MODEL_API_KEY','OPENAI_API_KEY','RESEND_API_KEY','BREVO_API_KEY') if os.environ.get(key)])+'\\n')
+    log.write(json.dumps([key for key in ('GH_TOKEN','OPENAI_API_KEY','CODEX_HOME','RESEND_API_KEY','BREVO_API_KEY') if os.environ.get(key)])+'\\n')
 scenario=json.loads(Path({str(self.scenario)!r}).read_text())
 if 'biome' in sys.argv:
     assert sys.argv[1:]==['--filter','@gaespos/web-tienda','exec','biome','check','.','--error-on-warnings']
@@ -207,10 +228,9 @@ module.exports=which=>{{
 
     def phase(self, name):
         env = dict(self.env, AUTONOMY_PHASE=name)
-        if name == 'executor':
-            env['KIMI_MODEL_API_KEY'] = 'synthetic-kimi'
-        if name == 'judge':
-            env['OPENAI_API_KEY'] = 'synthetic-openai'
+        if name in ('executor', 'judge'):
+            env.update(CODEX_AUTH_READY='true', CODEX_HOME=str(self.auth_homes[name]),
+                       KIMI_API_KEY='synthetic-retired-key')
         if name == 'publish':
             env.update(GH_TOKEN='synthetic-github', BREVO_API_KEY='synthetic-mail',
                        EMAIL_REMITENTE='qa@example.invalid', INCIDENT_ALERT_EMAIL='qa@example.invalid')
@@ -230,11 +250,19 @@ module.exports=which=>{{
     def full_cycle(self, testcase):
         self.export(testcase)
         seen = json.loads(self.model_env.read_text())
-        for key in ('GH_TOKEN', 'OPENAI_API_KEY', 'RESEND_API_KEY', 'BREVO_API_KEY'):
+        for key in ('GH_TOKEN', 'OPENAI_API_KEY', 'KIMI_API_KEY', 'KIMI_MODEL_API_KEY', 'RESEND_API_KEY', 'BREVO_API_KEY'):
             testcase.assertNotIn(key, seen)
+        testcase.assertEqual(seen['HOME'], str(self.auth_homes['executor']))
+        testcase.assertEqual(seen['CODEX_HOME'], str(self.auth_homes['executor']))
         self.validate(testcase)
         result = self.phase('judge')
         testcase.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        judge_seen = json.loads(self.judge_model_env.read_text())
+        testcase.assertEqual(judge_seen['CODEX_HOME'], str(self.auth_homes['judge']))
+        testcase.assertEqual(judge_seen['HOME'], str(self.auth_homes['judge']))
+        testcase.assertNotEqual(seen['CODEX_HOME'], judge_seen['CODEX_HOME'])
+        for key in ('GH_TOKEN', 'OPENAI_API_KEY', 'KIMI_API_KEY', 'RESEND_API_KEY', 'BREVO_API_KEY'):
+            testcase.assertNotIn(key, judge_seen)
         self.git('reset', '--hard', '-q', self.base)
         result = self.phase('publish')
         testcase.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -260,6 +288,28 @@ module.exports=which=>{{
 class AutonomousIntegrationTests(unittest.TestCase):
     def test_four_phase_local_bare_git_and_pending_pr_email(self):
         PhaseFixture(self).full_cycle(self)
+
+    def test_both_roles_reject_own_auth_key_in_artifacts(self):
+        for role in ('executor', 'judge'):
+            with self.subTest(role=role):
+                fixture = PhaseFixture(self)
+                if role == 'judge':
+                    fixture.export(self)
+                    fixture.validate(self)
+                fixture.configure(**{role + '_leak': True})
+                result = fixture.phase(role)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('contenido sensible', result.stderr)
+                self.assertFalse((fixture.artifact / ('judgment.json' if role == 'judge' else 'metadata.json')).exists())
+                self.assertFalse(fixture.mail.exists())
+
+    def test_failed_executor_never_creates_transferable_patch(self):
+        fixture = PhaseFixture(self)
+        fixture.configure(executor_status=42)
+        result = fixture.phase('executor')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((fixture.artifact / 'metadata.json').exists())
+        self.assertFalse(fixture.mail.exists())
 
     def test_st010_strict_lint_failure_blocks_all_later_phases(self):
         for docker in ([False, True] if DOCKER else [False]):

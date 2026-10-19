@@ -54,7 +54,7 @@ jobs:
         run: |
           gh workflow run autonomous-front-cycle.yml --repo "${GITHUB_REPOSITORY}" --ref main || true
           gh issue list --repo "${GITHUB_REPOSITORY}" --state open --search "[automation] cycle watchdog" --json number --jq '.[0].number' | grep -q . || \
-            gh issue create --repo "${GITHUB_REPOSITORY}" --title "[automation] cycle watchdog" --body "El watchdog no encontró un ciclo autónomo reciente; lo relanzó automáticamente. Revisar el runner self-hosted y las credenciales de Kimi/Codex."
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "[automation] cycle watchdog" --body "El watchdog no encontró un ciclo autónomo reciente; lo relanzó automáticamente. Revisar los jobs de GitHub Actions y la autenticación aislada de los agentes Codex."
           if [[ -n "${BREVO_API_KEY:-}${RESEND_API_KEY:-}" ]]; then
             python3 scripts/send-system-email.py <<'JSON' || true
           {"subject":"[GaesPOS] Watchdog relanzó el ciclo","text":"El ciclo autónomo no tuvo heartbeat reciente. El watchdog lo relanzó. Revisar runner y logs."}
