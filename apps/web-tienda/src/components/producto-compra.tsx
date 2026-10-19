@@ -262,7 +262,8 @@ function CompraContexto({
     router.push("/checkout");
   }
 
-  const mostrarMsi = msi.habilitado && msi.meses.length > 0 && precioNum >= Number(msi.montoMinimo);
+  const mostrarMsi =
+    precioValido && msi.habilitado && msi.meses.length > 0 && precioNum >= Number(msi.montoMinimo);
   const mejorPlazo = mostrarMsi ? Math.max(...msi.meses) : 0;
   const unidad = etiquetaUnidad(unidadMedida);
 
@@ -467,7 +468,9 @@ function CompraContexto({
 
       {sinStock && productoPublicadoId && <AvisoStock productoPublicadoId={productoPublicadoId} />}
       {mostrarCotizacion && (
-        <CalculadoraEnvio subtotal={cantidadFormatoValido ? precioNum * cantidad : Number.NaN} />
+        <CalculadoraEnvio
+          subtotal={precioValido && cantidadFormatoValido ? precioNum * cantidad : Number.NaN}
+        />
       )}
     </div>
   );

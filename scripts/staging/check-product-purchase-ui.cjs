@@ -424,6 +424,24 @@ let stage = "setup";
     );
     await safe(p, f);
     pass();
+    stage = "a missing price never advertises free financing or sends a shipping estimate";
+    ({ p, c, f } = await setup());
+    await p.evaluate(() =>
+      window.changeProduct({
+        precioOverride: " ",
+        mostrarCotizacion: true,
+        msi: { habilitado: true, meses: [12], montoMinimo: "0" },
+      }),
+    );
+    await expect(c.getByText("Precio no disponible", { exact: true })).toBeVisible();
+    await expect(c.getByText(/meses sin intereses/)).toHaveCount(0);
+    const shipping = c.getByRole("region", { name: "¿Cuándo llega?", exact: true });
+    await shipping.getByRole("button", { name: "Calcular", exact: true }).click();
+    await expect(shipping.getByRole("alert")).toContainText(
+      "Selecciona una cantidad y un precio válidos",
+    );
+    await safe(p, f);
+    pass();
     stage = "failed undo keeps the added line and reports uncertainty without a second undo";
     ({ p, c, f } = await setup());
     await add(c).click();
