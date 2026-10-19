@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="1" failures="0" time="5.865" timestamp="2026-10-19T06:21:46">
+    <testcase id="Staging kiosk setup without pairing a device" name="Staging kiosk setup without pairing a device" classname="Staging kiosk setup without pairing a device" file="/home/runner/work/verticals/verticals/apps/mobile-kiosko/.maestro/native-setup.yml" time="5.849" timestamp="2026-10-19T06:21:46" status="SUCCESS"/>
+  </testsuite>
+</testsuites>
