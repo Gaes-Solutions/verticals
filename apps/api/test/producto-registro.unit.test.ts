@@ -1,6 +1,10 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// The integration setup imports buildApp and caches these services before this
+// file's mocks are installed. Reload the graph so the unit doubles also apply
+// when this file runs as part of the complete API suite.
+vi.hoisted(() => vi.resetModules());
 vi.mock("../src/modules/tenant/notificaciones/service.js", () => ({
   notificarCliente: vi.fn(),
   notificarUsuariosConPermiso: vi.fn(),

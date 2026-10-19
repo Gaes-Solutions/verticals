@@ -62,7 +62,9 @@ async function abrirTienda(
   });
   const noDisponible = () =>
     reply.code(404).send({ statusCode: 404, error: "Not Found", message: "Tienda no disponible" });
-  if (!registro || registro.status === "cancelled") {
+  // Misma política que authenticateCliente: past_due conserva el período de
+  // gracia, pero suspender/archivar sí debe cerrar el catálogo sin sesión.
+  if (!registro || !["trial", "active", "past_due"].includes(registro.status)) {
     noDisponible();
     return null;
   }

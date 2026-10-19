@@ -188,9 +188,39 @@ const carritoRoutes: FastifyPluginAsync = async (app) => {
     const prod = await req.tenantPrisma.productoPublicado.findUnique({
       where: { slugSeo: slug },
       include: {
-        categoriaPublica: true,
-        producto: { include: { variantes: { where: { isActive: true, archivedAt: null } } } },
-        resenas: { where: { estado: "aprobada" }, orderBy: { createdAt: "desc" }, take: 20 },
+        categoriaPublica: { select: { id: true, nombre: true, slugSeo: true } },
+        // Esta respuesta también la lee el token limitado del storefront.
+        // Nunca publicar costos, metadata interna ni identidades de compradores.
+        producto: {
+          select: {
+            id: true,
+            tipoVenta: true,
+            unidadMedida: true,
+            isActive: true,
+            isVisiblePublico: true,
+            archivedAt: true,
+            variantes: {
+              where: { isActive: true, archivedAt: null },
+              select: { id: true, precioBase: true, nombreVariante: true, opciones: true },
+            },
+          },
+        },
+        resenas: {
+          where: { estado: "aprobada" },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: {
+            id: true,
+            rating: true,
+            titulo: true,
+            comentario: true,
+            imagenesArray: true,
+            videoUrl: true,
+            verificadaPorCompra: true,
+            respuestaTienda: true,
+            createdAt: true,
+          },
+        },
         preguntas: {
           where: { estado: "publicada" },
           orderBy: { respondidaAt: "desc" },

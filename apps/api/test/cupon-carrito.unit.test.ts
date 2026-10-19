@@ -1,6 +1,8 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
+// setup.ts may have cached the route and its pricing engine through buildApp.
+vi.hoisted(() => vi.resetModules());
 vi.mock("../src/modules/tenant/carrito/service.js", async (original) => ({
   ...(await original<typeof import("../src/modules/tenant/carrito/service.js")>()),
   calcularCarrito: vi.fn().mockResolvedValue({ items: [], subtotal: "100.00", total: "100.00" }),

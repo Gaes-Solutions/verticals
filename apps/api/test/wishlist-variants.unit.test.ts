@@ -1,5 +1,8 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import { describe, expect, it, vi } from "vitest";
+// Reload the subject after the integration setup's buildApp imports, so the
+// local database boundary remains mocked in both isolated and complete runs.
+vi.hoisted(() => vi.resetModules());
 vi.mock("@gaespos/db", () => ({ getTenantClient: vi.fn(), masterPrisma: {} }));
 import { getMiWishlist } from "../src/modules/cliente-portal/service.js";
 describe("wishlist option selection", () => {

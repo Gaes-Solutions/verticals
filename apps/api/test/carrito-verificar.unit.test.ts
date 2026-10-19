@@ -1,6 +1,9 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// setup.ts loads buildApp (and its pricing imports) before unit-file mocks.
+// Clear that cache before importing the subject, preserving the real assertions.
+vi.hoisted(() => vi.resetModules());
 vi.mock("../src/modules/tenant/carrito/service.js", async (original) => ({
   ...(await original<typeof import("../src/modules/tenant/carrito/service.js")>()),
   calcularCarrito: vi.fn(),

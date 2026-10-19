@@ -1,5 +1,8 @@
 import type { TenantPrismaClient } from "@gaespos/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// Integration setup preloads buildApp; reload services before installing the
+// notification/refund doubles, including when this file runs in the full suite.
+vi.hoisted(() => vi.resetModules());
 vi.mock("../src/modules/tenant/notificaciones/service.js", () => ({
   notificarCliente: vi.fn(),
   notificarUsuariosConPermiso: vi.fn(),
