@@ -402,3 +402,72 @@ La primera comprobación en runner limpio 39211928010 aprobó los checks locales
 y falló el paso de integración Docker; sigue en diagnóstico. No se declara
 operativa la automatización real por estas pruebas: está desactivada y ese
 runner no recibe claves Kimi/OpenAI. No se promueve main ni producción.
+
+## Cierre de validación del controlador en runner limpio
+
+La evidencia de 39213072007 permitió reproducir la entrada pnpm de
+`pnpm/action-setup`: un shim shell regular, no un enlace simbólico. Se resolvió
+la entrada usando metadata del paquete contiguo, validando nombre, bin y rutas
+reales dentro del paquete, sin ejecutar ni interpretar el shim. Se agregaron
+regresiones de shim hostil y escape de directorio. La corrida 39213651628
+(bafdc3f) pasó las 15 integraciones con Docker real, sin skipped.
+
+La revisión final e09b15d añade un bloqueo específico para ST-010: Biome debe
+pasar con `--error-on-warnings` antes de tipos, Vitest y build. El caso de fallo
+comprueba que no se genere evidencia de validación ni se permita juez,
+publicación o correo, tanto con fixtures como con Docker. Los avisos de PR
+incluyen tarea, pantallas inferidas, propuesta, archivos y pasos numerados;
+expresan que está pendiente de revisión/merge y que solo puede probarse tras
+el despliegue correspondiente o un APK nuevo.
+
+La corrida [39214567265](https://github.com/Gaes-Solutions/verticals/actions/runs/39214567265)
+terminó success para e09b15d: sintaxis, legacy 11/11, fase 10/10 e integración
+16/16, Docker real sin casos omitidos, más actionlint y regresión de privacidad.
+Root descargó por Git la evidencia saneada, verificó commit, códigos de salida,
+resultado completo y SHA-256 del log. Son pruebas del controlador con agentes,
+Git remoto bare y correo simulados; no acreditan credenciales ni ejecución de
+modelos reales. La configuración sigue desactivada y sin claves Kimi/OpenAI.
+
+## Limpieza final ST-010 y repetición integral
+
+Fuente `d39e736d1bdfd41b4caed64fa8457d448956ec6e`. Se cerraron las 67 advertencias
+anteriores del storefront sin cambiar reglas ni añadir ignores: se separaron
+validaciones, consultas y vistas; los reintentos y cambios de contexto se
+expresan con identidad de solicitud y comprobaciones reales. No se borraron las
+invalidaciones de precio, cotización, cupón, cuenta o pago para silenciar lint.
+Las comparaciones AST independientes conservaron controles, eventos, valores,
+labels y condiciones disabled del checkout. Otras 3006 comparaciones de contratos
+y cantidad frente al baseline no encontraron diferencias.
+
+La revisión antes del commit detectó y corrigió riesgos de la propia extracción:
+await perdido en la captura de errores de la segunda lectura de devoluciones y
+la lectura de tarjetas, guardia de aborto posterior a JSON, discriminación del
+resultado de tarjeta válida y un await innecesario antes de comprobar el flush.
+No se atribuyen a fallos previos de producción. Se agregaron regresiones para
+fallo de red privado, aborto al leer cuerpo de tarjetas y tres grupos de
+sincronización: flush correcto/fallido, recuperación con versión coincidente y
+conflicto que conserva ambas selecciones sin sobrescritura automática.
+
+Validación final sobre la fuente congelada:
+
+- Biome `check . --error-on-warnings`: 238 archivos, cero errores/advertencias.
+- Vitest tienda: 53 archivos, **1047/1047** pruebas.
+- Tipos globales: **30/30**; Next producción exit 0.
+- **21/21 suites de navegador**, incluidos productos, cuenta, direcciones,
+  tarjetas/SDKs simulados, checkout, recuperación, pedidos, chat y preferencias.
+- **22 grupos reales** Next/API/PostgreSQL local: búsqueda, compra/carrito,
+  recuperación de contraseña/carrito y teclado de cuenta en anchos móviles y
+  escritorio. Invariantes de ambos modelos de pedido, ventas, stock y reservas
+  intactas; DB/sesiones privadas eliminadas, 3058/3059 cerrados.
+
+Logs locales: `/tmp/gaes-st010-final-{biome,vitest,types,build,browser,shopper}.log`.
+El runner `scripts/testing/run-storefront-browser-regressions.cjs` ahora incluye
+las 21 suites, limpia también el selector de modo publicado del checkout y usa
+el mismo CSS vigente en los fixtures heredados. La pasada final utilizó el CSS
+del build Next comprobado. Los ensayos iniciales de dos fixtures sin CSS fallaron
+sus tamaños táctiles y se conservan como fallos de configuración del harness;
+las repeticiones con CSS y la suite integral final están aprobadas.
+
+No se cambió runtime nativo en esta limpieza: el cliente Android recomendado
+sigue siendo 17, ya publicado y probado. Tampoco se declara seguridad absoluta,
+proveedores/biometría físicos probados, ni automatización con modelos activa.

@@ -110,3 +110,15 @@ calidad de respuesta de proveedores reales. El workflow de seguridad de la rama
 de trabajo no recibe claves de modelos/correo ni permiso de publicación: prueba
 el flujo sobre un origin Git local. No activa el cron de main ni despliega
 producción.
+
+## Validación del controlador del 19 de octubre
+
+La corrida 39214567265 de la rama de trabajo pasó fase 10/10, legacy 11/11 e
+integración 16/16 con Docker real y sin skipped. ST-010 exige Biome sin
+advertencias antes de tipos, Vitest y build. Un fallo impide juez/publicación.
+El correo de PR detalla tarea, pantallas, propuesta y pasos, e indica revisión
+pendiente y disponibilidad condicionada a despliegue o nuevo APK.
+
+Esta evidencia valida el controlador aislado, no una operación con modelos
+reales. La activación, claves Kimi/OpenAI y promoción del código siguen
+pendientes; no hay un servicio autónomo activo probado.

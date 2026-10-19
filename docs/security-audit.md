@@ -708,3 +708,13 @@ nuevo y el efecto operativo pendiente en Railway se registran en
 [la auditoría de dependencias](testing/dependency-security-2026-10-18.md#proxy-e-identidad-de-cliente-tras-actualizar-fastify).
 No se debe reutilizar la afirmación anterior de que contar saltos garantiza
 por sí solo una IP de cliente no falsificable.
+
+Revisión adicional de documentación de Railway (19 oct 2026):
+[Specs & Limits](https://docs.railway.com/networking/public-networking/specs-and-limits)
+describe `X-Real-IP` para identificar al cliente y
+[Edge Networking](https://docs.railway.com/networking/edge-networking) describe
+el proxy y enrutamiento interno. Estas páginas no proporcionan una lista de
+CIDR de ingreso confiables ni un contrato suficiente de sobrescritura de headers
+para habilitar confianza amplia en este despliegue. Se mantiene pendiente esa
+confirmación de plataforma y la limitación documentada del presupuesto anónimo
+compartido. No se cambia a `trustProxy: true` ni se inventan rangos privados.

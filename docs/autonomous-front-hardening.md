@@ -44,3 +44,16 @@ La fuente de control es el checkout confiable de la revisión del workflow. El
 publisher no vuelve a ejecutar código del paquete después de recibir las
 credenciales de publicación. Los hashes ligan patch, metadata y evidencia entre
 fases; no son una firma criptográfica ni sustituyen una identidad de confianza.
+
+## Validación y notificación
+
+ST-010 agrega `biome check . --error-on-warnings` antes de los demás checks,
+tanto en el contenedor real como en los fixtures. No se relajan reglas para
+aprobar una limpieza. La regresión de fallo bloquea evidencia, juez y publicación.
+La corrida 39214567265 sobre e09b15d aprobó las 16 integraciones Docker sin
+omisiones; los modelos y el correo son simulados en esa prueba.
+
+El aviso del publisher corresponde a un PR pendiente, no a una integración:
+incluye descripción de backlog, pantallas inferidas de rutas, hasta 25 archivos
+y pasos de prueba por tarea. Aclara que staging o APK deben contener el cambio
+antes de probarlo. No afirma que se haya desplegado ni que el merge ocurriera.
