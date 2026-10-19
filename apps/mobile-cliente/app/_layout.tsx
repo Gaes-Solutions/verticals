@@ -1,6 +1,5 @@
 import { useAuth } from "@/lib/auth-store";
 import { queryClient } from "@/lib/query-client";
-import { cargarTiendaGuardada } from "@/lib/tienda";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -9,7 +8,7 @@ import { useEffect } from "react";
 export default function RootLayout() {
   const restore = useAuth((s) => s.restore);
   useEffect(() => {
-    void cargarTiendaGuardada().then(restore);
+    void restore();
   }, [restore]);
 
   return (

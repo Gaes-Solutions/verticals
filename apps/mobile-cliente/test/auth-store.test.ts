@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   enrolled: vi.fn(),
   write: vi.fn(),
   handler: vi.fn(),
+  read: vi.fn(),
 }));
 vi.mock("../src/config", () => ({
   TOKEN_KEY: "token",
@@ -23,7 +24,10 @@ vi.mock("../src/lib/api", () => ({
 }));
 vi.mock("../src/lib/storage", () => ({
   secureStorage: {
-    get: async (key: string) => mocks.values.get(key) ?? null,
+    get: async (key: string) => {
+      await mocks.read(key);
+      return mocks.values.get(key) ?? null;
+    },
     set: async (key: string, value: string) => {
       await mocks.write(key, value);
       mocks.values.set(key, value);
@@ -52,11 +56,24 @@ beforeEach(async () => {
   mocks.hardware.mockReset().mockResolvedValue(true);
   mocks.enrolled.mockReset().mockResolvedValue(true);
   mocks.write.mockReset().mockResolvedValue(undefined);
+  mocks.read.mockReset().mockResolvedValue(undefined);
   mocks.values.set("token", "stored-token");
   mocks.values.set("tenant", "shop-a");
 });
 
 describe("customer account boundaries", () => {
+  it("stops initial loading on store-read failure and retries without discarding credentials", async () => {
+    mocks.read.mockRejectedValueOnce(new Error("SecureStore locked"));
+    await useAuth.getState().restore();
+    expect(useAuth.getState()).toMatchObject({ status: "unverified", user: null });
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.deletes).not.toHaveBeenCalled();
+    expect(mocks.values.get("token")).toBe("stored-token");
+    expect(mocks.values.get("tenant")).toBe("shop-a");
+    mocks.get.mockResolvedValue({ id: "customer-a", nombre: "Ana", tenantSlug: "shop-a" });
+    await useAuth.getState().restore();
+    expect(useAuth.getState()).toMatchObject({ status: "signedIn", tenantSlug: "shop-a" });
+  });
   it("verifies /me before signing in and restores identity", async () => {
     let resolve!: (user: unknown) => void;
     mocks.get.mockReturnValue(

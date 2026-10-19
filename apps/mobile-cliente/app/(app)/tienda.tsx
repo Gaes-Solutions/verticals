@@ -3,7 +3,7 @@ import { cartCount } from "@/lib/cart-feedback";
 import { accountCartKey, useCart } from "@/lib/cart-store";
 import { checkoutBlocksCart, useCheckout } from "@/lib/checkout-store";
 import { money } from "@/lib/format";
-import { canAddQuantity } from "@/lib/product-selection";
+import { addAvailableProduct, canAddQuantity } from "@/lib/product-selection";
 import { tiendaActual } from "@/lib/tienda";
 import { type StoreProduct, listStoreProducts, storeConfig } from "@/services/comercio";
 import { colors, commerce, space } from "@/theme";
@@ -73,7 +73,8 @@ export default function Tienda() {
       return false;
     }
     try {
-      cart.add(owner, v.id, 1, item.tituloPublico);
+      if (checkoutBlocksCart(useCheckout.getState(), owner)) return false;
+      addAvailableProduct(owner, item, v.id, 1, item.tituloPublico);
       setError("");
       return true;
     } catch (err) {

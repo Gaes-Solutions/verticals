@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canAddQuantity, initialVariant } from "../src/lib/product-selection";
+import { useCart } from "../src/lib/cart-store";
+import { addAvailableProduct, canAddQuantity, initialVariant } from "../src/lib/product-selection";
 import { swipeComplete, swipeIntent } from "../src/lib/swipe";
 import type { StoreProduct } from "../src/services/comercio";
 
@@ -47,4 +48,27 @@ it("selects the sole available presentation and accounts for cart quantities", (
   expect(canAddQuantity(product, "a", "1e3", 0)).toBe(false);
   expect(canAddQuantity(product, "foreign", 1, 0)).toBe(false);
   expect(initialVariant({ ...product, stockPorVariante: null })).toBe("");
+});
+it("rechecks stock for consecutive additions before the next render", () => {
+  useCart.getState().clear();
+  useCart.getState().begin("owner");
+  useCart.getState().hydrate("owner", useCart.getState().revision, null);
+  addAvailableProduct("owner", product, "a", 2, "P");
+  expect(() => addAvailableProduct("owner", product, "a", 2, "P")).toThrow("supera");
+  expect(useCart.getState().lines).toEqual([{ varianteId: "a", cantidad: 2 }]);
+});
+it("a stale account action cannot replace the current account cart", () => {
+  useCart.getState().clear();
+  useCart.getState().begin("new-owner");
+  useCart.getState().hydrate("new-owner", useCart.getState().revision, null);
+  expect(() => addAvailableProduct("old-owner", product, "a", 1, "P")).toThrow("cambió");
+  expect(useCart.getState().owner).toBe("new-owner");
+  expect(useCart.getState().lines).toEqual([]);
+});
+it("does not offer quantities above the accumulated cart limit even with hidden stock", () => {
+  const hiddenStock = { ...product, stockPublico: null, stockPorVariante: null };
+  expect(canAddQuantity(hiddenStock, "a", 1, 100000)).toBe(false);
+  expect(canAddQuantity(hiddenStock, "a", 1, -1)).toBe(false);
+  expect(canAddQuantity(hiddenStock, "a", 1, Number.NaN)).toBe(false);
+  expect(canAddQuantity(hiddenStock, "a", 0.001, 99999.999)).toBe(true);
 });

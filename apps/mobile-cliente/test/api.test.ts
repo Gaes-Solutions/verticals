@@ -1,9 +1,9 @@
 import { ApiError, NetworkError } from "@gaespos/api-client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { readToken } = vi.hoisted(() => ({ readToken: vi.fn() }));
 vi.mock("../src/config", () => ({ API_URL: "http://127.0.0.1:4399/api", TOKEN_KEY: "token" }));
 vi.mock("../src/lib/storage", () => ({ secureStorage: { get: readToken } }));
-import { api, invalidateSessionRequests, setUnauthorizedHandler } from "../src/lib/api";
+import { api, authApi, invalidateSessionRequests, setUnauthorizedHandler } from "../src/lib/api";
 const fetchMock = vi.fn();
 const logout = vi.fn().mockResolvedValue(undefined);
 beforeEach(() => {
@@ -14,7 +14,50 @@ beforeEach(() => {
   setUnauthorizedHandler(logout);
   invalidateSessionRequests();
 });
+afterEach(() => vi.useRealTimers());
 describe("request ownership", () => {
+  it.each(["account", "login"])(
+    "limits a stalled %s request without deleting the session",
+    async (kind) => {
+      vi.useFakeTimers();
+      fetchMock.mockImplementation(
+        (_url: string, opts: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            opts.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+              once: true,
+            });
+          }),
+      );
+      const pending =
+        kind === "account"
+          ? api.get("/cliente-portal/pedidos")
+          : authApi.post("/auth/cliente/login", {}, { auth: false });
+      const rejection = expect(pending).rejects.toBeInstanceOf(NetworkError);
+      await vi.advanceTimersByTimeAsync(12_000);
+      await rejection;
+      expect(logout).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+  it("preserves caller cancellation and clears the request deadline", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(
+      (_url: string, opts: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          opts.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+    const controller = new AbortController();
+    const pending = authApi.get("/cliente-portal/me", { signal: controller.signal });
+    const rejection = expect(pending).rejects.toBeInstanceOf(NetworkError);
+    await Promise.resolve();
+    controller.abort();
+    await rejection;
+    expect(vi.getTimerCount()).toBe(0);
+    expect(logout).not.toHaveBeenCalled();
+  });
   it("logs out for 401 from the active account", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));
     await expect(api.get("/cliente-portal/me")).rejects.toBeInstanceOf(ApiError);

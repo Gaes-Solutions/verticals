@@ -6,7 +6,7 @@ import { BIOMETRIA_KEY, TENANT_KEY, TOKEN_KEY } from "../config";
 import { authApi, invalidateSessionRequests, setUnauthorizedHandler } from "./api";
 import { clearAccountCache } from "./query-client";
 import { secureStorage } from "./storage";
-import { marcarSesion } from "./tienda";
+import { cargarTiendaGuardada, marcarSesion } from "./tienda";
 
 type Status = "loading" | "signedOut" | "signedIn" | "unverified";
 
@@ -155,6 +155,8 @@ export const useAuth = create<AuthState>((set, get) => {
       set({ ...signedOut, status: "loading", error: null });
       try {
         await clearAccountCache();
+        await cargarTiendaGuardada();
+        if (attempt !== operation) return;
         const token = await secureStorage.get(TOKEN_KEY);
         const slug = await secureStorage.get(TENANT_KEY);
         if (attempt !== operation) return;

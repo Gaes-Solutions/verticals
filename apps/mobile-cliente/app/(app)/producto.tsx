@@ -2,7 +2,12 @@ import { useAuth } from "@/lib/auth-store";
 import { accountCartKey, useCart, validQuantity } from "@/lib/cart-store";
 import { checkoutBlocksCart, useCheckout } from "@/lib/checkout-store";
 import { money } from "@/lib/format";
-import { canAddQuantity, initialVariant, variantStock } from "@/lib/product-selection";
+import {
+  addAvailableProduct,
+  canAddQuantity,
+  initialVariant,
+  variantStock,
+} from "@/lib/product-selection";
 import { type StoreProduct, getStoreProduct } from "@/services/comercio";
 import { colors, commerce, radius, space } from "@/theme";
 import { Button, CommerceError, EmptyState, Icon, Input, Loading } from "@/ui";
@@ -23,7 +28,8 @@ export default function Producto() {
     enabled: typeof slug === "string" && slug.length > 0,
     retry: false,
   });
-  if (!slug) return <EmptyState title="Selecciona un artículo desde la tienda" />;
+  if (typeof slug !== "string" || !slug.trim())
+    return <EmptyState title="Selecciona un artículo desde la tienda" />;
   if (product.isPending) return <Loading />;
   if (product.isError)
     return <CommerceError error={product.error} retry={() => void product.refetch()} />;
@@ -54,10 +60,12 @@ function ProductDetails({ product }: { product: StoreProduct }) {
     }
     if (!ready || !selected || !allowed) return false;
     try {
-      cart.add(
+      if (checkoutBlocksCart(useCheckout.getState(), owner)) return false;
+      addAvailableProduct(
         owner,
+        product,
         selected.id,
-        Number(quantity.replace(",", ".")),
+        quantity,
         `${product.tituloPublico}${selected.nombreVariante ? ` · ${selected.nombreVariante}` : ""}`,
       );
       setError("");

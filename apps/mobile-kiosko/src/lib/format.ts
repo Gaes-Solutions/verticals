@@ -1,8 +1,10 @@
 const mxn = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
-export function money(v: number | string): string {
-  const n = typeof v === "string" ? Number.parseFloat(v) : v;
-  return mxn.format(Number.isFinite(n) ? n : 0);
+export function money(v: number | string | null | undefined): string {
+  if (typeof v !== "number" && typeof v !== "string") return "Precio no disponible";
+  if (typeof v === "string" && !/^-?\d+(?:\.\d+)?$/.test(v.trim())) return "Precio no disponible";
+  const n = Number(v);
+  return Number.isFinite(n) ? mxn.format(n) : "Precio no disponible";
 }
 
 export function fecha(iso: string): string {
