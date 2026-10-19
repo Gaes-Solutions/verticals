@@ -5,7 +5,7 @@ Este circuito registra errores y prepara propuestas. No aplica correcciones ni d
 ## Registro y privacidad
 
 La respuesta de error al comprador se envía antes de esperar al proveedor de correo.
-El API registra errores 5xx en `system_incidents` (base master), agrupa ocurrencias por huella y guarda contador y evento de aparición en una transacción. El upsert evita perder la primera aparición cuando llegan errores concurrentes. Las rutas se almacenan sin consulta ni fragmento.
+El API registra errores 5xx en `system_incidents` (base master), agrupa ocurrencias por huella y guarda contador y evento de aparición en una transacción. El upsert evita perder la primera aparición cuando llegan errores concurrentes. Las rutas se almacenan sin consulta ni fragmento. Los logs del API usan también serializadores saneados para errores, mensajes y solicitudes; excluyen configuraciones y cuerpos de clientes HTTP y eliminan consultas de las URLs.
 
 El texto, el contexto, las notas del auditor y los datos enviados a proveedores se sanean con reglas que reconocen credenciales habituales: autorización, cookies, tokens, contraseñas, claves API y credenciales en conexiones. El saneamiento es una defensa de mejor esfuerzo; no garantiza reconocer todos los secretos o datos personales. No agregar credenciales al contexto de un error.
 

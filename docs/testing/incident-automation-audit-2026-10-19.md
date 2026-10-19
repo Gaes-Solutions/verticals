@@ -16,6 +16,7 @@ Se corrigieron:
 - Ejecución insegura de una CLI en el servidor con credenciales del negocio.
 - Peticiones de correo o IA sin un presupuesto de tiempo apropiado para el scheduler.
 - Respuestas de error al comprador que esperaban al proveedor de correo.
+- Logs que todavía podían copiar secretos desde mensajes, stacks, causas y configuración de clientes HTTP.
 
 El runner de incidentes prepara ahora una entrega saneada y durable para revisión;
 no ejecuta agentes en el servidor. Esto no equivale a conectar un ejecutor externo.
@@ -23,8 +24,8 @@ Las aprobaciones consumidas quedan como `approved_handoff` y conservan su evento
 
 ## Validación
 
-- **83 pruebas aisladas** de privacidad, concurrencia, recuperación de alertas,
-  decisiones, autorización, versionado, entrega y respuesta HTTP.
+- **91 pruebas aisladas** de privacidad, concurrencia, recuperación de alertas,
+  decisiones, autorización, versionado, entrega, respuesta HTTP y logs reales.
 - **36 pruebas de proveedores**: correo 28 y AI 8, con transportes simulados.
 - **5 pruebas de seguridad del harness**, Biome estricto y actionlint sin hallazgos.
 - Typecheck global: **30/30 tareas**; build del API y comprobación final de tipos correctos.
@@ -113,3 +114,21 @@ seguía en cola al cerrar esta comprobación; no se cuenta como aprobado.
 
 `main` permaneció en `d14694ed31cebcb1c70cec55dd3b9fd8ca985aca`; no hubo push a
 producción. Este registro posterior de resultados no requiere otro despliegue.
+
+## Cierre adicional de privacidad de logs
+
+La revisión posterior encontró que el logger aún recibía errores crudos, aunque el
+registro de incidentes ya se saneaba. Se agregó una fábrica pura compartida de
+serializadores para solicitudes, `err`, `error` y `msg`.
+
+Los errores solo conservan tipo, mensaje, stack, código, estado HTTP y causas acotadas,
+todos saneados. No se copian configuraciones Axios, solicitudes, respuestas ni campos
+personalizados. Las solicitudes no registran consultas de URL. Ocho pruebas con Pino
+y Fastify reales cubren también la copia implícita de Error.message en `msg`, ciclos,
+proxies, getters, funciones y límites de tamaño. Las pruebas totales pasan de 83 a 91.
+
+El módulo nuevo y sus pruebas pasan Biome estricto. `app.ts` mantiene dos avisos de
+complejidad preexistentes; la integración solo sustituye la fábrica de serializadores,
+sin cambios en rutas ni permisos. Esta corrección posterior se acredita con sus ocho
+regresiones específicas y comprobación de despliegue; la suite amplia anterior no se
+presenta como una nueva ejecución tras este ajuste.
