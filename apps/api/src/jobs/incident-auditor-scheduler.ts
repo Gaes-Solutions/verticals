@@ -45,11 +45,17 @@ export function startIncidentAuditorScheduler(
   const reviewPendingIncident = async (id: string) => {
     try {
       await notifyIncident(app.masterPrisma, app.emailProviderFactory(), id, app.log);
-      if (!stopped) await reviewIncident(app.masterPrisma, app.aiProviderFactory(), id);
+    } catch {
+      app.log.warn({ incidentId: id }, "No se pudo preparar la alerta de incidente");
+    }
+    if (stopped) return;
+    try {
+      await reviewIncident(app.masterPrisma, app.aiProviderFactory(), id);
     } catch {
       app.log.warn({ incidentId: id }, "auditor IA no pudo revisar incidente");
     }
   };
+
   const tick = async () => {
     if (running || stopped) return;
     running = true;

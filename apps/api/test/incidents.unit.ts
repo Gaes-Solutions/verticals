@@ -384,6 +384,28 @@ describe("scheduler failures", () => {
     for (let turn = 0; turn < 10; turn++) await Promise.resolve();
     expect(aiProviderFactory).not.toHaveBeenCalled();
   });
+  it("continues reviewing when constructing the email provider fails", async () => {
+    const { db, incident, event } = database();
+    incident.findMany.mockResolvedValueOnce([{ id: "incident" }]);
+    const summarize = vi.fn().mockResolvedValue({ resumen: "Safe proposal", modelo: "test" });
+    const stop = startIncidentAuditorScheduler(
+      {
+        masterPrisma: db,
+        log: { warn: vi.fn() },
+        emailProviderFactory: () => {
+          throw new Error("synthetic-provider-configuration");
+        },
+        aiProviderFactory: () => ({ summarize }),
+      } as unknown as FastifyInstance,
+      1,
+    );
+    try {
+      await vi.waitFor(() => expect(event.create).toHaveBeenCalled());
+      expect(summarize).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  });
   it("catches database polling errors and retries on its next tick", async () => {
     vi.useFakeTimers();
     const { db, incident } = database();
