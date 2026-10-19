@@ -53,6 +53,16 @@ for (const [key, tool] of [
     });
   if (executable) env[key] = fs.realpathSync(executable);
 }
+const shopper = process.argv[2] === "--shopper-e2e";
+if (shopper)
+  Object.assign(env, {
+    SHOPPER_FLOW_TESTS: "true",
+    API_URL: "http://127.0.0.1:3059",
+    SHOPPER_TEST_URL: "http://127.0.0.1:3058",
+    TIENDA_TENANT_SLUG: "test-e2e-shopper",
+    STOREFRONT_SERVICE_KEY: require("node:crypto").randomBytes(32).toString("hex"),
+    SHOPPER_FIXTURE_FILE: path.join(temp, "shopper.json"),
+  });
 const retail = process.argv[2] === "--retail-e2e";
 if (retail)
   Object.assign(env, {
@@ -71,16 +81,27 @@ function command(args) {
   const r = spawnSync("pnpm", args, { cwd: repo, env, stdio: "inherit" });
   if (r.status !== 0) throw Error(`QA command failed: ${args[0]}`);
 }
-function start(args, name) {
+function start(args, name, overrides = {}) {
   const fd = fs.openSync(path.join(temp, name), "w", 0o600);
-  const child = spawn("pnpm", args, { cwd: repo, env, detached: true, stdio: ["ignore", fd, fd] });
+  const child = spawn("pnpm", args, {
+    cwd: repo,
+    env: { ...env, ...overrides },
+    detached: true,
+    stdio: ["ignore", fd, fd],
+  });
   fs.closeSync(fd);
+  child.qaLog = path.join(temp, name);
   children.push(child);
   return child;
 }
 async function ready(url, child) {
-  for (let i = 0; i < 150; i++) {
-    if (child.exitCode !== null) throw Error("QA server failed to start");
+  for (let i = 0; i < (shopper ? 900 : 150); i++) {
+    if (child.exitCode !== null) {
+      if (shopper) fs.copyFileSync(child.qaLog, "/tmp/gaes-shopper-server-failure.log");
+      throw Error(
+        `QA server failed to start${shopper ? "; diagnostic: /tmp/gaes-shopper-server-failure.log" : ""}`,
+      );
+    }
     try {
       if ((await fetch(url)).ok) return;
     } catch {}
@@ -98,8 +119,9 @@ async function ready(url, child) {
       ? []
       : [
           "http://127.0.0.1:3059/health",
-          "http://127.0.0.1:5179",
-          "http://127.0.0.1:5180",
+          ...(shopper
+            ? ["http://127.0.0.1:3058"]
+            : ["http://127.0.0.1:5179", "http://127.0.0.1:5180"]),
           ...(retail ? ["http://127.0.0.1:5181"] : []),
         ]) {
       let occupied = false;
@@ -124,7 +146,7 @@ async function ready(url, child) {
 import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { hash } from '${repo}/apps/api/node_modules/@node-rs/argon2/index.js';
-import { masterPrisma } from '${repo}/packages/db/src/index.ts';
+import { masterPrisma, getTenantClient } from '${repo}/packages/db/src/index.ts';
 import { buildTestApp, createTestTenant, createTenantUser } from '${repo}/apps/api/test/helpers.ts';
 if(process.env.RETAIL_FLOW_TESTS==='true') {
  await createTestTenant('test-e2e-retail','QA Retail','free');
@@ -138,13 +160,58 @@ for(const role of ['superadmin','support','billing']) {
  accounts.push({id:a.id,email,password,role});
 }
 fs.writeFileSync(process.env.PLATFORM_FLOW_ACCOUNTS!,JSON.stringify(accounts),{mode:0o600});
-const app=await buildTestApp();await app.listen({host:'127.0.0.1',port:3059});
+const app=await buildTestApp();
+if(process.env.SHOPPER_FLOW_TESTS==='true') {
+ const seed=(await import('${repo}/scripts/testing/shopper-fixture.cjs')).default;
+ const fixture=await seed(app,{createTestTenant,createTenantUser,hash},{getTenantClient});
+ fs.writeFileSync(process.env.SHOPPER_FIXTURE_FILE!,JSON.stringify(fixture),{mode:0o600});
+}
+await app.listen({host:'127.0.0.1',port:3059});
 process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect();process.exit(0)});
 `,
       { mode: 0o600 },
     );
     const api = start(["--filter", "@gaespos/api", "exec", "tsx", fixture], "api.log");
     await ready("http://127.0.0.1:3059/health", api);
+    if (shopper) {
+      const shop = start(
+        [
+          "--filter",
+          "@gaespos/web-tienda",
+          "exec",
+          "next",
+          "start",
+          "--hostname",
+          "127.0.0.1",
+          "--port",
+          "3058",
+        ],
+        "shopper-web.log",
+        { NODE_ENV: "production" },
+      );
+      await ready(env.SHOPPER_TEST_URL, shop);
+      command(["exec", "node", "scripts/testing/shopper-workflows.cjs"]);
+      command(["exec", "node", "scripts/testing/shopper-recovery-workflows.cjs"]);
+      const invariant = path.join(temp, "shopper-invariants.mts");
+      fs.writeFileSync(
+        invariant,
+        `
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {getTenantClient,disconnectAllTenantClients} from '${repo}/packages/db/src/index.ts';
+const fixture=JSON.parse(fs.readFileSync(process.env.SHOPPER_FIXTURE_FILE!,'utf8'));
+const tc=getTenantClient('test-e2e-shopper');
+try {
+ const current={orders:await tc.pedido.count(),ecommerceOrders:await tc.pedidoEcommerce.count(),sales:await tc.venta.count(),inventory:(await tc.inventarioSucursal.findMany({where:{varianteId:fixture.varianteId}})).map(r=>({varianteId:r.varianteId,stock:String(r.stockActual),reserved:String(r.stockReservado)}))};
+ assert.deepEqual(current,fixture.baseline);
+ console.log('PASS disposable DB invariant: no POS/ecommerce orders/sales/stock/reservations changed');
+} finally {await disconnectAllTenantClients()}
+`,
+        { mode: 0o600 },
+      );
+      command(["--filter", "@gaespos/api", "exec", "tsx", invariant]);
+      return;
+    }
     const web = start(
       [
         "--filter",
