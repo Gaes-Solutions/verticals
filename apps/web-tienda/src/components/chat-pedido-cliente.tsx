@@ -34,6 +34,25 @@ function HiloPedido({ folio }: { folio: string }) {
   const escritura = useRef<AbortController | null>(null);
   const endpoint = `/api/cuenta/pedidos/${encodeURIComponent(folio)}/mensajes`;
 
+  const reportarCarga = useCallback((error: unknown, controller: AbortController) => {
+    if (!vivo.current || controller.signal.aborted) return;
+    setListo(false);
+    if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) setMensajes([]);
+    setErrorCarga(
+      error instanceof ChatFailure && [401, 403, 404, 429].includes(error.status)
+        ? error.message
+        : "No pudimos cargar los mensajes. Revisa tu conexión y vuelve a actualizar.",
+    );
+  }, []);
+  const aplicarHistorial = useCallback((data: MensajePedido[], manual: boolean) => {
+    setMensajes(data);
+    setListo(true);
+    setErrorCarga(null);
+    if (manual) {
+      setIncierto(false);
+      setErrorEnvio(null);
+    }
+  }, []);
   const cargar = useCallback(
     async (manual = false) => {
       if (escribiendo.current) return;
@@ -51,27 +70,14 @@ function HiloPedido({ folio }: { folio: string }) {
         if (!esHistorialMensajes(data))
           throw new Error("No pudimos cargar los mensajes. Vuelve a actualizar.");
         if (!vivo.current || controller.signal.aborted) return;
-        setMensajes(data);
-        setListo(true);
-        setErrorCarga(null);
-        if (manual) {
-          setIncierto(false);
-          setErrorEnvio(null);
-        }
+        aplicarHistorial(data, manual);
       } catch (error) {
-        if (!vivo.current || controller.signal.aborted) return;
-        setListo(false);
-        if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) setMensajes([]);
-        setErrorCarga(
-          error instanceof ChatFailure && [401, 403, 404, 429].includes(error.status)
-            ? error.message
-            : "No pudimos cargar los mensajes. Revisa tu conexión y vuelve a actualizar.",
-        );
+        reportarCarga(error, controller);
       } finally {
         if (vivo.current && lectura.current === controller) setCargando(false);
       }
     },
-    [endpoint],
+    [endpoint, reportarCarga, aplicarHistorial],
   );
 
   useEffect(() => {
@@ -99,6 +105,15 @@ function HiloPedido({ folio }: { folio: string }) {
     };
   }, [cargar]);
 
+  function reportarEnvio(error: unknown, controller: AbortController) {
+    if (!vivo.current || controller.signal.aborted) return;
+    setIncierto(true);
+    if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) {
+      setMensajes([]);
+      setListo(false);
+    }
+    setErrorEnvio(error instanceof ChatFailure ? error.message : mensajeChatError(503));
+  }
   async function enviar(e: FormEvent) {
     e.preventDefault();
     const borrador = texto;
@@ -113,28 +128,13 @@ function HiloPedido({ folio }: { folio: string }) {
     setErrorEnvio(null);
     setConfirmacion("");
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cuerpo }),
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
-      });
-      if (!res.ok) throw new ChatFailure(res.status);
-      const data: unknown = await res.json();
-      if (!esMensajePedido(data) || data.autorTipo !== "cliente" || data.cuerpo !== cuerpo)
-        throw new ChatFailure(502);
+      const data = await enviarMensaje(endpoint, cuerpo, controller.signal);
       if (!vivo.current || controller.signal.aborted) return;
       setMensajes((prev) => [...prev.filter((m) => m.id !== data.id), data]);
       setTexto((actual) => (actual === borrador ? "" : actual));
       setConfirmacion("Mensaje enviado.");
     } catch (error) {
-      if (!vivo.current || controller.signal.aborted) return;
-      setIncierto(true);
-      if (error instanceof ChatFailure && [401, 403, 404].includes(error.status)) {
-        setMensajes([]);
-        setListo(false);
-      }
-      setErrorEnvio(error instanceof ChatFailure ? error.message : mensajeChatError(503));
+      reportarEnvio(error, controller);
     } finally {
       escribiendo.current = false;
       if (vivo.current) setEnviando(false);
@@ -205,4 +205,18 @@ function HiloPedido({ folio }: { folio: string }) {
       </div>
     </section>
   );
+}
+
+async function enviarMensaje(endpoint: string, cuerpo: string, controllerSignal: AbortSignal) {
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cuerpo }),
+    signal: AbortSignal.any([controllerSignal, AbortSignal.timeout(20_000)]),
+  });
+  if (!res.ok) throw new ChatFailure(res.status);
+  const data: unknown = await res.json();
+  if (!esMensajePedido(data) || data.autorTipo !== "cliente" || data.cuerpo !== cuerpo)
+    throw new ChatFailure(502);
+  return data;
 }

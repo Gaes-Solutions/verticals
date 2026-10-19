@@ -31,6 +31,25 @@ async function respuestaServidor(
   });
 }
 
+async function entradaCarrito(
+  req: NextRequest,
+  owner: string,
+): Promise<Record<string, unknown> | NextResponse | null> {
+  if (req.method !== "POST") return null;
+  const input = (await req.json()) as Record<string, unknown> | null;
+  if (!input || !("expectedVersion" in input))
+    return NextResponse.json(
+      { message: "Actualiza tu carrito antes de continuar." },
+      { status: 400 },
+    );
+  if (input.owner !== owner)
+    return NextResponse.json(
+      { message: "La cuenta cambió. Actualiza tu carrito." },
+      { status: 409 },
+    );
+  return input;
+}
+
 async function forward(req: NextRequest) {
   if (req.method !== "GET" && !sameOriginRequest(req))
     return NextResponse.json({ message: "Solicitud no autorizada." }, { status: 403 });
@@ -38,18 +57,10 @@ async function forward(req: NextRequest) {
     const session = await getClienteSession();
     if (!session) return NextResponse.json({ message: "Inicia sesión." }, { status: 401 });
     const owner = JSON.stringify([session.cliente.tenantSlug, session.cliente.id]);
-    const input = req.method === "POST" ? await req.json() : null;
-    if (req.method === "POST" && (!input || !("expectedVersion" in input)))
-      return NextResponse.json(
-        { message: "Actualiza tu carrito antes de continuar." },
-        { status: 400 },
-      );
+    const parsed = await entradaCarrito(req, owner);
+    if (parsed instanceof NextResponse) return parsed;
+    const input = parsed;
     // The browser never chooses the account, tenant or upstream URL.
-    if (input && input.owner !== owner)
-      return NextResponse.json(
-        { message: "La cuenta cambió. Actualiza tu carrito." },
-        { status: 409 },
-      );
     const res = await fetch(
       `${process.env.API_URL ?? "http://localhost:3000"}/cliente-portal/comercio/carrito`,
       {

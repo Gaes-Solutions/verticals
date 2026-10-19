@@ -53,31 +53,22 @@ export function useCarritoVerificado(items: CarritoLineaLocal[]) {
     const seleccion = JSON.parse(source) as CarritoLineaLocal[];
     const items = seleccion.map(({ varianteId, cantidad }) => ({ varianteId, cantidad }));
     const generation = generacion.current;
-    const cargar = async () => {
+    const vigente = () => controller.current === cancel && !cancel.signal.aborted;
+    function validarSeleccion() {
       if (!seleccionCarritoValida(items)) {
         if (seleccion.length)
           setError({ key, mensaje: "Revisa los productos y sus cantidades antes de continuar." });
-        return;
+        return false;
       }
+      return true;
+    }
+    const cargar = async () => {
+      if (!validarSeleccion()) return;
       try {
-        const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(20000)]);
-        const res = await fetch("/api/carrito/verificar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items }),
-          cache: "no-store",
-          redirect: "error",
-          signal,
-        });
-        const data = await res.json();
-        signal.throwIfAborted();
-        const lineas = res.ok ? leerVerificacionCarrito(data, items) : null;
-        if (!lineas) throw new Error(ERROR_VERIFICAR);
-        if (controller.current === cancel && !cancel.signal.aborted)
-          setResultado({ key, lineas, fecha: Date.now(), generacion: generation });
+        const lineas = await consultarLineas(items, cancel);
+        if (vigente()) setResultado({ key, lineas, fecha: Date.now(), generacion: generation });
       } catch {
-        if (controller.current === cancel && !cancel.signal.aborted)
-          setError({ key, mensaje: ERROR_VERIFICAR });
+        if (vigente()) setError({ key, mensaje: ERROR_VERIFICAR });
       }
     };
     const timer = setTimeout(() => void cargar(), 300);
@@ -124,4 +115,24 @@ export function useCarritoVerificado(items: CarritoLineaLocal[]) {
     revalidar,
     prepararCompra,
   };
+}
+
+async function consultarLineas(
+  items: { varianteId: string; cantidad: number }[],
+  cancel: AbortController,
+) {
+  const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(20000)]);
+  const res = await fetch("/api/carrito/verificar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+    cache: "no-store",
+    redirect: "error",
+    signal,
+  });
+  const data = await res.json();
+  signal.throwIfAborted();
+  const lineas = res.ok ? leerVerificacionCarrito(data, items) : null;
+  if (!lineas) throw new Error(ERROR_VERIFICAR);
+  return lineas;
 }

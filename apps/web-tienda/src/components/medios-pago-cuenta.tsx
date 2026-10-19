@@ -36,37 +36,45 @@ export function MediosPagoCuenta() {
       refreshButton.current?.focus();
     }
   }, [selected]);
-  const cargar = useCallback(async (parent?: AbortSignal) => {
-    read.current?.abort();
-    const c = new AbortController();
-    read.current = c;
-    setLoading(true);
-    setError(null);
-    const signal = AbortSignal.any([
-      c.signal,
-      AbortSignal.timeout(20000),
-      ...(parent ? [parent] : []),
-    ]);
-    try {
-      const data = await leerTarjetas(signal);
-      signal.throwIfAborted();
-      setMedios(data);
-      setDebeActualizar(false);
-      return data;
-    } catch (e) {
-      if (!c.signal.aborted) {
-        setError(e instanceof ErrorTarjeta ? e.message : errorTarjeta(503));
-        setDebeActualizar(true);
-        if (e instanceof ErrorTarjeta && [401, 403].includes(e.status)) setMedios(null);
-      }
-      return null;
-    } finally {
-      if (read.current === c) {
-        read.current = null;
-        if (!c.signal.aborted) setLoading(false);
-      }
+  const reportarError = useCallback((e: unknown, c: AbortController) => {
+    if (!c.signal.aborted) {
+      setError(e instanceof ErrorTarjeta ? e.message : errorTarjeta(503));
+      setDebeActualizar(true);
+      if (e instanceof ErrorTarjeta && [401, 403].includes(e.status)) setMedios(null);
     }
   }, []);
+  const finalizarLectura = useCallback((c: AbortController) => {
+    if (read.current !== c) return;
+    read.current = null;
+    if (!c.signal.aborted) setLoading(false);
+  }, []);
+  const cargar = useCallback(
+    async (parent?: AbortSignal) => {
+      read.current?.abort();
+      const c = new AbortController();
+      read.current = c;
+      setLoading(true);
+      setError(null);
+      const signal = AbortSignal.any([
+        c.signal,
+        AbortSignal.timeout(20000),
+        ...(parent ? [parent] : []),
+      ]);
+      try {
+        const data = await leerTarjetas(signal);
+        signal.throwIfAborted();
+        setMedios(data);
+        setDebeActualizar(false);
+        return data;
+      } catch (e) {
+        reportarError(e, c);
+        return null;
+      } finally {
+        finalizarLectura(c);
+      }
+    },
+    [reportarError, finalizarLectura],
+  );
   useEffect(() => {
     void cargar();
     return () => {
@@ -76,6 +84,21 @@ export function MediosPagoCuenta() {
       write.current = null;
     };
   }, [cargar]);
+  function confirmarBorrado(actual: MedioPagoGuardado[] | null, card: MedioPagoGuardado) {
+    if (actual && !actual.some((m) => m.id === card.id))
+      setMensaje("Tarjeta eliminada de tu cuenta.");
+    else if (actual) {
+      setDebeActualizar(true);
+      setError("La tarjeta sigue en la lista. Actualiza antes de continuar.");
+    }
+  }
+  function finalizarEscritura(c: AbortController) {
+    if (write.current !== c) return;
+    write.current = null;
+    setBusy(false);
+    focusAfterWrite.current = true;
+    setSelected(null);
+  }
   async function eliminar() {
     if (!selected || write.current || read.current || debeActualizar) return;
     const card = selected;
@@ -97,25 +120,11 @@ export function MediosPagoCuenta() {
       if (res.status !== 204) throw new ErrorTarjeta(502);
       const actual = await cargar(signal);
       signal.throwIfAborted();
-      if (actual && !actual.some((m) => m.id === card.id))
-        setMensaje("Tarjeta eliminada de tu cuenta.");
-      else if (actual) {
-        setDebeActualizar(true);
-        setError("La tarjeta sigue en la lista. Actualiza antes de continuar.");
-      }
+      confirmarBorrado(actual, card);
     } catch (e) {
-      if (!c.signal.aborted) {
-        setError(e instanceof ErrorTarjeta ? e.message : errorTarjeta(503));
-        setDebeActualizar(true);
-        if (e instanceof ErrorTarjeta && [401, 403].includes(e.status)) setMedios(null);
-      }
+      reportarError(e, c);
     } finally {
-      if (write.current === c) {
-        write.current = null;
-        setBusy(false);
-        focusAfterWrite.current = true;
-        setSelected(null);
-      }
+      finalizarEscritura(c);
     }
   }
   const blocked = busy || loading || debeActualizar;

@@ -168,36 +168,44 @@ export function CustomerPasskeys() {
   const read = useRef<AbortController | null>(null);
   const flow = useCeremonia();
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
-  const load = useCallback(async (parent?: AbortSignal) => {
-    read.current?.abort();
-    const c = new AbortController();
-    read.current = c;
-    refreshLock.current = true;
-    setLoading(true);
-    setLoadError(null);
-    const signal = parent ? AbortSignal.any([parent, c.signal]) : c.signal;
-    try {
-      const data = await call("list", signal);
-      if (!listaLlaves(data)) throw new ErrorLlave(502);
-      signal.throwIfAborted();
-      setKeys(data);
-      setMustRefresh(false);
-      return data;
-    } catch (e) {
-      if (!signal.aborted) {
-        setLoadError(message(e));
-        setMustRefresh(true);
-        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
-      }
-      return null;
-    } finally {
-      if (read.current === c) {
-        read.current = null;
-        refreshLock.current = false;
-        if (!c.signal.aborted) setLoading(false);
-      }
+  const reportLoadError = useCallback((e: unknown, signal: AbortSignal) => {
+    if (!signal.aborted) {
+      setLoadError(message(e));
+      setMustRefresh(true);
+      if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
     }
   }, []);
+  const finishLoad = useCallback((c: AbortController) => {
+    if (read.current !== c) return;
+    read.current = null;
+    refreshLock.current = false;
+    if (!c.signal.aborted) setLoading(false);
+  }, []);
+  const load = useCallback(
+    async (parent?: AbortSignal) => {
+      read.current?.abort();
+      const c = new AbortController();
+      read.current = c;
+      refreshLock.current = true;
+      setLoading(true);
+      setLoadError(null);
+      const signal = parent ? AbortSignal.any([parent, c.signal]) : c.signal;
+      try {
+        const data = await call("list", signal);
+        if (!listaLlaves(data)) throw new ErrorLlave(502);
+        signal.throwIfAborted();
+        setKeys(data);
+        setMustRefresh(false);
+        return data;
+      } catch (e) {
+        reportLoadError(e, signal);
+        return null;
+      } finally {
+        finishLoad(c);
+      }
+    },
+    [reportLoadError, finishLoad],
+  );
   useEffect(() => {
     setSupported(window.isSecureContext && browserSupportsWebAuthn());
     void load();
@@ -207,6 +215,16 @@ export function CustomerPasskeys() {
       refreshLock.current = false;
     };
   }, [load]);
+  function reportRegistrationError(e: unknown, c: AbortController, sent: boolean) {
+    if (flow.isCurrent(c)) {
+      setStatus({ ok: false, text: message(e) });
+      if (sent) setMustRefresh(true);
+      if (e instanceof ErrorLlave && [401, 403].includes(e.status)) {
+        setKeys(null);
+        setMustRefresh(true);
+      }
+    }
+  }
   async function register(e: React.FormEvent) {
     e.preventDefault();
     if (refreshLock.current || mustRefresh || !keys || keys.length >= 10 || !name.trim()) return;
@@ -235,17 +253,25 @@ export function CustomerPasskeys() {
       });
       await load(c.signal);
     } catch (e) {
-      if (flow.isCurrent(c)) {
-        setStatus({ ok: false, text: message(e) });
-        if (sent) setMustRefresh(true);
-        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) {
-          setKeys(null);
-          setMustRefresh(true);
-        }
-      }
+      reportRegistrationError(e, c, sent);
     } finally {
       if (flow.isCurrent(c)) setPassword("");
       flow.end(c);
+    }
+  }
+  function confirmRemoval(updated: LlaveCliente[] | null, key: LlaveCliente) {
+    if (updated && !updated.some((k) => k.id === key.id))
+      setStatus({ ok: true, text: "Llave eliminada de esta cuenta." });
+    else if (updated) {
+      setMustRefresh(true);
+      setStatus({ ok: false, text: "La llave sigue en la lista. Actualiza antes de continuar." });
+    }
+  }
+  function reportRemovalError(e: unknown, c: AbortController) {
+    if (!c.signal.aborted) {
+      setStatus({ ok: false, text: message(e) });
+      setMustRefresh(true);
+      if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
     }
   }
   async function remove() {
@@ -259,18 +285,9 @@ export function CustomerPasskeys() {
       const receipt = await call("remove", c.signal, { id: key.id });
       if (!reciboLlave(receipt)) throw new ErrorLlave(502);
       const updated = await load(c.signal);
-      if (updated && !updated.some((k) => k.id === key.id))
-        setStatus({ ok: true, text: "Llave eliminada de esta cuenta." });
-      else if (updated) {
-        setMustRefresh(true);
-        setStatus({ ok: false, text: "La llave sigue en la lista. Actualiza antes de continuar." });
-      }
+      confirmRemoval(updated, key);
     } catch (e) {
-      if (!c.signal.aborted) {
-        setStatus({ ok: false, text: message(e) });
-        setMustRefresh(true);
-        if (e instanceof ErrorLlave && [401, 403].includes(e.status)) setKeys(null);
-      }
+      reportRemovalError(e, c);
     } finally {
       if (!c.signal.aborted) {
         focusAfterWrite.current = true;
@@ -321,32 +338,7 @@ export function CustomerPasskeys() {
           Todavía no tienes llaves de acceso en esta tienda.
         </p>
       )}
-      {keys && keys.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {keys.map((key) => (
-            <li key={key.id} className="flex items-center gap-3 rounded-xl border p-3">
-              <KeyRound size={20} className="shrink-0 text-marca" />
-              <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-semibold">{key.deviceName}</p>
-                <p className="text-xs text-slate-500">
-                  {key.lastUsedAt
-                    ? `Último uso: ${new Date(key.lastUsedAt).toLocaleDateString("es-MX")}`
-                    : "Lista para tu próximo acceso"}
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={blocked}
-                onClick={() => setSelected(key)}
-                aria-label={`Eliminar llave ${key.deviceName}`}
-                className="min-h-11 min-w-11 rounded-lg p-3 text-danger"
-              >
-                <Trash2 size={19} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ListaLlaves keys={keys} blocked={blocked} seleccionar={setSelected} />
       {supported ? (
         <form onSubmit={register} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
@@ -401,14 +393,7 @@ export function CustomerPasskeys() {
           contraseña.
         </p>
       )}
-      {status && (
-        <p
-          role={status.ok ? "status" : "alert"}
-          className={`mt-3 text-sm ${status.ok ? "text-ok" : "text-danger"}`}
-        >
-          {status.text}
-        </p>
-      )}
+      <EstadoLlave status={status} />
       {selected && (
         <DialogoTienda
           titulo="Eliminar llave de acceso"
@@ -439,5 +424,61 @@ export function CustomerPasskeys() {
         </DialogoTienda>
       )}
     </section>
+  );
+}
+
+function ListaLlaves({
+  keys,
+  blocked,
+  seleccionar,
+}: {
+  keys: LlaveCliente[] | null;
+  blocked: boolean;
+  seleccionar: (key: LlaveCliente) => void;
+}) {
+  return (
+    <>
+      {keys && keys.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {keys.map((key) => (
+            <li key={key.id} className="flex items-center gap-3 rounded-xl border p-3">
+              <KeyRound size={20} className="shrink-0 text-marca" />
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-sm font-semibold">{key.deviceName}</p>
+                <p className="text-xs text-slate-500">
+                  {key.lastUsedAt
+                    ? `Último uso: ${new Date(key.lastUsedAt).toLocaleDateString("es-MX")}`
+                    : "Lista para tu próximo acceso"}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={blocked}
+                onClick={() => seleccionar(key)}
+                aria-label={`Eliminar llave ${key.deviceName}`}
+                className="min-h-11 min-w-11 rounded-lg p-3 text-danger"
+              >
+                <Trash2 size={19} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function EstadoLlave({ status }: { status: { ok: boolean; text: string } | null }) {
+  return (
+    <>
+      {status && (
+        <p
+          role={status.ok ? "status" : "alert"}
+          className={`mt-3 text-sm ${status.ok ? "text-ok" : "text-danger"}`}
+        >
+          {status.text}
+        </p>
+      )}
+    </>
   );
 }

@@ -1,6 +1,14 @@
 "use client";
 import { loadPaymentSdk } from "@/lib/payment-sdk";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  type MutableRefObject,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 interface Card {
   mount(el: HTMLElement): void;
   unmount(): void;
@@ -14,6 +22,15 @@ interface Stripe {
     data: { payment_method: { card: Card } },
   ): Promise<{ error?: { message?: string }; paymentIntent?: { status: string } }>;
 }
+type StripeForm = {
+  stripe: Stripe;
+  card: Card;
+  ready: boolean;
+  active: boolean;
+  confirming: boolean;
+  publicKey: string;
+  accountId: string | null;
+};
 declare global {
   interface Window {
     Stripe?: (key: string, options?: { stripeAccount?: string; locale?: string }) => Stripe;
@@ -50,7 +67,9 @@ export const PagoTarjetaStripe = forwardRef<PagoStripeHandle, Props>(function Pa
   const [ready, setReady] = useState(false);
   const [retry, setRetry] = useState(0);
   const [failed, setFailed] = useState(false);
+  const setup = useMemo(() => ({ publicKey, accountId, retry }), [publicKey, accountId, retry]);
   useEffect(() => {
+    const { publicKey, accountId } = setup;
     let active = true;
     let form: NonNullable<typeof current.current> | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -130,7 +149,7 @@ export const PagoTarjetaStripe = forwardRef<PagoStripeHandle, Props>(function Pa
       current.current = null;
       notify.current?.(false);
     };
-  }, [publicKey, accountId, retry]);
+  }, [setup]);
   useImperativeHandle(
     ref,
     () => ({
@@ -164,36 +183,7 @@ export const PagoTarjetaStripe = forwardRef<PagoStripeHandle, Props>(function Pa
           throw new Error(
             "No pudimos verificar este intento. Consulta el mismo pedido antes de continuar.",
           );
-        form.confirming = true;
-        try {
-          let result: Awaited<ReturnType<Stripe["confirmCardPayment"]>>;
-          try {
-            result = await form.stripe.confirmCardPayment(secret, {
-              payment_method: { card: form.card },
-            });
-          } catch {
-            throw new Error(
-              "No pudimos confirmar el pago. Consulta este mismo pedido; no vuelvas a pagar.",
-            );
-          }
-          if (!result || typeof result !== "object")
-            throw new Error(
-              "No pudimos confirmar el pago. Consulta este mismo pedido; no vuelvas a pagar.",
-            );
-          if (!form.active || current.current !== form)
-            throw new Error(
-              "El formulario cambió. Consulta el mismo pedido para comprobar el pago.",
-            );
-          if (result.error)
-            throw new Error(
-              result.error.message ??
-                "No se pudo confirmar tu tarjeta. Consulta este mismo pedido antes de volver a pagar.",
-            );
-          if (result.paymentIntent?.status !== "succeeded")
-            throw new Error("El banco sigue verificando el pago. Consulta este mismo pedido.");
-        } finally {
-          form.confirming = false;
-        }
+        await confirmarPagoStripe(form, secret, current);
       },
     }),
     [publicKey, accountId],
@@ -230,3 +220,38 @@ export const PagoTarjetaStripe = forwardRef<PagoStripeHandle, Props>(function Pa
     </div>
   );
 });
+
+async function confirmarPagoStripe(
+  form: StripeForm,
+  secret: string,
+  current: MutableRefObject<StripeForm | null>,
+) {
+  form.confirming = true;
+  try {
+    let result: Awaited<ReturnType<Stripe["confirmCardPayment"]>>;
+    try {
+      result = await form.stripe.confirmCardPayment(secret, {
+        payment_method: { card: form.card },
+      });
+    } catch {
+      throw new Error(
+        "No pudimos confirmar el pago. Consulta este mismo pedido; no vuelvas a pagar.",
+      );
+    }
+    if (!result || typeof result !== "object")
+      throw new Error(
+        "No pudimos confirmar el pago. Consulta este mismo pedido; no vuelvas a pagar.",
+      );
+    if (!form.active || current.current !== form)
+      throw new Error("El formulario cambió. Consulta el mismo pedido para comprobar el pago.");
+    if (result.error)
+      throw new Error(
+        result.error.message ??
+          "No se pudo confirmar tu tarjeta. Consulta este mismo pedido antes de volver a pagar.",
+      );
+    if (result.paymentIntent?.status !== "succeeded")
+      throw new Error("El banco sigue verificando el pago. Consulta este mismo pedido.");
+  } finally {
+    form.confirming = false;
+  }
+}

@@ -28,9 +28,39 @@ export function useAccionPedido(folio: string, accion: AccionPedido) {
       controller.current?.abort();
     };
   }, []);
+  function aplicarResultado(
+    resultado: Awaited<ReturnType<typeof solicitarResultado>>,
+    consulta: boolean,
+  ) {
+    const mensaje = resultado.confirmacion;
+    if (consulta) {
+      setRequiereConsulta(false);
+      setBloqueada(resultado.bloqueada);
+      if (resultado.bloqueada)
+        setError(
+          "El estado actual del pedido no permite esta operación. Revisa el detalle o contacta a la tienda.",
+        );
+    }
+    if (mensaje) {
+      setConfirmacion(mensaje);
+      router.refresh();
+    }
+  }
+  function reportarFallo(err: unknown, request: AbortController) {
+    if (!vivo.current || request.signal.aborted) return;
+    setRequiereConsulta(true);
+    setError(err instanceof FalloAccion ? err.message : errorAccion(503));
+  }
+  function finalizar() {
+    lock.current = false;
+    if (vivo.current) setOcupado(false);
+  }
+  function bloqueaOperacion(consulta: boolean) {
+    return lock.current || confirmacion || (!consulta && (requiereConsulta || bloqueada));
+  }
   async function ejecutar(payload?: Record<string, unknown>) {
     const consulta = payload === undefined;
-    if (lock.current || confirmacion || (!consulta && (requiereConsulta || bloqueada))) return;
+    if (bloqueaOperacion(consulta)) return;
     const body = consulta ? null : entradaAccion(accion, payload);
     if (!consulta && !body) {
       setError("Revisa el motivo y las cantidades antes de enviar.");
@@ -44,26 +74,11 @@ export function useAccionPedido(folio: string, accion: AccionPedido) {
     try {
       const resultado = await solicitarResultado(folio, accion, body, request.signal);
       if (!vivo.current || request.signal.aborted) return;
-      const mensaje = resultado.confirmacion;
-      if (consulta) {
-        setRequiereConsulta(false);
-        setBloqueada(resultado.bloqueada);
-        if (resultado.bloqueada)
-          setError(
-            "El estado actual del pedido no permite esta operación. Revisa el detalle o contacta a la tienda.",
-          );
-      }
-      if (mensaje) {
-        setConfirmacion(mensaje);
-        router.refresh();
-      }
+      aplicarResultado(resultado, consulta);
     } catch (err) {
-      if (!vivo.current || request.signal.aborted) return;
-      setRequiereConsulta(true);
-      setError(err instanceof FalloAccion ? err.message : errorAccion(503));
+      reportarFallo(err, request);
     } finally {
-      lock.current = false;
-      if (vivo.current) setOcupado(false);
+      finalizar();
     }
   }
   return {

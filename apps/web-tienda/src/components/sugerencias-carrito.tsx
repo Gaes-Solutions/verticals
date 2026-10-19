@@ -26,15 +26,7 @@ export function SugerenciasCarrito() {
       const cancel = new AbortController();
       controller = cancel;
       try {
-        const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(15000)]);
-        const res = await fetch("/api/catalogo?orden=populares&pageSize=24", {
-          cache: "no-store",
-          signal,
-          redirect: "error",
-        });
-        const data = res.ok ? leerSugerencias(await res.json()) : null;
-        signal.throwIfAborted();
-        if (!data) throw new Error("Invalid catalog");
+        const data = await consultarSugerencias(cancel);
         if (activo && revision.current === generation) {
           setSugerencias(sugerenciasFueraDelCarrito(data, leerCarrito()));
           setResultadoVersion(generation);
@@ -155,4 +147,17 @@ export function SugerenciasCarrito() {
       )}
     </section>
   );
+}
+
+async function consultarSugerencias(cancel: AbortController) {
+  const signal = AbortSignal.any([cancel.signal, AbortSignal.timeout(15000)]);
+  const res = await fetch("/api/catalogo?orden=populares&pageSize=24", {
+    cache: "no-store",
+    signal,
+    redirect: "error",
+  });
+  const data = res.ok ? leerSugerencias(await res.json()) : null;
+  signal.throwIfAborted();
+  if (!data) throw new Error("Invalid catalog");
+  return data;
 }

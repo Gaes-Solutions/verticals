@@ -62,9 +62,32 @@ export default async function PedidoDetallePage({
     pedido.statusPedido !== "cancelado" &&
     pedido.statusPedido !== "recibido";
 
-  const fecha = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
+  return (
+    <VistaPedido
+      pedido={pedido}
+      solicitud={solicitud}
+      devolible={devolible}
+      cancelable={cancelable}
+      facturable={facturable}
+    />
+  );
+}
+const fecha = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
 
+function VistaPedido({
+  pedido,
+  solicitud,
+  devolible,
+  cancelable,
+  facturable,
+}: {
+  pedido: PedidoDetalleCliente;
+  solicitud: SolicitudDevolucion | null;
+  devolible: boolean;
+  cancelable: boolean;
+  facturable: boolean;
+}) {
   return (
     <div className="mx-auto max-w-2xl">
       <Link href="/cuenta" className="text-marca text-sm hover:underline">
@@ -84,50 +107,7 @@ export default async function PedidoDetallePage({
         </span>
       </div>
 
-      {/* Timeline tipo Mercado Libre */}
-      {pedido.cancelado ? (
-        <div className="mb-8 rounded-lg border border-danger/40 bg-danger-light p-4 text-danger text-sm">
-          Este pedido fue cancelado.
-          {pedido.canceladoMotivo ? ` Motivo: ${pedido.canceladoMotivo}` : ""}
-        </div>
-      ) : (
-        <ol className="mb-8">
-          {pedido.hitos.map((h, i) => {
-            const ultimo = i === pedido.hitos.length - 1;
-            return (
-              <li key={h.estado} className="flex gap-3">
-                <div className="flex flex-col items-center">
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs ${
-                      h.completado
-                        ? "border-marca bg-marca text-white"
-                        : "border-slate-300 bg-white text-slate-300"
-                    }`}
-                  >
-                    {h.completado ? "✓" : i + 1}
-                  </span>
-                  {!ultimo && (
-                    <span
-                      className={`w-0.5 flex-1 ${h.completado ? "bg-marca" : "bg-slate-200"}`}
-                      style={{ minHeight: "1.75rem" }}
-                    />
-                  )}
-                </div>
-                <div className={`pb-6 ${h.actual ? "font-semibold" : ""}`}>
-                  <p className={h.completado ? "text-slate-800" : "text-slate-400"}>{h.label}</p>
-                  {h.fecha && <p className="text-slate-400 text-xs">{fecha(h.fecha)}</p>}
-                  {h.actual && pedido.guiaTracking && (
-                    <p className="mt-1 text-slate-500 text-xs">
-                      Guía {pedido.paqueteria}:{" "}
-                      <span className="font-mono">{pedido.guiaTracking}</span>
-                    </p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <TimelinePedido pedido={pedido} />
 
       {/* Productos */}
       <h2 className="mb-2 font-bold text-lg">Productos</h2>
@@ -193,5 +173,73 @@ export default async function PedidoDetallePage({
 
       <ChatPedidoCliente folio={pedido.folioPublico} />
     </div>
+  );
+}
+
+function TimelinePedido({ pedido }: { pedido: PedidoDetalleCliente }) {
+  return (
+    <>
+      {pedido.cancelado ? (
+        <div className="mb-8 rounded-lg border border-danger/40 bg-danger-light p-4 text-danger text-sm">
+          Este pedido fue cancelado.
+          {pedido.canceladoMotivo ? ` Motivo: ${pedido.canceladoMotivo}` : ""}
+        </div>
+      ) : (
+        <ol className="mb-8">
+          {pedido.hitos.map((h, i) => (
+            <HitoPedido
+              key={h.estado}
+              h={h}
+              numero={i + 1}
+              ultimo={i === pedido.hitos.length - 1}
+              pedido={pedido}
+            />
+          ))}
+        </ol>
+      )}
+    </>
+  );
+}
+
+function HitoPedido({
+  h,
+  numero,
+  ultimo,
+  pedido,
+}: {
+  h: PedidoDetalleCliente["hitos"][number];
+  numero: number;
+  ultimo: boolean;
+  pedido: PedidoDetalleCliente;
+}) {
+  return (
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span
+          className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs ${
+            h.completado
+              ? "border-marca bg-marca text-white"
+              : "border-slate-300 bg-white text-slate-300"
+          }`}
+        >
+          {h.completado ? "✓" : numero}
+        </span>
+        {!ultimo && (
+          <span
+            className={`w-0.5 flex-1 ${h.completado ? "bg-marca" : "bg-slate-200"}`}
+            style={{ minHeight: "1.75rem" }}
+          />
+        )}
+      </div>
+      <div className={`pb-6 ${h.actual ? "font-semibold" : ""}`}>
+        <p className={h.completado ? "text-slate-800" : "text-slate-400"}>{h.label}</p>
+        {h.fecha && <p className="text-slate-400 text-xs">{fecha(h.fecha)}</p>}
+        {h.actual && pedido.guiaTracking && (
+          <p className="mt-1 text-slate-500 text-xs">
+            Guía {pedido.paqueteria}: <span className="font-mono">{pedido.guiaTracking}</span>
+          </p>
+        )}
+      </div>
+    </li>
   );
 }

@@ -39,6 +39,12 @@ function FormResena({ item }: { item: CompraResenable }) {
       photoController.current?.abort();
     };
   }, []);
+  function reportarErrorFotos(c: AbortController) {
+    if (vivo.current && !c.signal.aborted)
+      setErrorLocal(
+        "No pudimos procesar las fotos. Usa JPG, PNG o WebP de hasta 12 MB y vuelve a intentarlo.",
+      );
+  }
   async function agregarFotos(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -54,18 +60,10 @@ function FormResena({ item }: { item: CompraResenable }) {
     photoController.current = c;
     try {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
-      const nuevas: string[] = [];
-      for (const file of files) {
-        const foto = await comprimirImagen(file, 1024, 0.7, signal);
-        if (!fotoResenaValida(foto)) throw new Error("Foto no válida");
-        nuevas.push(foto);
-      }
+      const nuevas = await comprimirFotos(files, signal);
       if (vivo.current && !c.signal.aborted) setFotos((prev) => [...prev, ...nuevas]);
     } catch {
-      if (vivo.current && !c.signal.aborted)
-        setErrorLocal(
-          "No pudimos procesar las fotos. Usa JPG, PNG o WebP de hasta 12 MB y vuelve a intentarlo.",
-        );
+      reportarErrorFotos(c);
     } finally {
       photoLock.current = false;
       if (vivo.current) setProcesando(false);
@@ -227,4 +225,14 @@ function FormResena({ item }: { item: CompraResenable }) {
       </button>
     </form>
   );
+}
+
+async function comprimirFotos(files: File[], signal: AbortSignal) {
+  const nuevas: string[] = [];
+  for (const file of files) {
+    const foto = await comprimirImagen(file, 1024, 0.7, signal);
+    if (!fotoResenaValida(foto)) throw new Error("Foto no válida");
+    nuevas.push(foto);
+  }
+  return nuevas;
 }

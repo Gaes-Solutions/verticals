@@ -11,6 +11,20 @@ export function AuthForm({
   modo,
   destino,
 }: { modo: "login" | "registro"; destino?: string | undefined }) {
+  const textos = {
+    login: {
+      kicker: "QUÉ BUENO VERTE",
+      titulo: "Iniciar sesión",
+      password: "current-password",
+      enviar: "Entrar",
+    },
+    registro: {
+      kicker: "EMPECEMOS",
+      titulo: "Crear cuenta",
+      password: "new-password",
+      enviar: "Crear cuenta",
+    },
+  }[modo];
   const router = useRouter();
   const pending = useRef(false);
   const [nombre, setNombre] = useState("");
@@ -78,10 +92,8 @@ export function AuthForm({
         </Link>
       </aside>
       <div className="store-auth-form">
-        <p className="store-kicker">{modo === "registro" ? "EMPECEMOS" : "QUÉ BUENO VERTE"}</p>
-        <h1 className="mb-6 text-2xl font-bold">
-          {modo === "registro" ? "Crear cuenta" : "Iniciar sesión"}
-        </h1>
+        <p className="store-kicker">{textos.kicker}</p>
+        <h1 className="mb-6 text-2xl font-bold">{textos.titulo}</h1>
         {siguiente === "/checkout" && (
           <p className="mb-5 text-sm text-slate-600">
             Inicia sesión para retomar tu compra. Conservamos tu carrito y los datos de este
@@ -122,7 +134,7 @@ export function AuthForm({
               <input
                 id="account-password"
                 type={mostrarPassword ? "text" : "password"}
-                autoComplete={modo === "registro" ? "new-password" : "current-password"}
+                autoComplete={textos.password}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -153,7 +165,7 @@ export function AuthForm({
             disabled={cargando || passkeyBusy}
             className="gx-btn-primary w-full"
           >
-            {cargando ? "Procesando…" : modo === "registro" ? "Crear cuenta" : "Entrar"}
+            {cargando ? "Procesando…" : textos.enviar}
           </button>
           {modo === "login" && (
             <p className="text-right text-sm">
@@ -166,24 +178,30 @@ export function AuthForm({
         {modo === "login" && (
           <PasskeyLogin destino={destino} disabled={cargando} onBusyChange={handlePasskeyBusy} />
         )}
-        <p className="mt-4 text-center text-sm text-slate-500">
-          {modo === "registro" ? (
-            <>
-              ¿Ya tienes cuenta?{" "}
-              <Link href={`/cuenta/login${retorno}`} className="font-medium text-marca">
-                Inicia sesión
-              </Link>
-            </>
-          ) : (
-            <>
-              ¿No tienes cuenta?{" "}
-              <Link href={`/cuenta/registro${retorno}`} className="font-medium text-marca">
-                Regístrate
-              </Link>
-            </>
-          )}
-        </p>
+        <AccesoAlternativo modo={modo} retorno={retorno} />
       </div>
     </div>
+  );
+}
+
+function AccesoAlternativo({ modo, retorno }: { modo: "login" | "registro"; retorno: string }) {
+  return (
+    <p className="mt-4 text-center text-sm text-slate-500">
+      {modo === "registro" ? (
+        <>
+          ¿Ya tienes cuenta?{" "}
+          <Link href={`/cuenta/login${retorno}`} className="font-medium text-marca">
+            Inicia sesión
+          </Link>
+        </>
+      ) : (
+        <>
+          ¿No tienes cuenta?{" "}
+          <Link href={`/cuenta/registro${retorno}`} className="font-medium text-marca">
+            Regístrate
+          </Link>
+        </>
+      )}
+    </p>
   );
 }

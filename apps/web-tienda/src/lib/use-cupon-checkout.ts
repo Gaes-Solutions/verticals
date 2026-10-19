@@ -12,6 +12,22 @@ class ErrorConsultaCupon extends Error {
     super(errorCupon(status));
   }
 }
+async function consultarCupon(
+  normalized: string,
+  subtotal: string,
+  signal: AbortSignal,
+): Promise<CuponEvaluado> {
+  const params = new URLSearchParams({ codigo: normalized, subtotal });
+  const res = await fetch(`/api/cupon?${params}`, { cache: "no-store", signal });
+  const data: unknown = await res.json().catch(() => null);
+  signal.throwIfAborted();
+  if (!res.ok) throw new ErrorConsultaCupon(res.status);
+  if (!esCuponEvaluado(data, normalized, subtotal)) throw new ErrorConsultaCupon(502);
+  return data;
+}
+function mensajeConsultaCupon(error: unknown): string {
+  return error instanceof ErrorConsultaCupon ? error.message : errorCupon(503);
+}
 interface Context {
   owner: string;
   contexto: string;
@@ -19,8 +35,9 @@ interface Context {
   habilitado: boolean;
 }
 export function useCuponCheckout({ owner, contexto, subtotal, habilitado }: Context) {
-  const [entrada, setEntrada] = useState({ owner, codigo: "" });
-  const codigo = habilitado && entrada.owner === owner ? entrada.codigo : "";
+  const inputKey = JSON.stringify([owner, habilitado]);
+  const [entrada, setEntrada] = useState({ contexto: inputKey, codigo: "" });
+  const codigo = habilitado && entrada.contexto === inputKey ? entrada.codigo : "";
   const [resultado, setResultado] = useState<{
     contexto: string;
     codigo: string;
@@ -40,6 +57,7 @@ export function useCuponCheckout({ owner, contexto, subtotal, habilitado }: Cont
     setPending(null);
   }, []);
   useEffect(() => {
+    lastKey.current = activeKey;
     cancelar();
     setResultado(null);
     setFallo(null);
@@ -50,13 +68,10 @@ export function useCuponCheckout({ owner, contexto, subtotal, habilitado }: Cont
   }, [activeKey, cancelar]);
   useEffect(() => {
     cancelar();
-    setEntrada({ owner, codigo: "" });
+    setEntrada({ contexto: inputKey, codigo: "" });
     setResultado(null);
     setFallo(null);
-  }, [owner, habilitado, cancelar]);
-  useEffect(() => {
-    lastKey.current = activeKey;
-  }, [activeKey]);
+  }, [inputKey, cancelar]);
   const info =
     habilitado && resultado?.contexto === activeKey && resultado.codigo === normalized
       ? resultado.info
@@ -65,7 +80,7 @@ export function useCuponCheckout({ owner, contexto, subtotal, habilitado }: Cont
   const validando = pending?.contexto === activeKey && pending.codigo === normalized;
   function cambiar(value: string) {
     cancelar();
-    setEntrada({ owner, codigo: value.toUpperCase() });
+    setEntrada({ contexto: inputKey, codigo: value.toUpperCase() });
     setResultado(null);
     setFallo(null);
   }
@@ -82,24 +97,20 @@ export function useCuponCheckout({ owner, contexto, subtotal, habilitado }: Cont
       return;
     }
     const c = new AbortController();
+    const vigente = () => !c.signal.aborted && current.current === c && lastKey.current === key;
     current.current = c;
     setPending({ contexto: key, codigo: normalized });
     try {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(15000)]);
-      const params = new URLSearchParams({ codigo: normalized, subtotal });
-      const res = await fetch(`/api/cupon?${params}`, { cache: "no-store", signal });
-      const data: unknown = await res.json().catch(() => null);
+      const data = await consultarCupon(normalized, subtotal, signal);
       signal.throwIfAborted();
-      if (!res.ok) throw new ErrorConsultaCupon(res.status);
-      if (!esCuponEvaluado(data, normalized, subtotal)) throw new ErrorConsultaCupon(502);
-      if (current.current === c && lastKey.current === key)
-        setResultado({ contexto: key, codigo: normalized, info: data });
+      if (vigente()) setResultado({ contexto: key, codigo: normalized, info: data });
     } catch (e) {
-      if (!c.signal.aborted && current.current === c && lastKey.current === key)
+      if (vigente())
         setFallo({
           contexto: key,
           codigo: normalized,
-          mensaje: e instanceof ErrorConsultaCupon ? e.message : errorCupon(503),
+          mensaje: mensajeConsultaCupon(e),
         });
     } finally {
       if (current.current === c) {

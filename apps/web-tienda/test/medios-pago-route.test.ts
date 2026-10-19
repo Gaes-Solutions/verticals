@@ -129,6 +129,24 @@ describe("saved card response boundary", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ok: true })));
     expect((await remove()).status).toBe(502);
   });
+  it("does not confirm card data when the request aborts while reading its body", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => {
+          controller.abort();
+          return [MEDIO];
+        },
+      }),
+    );
+    const response = await GET(req({}, controller.signal));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.text()).not.toContain(MEDIO.last4);
+  });
   it("stops aborted requests before a mutation", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

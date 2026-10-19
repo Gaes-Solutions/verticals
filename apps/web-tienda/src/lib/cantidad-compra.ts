@@ -20,13 +20,7 @@ export function cantidadCompra(
         ? "Escribe una cantidad mayor que cero, hasta 100000 y con hasta 3 decimales."
         : "Escribe una cantidad entera entre 1 y 100000.",
     };
-  if (
-    !Number.isFinite(actual) ||
-    actual < 0 ||
-    actual > 100000 ||
-    (!fraccion && !Number.isInteger(actual)) ||
-    Math.abs(actual * 1000 - Math.round(actual * 1000)) > 0.000001
-  )
+  if (cantidadActualInvalida(actual, fraccion))
     return {
       ok: false as const,
       mensaje: "Revisa la cantidad que ya tienes en tu carrito antes de agregar más.",
@@ -53,4 +47,14 @@ export function cantidadCompra(
     };
   }
   return { ok: true as const, cantidad, total };
+}
+
+function cantidadActualInvalida(actual: number, fraccion: boolean) {
+  return (
+    !Number.isFinite(actual) ||
+    actual < 0 ||
+    actual > 100000 ||
+    (!fraccion && !Number.isInteger(actual)) ||
+    Math.abs(actual * 1000 - Math.round(actual * 1000)) > 0.000001
+  );
 }

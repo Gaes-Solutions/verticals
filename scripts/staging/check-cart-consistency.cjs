@@ -30,8 +30,8 @@ const remote = (qty) => ({
     import {HeaderAcciones} from './src/components/header-acciones';
     import {CarritoFlotante} from './src/components/carrito-flotante';
     import CarritoPage from './src/app/carrito/page';
-    import {agregar,guardarCarrito,leerCarrito} from './src/lib/carrito-store';
-    function QA(){const [owner,setOwner]=useState(new URLSearchParams(location.search).get('owner'));window.__owner=owner;window.__switchOwner=setOwner;window.__read=leerCarrito;window.__edit=guardarCarrito;window.__add=()=>agregar(${JSON.stringify(localLine)});return <><HeaderAcciones/><CarritoSincronizado owner={owner}/><CarritoPage/><CarritoFlotante/></>};createRoot(document.getElementById('root')).render(<QA/>);`,
+    import {agregar,guardarCarrito,leerCarrito,esperarCarritoGuardado} from './src/lib/carrito-store';
+    function QA(){const [owner,setOwner]=useState(new URLSearchParams(location.search).get('owner'));window.__owner=owner;window.__switchOwner=setOwner;window.__read=leerCarrito;window.__flush=esperarCarritoGuardado;window.__edit=guardarCarrito;window.__add=()=>agregar(${JSON.stringify(localLine)});return <><HeaderAcciones/><CarritoSincronizado owner={owner}/><CarritoPage/><CarritoFlotante/></>};createRoot(document.getElementById('root')).render(<QA/>);`,
     },
     bundle: true,
     write: false,
@@ -198,12 +198,115 @@ const remote = (qty) => ({
         .toBeNull();
       assert.equal((await page.evaluate(() => window.__read()))[0].cantidad, 2);
     });
+    await test("checkout flush saves edits before resolving and preserves selection on failure", async (context) => {
+      const mode = { get: "valid", post: "valid" };
+      const { page, posts } = await pageFor(context, ownerA, mode);
+      await expect(
+        page.getByRole("link", { name: "Carrito, 1 productos", exact: true }),
+      ).toBeVisible();
+      await page.evaluate(async () => {
+        window.__add();
+        await window.__flush();
+      });
+      assert.equal(posts.length, 1);
+      assert.equal(posts[0].items[0].cantidad, 2);
+      assert.equal(
+        await page.evaluate(
+          (owner) => localStorage.getItem(`gaespos_carrito_pendiente:${owner}`),
+          ownerA,
+        ),
+        null,
+      );
+      mode.post = "network";
+      const result = await page.evaluate(async () => {
+        window.__add();
+        try {
+          await window.__flush();
+          return "unexpected success";
+        } catch (error) {
+          return error.message;
+        }
+      });
+      assert.match(result, /cambios por sincronizar/);
+      assert.equal((await page.evaluate(() => window.__read()))[0].cantidad, 3);
+      assert.equal(
+        (
+          await page.evaluate(
+            (owner) => JSON.parse(localStorage.getItem(`gaespos_carrito_pendiente:${owner}`)),
+            ownerA,
+          )
+        ).items[0].cantidad,
+        3,
+      );
+      mode.post = "valid";
+      await page.evaluate(() => window.__flush());
+      assert.equal(
+        await page.evaluate(
+          (owner) => localStorage.getItem(`gaespos_carrito_pendiente:${owner}`),
+          ownerA,
+        ),
+        null,
+      );
+    });
+    await test("durable reload resumes only the matching remote version", async (context) => {
+      await context.addInitScript(
+        ({ owner, line }) => {
+          localStorage.setItem(
+            `gaespos_carrito_pendiente:${owner}`,
+            JSON.stringify({ version: "qa-v1", items: [{ ...line, cantidad: 2 }] }),
+          );
+        },
+        { owner: ownerA, line: localLine },
+      );
+      const { page, posts } = await pageFor(context, ownerA);
+      await expect.poll(() => posts.length).toBe(1);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (owner) => localStorage.getItem(`gaespos_carrito_pendiente:${owner}`),
+            ownerA,
+          ),
+        )
+        .toBeNull();
+      assert.equal(posts[0].expectedVersion, "qa-v1");
+      assert.equal((await page.evaluate(() => window.__read()))[0].cantidad, 2);
+    });
+    await test("conflicting durable reload keeps both selections without an automatic overwrite", async (context) => {
+      await context.addInitScript(
+        ({ owner, line }) => {
+          localStorage.setItem(
+            `gaespos_carrito_pendiente:${owner}`,
+            JSON.stringify({ version: "older-version", items: [{ ...line, cantidad: 2 }] }),
+          );
+        },
+        { owner: ownerA, line: localLine },
+      );
+      const { page, posts } = await pageFor(context, ownerA);
+      await expect(page.getByText(/El carrito cambió en otro dispositivo/)).toBeVisible();
+      assert.equal(posts.length, 0);
+      assert.equal((await page.evaluate(() => window.__read()))[0].cantidad, 1);
+      const pending = await page.evaluate(
+        (owner) => JSON.parse(localStorage.getItem(`gaespos_carrito_pendiente:${owner}`)),
+        ownerA,
+      );
+      assert.equal(pending.items[0].cantidad, 2);
+      const flush = await page.evaluate(async () => {
+        try {
+          await window.__flush();
+          return "unexpected success";
+        } catch (error) {
+          return error.message;
+        }
+      });
+      assert.match(flush, /cambios por sincronizar/);
+      assert.equal(posts.length, 0);
+    });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
   }
   if (failed) process.exitCode = 1;
-  else console.log("PASS 4 cart consistency groups; no external API calls or business writes");
+  else console.log("PASS 7 cart consistency groups; no external API calls or business writes");
 })().catch((e) => {
   console.error(`Cart QA setup failed: ${e.name}`);
   process.exitCode = 1;

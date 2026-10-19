@@ -1,6 +1,6 @@
 "use client";
 
-import { etiquetaPedido } from "@/lib/seguimiento-contract";
+import { type PedidoSeguimiento, etiquetaPedido } from "@/lib/seguimiento-contract";
 import { useConsultaPedido } from "@/lib/use-consulta-pedido";
 import { Check, CircleAlert, LoaderCircle } from "lucide-react";
 import Link from "next/link";
@@ -28,16 +28,7 @@ function GraciasInner() {
 
   if (!folio) return null;
   const cancelado = pedido?.statusPedido === "cancelado";
-  const recogida = pedido?.metodoEnvio === "click_collect";
-  const titulo = !pedido
-    ? buscando
-      ? "Verificando tu pedido"
-      : "Consulta tu pedido"
-    : cancelado
-      ? "Tu pedido fue cancelado"
-      : recogida
-        ? "Tu pedido quedó registrado"
-        : "¡Gracias por tu compra!";
+  const titulo = tituloGracias(pedido, buscando);
   const Icono = buscando ? LoaderCircle : pedido && !cancelado ? Check : CircleAlert;
   const seguimiento = `/seguimiento?${new URLSearchParams({ folio: pedido?.folioPublico ?? folio, email })}`;
 
@@ -54,6 +45,66 @@ function GraciasInner() {
         />
       </div>
       <h1 className="font-bold text-3xl">{titulo}</h1>
+      <ResultadoGracias
+        pedido={pedido}
+        buscando={buscando}
+        error={error}
+        email={email}
+        reintentar={() => void consultar(folio, email)}
+      />
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Link href={seguimiento} className="gx-btn-primary min-h-11">
+          Rastrear mi pedido
+        </Link>
+        <Link href="/cuenta" className="gx-btn-secondary min-h-11">
+          Mi cuenta
+        </Link>
+        <Link href="/" className="gx-btn-secondary min-h-11">
+          Seguir comprando
+        </Link>
+      </div>
+    </div>
+  );
+}
+export default function GraciasPage() {
+  return (
+    <Suspense fallback={<p>Consultando pedido…</p>}>
+      <GraciasInner />
+    </Suspense>
+  );
+}
+
+function tituloGracias(pedido: PedidoSeguimiento | null, buscando: boolean) {
+  const cancelado = pedido?.statusPedido === "cancelado";
+  const recogida = pedido?.metodoEnvio === "click_collect";
+  return !pedido
+    ? buscando
+      ? "Verificando tu pedido"
+      : "Consulta tu pedido"
+    : cancelado
+      ? "Tu pedido fue cancelado"
+      : recogida
+        ? "Tu pedido quedó registrado"
+        : "¡Gracias por tu compra!";
+}
+
+function ResultadoGracias({
+  pedido,
+  buscando,
+  error,
+  email,
+  reintentar,
+}: {
+  pedido: PedidoSeguimiento | null;
+  buscando: boolean;
+  error: string | null;
+  email: string;
+  reintentar: () => void;
+}) {
+  const cancelado = pedido?.statusPedido === "cancelado";
+  const recogida = pedido?.metodoEnvio === "click_collect";
+  return (
+    <>
       {pedido ? (
         <>
           <p className="mt-2 break-words text-slate-600">
@@ -89,11 +140,7 @@ function GraciasInner() {
             </p>
           )}
           {email.trim() && (
-            <button
-              type="button"
-              onClick={() => void consultar(folio, email)}
-              className="gx-btn-primary mt-4 min-h-12"
-            >
+            <button type="button" onClick={reintentar} className="gx-btn-primary mt-4 min-h-12">
               Reintentar consulta
             </button>
           )}
@@ -103,24 +150,6 @@ function GraciasInner() {
           </p>
         </div>
       )}
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <Link href={seguimiento} className="gx-btn-primary min-h-11">
-          Rastrear mi pedido
-        </Link>
-        <Link href="/cuenta" className="gx-btn-secondary min-h-11">
-          Mi cuenta
-        </Link>
-        <Link href="/" className="gx-btn-secondary min-h-11">
-          Seguir comprando
-        </Link>
-      </div>
-    </div>
-  );
-}
-export default function GraciasPage() {
-  return (
-    <Suspense fallback={<p>Consultando pedido…</p>}>
-      <GraciasInner />
-    </Suspense>
+    </>
   );
 }

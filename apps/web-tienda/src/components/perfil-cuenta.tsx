@@ -13,6 +13,9 @@ interface Me {
 
 /** A password timeout is ambiguous: never retry it automatically. */
 function useGuardarCuenta(password: boolean) {
+  const configuracion = password
+    ? { endpoint: "cambiar-password", method: "POST", exito: "Contraseña actualizada" }
+    : { endpoint: "perfil", method: "PUT", exito: "Datos guardados" };
   const pendiente = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [incierto, setIncierto] = useState(false);
@@ -24,6 +27,13 @@ function useGuardarCuenta(password: boolean) {
     },
     [],
   );
+  function reportarFallo(c: AbortController, status: number) {
+    if (!c.signal.aborted && pendiente.current === c) {
+      setMsg({ ok: false, texto: errorPerfil(status, password) });
+      if (password && status !== 400 && status !== 401 && status !== 403 && status !== 429)
+        setIncierto(true);
+    }
+  }
   async function guardar(body: Record<string, string>) {
     if (pendiente.current || incierto) return false;
     const c = new AbortController();
@@ -33,8 +43,8 @@ function useGuardarCuenta(password: boolean) {
     let status = 503;
     try {
       const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
-      const res = await fetch(`/api/cuenta/${password ? "cambiar-password" : "perfil"}`, {
-        method: password ? "POST" : "PUT",
+      const res = await fetch(`/api/cuenta/${configuracion.endpoint}`, {
+        method: configuracion.method,
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         signal,
@@ -44,14 +54,10 @@ function useGuardarCuenta(password: boolean) {
       signal.throwIfAborted();
       status = res.ok ? 502 : res.status;
       if (!res.ok || !esGuardadoCuenta(data)) throw new Error("unconfirmed");
-      setMsg({ ok: true, texto: password ? "Contraseña actualizada" : "Datos guardados" });
+      setMsg({ ok: true, texto: configuracion.exito });
       return true;
     } catch {
-      if (!c.signal.aborted && pendiente.current === c) {
-        setMsg({ ok: false, texto: errorPerfil(status, password) });
-        if (password && status !== 400 && status !== 401 && status !== 403 && status !== 429)
-          setIncierto(true);
-      }
+      reportarFallo(c, status);
       return false;
     } finally {
       if (pendiente.current === c) {

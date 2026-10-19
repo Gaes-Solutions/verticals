@@ -180,11 +180,7 @@ export function RecuperarCarrito({ codigo }: { codigo: string }) {
               disabled={guardando || !actual.firma || (actual.cantidad > 0 && !confirmado)}
               className="gx-btn-primary mt-4 min-h-11 w-full"
             >
-              {guardando
-                ? "Abriendo carrito…"
-                : actual.cantidad > 0
-                  ? "Reemplazar mi carrito"
-                  : "Llevar al carrito"}
+              {textoRecuperacion(guardando, actual.cantidad)}
             </button>
           </div>
         ) : (
@@ -207,4 +203,9 @@ export function RecuperarCarrito({ codigo }: { codigo: string }) {
       </nav>
     </section>
   );
+}
+
+function textoRecuperacion(guardando: boolean, cantidadActual: number) {
+  if (guardando) return "Abriendo carrito…";
+  return cantidadActual > 0 ? "Reemplazar mi carrito" : "Llevar al carrito";
 }

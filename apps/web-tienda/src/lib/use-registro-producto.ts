@@ -22,6 +22,18 @@ export function useRegistroProducto() {
       current.current = null;
     };
   }, []);
+  function reportarFallo(
+    c: AbortController,
+    e: unknown,
+    alFallar?: (e: ErrorRegistroProducto) => void,
+  ) {
+    if (current.current === c && !c.signal.aborted) {
+      const failure = e instanceof ErrorRegistroProducto ? e : new ErrorRegistroProducto(503);
+      setError(failure.message);
+      setFase([400, 401, 403, 404, 409, 422, 429].includes(failure.status) ? "idle" : "incierto");
+      alFallar?.(failure);
+    }
+  }
   async function enviar(
     path: string,
     body: unknown,
@@ -34,32 +46,12 @@ export function useRegistroProducto() {
     setFase("enviando");
     setError(null);
     try {
-      const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
-      const res = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-        cache: "no-store",
-      });
-      const data: unknown = await res.json().catch(() => null);
-      signal.throwIfAborted();
-      if (!res.ok)
-        throw new ErrorRegistroProducto(
-          res.status,
-          objetoRegistro(data) && typeof data.code === "string" ? data.code : undefined,
-        );
-      if (!validar(data)) throw new ErrorRegistroProducto(502);
+      await registrarProducto(path, body, validar, c.signal);
       if (current.current !== c || c.signal.aborted) return false;
       setFase("enviado");
       return true;
     } catch (e) {
-      if (current.current === c && !c.signal.aborted) {
-        const failure = e instanceof ErrorRegistroProducto ? e : new ErrorRegistroProducto(503);
-        setError(failure.message);
-        setFase([400, 401, 403, 404, 409, 422, 429].includes(failure.status) ? "idle" : "incierto");
-        alFallar?.(failure);
-      }
+      reportarFallo(c, e, alFallar);
       return false;
     } finally {
       if (current.current === c) current.current = null;
@@ -77,4 +69,28 @@ export function useRegistroProducto() {
       }
     },
   };
+}
+
+async function registrarProducto(
+  path: string,
+  body: unknown,
+  validar: (value: unknown) => boolean,
+  controllerSignal: AbortSignal,
+) {
+  const signal = AbortSignal.any([controllerSignal, AbortSignal.timeout(20000)]);
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  const data: unknown = await res.json().catch(() => null);
+  signal.throwIfAborted();
+  if (!res.ok)
+    throw new ErrorRegistroProducto(
+      res.status,
+      objetoRegistro(data) && typeof data.code === "string" ? data.code : undefined,
+    );
+  if (!validar(data)) throw new ErrorRegistroProducto(502);
 }

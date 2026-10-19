@@ -23,10 +23,14 @@ export function entradaAccion(
   value: unknown,
 ): Record<string, unknown> | null {
   if (!esObjetoAccion(value)) return null;
-  if (accion === "cancelar") {
-    const motivo = typeof value.motivo === "string" ? value.motivo.trim() : "";
-    return motivo.length >= 3 && motivo.length <= 500 ? { motivo } : null;
-  }
+  if (accion === "cancelar") return entradaCancelacion(value);
+  return entradaDevolucion(value);
+}
+function entradaCancelacion(value: Record<string, unknown>) {
+  const motivo = typeof value.motivo === "string" ? value.motivo.trim() : "";
+  return motivo.length >= 3 && motivo.length <= 500 ? { motivo } : null;
+}
+function entradaDevolucion(value: Record<string, unknown>) {
   if (
     !MOTIVOS_DEVOLUCION.some((m) => m === value.motivo) ||
     (value.descripcion !== undefined &&

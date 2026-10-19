@@ -99,9 +99,12 @@ export function NotificacionesCliente() {
     };
     return () => es.close();
   }, [cargar, conSesion]);
+  function marcaNoPermitida(id?: string) {
+    if (escribiendo.current || !valido || incierto || !historial?.noLeidas) return true;
+    return !!(id && !historial.items.some((n) => n.id === id && !n.leida));
+  }
   async function marcar(id?: string) {
-    if (escribiendo.current || !valido || incierto || !historial?.noLeidas) return;
-    if (id && !historial.items.some((n) => n.id === id && !n.leida)) return;
+    if (marcaNoPermitida(id)) return;
     escribiendo.current = true;
     control.current?.abort();
     const c = new AbortController();
@@ -110,14 +113,7 @@ export function NotificacionesCliente() {
     setError(null);
     const signal = AbortSignal.any([c.signal, AbortSignal.timeout(20000)]);
     try {
-      const res = await fetch(
-        `/api/cuenta/notificaciones/${id ? `${encodeURIComponent(id)}/leer` : "leer-todas"}`,
-        { method: "POST", cache: "no-store", signal },
-      );
-      if (!res.ok) throw new FalloNotificacion(res.status);
-      const data: unknown = await res.json().catch(() => null);
-      if (!(id ? esLecturaNotificacion(data) : esLecturaTodas(data)))
-        throw new FalloNotificacion(502);
+      await marcarLectura(id, signal);
       // ok:false can mean already read or unavailable. Always reconcile, never decrement blindly.
       const actual = await obtenerHistorial(signal);
       if (activo(c)) aplicar(actual);
@@ -260,4 +256,14 @@ export function NotificacionesCliente() {
       )}
     </>
   );
+}
+
+async function marcarLectura(id: string | undefined, signal: AbortSignal) {
+  const res = await fetch(
+    `/api/cuenta/notificaciones/${id ? `${encodeURIComponent(id)}/leer` : "leer-todas"}`,
+    { method: "POST", cache: "no-store", signal },
+  );
+  if (!res.ok) throw new FalloNotificacion(res.status);
+  const data: unknown = await res.json().catch(() => null);
+  if (!(id ? esLecturaNotificacion(data) : esLecturaTodas(data))) throw new FalloNotificacion(502);
 }

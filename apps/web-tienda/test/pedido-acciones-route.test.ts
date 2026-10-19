@@ -145,6 +145,19 @@ describe("customer order action boundary", () => {
     });
     expect(fetch.mock.calls[0][1].signal).toBe(fetch.mock.calls[1][1].signal);
   });
+  it("return history network errors stay private 503 responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ ...pedido, statusPedido: "entregado" }))
+        .mockRejectedValueOnce(new Error("private history network")),
+    );
+    const res = await devolucion.GET(req({}), context());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(await res.text()).not.toContain("private history network");
+  });
   it("existing return prevents another submission", async () => {
     vi.stubGlobal(
       "fetch",

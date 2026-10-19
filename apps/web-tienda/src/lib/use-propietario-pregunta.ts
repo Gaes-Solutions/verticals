@@ -26,15 +26,7 @@ export function usePropietarioPregunta(productoId: string) {
         setOwner(null);
         return;
       }
-      if (
-        !res.ok ||
-        !objetoRegistro(data) ||
-        !idRegistro(data.clienteId) ||
-        typeof data.tenantSlug !== "string" ||
-        !data.tenantSlug
-      )
-        throw new Error();
-      setOwner(data.clienteId);
+      setOwner(propietarioRespuesta(data, res.ok));
     } catch {
       if (current.current === c && !c.signal.aborted) setError(true);
     } finally {
@@ -66,4 +58,16 @@ export function usePropietarioPregunta(productoId: string) {
     };
   }, [cargar]);
   return { owner, verificando, error, cargar };
+}
+
+function propietarioRespuesta(data: unknown, ok: boolean): string {
+  if (
+    !ok ||
+    !objetoRegistro(data) ||
+    !idRegistro(data.clienteId) ||
+    typeof data.tenantSlug !== "string" ||
+    !data.tenantSlug
+  )
+    throw new Error();
+  return data.clienteId;
 }

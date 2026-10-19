@@ -4,7 +4,7 @@ import { useRepetirPedido } from "@/lib/use-repetir-pedido";
 import type { LineaVerificada } from "@/lib/verificar-carrito-contract";
 import { Check, ShoppingBasket } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import { DialogoTienda } from "./dialogo-tienda";
 
 /** A delivered order is a starting selection, never a promise of historical prices or stock. */
@@ -18,15 +18,7 @@ export function RepetirDespensa() {
   if (!p.datos && !p.aviso) return null;
   const ocupado = p.fase === "consultando" || p.fase === "confirmando";
   const precios = new Map(p.vista?.precios.map((i) => [i.varianteId, i]));
-  const total =
-    p.datos?.pedido.items.reduce(
-      (sum, i) =>
-        sum +
-        (p.vista?.seleccionadas.includes(i.varianteId)
-          ? Number(precios.get(i.varianteId)?.precio ?? 0) * i.cantidad
-          : 0),
-      0,
-    ) ?? 0;
+  const total = totalSeleccion(p, precios);
   return (
     <section
       aria-label="Repetir tu despensa"
@@ -49,40 +41,7 @@ export function RepetirDespensa() {
             </p>
           </div>
         </div>
-        {p.fase === "exito" ? (
-          <output className="flex items-center gap-2 text-sm font-semibold">
-            <Check aria-hidden="true" size={16} /> Selección agregada ·{" "}
-            <Link
-              ref={resultado}
-              href="/carrito"
-              className="inline-flex min-h-11 items-center underline underline-offset-2"
-            >
-              Ver carrito
-            </Link>
-          </output>
-        ) : (
-          <button
-            ref={trigger}
-            type="button"
-            disabled={ocupado}
-            onClick={
-              p.actualizarPagina
-                ? () => window.location.reload()
-                : p.datos
-                  ? p.revisar
-                  : p.reintentar
-            }
-            className="min-h-11 shrink-0 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-brand-dark shadow disabled:cursor-wait disabled:opacity-70"
-          >
-            {ocupado
-              ? "Consultando…"
-              : p.actualizarPagina
-                ? "Actualizar página"
-                : p.datos
-                  ? "Revisar productos"
-                  : "Volver a intentar"}
-          </button>
-        )}
+        <AccionRepetir p={p} ocupado={ocupado} trigger={trigger} resultado={resultado} />
       </div>
       {!p.vista && p.aviso && (
         <p role="alert" className="mt-3 text-sm">
@@ -195,5 +154,68 @@ function LineaPedido({
         </span>
       </label>
     </li>
+  );
+}
+
+function totalSeleccion(
+  p: ReturnType<typeof useRepetirPedido>,
+  precios: Map<string, LineaVerificada>,
+) {
+  return (
+    p.datos?.pedido.items.reduce(
+      (sum, i) =>
+        sum +
+        (p.vista?.seleccionadas.includes(i.varianteId)
+          ? Number(precios.get(i.varianteId)?.precio ?? 0) * i.cantidad
+          : 0),
+      0,
+    ) ?? 0
+  );
+}
+
+function AccionRepetir({
+  p,
+  ocupado,
+  trigger,
+  resultado,
+}: {
+  p: ReturnType<typeof useRepetirPedido>;
+  ocupado: boolean;
+  trigger: RefObject<HTMLButtonElement | null>;
+  resultado: RefObject<HTMLAnchorElement | null>;
+}) {
+  return (
+    <>
+      {p.fase === "exito" ? (
+        <output className="flex items-center gap-2 text-sm font-semibold">
+          <Check aria-hidden="true" size={16} /> Selección agregada ·{" "}
+          <Link
+            ref={resultado}
+            href="/carrito"
+            className="inline-flex min-h-11 items-center underline underline-offset-2"
+          >
+            Ver carrito
+          </Link>
+        </output>
+      ) : (
+        <button
+          ref={trigger}
+          type="button"
+          disabled={ocupado}
+          onClick={
+            p.actualizarPagina ? () => window.location.reload() : p.datos ? p.revisar : p.reintentar
+          }
+          className="min-h-11 shrink-0 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-brand-dark shadow disabled:cursor-wait disabled:opacity-70"
+        >
+          {ocupado
+            ? "Consultando…"
+            : p.actualizarPagina
+              ? "Actualizar página"
+              : p.datos
+                ? "Revisar productos"
+                : "Volver a intentar"}
+        </button>
+      )}
+    </>
   );
 }

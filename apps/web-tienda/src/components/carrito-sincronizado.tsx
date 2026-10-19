@@ -96,87 +96,138 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
       if (!esRespuestaCarrito(data, owner)) throw new Error(SYNC_ERROR);
       return data;
     }
-    async function sync() {
-      if (!owner || !alive || busy || document.visibilityState === "hidden") return;
+    function recuperarSeleccion(cart: Cart | null, remoteVersion: string | null) {
+      let saved = leerCarritoPendiente(leerAlmacenamiento(pendingKey));
+      const guestRaw = leerAlmacenamiento("gaespos_carrito");
+      const guest = leerLineasGuardadas(guestRaw);
+      if (!saved && !cart?.items.length && guest.length > 0) {
+        // Move the guest selection into this empty account durably before clearing it.
+        saved = { version: remoteVersion, items: guest };
+        localStorage.setItem(pendingKey, JSON.stringify(saved));
+        if (leerAlmacenamiento("gaespos_carrito") === guestRaw)
+          localStorage.removeItem("gaespos_carrito");
+      }
+      return saved;
+    }
+    function restaurarSeleccion(
+      saved: ReturnType<typeof leerCarritoPendiente>,
+      cart: Cart | null,
+      remoteVersion: string | null,
+      start: number,
+    ) {
+      if (saved && saved.version !== undefined && saved.version === remoteVersion) {
+        // Resume only against the original version; the API still enforces CAS.
+        version = remoteVersion;
+        coupon = cart?.cuponCodigo ?? null;
+        fijarCarritoVersion(version);
+        recibirCarrito(saved.items);
+        dirty = true;
+        revision++;
+        setLocal([]);
+        setMessage("Guardando carrito…");
+      } else {
+        if (saved || revision !== start) {
+          setLocal(saved?.items ?? leerCarrito());
+          dirty = false;
+          setMessage(
+            "El carrito cambió en otro dispositivo. Puedes agregar tu selección guardada abajo.",
+          );
+        } else setMessage("");
+        apply(cart);
+      }
+    }
+    async function descargarCarrito(start: number) {
+      const result = await request();
+      if (!result || !alive) return;
+      const remoteVersion = result.cart?.version ?? null;
+      const saved = recuperarSeleccion(result.cart, remoteVersion);
+      if (saved && mismasCantidades(saved.items, result.cart?.items ?? [])) {
+        // The server may have saved a POST whose response was lost.
+        localStorage.removeItem(pendingKey);
+        dirty = false;
+        setLocal([]);
+        setMessage("");
+        apply(result.cart);
+      } else {
+        restaurarSeleccion(saved, result.cart, remoteVersion, start);
+      }
+      ready = true;
+    }
+    async function subirCarrito(start: number) {
+      const result = await request({
+        owner,
+        expectedVersion: version,
+        items: leerCarrito().map(({ varianteId, cantidad }) => ({ varianteId, cantidad })),
+        ...(coupon ? { cuponCodigo: coupon } : {}),
+      });
+      if (!result || !alive) return;
+      version = result.cart?.version ?? null;
+      fijarCarritoVersion(version);
+      if (revision === start) {
+        dirty = false;
+        apply(result.cart);
+        localStorage.removeItem(pendingKey);
+        setMessage("");
+      }
+    }
+    function sincronizacionBloqueada() {
+      if (!owner || !alive || busy || document.visibilityState === "hidden") return true;
       // A pending checkout owns its cart; its outcome must be resolved first.
-      if (pathRef.current.startsWith("/checkout") && ready && !dirty) return;
+      return pathRef.current.startsWith("/checkout") && ready && !dirty;
+    }
+    function programarCambiosPendientes(start: number) {
+      busy = false;
+      if (alive && dirty && ready && revision !== start) timer = setTimeout(() => void sync(), 600);
+    }
+    function mostrarErrorSincronizacion(error: unknown) {
+      if (!alive) return;
+      if ((error as { code?: string }).code === "CART_CHANGED") {
+        setLocal(leerCarrito());
+        dirty = false;
+        ready = false;
+      }
+      setMessage(error instanceof Error ? error.message : "No pudimos sincronizar tu carrito.");
+    }
+    async function sync() {
+      if (sincronizacionBloqueada()) return;
       busy = true;
       syncFailed = false;
       const start = revision;
       try {
         if (!ready || !dirty) {
-          const result = await request();
-          if (!result || !alive) return;
-          const remoteVersion = result.cart?.version ?? null;
-          let saved = leerCarritoPendiente(leerAlmacenamiento(pendingKey));
-          const guestRaw = leerAlmacenamiento("gaespos_carrito");
-          const guest = leerLineasGuardadas(guestRaw);
-          if (!saved && !result.cart?.items.length && guest.length > 0) {
-            // Move the guest selection into this empty account durably before clearing it.
-            saved = { version: remoteVersion, items: guest };
-            localStorage.setItem(pendingKey, JSON.stringify(saved));
-            if (leerAlmacenamiento("gaespos_carrito") === guestRaw)
-              localStorage.removeItem("gaespos_carrito");
-          }
-          if (saved && mismasCantidades(saved.items, result.cart?.items ?? [])) {
-            // The server may have saved a POST whose response was lost.
-            localStorage.removeItem(pendingKey);
-            dirty = false;
-            setLocal([]);
-            setMessage("");
-            apply(result.cart);
-          } else if (saved && saved.version !== undefined && saved.version === remoteVersion) {
-            // Resume only against the original version; the API still enforces CAS.
-            version = remoteVersion;
-            coupon = result.cart?.cuponCodigo ?? null;
-            fijarCarritoVersion(version);
-            recibirCarrito(saved.items);
-            dirty = true;
-            revision++;
-            setLocal([]);
-            setMessage("Guardando carrito…");
-          } else {
-            if (saved || revision !== start) {
-              setLocal(saved?.items ?? leerCarrito());
-              dirty = false;
-              setMessage(
-                "El carrito cambió en otro dispositivo. Puedes agregar tu selección guardada abajo.",
-              );
-            } else setMessage("");
-            apply(result.cart);
-          }
-          ready = true;
+          await descargarCarrito(start);
         } else {
-          const result = await request({
-            owner,
-            expectedVersion: version,
-            items: leerCarrito().map(({ varianteId, cantidad }) => ({ varianteId, cantidad })),
-            ...(coupon ? { cuponCodigo: coupon } : {}),
-          });
-          if (!result || !alive) return;
-          version = result.cart?.version ?? null;
-          fijarCarritoVersion(version);
-          if (revision === start) {
-            dirty = false;
-            apply(result.cart);
-            localStorage.removeItem(pendingKey);
-            setMessage("");
-          }
+          await subirCarrito(start);
         }
       } catch (error) {
         syncFailed = true;
-        if (!alive) return;
-        if ((error as { code?: string }).code === "CART_CHANGED") {
-          setLocal(leerCarrito());
-          dirty = false;
-          ready = false;
-        }
-        setMessage(error instanceof Error ? error.message : "No pudimos sincronizar tu carrito.");
+        mostrarErrorSincronizacion(error);
       } finally {
-        busy = false;
-        if (alive && dirty && ready && revision !== start)
-          timer = setTimeout(() => void sync(), 600);
+        programarCambiosPendientes(start);
       }
+    }
+    function esperaPendiente(deadline: number) {
+      return busy && alive && Date.now() < deadline;
+    }
+    function comprobarDisponible(deadline: number) {
+      if (!alive || busy || Date.now() >= deadline)
+        throw new Error("No pudimos terminar de guardar tu carrito. Reintenta antes de pagar.");
+    }
+    function guardadoCompleto() {
+      return ready && !dirty && !leerAlmacenamiento(pendingKey);
+    }
+    function reintentoBloqueado() {
+      return syncFailed || (ready && !dirty && leerAlmacenamiento(pendingKey));
+    }
+    function finalizarGuardado() {
+      clearTimeout(timer);
+      return guardarAntesDeCheckout({
+        esperaPendiente,
+        comprobarDisponible,
+        guardadoCompleto,
+        sync,
+        reintentoBloqueado,
+      });
     }
     configurarCarrito(
       owner,
@@ -190,27 +241,7 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
             timer = setTimeout(() => void sync(), 600);
           }
         : null,
-      owner
-        ? async () => {
-            clearTimeout(timer);
-            const deadline = Date.now() + 20000;
-            for (let pass = 0; pass < 3; pass++) {
-              while (busy && alive && Date.now() < deadline)
-                await new Promise((resolve) => setTimeout(resolve, 30));
-              if (!alive || busy || Date.now() >= deadline)
-                throw new Error(
-                  "No pudimos terminar de guardar tu carrito. Reintenta antes de pagar.",
-                );
-              if (ready && !dirty && !leerAlmacenamiento(pendingKey)) return;
-              await sync();
-              if (syncFailed || (ready && !dirty && leerAlmacenamiento(pendingKey))) break;
-            }
-            if (!ready || dirty || leerAlmacenamiento(pendingKey))
-              throw new Error(
-                "Tu carrito tiene cambios por sincronizar. Actualízalo antes de pagar; tu selección se conserva.",
-              );
-          }
-        : null,
+      owner ? finalizarGuardado : null,
     );
     refreshRef.current = () => void sync();
     void sync();
@@ -317,4 +348,26 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
       )}
     </div>
   );
+}
+
+/** Keep each pre-check synchronous; only a busy cart or sync itself may yield. */
+async function guardarAntesDeCheckout(state: {
+  esperaPendiente: (deadline: number) => boolean;
+  comprobarDisponible: (deadline: number) => void;
+  guardadoCompleto: () => boolean;
+  sync: () => Promise<void>;
+  reintentoBloqueado: () => unknown;
+}) {
+  const deadline = Date.now() + 20000;
+  for (let pass = 0; pass < 3; pass++) {
+    while (state.esperaPendiente(deadline)) await new Promise((resolve) => setTimeout(resolve, 30));
+    state.comprobarDisponible(deadline);
+    if (state.guardadoCompleto()) return;
+    await state.sync();
+    if (state.reintentoBloqueado()) break;
+  }
+  if (!state.guardadoCompleto())
+    throw new Error(
+      "Tu carrito tiene cambios por sincronizar. Actualízalo antes de pagar; tu selección se conserva.",
+    );
 }

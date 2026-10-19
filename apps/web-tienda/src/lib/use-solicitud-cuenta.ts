@@ -28,6 +28,11 @@ export function useSolicitudCuenta() {
       lock.current = false;
     };
   }, []);
+  const finalizar = useCallback((c: AbortController) => {
+    if (controller.current !== c) return;
+    lock.current = false;
+    if (vivo.current) setOcupado(false);
+  }, []);
   const ejecutar = useCallback(
     async (tarea: (signal: AbortSignal) => Promise<void>, alFallar?: (error: unknown) => void) => {
       if (lock.current) return;
@@ -44,13 +49,10 @@ export function useSolicitudCuenta() {
           alFallar?.(e);
         }
       } finally {
-        if (controller.current === c) {
-          lock.current = false;
-          if (vivo.current) setOcupado(false);
-        }
+        finalizar(c);
       }
     },
-    [],
+    [finalizar],
   );
   return { ocupado, error, ejecutar };
 }

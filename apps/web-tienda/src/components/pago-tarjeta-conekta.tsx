@@ -2,7 +2,7 @@
 
 import { loadPaymentSdk } from "@/lib/payment-sdk";
 import { Lock } from "lucide-react";
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 
 /** Tipado mínimo del SDK Conekta.js cargado por <script>. */
 interface ConektaSDK {
@@ -63,7 +63,14 @@ export function PagoTarjetaConekta({
     pay.current = onPagar;
   }, [onPagar]);
   const cuotasKey = msiMeses.join(",");
+  const sdkSetup = useMemo(() => ({ publicKey, sdkIntento }), [publicKey, sdkIntento]);
+  const resetContext = useMemo(
+    () => ({ publicKey, montoTotal, cuotasKey }),
+    [publicKey, montoTotal, cuotasKey],
+  );
+  const latestContext = useRef(resetContext);
   useEffect(() => {
+    const { publicKey } = sdkSetup;
     let active = true;
     sdkReady.current = false;
     setSdkListo(false);
@@ -88,8 +95,9 @@ export function PagoTarjetaConekta({
       active = false;
       sdkReady.current = false;
     };
-  }, [publicKey, sdkIntento]);
+  }, [sdkSetup]);
   useEffect(() => {
+    latestContext.current = resetContext;
     pending.current?.abort();
     pending.current = null;
     setTokenizando(false);
@@ -100,7 +108,7 @@ export function PagoTarjetaConekta({
       pending.current?.abort();
       pending.current = null;
     };
-  }, [publicKey, montoTotal, cuotasKey]);
+  }, [resetContext]);
 
   function formatearExp(v: string): string {
     const digitos = v.replace(/\D/g, "").slice(0, 4);
@@ -116,30 +124,14 @@ export function PagoTarjetaConekta({
       setError("Espera a que cargue el pago seguro.");
       return;
     }
-    const [mm, aa] = exp.split("/");
-    const now = new Date();
-    const year = 2000 + Number(aa);
-    if (
-      !/^\d{12,19}$/.test(numero.replace(/\s/g, "")) ||
-      !nombre.trim() ||
-      !/^\d{3,4}$/.test(cvc)
-    ) {
-      setError("Revisa el número de tarjeta, el nombre y el CVC.");
+    const entrada = validarTarjeta(numero, nombre, exp, cvc);
+    if (!entrada.ok) {
+      setError(entrada.error);
       return;
     }
-    if (
-      !mm ||
-      !aa ||
-      aa.length !== 2 ||
-      Number(mm) < 1 ||
-      Number(mm) > 12 ||
-      year < now.getFullYear() ||
-      (year === now.getFullYear() && Number(mm) < now.getMonth() + 1)
-    ) {
-      setError("Revisa el vencimiento: usa MM/AA y una tarjeta vigente.");
-      return;
-    }
+    const { mm, aa } = entrada;
     const controller = new AbortController();
+    const context = latestContext.current;
     pending.current = controller;
     setTokenizando(true);
     const current = () => pending.current === controller && !controller.signal.aborted;
@@ -173,7 +165,7 @@ export function PagoTarjetaConekta({
           },
         },
         (token) => {
-          if (!current()) return;
+          if (!current() || latestContext.current !== context) return;
           setCvc("");
           if (
             !token ||
@@ -339,4 +331,28 @@ export function PagoTarjetaConekta({
       </p>
     </form>
   );
+}
+
+function validarTarjeta(
+  numero: string,
+  nombre: string,
+  exp: string,
+  cvc: string,
+): { ok: false; error: string } | { ok: true; mm: string; aa: string } {
+  const [mm, aa] = exp.split("/");
+  const now = new Date();
+  const year = 2000 + Number(aa);
+  if (!/^\d{12,19}$/.test(numero.replace(/\s/g, "")) || !nombre.trim() || !/^\d{3,4}$/.test(cvc))
+    return { ok: false, error: "Revisa el número de tarjeta, el nombre y el CVC." };
+  if (
+    !mm ||
+    !aa ||
+    aa.length !== 2 ||
+    Number(mm) < 1 ||
+    Number(mm) > 12 ||
+    year < now.getFullYear() ||
+    (year === now.getFullYear() && Number(mm) < now.getMonth() + 1)
+  )
+    return { ok: false, error: "Revisa el vencimiento: usa MM/AA y una tarjeta vigente." };
+  return { ok: true, mm, aa };
 }

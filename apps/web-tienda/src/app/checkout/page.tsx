@@ -119,7 +119,7 @@ function resolverPagoPendiente(
   return esPagoPendiente(pendiente) ? pendiente : null;
 }
 
-export default function CheckoutPage() {
+function useCheckoutModel() {
   const router = useRouter();
   const stripeForm = useRef<PagoStripeHandle>(null);
   const [stripeReady, setStripeReady] = useState(false);
@@ -153,7 +153,10 @@ export default function CheckoutPage() {
   const [reintentoEntrega, setReintentoEntrega] = useState(0);
   const [procesando, setProcesando] = useState(false);
   const [consultaRealizada, setConsultaRealizada] = useState(false);
-  const checkoutOperation = useRef<AbortController | null>(null);
+  const checkoutOperation = useRef<{
+    owner: string | undefined;
+    controller: AbortController;
+  } | null>(null);
   const [attempt, setAttempt] = useState<CheckoutAttempt | null>(null);
   const [sessionRetry, setSessionRetry] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -170,12 +173,17 @@ export default function CheckoutPage() {
   const [borradorListo, setBorradorListo] = useState<string | null>(null);
   const borradorRestaurado = useRef(false);
   const entregaInicial = useRef(false);
+  const requestGenerations = useRef(new Map<string, string>());
+
   useEffect(() => {
+    const owner = draftScope?.owner;
     setProcesando(false);
     setConsultaRealizada(false);
     return () => {
-      checkoutOperation.current?.abort();
-      checkoutOperation.current = null;
+      if (checkoutOperation.current?.owner === owner) {
+        checkoutOperation.current?.controller.abort();
+        checkoutOperation.current = null;
+      }
     };
   }, [draftScope?.owner]);
 
@@ -185,7 +193,6 @@ export default function CheckoutPage() {
       signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     });
   }
-
   const actualizarCarrito = useCallback(() => {
     try {
       setItems(leerCarrito());
@@ -194,6 +201,7 @@ export default function CheckoutPage() {
       setErrorCarrito(true);
     }
   }, []);
+
   useEffect(() => {
     const actualizar = actualizarCarrito;
     actualizar();
@@ -204,6 +212,7 @@ export default function CheckoutPage() {
       window.removeEventListener("storage", actualizar);
     };
   }, [actualizarCarrito]);
+
   useEffect(() => {
     if (!error) return;
     const target = document.getElementById(
@@ -234,6 +243,7 @@ export default function CheckoutPage() {
     setMedioPagoSel("");
     setBorradorListo(draftScope.owner);
   }, [draftScope]);
+
   useEffect(() => {
     if (draftScope && borradorListo === draftScope.owner)
       guardarBorradorCompra(
@@ -279,8 +289,12 @@ export default function CheckoutPage() {
   }, [draftScope]);
 
   useEffect(() => {
+    const generation = JSON.stringify([borradorListo, reintentoConfig]);
+    requestGenerations.current.set("config", generation);
     if (!borradorListo) return;
     const controller = new AbortController();
+    const vigente = () =>
+      !controller.signal.aborted && requestGenerations.current.get("config") === generation;
     const options = { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) };
     setConfig(null);
     setErrorConfig(false);
@@ -289,10 +303,10 @@ export default function CheckoutPage() {
         if (!res.ok) throw new Error();
         const next: unknown = await res.json();
         if (!esConfigCheckout(next)) throw new Error();
-        if (!controller.signal.aborted) setConfig(next);
+        if (vigente()) setConfig(next);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setErrorConfig(true);
+        if (vigente()) setErrorConfig(true);
       });
     return () => controller.abort();
   }, [borradorListo, reintentoConfig]);
@@ -350,39 +364,32 @@ export default function CheckoutPage() {
   }, [borradorListo]);
 
   useEffect(() => {
+    const generation = String(sessionRetry);
+    requestGenerations.current.set("session", generation);
     let active = true;
+    const vigente = () => active && requestGenerations.current.get("session") === generation;
     fetch("/api/checkout/session", { cache: "no-store", signal: AbortSignal.timeout(15_000) })
       .then(async (response) => {
         if (response.status === 401 || response.status === 403) {
-          if (active) setRequiereSesion(true);
+          if (vigente()) setRequiereSesion(true);
           throw new Error("Inicia sesión para retomar tu compra sin perder el carrito.");
         }
-        const data = await response.json();
-        if (
-          !response.ok ||
-          !data ||
-          typeof data.context !== "string" ||
-          !data.context ||
-          data.context.length > 200
-        )
-          throw new Error("No se pudo preparar la compra. Reintenta sin volver a pagar.");
-        if (!active) return;
-        setDraftScope({
-          owner: data.context,
-          ...(typeof data.guestContext === "string" ? { guestOwner: data.guestContext } : {}),
-        });
+        const data = await leerSesionCheckout(response);
+        if (!vigente()) return;
+        setDraftScope(scopeSesionCheckout(data));
         const next = await prepareAttempt(data.context);
-        if (active) {
+        if (vigente()) {
           setAttempt(next);
           setRequiereSesion(false);
         }
       })
       .catch((err) => {
-        if (active)
+        if (vigente())
           setError(
-            err instanceof Error && err.name === "Error"
-              ? err.message
-              : "No pudimos preparar tu compra. Revisa tu conexión e inténtalo de nuevo.",
+            mensajeErrorCheckout(
+              err,
+              "No pudimos preparar tu compra. Revisa tu conexión e inténtalo de nuevo.",
+            ),
           );
       });
     return () => {
@@ -398,7 +405,6 @@ export default function CheckoutPage() {
     setEstado(d.estado ?? "");
     setCp(d.codigoPostal ?? "");
   }
-
   const subtotal = items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0);
   const cupon = useCuponCheckout({
     owner: draftScope?.owner ?? "",
@@ -415,17 +421,21 @@ export default function CheckoutPage() {
     subtotal: subtotal.toFixed(4),
     habilitado: config?.cuponEnCheckout === true,
   });
+
   useEffect(() => {
     if (!config || pickupSubtotal == null || entregaInicial.current) return;
     entregaInicial.current = true;
     if (!borradorRestaurado.current && config.metodosPago?.length === 0 && pickups.length > 0)
       setModoEntrega("pickup");
   }, [config, pickupSubtotal, pickups]);
-
   const entregaKey = JSON.stringify([cp, estado.trim(), subtotal]);
 
   useEffect(() => {
+    const generation = JSON.stringify([subtotal, reintentoEntrega]);
+    requestGenerations.current.set("pickup", generation);
     const controller = new AbortController();
+    const vigente = () =>
+      !controller.signal.aborted && requestGenerations.current.get("pickup") === generation;
     setPickups([]);
     setSucursalId("");
     setPickupSubtotal(null);
@@ -438,13 +448,13 @@ export default function CheckoutPage() {
         if (!res.ok) throw new Error("Entrega no disponible");
         const cot = leerCotizacionEnvio(await res.json());
         if (!cot) throw new Error("Cotización inválida");
-        if (controller.signal.aborted) return;
+        if (!vigente()) return;
         setPickups(cot.pickup);
         if (cot.pickup.length === 1) setSucursalId(cot.pickup[0]?.sucursalId ?? "");
         setPickupSubtotal(subtotal);
       })
       .catch(() => {
-        if (!controller.signal.aborted) {
+        if (vigente()) {
           setErrorPickup("No se pudieron consultar las sucursales para recoger tu pedido.");
         }
       });
@@ -452,7 +462,11 @@ export default function CheckoutPage() {
   }, [subtotal, reintentoEntrega]);
 
   useEffect(() => {
+    const generation = JSON.stringify([entregaKey, reintentoEntrega]);
+    requestGenerations.current.set("shipping", generation);
     const controller = new AbortController();
+    const vigente = () =>
+      !controller.signal.aborted && requestGenerations.current.get("shipping") === generation;
     setOpcionesEnvio([]);
     setTarifaId("");
     setCotizacionKey("");
@@ -471,18 +485,18 @@ export default function CheckoutPage() {
           if (!res.ok) throw new Error("Entrega no disponible");
           const cot = leerCotizacionEnvio(await res.json());
           if (!cot) throw new Error("Cotización inválida");
-          if (controller.signal.aborted) return;
+          if (!vigente()) return;
           setOpcionesEnvio(cot.opcionesEnvio);
           setTarifaId(cot.opcionesEnvio[0]?.tarifaId ?? "");
           setCotizacionKey(entregaKey);
         })
         .catch(() => {
-          if (!controller.signal.aborted) {
+          if (vigente()) {
             setErrorEnvio("No se pudo calcular el envío. Reintenta antes de pagar.");
           }
         })
         .finally(() => {
-          if (!controller.signal.aborted) setCotizando(false);
+          if (vigente()) setCotizando(false);
         });
     }, 400);
     return () => {
@@ -490,7 +504,6 @@ export default function CheckoutPage() {
       controller.abort();
     };
   }, [cp, estado, subtotal, entregaKey, reintentoEntrega]);
-
   const envioSeleccionado = opcionesEnvio.find((o) => o.tarifaId === tarifaId);
   const entregaLista =
     modoEntrega === "pickup"
@@ -501,27 +514,15 @@ export default function CheckoutPage() {
   const descuentoCupon = cuponOk ? Number(cupon.info?.descuentoSubtotal ?? 0) : 0;
   const costoEnvio = cuponOk && cupon.info?.envioGratis ? 0 : costoEnvioBase;
   const total = Math.max(0, subtotal - descuentoCupon) + costoEnvio;
-
-  // Pagar al recoger no depende del proveedor: se ofrece cuando el pedido se
-  // recoge en tienda, porque el cobro ocurre en el mostrador.
-  const metodosDisponibles = [
-    ...(config?.metodosPago ?? ["tarjeta"]),
-    ...(modoEntrega === "pickup" ? ["cod"] : []),
-  ];
-  const metodoActivo = (
-    metodosDisponibles.includes(metodoPago) ? metodoPago : (metodosDisponibles[0] ?? "tarjeta")
-  ) as MetodoPago;
-
-  const conStripe = config?.proveedorPago === "stripe";
-  const stripeKey = conStripe ? config?.pagoPublicKey : null;
-  const conektaKey = config?.proveedorPago === "conekta" ? (config.pagoPublicKey ?? "") : "";
-  // Pagar al recoger no necesita proveedor de pagos: el cobro ocurre en el mostrador.
-  const permiteDemo = process.env.NODE_ENV !== "production";
-  // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
-  const msiOfrecibles =
-    !conStripe && config?.msiHabilitado && total >= Number(config.msiMontoMinimo)
-      ? config.msiMeses
-      : [];
+  const {
+    metodosDisponibles,
+    metodoActivo,
+    conStripe,
+    stripeKey,
+    conektaKey,
+    permiteDemo,
+    msiOfrecibles,
+  } = opcionesCobroCheckout(config, modoEntrega, metodoPago, total);
 
   function validar(): boolean {
     if (errorCarrito || !config) {
@@ -544,14 +545,15 @@ export default function CheckoutPage() {
       setError("Ingresa un correo válido para recibir tu confirmación.");
       return false;
     }
+    return validarDatosEntrega();
+  }
+
+  function validarDatosEntrega(): boolean {
     if (modoEntrega === "pickup" && !sucursalId) {
       setError("Elige la sucursal donde recogerás tu pedido");
       return false;
     }
-    if (
-      modoEntrega === "envio" &&
-      (cp.length !== 5 || !calle.trim() || !ciudad.trim() || estado.trim().length < 3)
-    ) {
+    if (modoEntrega === "envio" && direccionEnvioIncompleta(cp, calle, ciudad, estado)) {
       setError("Completa la dirección de envío");
       return false;
     }
@@ -567,34 +569,46 @@ export default function CheckoutPage() {
     );
   }
 
-  async function handleCheckoutResponse(
-    response: Response,
+  async function confirmarStripeCheckout(
+    data: RespuestaCheckout,
     current: CheckoutAttempt,
     signal: AbortSignal,
   ) {
+    if (!stripeForm.current)
+      throw new Error("Espera a que cargue el formulario seguro para retomar tu pago.");
+    await stripeForm.current.confirmar(data.clientSecret as string, data.stripeAccountId ?? null);
+    const params = new URLSearchParams({ context: current.context, idempotencyKey: current.key });
+    const verified = await checkoutFetch(`/api/checkout?${params}`, signal, {
+      cache: "no-store",
+    });
+    const result = (await verified.json()) as RespuestaCheckout;
+    signal.throwIfAborted();
+    if (!verified.ok || !esRespuestaCheckout(result) || result.intentStatus !== "confirmado")
+      throw new Error(
+        "Estamos verificando tu pago. Consulta este mismo pedido; no vuelvas a pagar.",
+      );
+    return result;
+  }
+
+  async function verificarRespuestaPedido(
+    response: Response,
+    current: CheckoutAttempt,
+    signal: AbortSignal,
+  ): Promise<RespuestaCheckout | null> {
     signal.throwIfAborted();
     if (response.status === 401 || response.status === 403) {
       setRequiereSesion(true);
       throw new Error("Inicia sesión para verificar y retomar este mismo intento de compra.");
     }
-    const raw: unknown = await response.json().catch(() => null);
+    const data = await leerRespuestaCheckout(response, signal);
     signal.throwIfAborted();
-    if (!raw || typeof raw !== "object" || Array.isArray(raw))
-      throw new Error(
-        "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
-      );
-    const data = raw as RespuestaCheckout;
-    if (response.ok && !esRespuestaCheckout(raw))
-      throw new Error(
-        "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
-      );
     if (response.status === 404 && data.code === "ATTEMPT_NOT_FOUND" && data.safeToRetry === true) {
       const recovered = await recuperarIntentoSinPedido(current);
       signal.throwIfAborted();
       limpiarPendiente();
       setAttempt(recovered);
       setError("No hay un pedido registrado para este intento. Revisa tus datos para continuar.");
-      return;
+      return null;
     }
     if (!response.ok)
       throw new Error(
@@ -606,6 +620,17 @@ export default function CheckoutPage() {
       throw new Error(
         "El resultado no corresponde al pedido apartado. Conserva tu referencia y contacta a la tienda antes de pagar.",
       );
+    return data;
+  }
+
+  async function handleCheckoutResponse(
+    response: Response,
+    current: CheckoutAttempt,
+    signal: AbortSignal,
+  ) {
+    const data = await verificarRespuestaPedido(response, current, signal);
+    signal.throwIfAborted();
+    if (!data) return;
     if (data.intentStatus === "fallido") {
       manejarNoConfirmado(data);
       return;
@@ -615,19 +640,8 @@ export default function CheckoutPage() {
       data.clientSecret &&
       data.intentStatus !== "confirmado"
     ) {
-      if (!stripeForm.current)
-        throw new Error("Espera a que cargue el formulario seguro para retomar tu pago.");
-      await stripeForm.current.confirmar(data.clientSecret, data.stripeAccountId ?? null);
-      const params = new URLSearchParams({ context: current.context, idempotencyKey: current.key });
-      const verified = await checkoutFetch(`/api/checkout?${params}`, signal, {
-        cache: "no-store",
-      });
-      const result = (await verified.json()) as RespuestaCheckout;
+      const result = await confirmarStripeCheckout(data, current, signal);
       signal.throwIfAborted();
-      if (!verified.ok || !esRespuestaCheckout(result) || result.intentStatus !== "confirmado")
-        throw new Error(
-          "Estamos verificando tu pago. Consulta este mismo pedido; no vuelvas a pagar.",
-        );
       return handleCheckoutResponse(new Response(JSON.stringify(result)), current, signal);
     }
     // Pago referenciado (OXXO/SPEI): NO es error; el pedido queda apartado
@@ -642,6 +656,15 @@ export default function CheckoutPage() {
       manejarNoConfirmado(data);
       return;
     }
+    await completarPedidoCheckout(data.folioPublico, current, signal, reservadoParaRecoger);
+  }
+
+  async function completarPedidoCheckout(
+    folioPublico: string,
+    current: CheckoutAttempt,
+    signal: AbortSignal,
+    reservadoParaRecoger: boolean,
+  ) {
     limpiarPendiente();
     if (guardarDir && modoEntrega === "envio") {
       await fetch("/api/cuenta/direcciones", {
@@ -664,14 +687,14 @@ export default function CheckoutPage() {
     signal.throwIfAborted();
     borrarBorradorCompra();
     router.push(
-      `/gracias?folio=${encodeURIComponent(data.folioPublico)}&email=${encodeURIComponent(email)}${reservadoParaRecoger ? "&recogida=1" : ""}`,
+      `/gracias?folio=${encodeURIComponent(folioPublico)}&email=${encodeURIComponent(email)}${reservadoParaRecoger ? "&recogida=1" : ""}`,
     );
   }
 
   async function consultarPedido() {
     if (!attempt || checkoutOperation.current || requiereSesion) return;
     const controller = new AbortController();
-    checkoutOperation.current = controller;
+    checkoutOperation.current = { owner: draftScope?.owner, controller };
     setConsultaRealizada(false);
     setProcesando(true);
     setError(null);
@@ -686,16 +709,122 @@ export default function CheckoutPage() {
     } catch (err) {
       if (!controller.signal.aborted)
         setError(
-          err instanceof Error && err.name === "Error"
-            ? err.message
-            : "No se pudo consultar el pago. Tu intento se conserva; no vuelvas a pagar.",
+          mensajeErrorCheckout(
+            err,
+            "No se pudo consultar el pago. Tu intento se conserva; no vuelvas a pagar.",
+          ),
         );
     } finally {
-      if (checkoutOperation.current === controller) {
+      if (checkoutOperation.current?.controller === controller) {
         checkoutOperation.current = null;
         setProcesando(false);
       }
     }
+  }
+
+  function crearEntregaPedido() {
+    return modoEntrega === "pickup"
+      ? { sucursalPickupId: sucursalId }
+      : {
+          ...(tarifaId ? { tarifaEnvioId: tarifaId } : {}),
+          direccionEnvio: { nombre, calle, numero, colonia, ciudad, estado, cp },
+        };
+  }
+
+  function crearPayloadPedido(
+    current: CheckoutAttempt,
+    metodo: MetodoPago,
+    cardTokenId?: string,
+    meses?: number | null,
+    extra?: { medioPagoGuardadoId?: string; guardarTarjeta?: boolean },
+  ) {
+    return JSON.stringify({
+      checkoutContext: current.context,
+      idempotencyKey: current.key,
+      emailComprador: email,
+      expectedCartVersion: carritoVersion(),
+      items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
+      metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
+      metodoPago: metodo,
+      ...(cupon.codigoAplicado ? { cuponCodigo: cupon.codigoAplicado } : {}),
+      ...(cardTokenId ? { cardTokenId } : {}),
+      ...(extra?.medioPagoGuardadoId ? { medioPagoGuardadoId: extra.medioPagoGuardadoId } : {}),
+      ...(extra?.guardarTarjeta ? { guardarTarjeta: true } : {}),
+      ...(meses ? { mesesSinIntereses: meses } : {}),
+      ...crearEntregaPedido(),
+    });
+  }
+
+  function validarFuenteTarjeta(
+    metodo: MetodoPago,
+    cardTokenId?: string,
+    medioPagoGuardadoId?: string,
+  ): boolean {
+    if (
+      metodo === "tarjeta" &&
+      !cardTokenId &&
+      !medioPagoGuardadoId &&
+      !conStripe &&
+      !permiteDemo
+    ) {
+      setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
+      return false;
+    }
+    if (metodo === "tarjeta" && conStripe && !stripeForm.current?.disponible()) {
+      setError("Espera a que cargue el formulario seguro antes de enviar el pedido.");
+      return false;
+    }
+    return true;
+  }
+
+  async function enviarPedido(
+    attempt: CheckoutAttempt,
+    signal: AbortSignal,
+    metodo: MetodoPago,
+    cardTokenId?: string,
+    meses?: number | null,
+    extra?: { medioPagoGuardadoId?: string; guardarTarjeta?: boolean },
+  ) {
+    await esperarCarritoGuardado();
+    signal.throwIfAborted();
+    if (!comprobarSeleccion()) return;
+    const firstSubmission = await submitAttempt(attempt);
+    signal.throwIfAborted();
+    const current = { ...attempt, submitted: true };
+    setAttempt(current);
+    if (!firstSubmission) {
+      const params = new URLSearchParams({
+        context: current.context,
+        idempotencyKey: current.key,
+      });
+      await handleCheckoutResponse(
+        await checkoutFetch(`/api/checkout?${params}`, signal, { cache: "no-store" }),
+        current,
+        signal,
+      );
+      return;
+    }
+    if (!comprobarSeleccion()) return;
+    const response = await checkoutFetch("/api/checkout", signal, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: crearPayloadPedido(current, metodo, cardTokenId, meses, extra),
+    });
+    await handleCheckoutResponse(response, current, signal);
+  }
+
+  function validarSeleccionPedido() {
+    return validar() && comprobarSeleccion();
+  }
+
+  function informarErrorPedido(signal: AbortSignal, err: unknown) {
+    if (!signal.aborted)
+      setError(
+        mensajeErrorCheckout(
+          err,
+          "Estamos verificando el pago. Consulta este mismo intento; no vuelvas a pagar.",
+        ),
+      );
   }
 
   async function procesarPedido(
@@ -709,80 +838,18 @@ export default function CheckoutPage() {
       await consultarPedido();
       return;
     }
-    if (
-      metodo === "tarjeta" &&
-      !cardTokenId &&
-      !extra?.medioPagoGuardadoId &&
-      !conStripe &&
-      !permiteDemo
-    ) {
-      setError("El pago en línea no está disponible en este momento. Intenta más tarde.");
-      return;
-    }
-    if (metodo === "tarjeta" && conStripe && !stripeForm.current?.disponible()) {
-      setError("Espera a que cargue el formulario seguro antes de enviar el pedido.");
-      return;
-    }
-    if (!validar() || !comprobarSeleccion()) return;
+    if (!validarFuenteTarjeta(metodo, cardTokenId, extra?.medioPagoGuardadoId)) return;
+    if (!validarSeleccionPedido()) return;
     const controller = new AbortController();
-    checkoutOperation.current = controller;
+    checkoutOperation.current = { owner: draftScope?.owner, controller };
     setProcesando(true);
     setError(null);
     try {
-      await esperarCarritoGuardado();
-      controller.signal.throwIfAborted();
-      if (!comprobarSeleccion()) return;
-      const firstSubmission = await submitAttempt(attempt);
-      controller.signal.throwIfAborted();
-      const current = { ...attempt, submitted: true };
-      setAttempt(current);
-      if (!firstSubmission) {
-        const params = new URLSearchParams({
-          context: current.context,
-          idempotencyKey: current.key,
-        });
-        await handleCheckoutResponse(
-          await checkoutFetch(`/api/checkout?${params}`, controller.signal, { cache: "no-store" }),
-          current,
-          controller.signal,
-        );
-        return;
-      }
-      if (!comprobarSeleccion()) return;
-      const response = await checkoutFetch("/api/checkout", controller.signal, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          checkoutContext: current.context,
-          idempotencyKey: current.key,
-          emailComprador: email,
-          expectedCartVersion: carritoVersion(),
-          items: items.map((i) => ({ varianteId: i.varianteId, cantidad: i.cantidad })),
-          metodoEnvio: modoEntrega === "pickup" ? "click_collect" : "paqueteria",
-          metodoPago: metodo,
-          ...(cupon.codigoAplicado ? { cuponCodigo: cupon.codigoAplicado } : {}),
-          ...(cardTokenId ? { cardTokenId } : {}),
-          ...(extra?.medioPagoGuardadoId ? { medioPagoGuardadoId: extra.medioPagoGuardadoId } : {}),
-          ...(extra?.guardarTarjeta ? { guardarTarjeta: true } : {}),
-          ...(meses ? { mesesSinIntereses: meses } : {}),
-          ...(modoEntrega === "pickup"
-            ? { sucursalPickupId: sucursalId }
-            : {
-                ...(tarifaId ? { tarifaEnvioId: tarifaId } : {}),
-                direccionEnvio: { nombre, calle, numero, colonia, ciudad, estado, cp },
-              }),
-        }),
-      });
-      await handleCheckoutResponse(response, current, controller.signal);
+      await enviarPedido(attempt, controller.signal, metodo, cardTokenId, meses, extra);
     } catch (err) {
-      if (!controller.signal.aborted)
-        setError(
-          err instanceof Error && err.name === "Error"
-            ? err.message
-            : "Estamos verificando el pago. Consulta este mismo intento; no vuelvas a pagar.",
-        );
+      informarErrorPedido(controller.signal, err);
     } finally {
-      if (checkoutOperation.current === controller) {
+      if (checkoutOperation.current?.controller === controller) {
         checkoutOperation.current = null;
         setProcesando(false);
       }
@@ -805,116 +872,6 @@ export default function CheckoutPage() {
       return false;
     }
   }
-
-  if (!draftScope || borradorListo !== draftScope.owner) {
-    return (
-      <div className="mx-auto max-w-md py-8 text-center">
-        <h1 className="font-bold text-2xl">
-          {requiereSesion ? "Retoma tu compra" : "Preparando tu compra"}
-        </h1>
-        {error ? (
-          <>
-            <p role="alert" className="mt-3 text-danger">
-              {error}
-            </p>
-            {requiereSesion ? (
-              <Link
-                href="/cuenta/login?next=%2Fcheckout"
-                className="gx-btn-primary mt-4 inline-block"
-              >
-                Iniciar sesión para continuar
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSessionRetry((n) => n + 1)}
-                className="gx-btn-primary mt-4"
-              >
-                Reintentar
-              </button>
-            )}
-          </>
-        ) : (
-          <output className="mt-3 block text-slate-500">Estamos recuperando tu selección.</output>
-        )}
-      </div>
-    );
-  }
-
-  if (pagoPendiente) {
-    return (
-      <PantallaPagoPendiente
-        pago={pagoPendiente}
-        email={email}
-        procesando={procesando || !attempt}
-        onConsultar={consultarPedido}
-        error={error}
-        requiereSesion={requiereSesion}
-        consultaRealizada={consultaRealizada}
-      />
-    );
-  }
-
-  if (errorCarrito) {
-    return (
-      <div className="mx-auto max-w-lg py-8 text-center">
-        <h1 className="text-2xl font-bold">Revisa tu carrito</h1>
-        <p role="alert" className="mt-3 text-danger">
-          No pudimos leer tu carrito en este navegador. Permite el almacenamiento y vuelve a
-          intentar. Si ya intentaste pagar, consulta ese mismo pedido antes de iniciar otra compra.
-        </p>
-        <button type="button" onClick={actualizarCarrito} className="gx-btn-primary mt-4 min-h-11">
-          Volver a leer carrito
-        </button>
-        {attempt?.submitted && (
-          <button
-            type="button"
-            onClick={() => void consultarPedido()}
-            disabled={procesando || requiereSesion}
-            className="gx-btn-secondary mt-3 min-h-11"
-          >
-            Consultar el pedido anterior
-          </button>
-        )}
-        {error && (
-          <p role="alert" className="mt-3 text-danger">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="text-center">
-        <h1 className="font-bold text-2xl">
-          {requiereSesion ? "Retoma tu compra" : "Tu carrito está vacío"}
-        </h1>
-        {requiereSesion ? (
-          <div
-            id="checkout-session-notice"
-            role="alert"
-            tabIndex={-1}
-            className="mx-auto mt-4 max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
-          >
-            <p>
-              Tu sesión venció. Inicia sesión para recuperar tu selección y los datos de esta
-              compra.
-            </p>
-            <Link href="/cuenta/login?next=%2Fcheckout" className="gx-btn-primary mt-3">
-              Iniciar sesión y continuar
-            </Link>
-          </div>
-        ) : (
-          <Link href="/" className="mt-4 inline-block text-marca">
-            Ver catálogo
-          </Link>
-        )}
-      </div>
-    );
-  }
-
   const pagoDeshabilitado =
     requiereSesion ||
     !config ||
@@ -956,13 +913,167 @@ export default function CheckoutPage() {
       },
     ] satisfies Array<{ id: MetodoPago; titulo: string; descripcion: string; icon: ReactNode }>
   ).filter((o) => metodosDisponibles.includes(o.id));
-
   // "Mis tarjetas": tarjeta guardada seleccionada (pago en 1 toque) o tarjeta nueva.
-  const tarjetaGuardadaSel = conStripe
-    ? null
-    : (mediosPago.find((m) => m.id === medioPagoSel) ?? null);
+  const tarjetaGuardadaSel = tarjetaSeleccionada(conStripe, mediosPago, medioPagoSel);
   const pagarConTarjetaNueva = !tarjetaGuardadaSel;
+  return {
+    stripeForm,
+    stripeReady,
+    setStripeReady,
+    items,
+    email,
+    setEmail,
+    nombre,
+    setNombre,
+    calle,
+    setCalle,
+    numero,
+    setNumero,
+    colonia,
+    setColonia,
+    ciudad,
+    setCiudad,
+    estado,
+    setEstado,
+    cp,
+    setCp,
+    direcciones,
+    direccionId,
+    setDireccionId,
+    modoDir,
+    setModoDir,
+    guardarDir,
+    setGuardarDir,
+    config,
+    errorConfig,
+    setReintentoConfig,
+    errorCarrito,
+    modoEntrega,
+    setModoEntrega,
+    opcionesEnvio,
+    pickups,
+    tarifaId,
+    setTarifaId,
+    sucursalId,
+    setSucursalId,
+    cotizando,
+    errorEnvio,
+    errorPickup,
+    setReintentoEntrega,
+    procesando,
+    consultaRealizada,
+    attempt,
+    setSessionRetry,
+    error,
+    setMetodoPago,
+    pagoPendiente,
+    mediosPago,
+    setMedioPagoSel,
+    guardarTarjeta,
+    setGuardarTarjeta,
+    sesionCliente,
+    requiereSesion,
+    draftScope,
+    borradorListo,
+    actualizarCarrito,
+    usarDireccion,
+    subtotal,
+    cupon,
+    entregaLista,
+    descuentoCupon,
+    costoEnvio,
+    total,
+    metodoActivo,
+    conStripe,
+    stripeKey,
+    conektaKey,
+    permiteDemo,
+    msiOfrecibles,
+    consultarPedido,
+    procesarPedido,
+    pagoDeshabilitado,
+    mostrarSelector,
+    opcionesPago,
+    tarjetaGuardadaSel,
+    pagarConTarjetaNueva,
+  };
+}
+type CheckoutModel = ReturnType<typeof useCheckoutModel>;
+type CheckoutPrepared = CheckoutModel & { draftScope: NonNullable<CheckoutModel["draftScope"]> };
+export default function CheckoutPage() {
+  const model = useCheckoutModel();
+  return <CheckoutView {...model} />;
+}
+function CheckoutView(model: CheckoutModel) {
+  const {
+    items,
+    email,
+    config,
+    errorConfig,
+    setReintentoConfig,
+    errorCarrito,
+    procesando,
+    consultaRealizada,
+    attempt,
+    error,
+    pagoPendiente,
+    requiereSesion,
+    draftScope,
+    borradorListo,
+    consultarPedido,
+  } = model;
+  if (!draftScope || borradorListo !== draftScope.owner) {
+    return <PreparandoCheckout {...model} />;
+  }
 
+  if (pagoPendiente) {
+    return (
+      <PantallaPagoPendiente
+        pago={pagoPendiente}
+        email={email}
+        procesando={procesando || !attempt}
+        onConsultar={consultarPedido}
+        error={error}
+        requiereSesion={requiereSesion}
+        consultaRealizada={consultaRealizada}
+      />
+    );
+  }
+
+  if (errorCarrito) {
+    return <ErrorCarritoCheckout {...model} />;
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="text-center">
+        <h1 className="font-bold text-2xl">
+          {requiereSesion ? "Retoma tu compra" : "Tu carrito está vacío"}
+        </h1>
+        {requiereSesion ? (
+          <div
+            id="checkout-session-notice"
+            role="alert"
+            tabIndex={-1}
+            className="mx-auto mt-4 max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
+          >
+            <p>
+              Tu sesión venció. Inicia sesión para recuperar tu selección y los datos de esta
+              compra.
+            </p>
+            <Link href="/cuenta/login?next=%2Fcheckout" className="gx-btn-primary mt-3">
+              Iniciar sesión y continuar
+            </Link>
+          </div>
+        ) : (
+          <Link href="/" className="mt-4 inline-block text-marca">
+            Ver catálogo
+          </Link>
+        )}
+      </div>
+    );
+  }
+  const prepared = { ...model, draftScope };
   return (
     <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
       <h1 className="mb-6 font-bold text-2xl">Finalizar compra</h1>
@@ -1008,652 +1119,18 @@ export default function CheckoutPage() {
       <div className="lg:grid lg:grid-cols-[1fr_340px] lg:items-start lg:gap-6">
         <div className="min-w-0">
           {/* ① Entrega */}
-          <SeccionCheckout paso={1} titulo="¿A dónde lo llevas?">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Email" value={email} onChange={setEmail} type="email" required />
-              <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <BotonEntrega
-                activo={modoEntrega === "envio"}
-                onClick={() => setModoEntrega("envio")}
-                label={
-                  <>
-                    <Truck size={16} strokeWidth={2} /> Envío a domicilio
-                  </>
-                }
-              />
-              {pickups.length > 0 && (
-                <BotonEntrega
-                  activo={modoEntrega === "pickup"}
-                  onClick={() => {
-                    setModoEntrega("pickup");
-                    if (pickups.length === 1 && pickups[0]) setSucursalId(pickups[0].sucursalId);
-                  }}
-                  label={
-                    <>
-                      <Store size={16} strokeWidth={2} /> Recoger en tienda
-                    </>
-                  }
-                />
-              )}
-            </div>
-
-            {errorPickup && (
-              <div role="alert" className="mt-3 space-y-2 text-danger text-sm">
-                <p>{errorPickup}</p>
-                <button
-                  type="button"
-                  className="gx-btn-secondary"
-                  onClick={() => setReintentoEntrega((n) => n + 1)}
-                >
-                  Reintentar entrega
-                </button>
-              </div>
-            )}
-
-            {modoEntrega === "envio" ? (
-              <div className="mt-4 space-y-3">
-                {direcciones.length > 0 && (
-                  <div
-                    className="space-y-2"
-                    role="radiogroup"
-                    onKeyDown={navegarRadios}
-                    aria-label="Dirección de envío"
-                  >
-                    {direcciones.map((d) => {
-                      const seleccionada = modoDir === "guardada" && direccionId === d.id;
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta
-                          role="radio"
-                          aria-checked={seleccionada}
-                          tabIndex={seleccionada ? 0 : -1}
-                          onClick={() => {
-                            setModoDir("guardada");
-                            setDireccionId(d.id);
-                            usarDireccion(d);
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
-                            seleccionada
-                              ? "border-marca bg-marca/5 ring-1 ring-marca"
-                              : "border-slate-300 hover:border-marca"
-                          }`}
-                        >
-                          <span
-                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                              seleccionada ? "border-marca" : "border-slate-300"
-                            }`}
-                          >
-                            {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-medium">
-                              {d.etiqueta}
-                              {d.isDefaultEnvio && (
-                                <span className="ml-1 font-normal text-marca text-xs">
-                                  · predeterminada
-                                </span>
-                              )}
-                            </span>
-                            <span className="block truncate text-slate-500 text-xs">
-                              {d.calle} {d.numeroExterior}
-                              {d.colonia ? `, ${d.colonia}` : ""} {d.municipio} · CP{" "}
-                              {d.codigoPostal}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del button de direccion guardada
-                      role="radio"
-                      aria-checked={modoDir === "nueva"}
-                      tabIndex={modoDir === "nueva" ? 0 : -1}
-                      onClick={() => {
-                        setModoDir("nueva");
-                        setDireccionId("");
-                        setCalle("");
-                        setNumero("");
-                        setColonia("");
-                        setCiudad("");
-                        setEstado("");
-                        setCp("");
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
-                        modoDir === "nueva"
-                          ? "border-marca bg-marca/5 ring-1 ring-marca"
-                          : "border-slate-300 hover:border-marca"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                          modoDir === "nueva" ? "border-marca" : "border-slate-300"
-                        }`}
-                      >
-                        {modoDir === "nueva" && <span className="h-2 w-2 rounded-full bg-marca" />}
-                      </span>
-                      <span className="flex items-center gap-1 font-medium">
-                        <Plus size={14} strokeWidth={2.5} /> Nueva dirección
-                      </span>
-                    </button>
-                  </div>
-                )}
-
-                {modoDir === "nueva" && (
-                  <>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <div className="sm:col-span-2">
-                        <Campo label="Calle" value={calle} onChange={setCalle} required />
-                      </div>
-                      <Campo label="Número" value={numero} onChange={setNumero} />
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Campo label="Colonia" value={colonia} onChange={setColonia} />
-                      <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Campo label="Estado" value={estado} onChange={setEstado} required />
-                      <Campo label="Código postal" value={cp} onChange={setCp} required />
-                    </div>
-                    <label className="flex items-center gap-2 text-slate-600 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={guardarDir}
-                        onChange={(e) => setGuardarDir(e.target.checked)}
-                      />
-                      Guardar esta dirección para próximas compras
-                    </label>
-                  </>
-                )}
-
-                <OpcionesEnvio
-                  opciones={opcionesEnvio}
-                  tarifaId={tarifaId}
-                  onSelect={setTarifaId}
-                  cotizando={cotizando}
-                  error={errorEnvio}
-                  onRetry={() => setReintentoEntrega((n) => n + 1)}
-                  direccionLista={cp.length === 5 && estado.trim().length >= 3}
-                />
-              </div>
-            ) : (
-              <div className="mt-4 space-y-2">
-                {pickups.map((p) => (
-                  <label
-                    key={p.sucursalId}
-                    className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
-                  >
-                    <input
-                      type="radio"
-                      name="pickup"
-                      checked={sucursalId === p.sucursalId}
-                      onChange={() => setSucursalId(p.sucursalId)}
-                    />
-                    <span className="flex-1 font-medium">{p.nombre}</span>
-                    <span className="text-slate-500">
-                      listo en ~{p.tiempoPreparacionPromedioMin} min
-                    </span>
-                    <span className="font-semibold text-ok">Gratis</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </SeccionCheckout>
+          <EntregaCheckout {...prepared} />
 
           {/* ② Pago */}
-          <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
-            {mostrarSelector ? (
-              <div
-                className="space-y-2"
-                role="radiogroup"
-                onKeyDown={navegarRadios}
-                aria-label="Método de pago"
-              >
-                {opcionesPago.map((o) => {
-                  const activa = metodoActivo === o.id;
-                  return (
-                    <button
-                      key={o.id}
-                      type="button"
-                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta — mismo patrón que direcciones guardadas
-                      role="radio"
-                      aria-checked={activa}
-                      tabIndex={activa ? 0 : -1}
-                      onClick={() => setMetodoPago(o.id)}
-                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
-                        activa
-                          ? "border-marca bg-marca/5 ring-1 ring-marca"
-                          : "border-slate-300 hover:border-marca"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                          activa ? "border-marca" : "border-slate-300"
-                        }`}
-                      >
-                        {activa && <span className="h-2 w-2 rounded-full bg-marca" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2 font-medium">
-                          {o.icon} {o.titulo}
-                        </span>
-                        <span className="block text-slate-500 text-xs">{o.descripcion}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : opcionesPago[0] ? (
-              <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
-                <p className="flex items-center gap-2 font-medium text-sm">
-                  {opcionesPago[0].icon} {opcionesPago[0].titulo}
-                </p>
-                <p className="mt-0.5 text-slate-500 text-xs">{opcionesPago[0].descripcion}</p>
-              </div>
-            ) : (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Esta tienda todavía no tiene pagos en línea configurados.{" "}
-                {pickups.length > 0
-                  ? "Elige recoger en tienda para pagar al recibir tu pedido."
-                  : "Tu carrito se conserva para continuar cuando la tienda habilite el pago."}
-              </p>
-            )}
-
-            {!attempt && !requiereSesion && (
-              <div className="mt-3 space-y-2 text-sm text-slate-600">
-                <p>Preparando sesión segura de compra…</p>
-                <button
-                  type="button"
-                  className="gx-btn-secondary"
-                  onClick={() => setSessionRetry((n) => n + 1)}
-                >
-                  Reintentar sesión
-                </button>
-              </div>
-            )}
-            {attempt?.submitted && (
-              <div className="mt-3 space-y-2 text-sm text-slate-600">
-                <p>
-                  Hay un intento de compra por verificar. El carrito se conserva hasta confirmar el
-                  pago.
-                </p>
-                <button
-                  type="button"
-                  className="gx-btn-secondary"
-                  disabled={procesando}
-                  onClick={consultarPedido}
-                >
-                  {procesando ? "Consultando…" : "Consultar estado del pago"}
-                </button>
-              </div>
-            )}
-            {metodoActivo === "tarjeta" ? (
-              <fieldset
-                disabled={conStripe ? procesando || requiereSesion : pagoDeshabilitado}
-                className="mt-3 min-w-0"
-              >
-                {!conStripe && mediosPago.length > 0 && (
-                  <div
-                    className="mb-3 space-y-2"
-                    role="radiogroup"
-                    onKeyDown={navegarRadios}
-                    aria-label="Tu tarjeta"
-                  >
-                    <p className="gx-label">Tu tarjeta</p>
-                    {mediosPago.map((m) => {
-                      const seleccionada = tarjetaGuardadaSel?.id === m.id;
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (mismo patrón que direcciones guardadas)
-                          role="radio"
-                          aria-checked={seleccionada}
-                          tabIndex={seleccionada ? 0 : -1}
-                          onClick={() => setMedioPagoSel(m.id)}
-                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
-                            seleccionada
-                              ? "border-marca bg-marca/5 ring-1 ring-marca"
-                              : "border-slate-300 hover:border-marca"
-                          }`}
-                        >
-                          <span
-                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                              seleccionada ? "border-marca" : "border-slate-300"
-                            }`}
-                          >
-                            {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
-                          </span>
-                          <CreditCard size={16} strokeWidth={2} className="flex-shrink-0" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-medium capitalize">{m.marca}</span>
-                            <span className="block text-slate-500 text-xs">
-                              •••• {m.last4} · exp {String(m.expMes).padStart(2, "0")}/{m.expAnio}
-                            </span>
-                          </span>
-                          <span className="text-marca text-xs">1 toque</span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del selector de tarjetas guardadas
-                      role="radio"
-                      aria-checked={pagarConTarjetaNueva}
-                      tabIndex={pagarConTarjetaNueva ? 0 : -1}
-                      onClick={() => setMedioPagoSel("")}
-                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
-                        pagarConTarjetaNueva
-                          ? "border-marca bg-marca/5 ring-1 ring-marca"
-                          : "border-slate-300 hover:border-marca"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                          pagarConTarjetaNueva ? "border-marca" : "border-slate-300"
-                        }`}
-                      >
-                        {pagarConTarjetaNueva && <span className="h-2 w-2 rounded-full bg-marca" />}
-                      </span>
-                      <span className="flex items-center gap-1 font-medium">
-                        <Plus size={14} strokeWidth={2.5} /> Usar otra tarjeta
-                      </span>
-                    </button>
-                  </div>
-                )}
-
-                {tarjetaGuardadaSel ? (
-                  <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
-                    <p className="flex items-center gap-2 font-medium text-sm">
-                      <CreditCard size={16} strokeWidth={2} />
-                      <span className="capitalize">{tarjetaGuardadaSel.marca}</span> ••••{" "}
-                      {tarjetaGuardadaSel.last4}
-                    </p>
-                    <p className="mt-0.5 text-slate-500 text-xs">
-                      Expira {String(tarjetaGuardadaSel.expMes).padStart(2, "0")}/
-                      {tarjetaGuardadaSel.expAnio} · pagas en un paso sin volver a capturar tu
-                      tarjeta
-                    </p>
-                  </div>
-                ) : stripeKey ? (
-                  <PagoTarjetaStripe
-                    key={draftScope.owner}
-                    ref={stripeForm}
-                    publicKey={stripeKey}
-                    accountId={config?.stripeAccountId ?? null}
-                    onReadyChange={setStripeReady}
-                  />
-                ) : conektaKey ? (
-                  <>
-                    <PagoTarjetaConekta
-                      key={draftScope.owner}
-                      publicKey={conektaKey}
-                      montoTotal={total}
-                      msiMeses={msiOfrecibles}
-                      procesando={procesando}
-                      formId={FORM_PAGO_ID}
-                      onPagar={(token, meses) =>
-                        procesarPedido("tarjeta", token, meses, {
-                          ...(guardarTarjeta ? { guardarTarjeta: true } : {}),
-                        })
-                      }
-                    />
-                    {sesionCliente && (
-                      <label className="mt-3 flex items-center gap-2 text-slate-600 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={guardarTarjeta}
-                          onChange={(e) => setGuardarTarjeta(e.target.checked)}
-                        />
-                        Guardar mi tarjeta para la próxima vez
-                      </label>
-                    )}
-                  </>
-                ) : permiteDemo ? (
-                  <>
-                    {msiOfrecibles.length > 0 && (
-                      <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
-                        <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
-                          <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
-                        </p>
-                        <div className="space-y-1 text-slate-600 text-sm">
-                          {[...msiOfrecibles]
-                            .sort((a, b) => a - b)
-                            .map((m) => (
-                              <div key={m} className="flex justify-between">
-                                <span>{m} pagos de</span>
-                                <span className="font-semibold">${(total / m).toFixed(2)}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => procesarPedido("tarjeta")}
-                      disabled={procesando}
-                      className="gx-btn-primary w-full !py-3"
-                    >
-                      {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
-                    </button>
-                    <p className="mt-2 text-center text-slate-400 text-xs">
-                      Pago simulado con proveedor mock (sin cobro real). Configura Conekta para
-                      cobrar de verdad con MSI.
-                    </p>
-                  </>
-                ) : (
-                  <p
-                    role="alert"
-                    className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
-                  >
-                    El pago en línea no está disponible en este momento. Tu carrito se conserva para
-                    que puedas intentarlo más tarde.
-                  </p>
-                )}
-              </fieldset>
-            ) : (
-              <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                <p className="flex items-center gap-2 font-medium">
-                  {opcionesPago.find((o) => o.id === metodoActivo)?.icon}
-                  {opcionesPago.find((o) => o.id === metodoActivo)?.titulo}
-                </p>
-                <p className="text-slate-600">
-                  {metodoActivo === "oxxo"
-                    ? "Al confirmar tu compra te mostraremos la referencia para pagar en efectivo en cualquier OXXO. Tu pedido queda apartado mientras realizas tu pago."
-                    : metodoActivo === "spei"
-                      ? "Al confirmar tu compra te mostraremos la CLABE para transferir desde tu banca en línea. Tu pedido queda apartado mientras realizas tu pago."
-                      : "No se te cobra nada ahora. Apartamos tu pedido y pagas en la tienda cuando lo recojas."}
-                </p>
-              </div>
-            )}
-          </SeccionCheckout>
+          <PagoCheckout {...prepared} />
         </div>
 
         {/* ③ Resumen */}
-        <aside className="mt-4 lg:sticky lg:top-32 lg:mt-0">
-          <div className="gx-card !p-4">
-            <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
-            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              {items.map((i) => (
-                <div key={i.varianteId} className="flex items-center gap-3 text-sm">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-lg">
-                    {i.imagenUrl ? (
-                      <img
-                        src={i.imagenUrl}
-                        alt={i.titulo}
-                        className="h-full w-full rounded object-cover"
-                      />
-                    ) : (
-                      <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{i.titulo}</p>
-                    <p className="text-slate-500">
-                      {i.cantidad} × ${Number(i.precio).toFixed(2)}
-                    </p>
-                  </div>
-                  <span className="whitespace-nowrap font-semibold">
-                    ${(Number(i.precio) * i.cantidad).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {config?.envioGratisDesde && (
-              <div className="mt-3">
-                <BarraEnvioGratis subtotal={subtotal} umbral={Number(config.envioGratisDesde)} />
-              </div>
-            )}
-
-            {config?.cuponEnCheckout && (
-              <CuponCheckout cupon={cupon} disabled={procesando || !!attempt?.submitted} />
-            )}
-
-            <div className="mt-4 border-t pt-3">
-              <div className="mb-1 flex justify-between text-slate-600 text-sm">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
-              </div>
-              {descuentoCupon > 0 && (
-                <div className="mb-1 flex justify-between text-ok text-sm">
-                  <span>Descuento ({cupon.codigoAplicado})</span>
-                  <span>−${descuentoCupon.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="mb-2 flex justify-between text-slate-600 text-sm">
-                <span>Envío</span>
-                <span>
-                  {!entregaLista
-                    ? "Por confirmar"
-                    : costoEnvio === 0
-                      ? "Gratis"
-                      : `$${costoEnvio.toFixed(2)}`}
-                </span>
-              </div>
-              <div className="flex justify-between font-bold text-lg">
-                <span>
-                  {cupon.bloquea
-                    ? "Total antes de validar cupón"
-                    : entregaLista
-                      ? "Total con envío"
-                      : "Subtotal con descuentos"}
-                </span>
-                <span className="text-marca">${total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {!entregaLista && (
-              <output className="mt-2 block text-sm text-slate-600">
-                Confirma una opción de entrega para habilitar el pago.
-              </output>
-            )}
-            {error && (
-              <p
-                id="checkout-error"
-                tabIndex={-1}
-                role="alert"
-                className="mt-2 rounded bg-danger-light p-2 text-sm text-danger"
-              >
-                {error}
-              </p>
-            )}
-          </div>
-        </aside>
+        <ResumenCheckout {...prepared} />
       </div>
 
       {/* Total negro siempre visible */}
-      <div className="fixed inset-x-0 bottom-0 z-40 bg-slate-800 text-white shadow-[0_-4px_12px_rgb(0_0_0/0.25)]">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-white/70 text-xs">
-              {cupon.bloquea
-                ? "Cupón por validar"
-                : entregaLista
-                  ? "Total con envío"
-                  : "Subtotal (envío por confirmar)"}
-            </p>
-            <p className="font-bold text-xl leading-tight">${total.toFixed(2)}</p>
-          </div>
-          {attempt?.submitted ? (
-            <button
-              type="button"
-              onClick={consultarPedido}
-              disabled={procesando}
-              className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85"
-            >
-              {procesando ? "Verificando…" : conStripe ? "Retomar pago" : "Consultar pago"}
-            </button>
-          ) : metodoActivo !== "tarjeta" ? (
-            <button
-              type="button"
-              onClick={() => procesarPedido(metodoActivo)}
-              disabled={pagoDeshabilitado}
-              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {procesando
-                ? "Procesando…"
-                : metodoActivo === "cod"
-                  ? `Apartar pedido · $${total.toFixed(2)}`
-                  : `Pagar $${total.toFixed(2)}`}
-            </button>
-          ) : tarjetaGuardadaSel ? (
-            <button
-              type="button"
-              onClick={() =>
-                procesarPedido("tarjeta", undefined, undefined, {
-                  medioPagoGuardadoId: tarjetaGuardadaSel.id,
-                })
-              }
-              disabled={pagoDeshabilitado}
-              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
-            </button>
-          ) : stripeKey ? (
-            <button
-              type="button"
-              onClick={() => procesarPedido("tarjeta")}
-              disabled={pagoDeshabilitado || !stripeReady}
-              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:opacity-50"
-            >
-              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
-            </button>
-          ) : conektaKey ? (
-            <button
-              type="submit"
-              form={FORM_PAGO_ID}
-              disabled={pagoDeshabilitado}
-              className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {procesando ? "Procesando…" : "Pagar"}
-            </button>
-          ) : permiteDemo ? (
-            <button
-              type="button"
-              onClick={() => procesarPedido("tarjeta")}
-              disabled={pagoDeshabilitado}
-              className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)} (demo)`}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="El pago en línea no está disponible en este momento"
-              className="gx-btn bg-ok !py-3 !px-8 text-base text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Pagar
-            </button>
-          )}
-        </div>
-      </div>
+      <TotalCheckout {...prepared} />
     </div>
   );
 }
@@ -1815,4 +1292,989 @@ function Campo({
       />
     </label>
   );
+}
+
+function EntregaCheckout(model: CheckoutPrepared) {
+  const {
+    email,
+    setEmail,
+    nombre,
+    setNombre,
+    modoEntrega,
+    setModoEntrega,
+    pickups,
+    setSucursalId,
+    errorPickup,
+    setReintentoEntrega,
+  } = model;
+
+  return (
+    <SeccionCheckout paso={1} titulo="¿A dónde lo llevas?">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Campo label="Email" value={email} onChange={setEmail} type="email" required />
+        <Campo label="Nombre completo" value={nombre} onChange={setNombre} required />
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <BotonEntrega
+          activo={modoEntrega === "envio"}
+          onClick={() => setModoEntrega("envio")}
+          label={
+            <>
+              <Truck size={16} strokeWidth={2} /> Envío a domicilio
+            </>
+          }
+        />
+        {pickups.length > 0 && (
+          <BotonEntrega
+            activo={modoEntrega === "pickup"}
+            onClick={() => {
+              setModoEntrega("pickup");
+              if (pickups.length === 1 && pickups[0]) setSucursalId(pickups[0].sucursalId);
+            }}
+            label={
+              <>
+                <Store size={16} strokeWidth={2} /> Recoger en tienda
+              </>
+            }
+          />
+        )}
+      </div>
+
+      {errorPickup && (
+        <div role="alert" className="mt-3 space-y-2 text-danger text-sm">
+          <p>{errorPickup}</p>
+          <button
+            type="button"
+            className="gx-btn-secondary"
+            onClick={() => setReintentoEntrega((n) => n + 1)}
+          >
+            Reintentar entrega
+          </button>
+        </div>
+      )}
+
+      {modoEntrega === "envio" ? <EnvioCheckout {...model} /> : <RecogidaCheckout {...model} />}
+    </SeccionCheckout>
+  );
+}
+
+function PagoCheckout(model: CheckoutPrepared) {
+  const {
+    pickups,
+    procesando,
+    attempt,
+    setSessionRetry,
+    requiereSesion,
+    metodoActivo,
+    consultarPedido,
+    mostrarSelector,
+    opcionesPago,
+  } = model;
+
+  return (
+    <SeccionCheckout paso={2} titulo="¿Cómo pagas?">
+      {mostrarSelector ? (
+        <SelectorPagoCheckout {...model} />
+      ) : opcionesPago[0] ? (
+        <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+          <p className="flex items-center gap-2 font-medium text-sm">
+            {opcionesPago[0].icon} {opcionesPago[0].titulo}
+          </p>
+          <p className="mt-0.5 text-slate-500 text-xs">{opcionesPago[0].descripcion}</p>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Esta tienda todavía no tiene pagos en línea configurados.{" "}
+          {pickups.length > 0
+            ? "Elige recoger en tienda para pagar al recibir tu pedido."
+            : "Tu carrito se conserva para continuar cuando la tienda habilite el pago."}
+        </p>
+      )}
+
+      {!attempt && !requiereSesion && (
+        <div className="mt-3 space-y-2 text-sm text-slate-600">
+          <p>Preparando sesión segura de compra…</p>
+          <button
+            type="button"
+            className="gx-btn-secondary"
+            onClick={() => setSessionRetry((n) => n + 1)}
+          >
+            Reintentar sesión
+          </button>
+        </div>
+      )}
+      {attempt?.submitted && (
+        <div className="mt-3 space-y-2 text-sm text-slate-600">
+          <p>
+            Hay un intento de compra por verificar. El carrito se conserva hasta confirmar el pago.
+          </p>
+          <button
+            type="button"
+            className="gx-btn-secondary"
+            disabled={procesando}
+            onClick={consultarPedido}
+          >
+            {procesando ? "Consultando…" : "Consultar estado del pago"}
+          </button>
+        </div>
+      )}
+      {metodoActivo === "tarjeta" ? (
+        <TarjetaCheckout {...model} />
+      ) : (
+        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="flex items-center gap-2 font-medium">
+            {opcionesPago.find((o) => o.id === metodoActivo)?.icon}
+            {opcionesPago.find((o) => o.id === metodoActivo)?.titulo}
+          </p>
+          <p className="text-slate-600">
+            {metodoActivo === "oxxo"
+              ? "Al confirmar tu compra te mostraremos la referencia para pagar en efectivo en cualquier OXXO. Tu pedido queda apartado mientras realizas tu pago."
+              : metodoActivo === "spei"
+                ? "Al confirmar tu compra te mostraremos la CLABE para transferir desde tu banca en línea. Tu pedido queda apartado mientras realizas tu pago."
+                : "No se te cobra nada ahora. Apartamos tu pedido y pagas en la tienda cuando lo recojas."}
+          </p>
+        </div>
+      )}
+    </SeccionCheckout>
+  );
+}
+
+function ResumenCheckout(model: CheckoutPrepared) {
+  const {
+    items,
+    config,
+    procesando,
+    attempt,
+    error,
+    subtotal,
+    cupon,
+    entregaLista,
+    descuentoCupon,
+    costoEnvio,
+    total,
+  } = model;
+
+  return (
+    <aside className="mt-4 lg:sticky lg:top-32 lg:mt-0">
+      <div className="gx-card !p-4">
+        <p className="mb-3 font-medium text-sm">Tu pedido ({items.length})</p>
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+          {items.map((i) => (
+            <div key={i.varianteId} className="flex items-center gap-3 text-sm">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-lg">
+                {i.imagenUrl ? (
+                  <img
+                    src={i.imagenUrl}
+                    alt={i.titulo}
+                    className="h-full w-full rounded object-cover"
+                  />
+                ) : (
+                  <ImageOff size={20} strokeWidth={1.5} className="text-slate-300" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{i.titulo}</p>
+                <p className="text-slate-500">
+                  {i.cantidad} × ${Number(i.precio).toFixed(2)}
+                </p>
+              </div>
+              <span className="whitespace-nowrap font-semibold">
+                ${(Number(i.precio) * i.cantidad).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {config?.envioGratisDesde && (
+          <div className="mt-3">
+            <BarraEnvioGratis subtotal={subtotal} umbral={Number(config.envioGratisDesde)} />
+          </div>
+        )}
+
+        {config?.cuponEnCheckout && (
+          <CuponCheckout cupon={cupon} disabled={procesando || !!attempt?.submitted} />
+        )}
+
+        <div className="mt-4 border-t pt-3">
+          <div className="mb-1 flex justify-between text-slate-600 text-sm">
+            <span>Subtotal</span>
+            <span>${subtotal.toFixed(2)}</span>
+          </div>
+          {descuentoCupon > 0 && (
+            <div className="mb-1 flex justify-between text-ok text-sm">
+              <span>Descuento ({cupon.codigoAplicado})</span>
+              <span>−${descuentoCupon.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="mb-2 flex justify-between text-slate-600 text-sm">
+            <span>Envío</span>
+            <span>
+              {!entregaLista
+                ? "Por confirmar"
+                : costoEnvio === 0
+                  ? "Gratis"
+                  : `$${costoEnvio.toFixed(2)}`}
+            </span>
+          </div>
+          <div className="flex justify-between font-bold text-lg">
+            <span>
+              {cupon.bloquea
+                ? "Total antes de validar cupón"
+                : entregaLista
+                  ? "Total con envío"
+                  : "Subtotal con descuentos"}
+            </span>
+            <span className="text-marca">${total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {!entregaLista && (
+          <output className="mt-2 block text-sm text-slate-600">
+            Confirma una opción de entrega para habilitar el pago.
+          </output>
+        )}
+        {error && (
+          <p
+            id="checkout-error"
+            tabIndex={-1}
+            role="alert"
+            className="mt-2 rounded bg-danger-light p-2 text-sm text-danger"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function TotalCheckout(model: CheckoutPrepared) {
+  const { cupon, entregaLista, total } = model;
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 bg-slate-800 text-white shadow-[0_-4px_12px_rgb(0_0_0/0.25)]">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-white/70 text-xs">
+            {cupon.bloquea
+              ? "Cupón por validar"
+              : entregaLista
+                ? "Total con envío"
+                : "Subtotal (envío por confirmar)"}
+          </p>
+          <p className="font-bold text-xl leading-tight">${total.toFixed(2)}</p>
+        </div>
+        {<AccionPagoCheckout {...model} />}
+      </div>
+    </div>
+  );
+}
+
+function EnvioCheckout(model: CheckoutPrepared) {
+  const {
+    calle,
+    setCalle,
+    numero,
+    setNumero,
+    colonia,
+    setColonia,
+    ciudad,
+    setCiudad,
+    estado,
+    setEstado,
+    cp,
+    setCp,
+    direcciones,
+    modoDir,
+    guardarDir,
+    setGuardarDir,
+    opcionesEnvio,
+    tarifaId,
+    setTarifaId,
+    cotizando,
+    errorEnvio,
+    setReintentoEntrega,
+  } = model;
+  return (
+    <div className="mt-4 space-y-3">
+      {direcciones.length > 0 && <DireccionesCheckout {...model} />}
+
+      {modoDir === "nueva" && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <Campo label="Calle" value={calle} onChange={setCalle} required />
+            </div>
+            <Campo label="Número" value={numero} onChange={setNumero} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Campo label="Colonia" value={colonia} onChange={setColonia} />
+            <Campo label="Ciudad" value={ciudad} onChange={setCiudad} required />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Campo label="Estado" value={estado} onChange={setEstado} required />
+            <Campo label="Código postal" value={cp} onChange={setCp} required />
+          </div>
+          <label className="flex items-center gap-2 text-slate-600 text-sm">
+            <input
+              type="checkbox"
+              checked={guardarDir}
+              onChange={(e) => setGuardarDir(e.target.checked)}
+            />
+            Guardar esta dirección para próximas compras
+          </label>
+        </>
+      )}
+
+      <OpcionesEnvio
+        opciones={opcionesEnvio}
+        tarifaId={tarifaId}
+        onSelect={setTarifaId}
+        cotizando={cotizando}
+        error={errorEnvio}
+        onRetry={() => setReintentoEntrega((n) => n + 1)}
+        direccionLista={cp.length === 5 && estado.trim().length >= 3}
+      />
+    </div>
+  );
+}
+
+function RecogidaCheckout(model: CheckoutPrepared) {
+  const { pickups, sucursalId, setSucursalId } = model;
+  return (
+    <div className="mt-4 space-y-2">
+      {pickups.map((p) => (
+        <label
+          key={p.sucursalId}
+          className="flex cursor-pointer items-center gap-3 rounded border p-3 text-sm has-[:checked]:border-marca"
+        >
+          <input
+            type="radio"
+            name="pickup"
+            checked={sucursalId === p.sucursalId}
+            onChange={() => setSucursalId(p.sucursalId)}
+          />
+          <span className="flex-1 font-medium">{p.nombre}</span>
+          <span className="text-slate-500">listo en ~{p.tiempoPreparacionPromedioMin} min</span>
+          <span className="font-semibold text-ok">Gratis</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function DireccionesCheckout(model: CheckoutPrepared) {
+  const {
+    setCalle,
+    setNumero,
+    setColonia,
+    setCiudad,
+    setEstado,
+    setCp,
+    direcciones,
+    direccionId,
+    setDireccionId,
+    modoDir,
+    setModoDir,
+    usarDireccion,
+  } = model;
+  return (
+    <div
+      className="space-y-2"
+      role="radiogroup"
+      onKeyDown={navegarRadios}
+      aria-label="Dirección de envío"
+    >
+      {direcciones.map((d) => {
+        const seleccionada = modoDir === "guardada" && direccionId === d.id;
+        return (
+          <button
+            key={d.id}
+            type="button"
+            // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta
+            role="radio"
+            aria-checked={seleccionada}
+            tabIndex={seleccionada ? 0 : -1}
+            onClick={() => {
+              setModoDir("guardada");
+              setDireccionId(d.id);
+              usarDireccion(d);
+            }}
+            className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+              seleccionada
+                ? "border-marca bg-marca/5 ring-1 ring-marca"
+                : "border-slate-300 hover:border-marca"
+            }`}
+          >
+            <span
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                seleccionada ? "border-marca" : "border-slate-300"
+              }`}
+            >
+              {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">
+                {d.etiqueta}
+                {d.isDefaultEnvio && (
+                  <span className="ml-1 font-normal text-marca text-xs">· predeterminada</span>
+                )}
+              </span>
+              <span className="block truncate text-slate-500 text-xs">
+                {d.calle} {d.numeroExterior}
+                {d.colonia ? `, ${d.colonia}` : ""} {d.municipio} · CP {d.codigoPostal}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del button de direccion guardada
+        role="radio"
+        aria-checked={modoDir === "nueva"}
+        tabIndex={modoDir === "nueva" ? 0 : -1}
+        onClick={() => {
+          setModoDir("nueva");
+          setDireccionId("");
+          setCalle("");
+          setNumero("");
+          setColonia("");
+          setCiudad("");
+          setEstado("");
+          setCp("");
+        }}
+        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+          modoDir === "nueva"
+            ? "border-marca bg-marca/5 ring-1 ring-marca"
+            : "border-slate-300 hover:border-marca"
+        }`}
+      >
+        <span
+          className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+            modoDir === "nueva" ? "border-marca" : "border-slate-300"
+          }`}
+        >
+          {modoDir === "nueva" && <span className="h-2 w-2 rounded-full bg-marca" />}
+        </span>
+        <span className="flex items-center gap-1 font-medium">
+          <Plus size={14} strokeWidth={2.5} /> Nueva dirección
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function SelectorPagoCheckout(model: CheckoutPrepared) {
+  const { setMetodoPago, metodoActivo, opcionesPago } = model;
+  return (
+    <div
+      className="space-y-2"
+      role="radiogroup"
+      onKeyDown={navegarRadios}
+      aria-label="Método de pago"
+    >
+      {opcionesPago.map((o) => {
+        const activa = metodoActivo === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (focusables y operables con Enter/Espacio); input radio nativo no permite el contenido rico de la tarjeta — mismo patrón que direcciones guardadas
+            role="radio"
+            aria-checked={activa}
+            tabIndex={activa ? 0 : -1}
+            onClick={() => setMetodoPago(o.id)}
+            className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+              activa
+                ? "border-marca bg-marca/5 ring-1 ring-marca"
+                : "border-slate-300 hover:border-marca"
+            }`}
+          >
+            <span
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                activa ? "border-marca" : "border-slate-300"
+              }`}
+            >
+              {activa && <span className="h-2 w-2 rounded-full bg-marca" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2 font-medium">
+                {o.icon} {o.titulo}
+              </span>
+              <span className="block text-slate-500 text-xs">{o.descripcion}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TarjetaCheckout(model: CheckoutPrepared) {
+  const { procesando, mediosPago, requiereSesion, conStripe, pagoDeshabilitado } = model;
+  return (
+    <fieldset
+      disabled={conStripe ? procesando || requiereSesion : pagoDeshabilitado}
+      className="mt-3 min-w-0"
+    >
+      {!conStripe && mediosPago.length > 0 && <TarjetasGuardadasCheckout {...model} />}
+
+      {<ProveedorTarjetaCheckout {...model} />}
+    </fieldset>
+  );
+}
+
+function TarjetasGuardadasCheckout(model: CheckoutPrepared) {
+  const { mediosPago, setMedioPagoSel, tarjetaGuardadaSel, pagarConTarjetaNueva } = model;
+  return (
+    <div
+      className="mb-3 space-y-2"
+      role="radiogroup"
+      onKeyDown={navegarRadios}
+      aria-label="Tu tarjeta"
+    >
+      <p className="gx-label">Tu tarjeta</p>
+      {mediosPago.map((m) => {
+        const seleccionada = tarjetaGuardadaSel?.id === m.id;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones (mismo patrón que direcciones guardadas)
+            role="radio"
+            aria-checked={seleccionada}
+            tabIndex={seleccionada ? 0 : -1}
+            onClick={() => setMedioPagoSel(m.id)}
+            className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+              seleccionada
+                ? "border-marca bg-marca/5 ring-1 ring-marca"
+                : "border-slate-300 hover:border-marca"
+            }`}
+          >
+            <span
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                seleccionada ? "border-marca" : "border-slate-300"
+              }`}
+            >
+              {seleccionada && <span className="h-2 w-2 rounded-full bg-marca" />}
+            </span>
+            <CreditCard size={16} strokeWidth={2} className="flex-shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium capitalize">{m.marca}</span>
+              <span className="block text-slate-500 text-xs">
+                •••• {m.last4} · exp {String(m.expMes).padStart(2, "0")}/{m.expAnio}
+              </span>
+            </span>
+            <span className="text-marca text-xs">1 toque</span>
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        // biome-ignore lint/a11y/useSemanticElements: radiogroup WAI-ARIA con botones — ver nota del selector de tarjetas guardadas
+        role="radio"
+        aria-checked={pagarConTarjetaNueva}
+        tabIndex={pagarConTarjetaNueva ? 0 : -1}
+        onClick={() => setMedioPagoSel("")}
+        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left text-sm transition ${
+          pagarConTarjetaNueva
+            ? "border-marca bg-marca/5 ring-1 ring-marca"
+            : "border-slate-300 hover:border-marca"
+        }`}
+      >
+        <span
+          className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+            pagarConTarjetaNueva ? "border-marca" : "border-slate-300"
+          }`}
+        >
+          {pagarConTarjetaNueva && <span className="h-2 w-2 rounded-full bg-marca" />}
+        </span>
+        <span className="flex items-center gap-1 font-medium">
+          <Plus size={14} strokeWidth={2.5} /> Usar otra tarjeta
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function ProveedorTarjetaCheckout(model: CheckoutPrepared) {
+  const {
+    stripeForm,
+    setStripeReady,
+    config,
+    procesando,
+    guardarTarjeta,
+    setGuardarTarjeta,
+    sesionCliente,
+    draftScope,
+    total,
+    stripeKey,
+    conektaKey,
+    permiteDemo,
+    msiOfrecibles,
+    procesarPedido,
+    tarjetaGuardadaSel,
+  } = model;
+  if (tarjetaGuardadaSel)
+    return (
+      <div className="rounded-lg border border-marca bg-marca/5 p-3 ring-1 ring-marca">
+        <p className="flex items-center gap-2 font-medium text-sm">
+          <CreditCard size={16} strokeWidth={2} />
+          <span className="capitalize">{tarjetaGuardadaSel.marca}</span> ••••{" "}
+          {tarjetaGuardadaSel.last4}
+        </p>
+        <p className="mt-0.5 text-slate-500 text-xs">
+          Expira {String(tarjetaGuardadaSel.expMes).padStart(2, "0")}/{tarjetaGuardadaSel.expAnio} ·
+          pagas en un paso sin volver a capturar tu tarjeta
+        </p>
+      </div>
+    );
+  if (stripeKey)
+    return (
+      <PagoTarjetaStripe
+        key={draftScope.owner}
+        ref={stripeForm}
+        publicKey={stripeKey}
+        accountId={config?.stripeAccountId ?? null}
+        onReadyChange={setStripeReady}
+      />
+    );
+  if (conektaKey)
+    return (
+      <>
+        <PagoTarjetaConekta
+          key={draftScope.owner}
+          publicKey={conektaKey}
+          montoTotal={total}
+          msiMeses={msiOfrecibles}
+          procesando={procesando}
+          formId={FORM_PAGO_ID}
+          onPagar={(token, meses) =>
+            procesarPedido("tarjeta", token, meses, {
+              ...(guardarTarjeta ? { guardarTarjeta: true } : {}),
+            })
+          }
+        />
+        {sesionCliente && (
+          <label className="mt-3 flex items-center gap-2 text-slate-600 text-sm">
+            <input
+              type="checkbox"
+              checked={guardarTarjeta}
+              onChange={(e) => setGuardarTarjeta(e.target.checked)}
+            />
+            Guardar mi tarjeta para la próxima vez
+          </label>
+        )}
+      </>
+    );
+  if (permiteDemo)
+    return (
+      <>
+        {msiOfrecibles.length > 0 && (
+          <div className="mb-4 rounded-lg border border-marca/30 bg-marca/5 p-3">
+            <p className="mb-2 flex items-center gap-1.5 font-medium text-marca text-sm">
+              <CreditCard size={16} strokeWidth={2} /> Meses sin intereses
+            </p>
+            <div className="space-y-1 text-slate-600 text-sm">
+              {[...msiOfrecibles]
+                .sort((a, b) => a - b)
+                .map((m) => (
+                  <div key={m} className="flex justify-between">
+                    <span>{m} pagos de</span>
+                    <span className="font-semibold">${(total / m).toFixed(2)}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => procesarPedido("tarjeta")}
+          disabled={procesando}
+          className="gx-btn-primary w-full !py-3"
+        >
+          {procesando ? "Procesando pago…" : `Pagar $${total.toFixed(2)} (demo)`}
+        </button>
+        <p className="mt-2 text-center text-slate-400 text-xs">
+          Pago simulado con proveedor mock (sin cobro real). Configura Conekta para cobrar de verdad
+          con MSI.
+        </p>
+      </>
+    );
+  return (
+    <p
+      role="alert"
+      className="rounded-lg border border-warn/40 bg-warn-light p-3 text-sm text-warn"
+    >
+      El pago en línea no está disponible en este momento. Tu carrito se conserva para que puedas
+      intentarlo más tarde.
+    </p>
+  );
+}
+
+function AccionPagoCheckout(model: CheckoutPrepared) {
+  const {
+    stripeReady,
+    procesando,
+    attempt,
+    total,
+    metodoActivo,
+    stripeKey,
+    conektaKey,
+    permiteDemo,
+    procesarPedido,
+    pagoDeshabilitado,
+    tarjetaGuardadaSel,
+  } = model;
+  if (attempt?.submitted) return <AccionRetomarPago {...model} />;
+  if (metodoActivo !== "tarjeta") return <AccionPagoReferenciado {...model} />;
+  if (tarjetaGuardadaSel)
+    return (
+      <button
+        type="button"
+        onClick={() =>
+          procesarPedido("tarjeta", undefined, undefined, {
+            medioPagoGuardadoId: tarjetaGuardadaSel.id,
+          })
+        }
+        disabled={pagoDeshabilitado}
+        className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
+      </button>
+    );
+  if (stripeKey)
+    return (
+      <button
+        type="button"
+        onClick={() => procesarPedido("tarjeta")}
+        disabled={pagoDeshabilitado || !stripeReady}
+        className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:opacity-50"
+      >
+        {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)}`}
+      </button>
+    );
+  if (conektaKey)
+    return (
+      <button
+        type="submit"
+        form={FORM_PAGO_ID}
+        disabled={pagoDeshabilitado}
+        className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {procesando ? "Procesando…" : "Pagar"}
+      </button>
+    );
+  if (permiteDemo)
+    return (
+      <button
+        type="button"
+        onClick={() => procesarPedido("tarjeta")}
+        disabled={pagoDeshabilitado}
+        className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {procesando ? "Procesando…" : `Pagar $${total.toFixed(2)} (demo)`}
+      </button>
+    );
+  return (
+    <button
+      type="button"
+      disabled
+      title="El pago en línea no está disponible en este momento"
+      className="gx-btn bg-ok !py-3 !px-8 text-base text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Pagar
+    </button>
+  );
+}
+
+function PreparandoCheckout(model: CheckoutModel) {
+  const { setSessionRetry, error, requiereSesion } = model;
+  return (
+    <div className="mx-auto max-w-md py-8 text-center">
+      <h1 className="font-bold text-2xl">
+        {requiereSesion ? "Retoma tu compra" : "Preparando tu compra"}
+      </h1>
+      {error ? (
+        <>
+          <p role="alert" className="mt-3 text-danger">
+            {error}
+          </p>
+          {requiereSesion ? (
+            <Link
+              href="/cuenta/login?next=%2Fcheckout"
+              className="gx-btn-primary mt-4 inline-block"
+            >
+              Iniciar sesión para continuar
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSessionRetry((n) => n + 1)}
+              className="gx-btn-primary mt-4"
+            >
+              Reintentar
+            </button>
+          )}
+        </>
+      ) : (
+        <output className="mt-3 block text-slate-500">Estamos recuperando tu selección.</output>
+      )}
+    </div>
+  );
+}
+
+async function leerRespuestaCheckout(response: Response, signal: AbortSignal) {
+  const raw: unknown = await response.json().catch(() => null);
+  signal.throwIfAborted();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    throw new Error(
+      "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
+    );
+  const data = raw as RespuestaCheckout;
+  if (response.ok && !esRespuestaCheckout(raw))
+    throw new Error(
+      "No pudimos verificar el resultado. Conserva este intento y no vuelvas a pagar.",
+    );
+
+  return data;
+}
+
+function direccionEnvioIncompleta(cp: string, calle: string, ciudad: string, estado: string) {
+  return cp.length !== 5 || !calle.trim() || !ciudad.trim() || estado.trim().length < 3;
+}
+function mensajeErrorCheckout(error: unknown, fallback: string): string {
+  return error instanceof Error && error.name === "Error" ? error.message : fallback;
+}
+
+async function leerSesionCheckout(
+  response: Response,
+): Promise<{ context: string; guestContext?: unknown }> {
+  const data = await response.json();
+  if (
+    !response.ok ||
+    !data ||
+    typeof data.context !== "string" ||
+    !data.context ||
+    data.context.length > 200
+  )
+    throw new Error("No se pudo preparar la compra. Reintenta sin volver a pagar.");
+  return data;
+}
+
+function AccionRetomarPago(model: CheckoutPrepared) {
+  const { procesando, conStripe, consultarPedido } = model;
+  return (
+    <button
+      type="button"
+      onClick={consultarPedido}
+      disabled={procesando}
+      className="gx-btn bg-ok !py-3 !px-6 text-base text-white hover:bg-ok/85"
+    >
+      {procesando ? "Verificando…" : conStripe ? "Retomar pago" : "Consultar pago"}
+    </button>
+  );
+}
+
+function AccionPagoReferenciado(model: CheckoutPrepared) {
+  const { procesando, total, metodoActivo, procesarPedido, pagoDeshabilitado } = model;
+  return (
+    <button
+      type="button"
+      onClick={() => procesarPedido(metodoActivo)}
+      disabled={pagoDeshabilitado}
+      className="gx-btn bg-ok !py-3 !px-8 text-base text-white hover:bg-ok/85 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {procesando
+        ? "Procesando…"
+        : metodoActivo === "cod"
+          ? `Apartar pedido · $${total.toFixed(2)}`
+          : `Pagar $${total.toFixed(2)}`}
+    </button>
+  );
+}
+
+function ErrorCarritoCheckout(model: CheckoutModel) {
+  const { procesando, attempt, error, requiereSesion, actualizarCarrito, consultarPedido } = model;
+  return (
+    <div className="mx-auto max-w-lg py-8 text-center">
+      <h1 className="text-2xl font-bold">Revisa tu carrito</h1>
+      <p role="alert" className="mt-3 text-danger">
+        No pudimos leer tu carrito en este navegador. Permite el almacenamiento y vuelve a intentar.
+        Si ya intentaste pagar, consulta ese mismo pedido antes de iniciar otra compra.
+      </p>
+      <button type="button" onClick={actualizarCarrito} className="gx-btn-primary mt-4 min-h-11">
+        Volver a leer carrito
+      </button>
+      {attempt?.submitted && (
+        <button
+          type="button"
+          onClick={() => void consultarPedido()}
+          disabled={procesando || requiereSesion}
+          className="gx-btn-secondary mt-3 min-h-11"
+        >
+          Consultar el pedido anterior
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="mt-3 text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function scopeSesionCheckout(data: { context: string; guestContext?: unknown }) {
+  return {
+    owner: data.context,
+    ...(typeof data.guestContext === "string" ? { guestOwner: data.guestContext } : {}),
+  };
+}
+
+function opcionesCobroCheckout(
+  config: TiendaConfig | null,
+  modoEntrega: "envio" | "pickup",
+  metodoPago: MetodoPago,
+  total: number,
+) {
+  // Pagar al recoger no depende del proveedor: se ofrece cuando el pedido se
+  // recoge en tienda, porque el cobro ocurre en el mostrador.
+  const metodosDisponibles = [
+    ...(config?.metodosPago ?? ["tarjeta"]),
+    ...(modoEntrega === "pickup" ? ["cod"] : []),
+  ];
+  const metodoActivo = (
+    metodosDisponibles.includes(metodoPago) ? metodoPago : (metodosDisponibles[0] ?? "tarjeta")
+  ) as MetodoPago;
+  const conStripe = config?.proveedorPago === "stripe";
+  const stripeKey = conStripe ? config?.pagoPublicKey : null;
+  const conektaKey = config?.proveedorPago === "conekta" ? (config.pagoPublicKey ?? "") : "";
+  // Pagar al recoger no necesita proveedor de pagos: el cobro ocurre en el mostrador.
+  const permiteDemo = process.env.NODE_ENV !== "production";
+  // MSI ofrecibles para esta compra (activos + total sobre el mínimo).
+  const msiOfrecibles =
+    !conStripe && config?.msiHabilitado && total >= Number(config.msiMontoMinimo)
+      ? config.msiMeses
+      : [];
+
+  return {
+    metodosDisponibles,
+    metodoActivo,
+    conStripe,
+    stripeKey,
+    conektaKey,
+    permiteDemo,
+    msiOfrecibles,
+  };
+}
+
+function tarjetaSeleccionada(
+  conStripe: boolean,
+  mediosPago: MedioPagoGuardado[],
+  medioPagoSel: string,
+) {
+  return conStripe ? null : (mediosPago.find((m) => m.id === medioPagoSel) ?? null);
 }

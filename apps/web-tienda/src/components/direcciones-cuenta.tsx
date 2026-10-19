@@ -90,6 +90,10 @@ export function DireccionesCuenta() {
     setAbierto(false);
   }
 
+  const cargaVigente = useCallback(
+    (controller: AbortController) => !controller.signal.aborted && montado.current,
+    [],
+  );
   const cargar = useCallback(async () => {
     carga.current?.abort();
     const controller = new AbortController();
@@ -104,14 +108,14 @@ export function DireccionesCuenta() {
       if (!res.ok) throw new Error("load");
       const data = await res.json();
       if (!esListaDirecciones(data)) throw new Error("invalid");
-      if (!controller.signal.aborted && montado.current) setDirs(data);
+      if (cargaVigente(controller)) setDirs(data);
     } catch {
-      if (!controller.signal.aborted && montado.current)
+      if (cargaVigente(controller))
         setErrorCarga("No pudimos cargar tus direcciones. Reintenta; tus datos se conservan.");
     } finally {
-      if (!controller.signal.aborted && montado.current) setCargando(false);
+      if (cargaVigente(controller)) setCargando(false);
     }
-  }, []);
+  }, [cargaVigente]);
 
   useEffect(() => {
     montado.current = true;
@@ -270,6 +274,24 @@ export function DireccionesCuenta() {
     );
   }
 
+  async function confirmarGuardado(res: Response, data: unknown) {
+    if (!montado.current) return;
+    if (!res.ok) {
+      setError(
+        res.status === 401
+          ? "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a guardar; tus campos permanecen aquí."
+          : esObjeto(data) && typeof data.message === "string"
+            ? data.message
+            : "Revisa los datos (CP de 5 dígitos, estado y calle).",
+      );
+      return;
+    }
+    if (!direccionConfirmada(data, !!editId)) throw new Error("unconfirmed");
+    cerrar();
+    setEditId(null);
+    setForm({ ...VACIA });
+    await cargar();
+  }
   async function guardar(e: FormEvent) {
     e.preventDefault();
     if (ocupado.current) return;
@@ -290,22 +312,7 @@ export function DireccionesCuenta() {
         body: JSON.stringify(form),
       });
       const data = await res.json().catch(() => null);
-      if (!montado.current) return;
-      if (!res.ok) {
-        setError(
-          res.status === 401
-            ? "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a guardar; tus campos permanecen aquí."
-            : typeof data?.message === "string"
-              ? data.message
-              : "Revisa los datos (CP de 5 dígitos, estado y calle).",
-        );
-        return;
-      }
-      if (!direccionConfirmada(data, !!editId)) throw new Error("unconfirmed");
-      cerrar();
-      setEditId(null);
-      setForm({ ...VACIA });
-      await cargar();
+      await confirmarGuardado(res, data);
     } catch {
       setError(
         "No pudimos confirmar que se guardó. Tus campos se conservan; revisa la lista antes de reintentar.",
@@ -317,6 +324,11 @@ export function DireccionesCuenta() {
     }
   }
 
+  function finalizarBorrado() {
+    ocupado.current = false;
+    escritura.current = null;
+    if (montado.current) setBorrando(null);
+  }
   async function borrar(id: string) {
     if (ocupado.current) return;
     ocupado.current = true;
@@ -343,9 +355,7 @@ export function DireccionesCuenta() {
       if (montado.current)
         setError("No pudimos confirmar la eliminación. Revisa la lista antes de reintentar.");
     } finally {
-      ocupado.current = false;
-      escritura.current = null;
-      if (montado.current) setBorrando(null);
+      finalizarBorrado();
     }
   }
 
@@ -393,77 +403,17 @@ export function DireccionesCuenta() {
         </button>
       </div>
 
-      {dirs.length === 0 && (cargando || errorCarga) ? (
-        <output className="block py-8 text-center text-slate-500 text-sm">
-          {cargando ? "Cargando direcciones…" : "No pudimos consultar tu lista de direcciones."}
-        </output>
-      ) : dirs.length === 0 ? (
-        <div className="tienda-surface flex flex-col items-center px-6 py-12 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-marca/10 text-marca">
-            <MapPin size={26} />
-          </span>
-          <p className="mt-4 font-semibold text-slate-800">Aún no tienes direcciones guardadas</p>
-          <p className="mt-1 max-w-sm text-slate-500 text-sm">
-            Agrega tu domicilio y en tus próximas compras solo tendrás que seleccionarlo.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {dirs.map((d) => (
-            <div
-              key={d.id}
-              className="tienda-surface group !p-5 text-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-            >
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 font-semibold text-slate-800">
-                  <House size={16} className="text-marca" />
-                  {d.etiqueta}
-                </span>
-                {d.isDefaultEnvio && (
-                  <span className="gx-badge-ok">
-                    <Check size={12} className="mr-1 inline" />
-                    Predeterminada
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-slate-600">
-                {d.calle} {d.numeroExterior}, {d.colonia}, {d.municipio}, {d.estado} CP{" "}
-                {d.codigoPostal}
-              </p>
-              <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  disabled={guardando || !!borrando}
-                  onClick={() => editar(d)}
-                  className="gx-btn-ghost !px-3"
-                >
-                  <Pencil size={14} />
-                  Editar
-                </button>
-                {confirmandoId === d.id ? (
-                  <button
-                    type="button"
-                    disabled={guardando || !!borrando}
-                    onClick={() => borrar(d.id)}
-                    className="gx-btn-danger"
-                  >
-                    {borrando === d.id ? "Eliminando…" : "¿Seguro? Sí, eliminar"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={guardando || !!borrando}
-                    onClick={() => setConfirmandoId(d.id)}
-                    className="gx-btn-danger"
-                  >
-                    Eliminar
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ListaDirecciones
+        dirs={dirs}
+        cargando={cargando}
+        errorCarga={errorCarga}
+        guardando={guardando}
+        borrando={borrando}
+        confirmandoId={confirmandoId}
+        editar={editar}
+        borrar={borrar}
+        confirmar={setConfirmandoId}
+      />
 
       {abierto && (
         <dialog
@@ -634,5 +584,103 @@ export function DireccionesCuenta() {
         </dialog>
       )}
     </div>
+  );
+}
+
+function ListaDirecciones({
+  dirs,
+  cargando,
+  errorCarga,
+  guardando,
+  borrando,
+  confirmandoId,
+  editar,
+  borrar,
+  confirmar,
+}: {
+  dirs: Direccion[];
+  cargando: boolean;
+  errorCarga: string | null;
+  guardando: boolean;
+  borrando: string | null;
+  confirmandoId: string | null;
+  editar: (d: Direccion) => void;
+  borrar: (id: string) => void;
+  confirmar: (id: string) => void;
+}) {
+  return (
+    <>
+      {dirs.length === 0 && (cargando || errorCarga) ? (
+        <output className="block py-8 text-center text-slate-500 text-sm">
+          {cargando ? "Cargando direcciones…" : "No pudimos consultar tu lista de direcciones."}
+        </output>
+      ) : dirs.length === 0 ? (
+        <div className="tienda-surface flex flex-col items-center px-6 py-12 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-marca/10 text-marca">
+            <MapPin size={26} />
+          </span>
+          <p className="mt-4 font-semibold text-slate-800">Aún no tienes direcciones guardadas</p>
+          <p className="mt-1 max-w-sm text-slate-500 text-sm">
+            Agrega tu domicilio y en tus próximas compras solo tendrás que seleccionarlo.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {dirs.map((d) => (
+            <div
+              key={d.id}
+              className="tienda-surface group !p-5 text-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 font-semibold text-slate-800">
+                  <House size={16} className="text-marca" />
+                  {d.etiqueta}
+                </span>
+                {d.isDefaultEnvio && (
+                  <span className="gx-badge-ok">
+                    <Check size={12} className="mr-1 inline" />
+                    Predeterminada
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-slate-600">
+                {d.calle} {d.numeroExterior}, {d.colonia}, {d.municipio}, {d.estado} CP{" "}
+                {d.codigoPostal}
+              </p>
+              <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  disabled={guardando || !!borrando}
+                  onClick={() => editar(d)}
+                  className="gx-btn-ghost !px-3"
+                >
+                  <Pencil size={14} />
+                  Editar
+                </button>
+                {confirmandoId === d.id ? (
+                  <button
+                    type="button"
+                    disabled={guardando || !!borrando}
+                    onClick={() => borrar(d.id)}
+                    className="gx-btn-danger"
+                  >
+                    {borrando === d.id ? "Eliminando…" : "¿Seguro? Sí, eliminar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={guardando || !!borrando}
+                    onClick={() => confirmar(d.id)}
+                    className="gx-btn-danger"
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

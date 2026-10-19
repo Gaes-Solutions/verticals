@@ -278,9 +278,7 @@ function CantidadProducto({ p, precio }: { p: ProductoPublicado; precio: string 
         <BotonAgregar
           key={lectura.contexto}
           disabled={sinStock || !lectura.lista || !precioValido}
-          textoDeshabilitado={
-            !lectura.lista ? "Preparando…" : !precioValido ? "No disponible" : "Agotado"
-          }
+          textoDeshabilitado={textoBotonCatalogo(lectura.lista, precioValido)}
           onAgregar={() => cambiar(1)}
         />
         {error && (
@@ -363,4 +361,9 @@ export function ProductoGrid({
       ))}
     </div>
   );
+}
+
+function textoBotonCatalogo(lista: boolean, precioValido: boolean) {
+  if (!lista) return "Preparando…";
+  return precioValido ? "Agotado" : "No disponible";
 }

@@ -7,7 +7,17 @@ fs.mkdirSync(output, { recursive: true });
 const css = "/tmp/gaes-audit-storefront.css";
 if (!fs.existsSync(css))
   throw Error("Generate the storefront Tailwind CSS before running this check");
+// Legacy fixture scripts use these fixed CSS paths. All receive the same current bundle.
+for (const target of ["/tmp/gaes-purchase.css", "/tmp/gaes-repeat.css"])
+  fs.copyFileSync(css, target);
 const cases = [
+  ["cart-consistency"],
+  ["cart-suggestions-ui", "SUGGESTIONS"],
+  ["cart-recovery-ui", "RECOVERY"],
+  ["product-purchase-ui"],
+  ["repeat-order-ui"],
+  ["catalog-card-ui", "CARD"],
+  ["checkout-initialization-ui"],
   ["address-recovery", "ADDRESS"],
   ["cart-verification-ui", "VERIFICATION"],
   ["cupon-ui", "CUPON"],
@@ -37,6 +47,7 @@ async function worker() {
       "RECOVERY_QA_URL",
       "SUGGESTIONS_QA_URL",
       "PREFERENCIAS_QA_URL",
+      "CHECKOUT_INIT_QA_URL",
     ])
       delete env[key];
     const start = Date.now();

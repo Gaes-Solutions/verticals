@@ -289,6 +289,13 @@ export function useRepetirPedido() {
     });
     return true;
   }
+  function exigirPreciosVigentes(v: Vista, precios: LineaVerificada[]) {
+    if (actualizarPrecios(v, precios)) {
+      throw new AvisoRepetir(
+        "Cambió un precio o la disponibilidad. Revisa la selección actualizada y confirma de nuevo. Si el problema está en tu carrito actual, revísalo antes de continuar.",
+      );
+    }
+  }
   async function confirmar() {
     if (ocupado.current || !datos || !vista?.seleccionadas.length) return;
     const { c, signal } = empezar();
@@ -302,11 +309,7 @@ export function useRepetirPedido() {
       if (!target) throw new Error(ERROR_REPETIR);
       const precios = await verificar(target, signal);
       if (!vigente(c, datos.owner)) return;
-      if (actualizarPrecios(vista, precios)) {
-        throw new AvisoRepetir(
-          "Cambió un precio o la disponibilidad. Revisa la selección actualizada y confirma de nuevo. Si el problema está en tu carrito actual, revísalo antes de continuar.",
-        );
-      }
+      exigirPreciosVigentes(vista, precios);
       await verificarOwner(datos.owner, signal);
       if (!vigente(c, datos.owner)) return;
       const finales = new Map(precios.map((i) => [i.varianteId, i.precio as string]));

@@ -31,11 +31,7 @@ export function PwaPush() {
   useEffect(() => {
     let cancelado = false;
     (async () => {
-      if (
-        typeof window === "undefined" ||
-        !("serviceWorker" in navigator) ||
-        !("PushManager" in window)
-      ) {
+      if (!soportaPush()) {
         setEstado("no-disponible");
         return;
       }
@@ -44,7 +40,7 @@ export function PwaPush() {
         .then((r) => r.json())
         .catch(() => null)) as TiendaConfigPublic | null;
       if (cancelado) return;
-      if (!reg || !cfg?.pushHabilitado || !cfg.vapidPublicKey) {
+      if (!reg || !configuracionPushDisponible(cfg)) {
         setEstado("no-disponible");
         return;
       }
@@ -54,7 +50,7 @@ export function PwaPush() {
         return;
       }
       const sub = await reg.pushManager.getSubscription();
-      setEstado(sub ? "activa" : "lista");
+      setEstado(estadoSuscripcion(sub));
     })();
     return () => {
       cancelado = true;
@@ -135,4 +131,17 @@ export function PwaPush() {
       )}
     </div>
   );
+}
+
+function configuracionPushDisponible(
+  cfg: TiendaConfigPublic | null,
+): cfg is TiendaConfigPublic & { vapidPublicKey: string } {
+  return !!(cfg?.pushHabilitado && cfg.vapidPublicKey);
+}
+
+function soportaPush() {
+  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+}
+function estadoSuscripcion(sub: PushSubscription | null): Estado {
+  return sub ? "activa" : "lista";
 }
