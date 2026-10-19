@@ -2,7 +2,7 @@
  * Entire API suite on disposable localhost PostgreSQL databases, without provider credentials.
  * Node 24: pnpm exec dotenv -e .env -- node scripts/testing/run-api-isolated.cjs
  * Optional: --shards 2 (default), --shards 1, or --incidents-only (fixed persistence suite).
- * --release-fixes-only runs incident persistence, browser WebAuthn, and marketplace regressions.
+ * --release-fixes-only runs incident, WebAuthn, marketplace and appointment reminder regressions.
  * Each shard gets its own DB; runs sequentially.
  * This verifies mock integrations only. It does not contact payment, mail, or AI providers.
  */
@@ -51,6 +51,7 @@ function configuration(input = process.env, args = process.argv.slice(2)) {
           "test/incidents-persistence.test.ts",
           "test/customer-passkeys.test.ts",
           "test/marketplace.test.ts",
+          "test/tenant-recordatorios-citas.test.ts",
         ]
       : incidentsOnly
         ? ["test/incidents-persistence.test.ts"]

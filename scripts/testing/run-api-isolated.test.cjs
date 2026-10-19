@@ -77,7 +77,7 @@ test("incidents-only selection is fixed; does not accept arbitrary paths or comb
   assert.throws(() => configuration(input, ["--incidents-only", "--shards", "2"]));
 });
 
-test("release fixes mode runs exactly incident persistence, browser passkey and marketplace regressions", () => {
+test("release fixes selection is fixed to incident, passkey, marketplace and reminder regressions", () => {
   const input = { DATABASE_URL_MASTER: "postgres://localhost/dev" };
   const config = configuration(input, ["--release-fixes-only"]);
   assert.equal(config.shards, 1);
@@ -85,6 +85,7 @@ test("release fixes mode runs exactly incident persistence, browser passkey and 
     "test/incidents-persistence.test.ts",
     "test/customer-passkeys.test.ts",
     "test/marketplace.test.ts",
+    "test/tenant-recordatorios-citas.test.ts",
   ]);
   assert.throws(() => configuration(input, ["--release-fixes-only", "test/other.test.ts"]));
   assert.throws(() => configuration(input, ["--release-fixes-only", "--shards", "2"]));

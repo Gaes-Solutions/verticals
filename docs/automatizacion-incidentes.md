@@ -4,6 +4,7 @@ Este circuito registra errores y prepara propuestas. No aplica correcciones ni d
 
 ## Registro y privacidad
 
+La respuesta de error al comprador se envía antes de esperar al proveedor de correo.
 El API registra errores 5xx en `system_incidents` (base master), agrupa ocurrencias por huella y guarda contador y evento de aparición en una transacción. El upsert evita perder la primera aparición cuando llegan errores concurrentes. Las rutas se almacenan sin consulta ni fragmento.
 
 El texto, el contexto, las notas del auditor y los datos enviados a proveedores se sanean con reglas que reconocen credenciales habituales: autorización, cookies, tokens, contraseñas, claves API y credenciales en conexiones. El saneamiento es una defensa de mejor esfuerzo; no garantiza reconocer todos los secretos o datos personales. No agregar credenciales al contexto de un error.
@@ -83,7 +84,8 @@ reciben un entorno limitado sin claves ni endpoints de proveedores ni sesiones p
 Los archivos de evidencia quedan privados en `/tmp/gaes-api-isolated-*`; las bases de
 negocio indicadas en `.env` no se usan para las pruebas.
 
-Para repetir solo persistencia de incidentes y WebAuthn después de ajustar el entorno:
+Para repetir persistencia, WebAuthn y los módulos con configuración directa de sesión
+(marketplace y recordatorios) después de ajustar el entorno:
 
 ```sh
 pnpm exec dotenv -e .env -- node scripts/testing/run-api-isolated.cjs --release-fixes-only
@@ -93,3 +95,5 @@ Las seis regresiones de incidentes comprueban 25 primeras apariciones concurrent
 reapertura sin aprobación heredada, diez trabajadores de correo concurrentes,
 recuperación de reserva abandonada, proveedor que rechaza y revisión IA invalidada
 por una decisión humana. Los proveedores son dobles locales sin comunicación externa.
+
+Resultados de esta ronda: [auditoría del 19 de octubre](testing/incident-automation-audit-2026-10-19.md).

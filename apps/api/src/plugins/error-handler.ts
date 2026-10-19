@@ -1,5 +1,5 @@
 import { PermissionDeniedError } from "@gaespos/permissions";
-import type { FastifyError, FastifyPluginAsync } from "fastify";
+import type { FastifyBaseLogger, FastifyError, FastifyInstance, FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
 import { ZodError } from "zod";
 import { notifyIncident, recordIncident } from "../observability/incidents.js";
@@ -26,6 +26,33 @@ function isNumericOverflow(err: unknown): boolean {
   return typeof msg === "string" && msg.includes("numeric field overflow");
 }
 
+function prismaResponse(err: unknown) {
+  if (!isPrismaKnownRequestError(err)) return undefined;
+  if (err.code === "P2002")
+    return {
+      statusCode: 409,
+      error: "Conflict",
+      message: "Recurso ya existe",
+      target: err.meta?.target,
+    };
+  if (err.code === "P2025")
+    return { statusCode: 404, error: "Not Found", message: "Recurso no encontrado" };
+  return undefined;
+}
+
+async function sendIncidentAlert(
+  app: FastifyInstance,
+  id: string | undefined,
+  log: FastifyBaseLogger,
+) {
+  if (!id) return;
+  try {
+    await notifyIncident(app.masterPrisma, app.emailProviderFactory(), id, log);
+  } catch {
+    log.warn({ incidentId: id }, "No se pudo preparar la alerta de incidente");
+  }
+}
+
 const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
   app.setErrorHandler(async (err: FastifyError, req, reply) => {
     if (err instanceof ZodError) {
@@ -46,24 +73,8 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
       });
     }
 
-    if (isPrismaKnownRequestError(err)) {
-      const prismaErr = err as { code: string; meta?: { target?: unknown } };
-      if (prismaErr.code === "P2002") {
-        return reply.code(409).send({
-          statusCode: 409,
-          error: "Conflict",
-          message: "Recurso ya existe",
-          target: prismaErr.meta?.target,
-        });
-      }
-      if (prismaErr.code === "P2025") {
-        return reply.code(404).send({
-          statusCode: 404,
-          error: "Not Found",
-          message: "Recurso no encontrado",
-        });
-      }
-    }
+    const prismaError = prismaResponse(err);
+    if (prismaError) return reply.code(prismaError.statusCode).send(prismaError);
 
     if (isNumericOverflow(err)) {
       return reply.code(422).send({
@@ -91,13 +102,15 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
       requestId: req.id,
       context: { ip: req.ip, hostname: req.hostname },
     });
-    if (incidentId)
-      await notifyIncident(app.masterPrisma, app.emailProviderFactory(), incidentId, req.log);
-    return reply.code(500).send({
+    // Deliver the shopper response before contacting an external mail provider.
+    // The durable incident remains available to the scheduler after a process crash.
+    reply.code(500).send({
       statusCode: 500,
       error: "Internal Server Error",
       message: "Algo salió mal",
     });
+    await sendIncidentAlert(app, incidentId, req.log);
+    return reply;
   });
 };
 
