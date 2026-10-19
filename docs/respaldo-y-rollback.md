@@ -47,6 +47,31 @@ bash scripts/restore-ensayo.sh ~/respaldos-gaespos/gaespos-AAAAMMDD-HHMMSS.dump
 Levanta un Postgres desechable, restaura ahí dentro, cuenta lo que llegó y se borra solo. Nunca
 toca producción ni la base de desarrollo.
 
+El ensayo usa `postgres:18-alpine`, sin red ni puertos publicados. Lee el catálogo con
+`pg_restore` 18 y restaura con `--exit-on-error --single-transaction`: cualquier error o timeout
+rechaza el ensayo. También falla si no puede consultar `public.tenants` y `public.plans`,
+o si no confirma la eliminación del contenedor y su volumen anónimo. Los errores del motor
+se guardan solo en archivos temporales privados, que se eliminan al terminar.
+
+La consulta cuenta esquemas `tenant_`, tablas base de usuario, tenants y planes. Sin valores
+esperados del origen, solo prueba que el archivo se puede restaurar y consultar; **no certifica
+que incluya todos los datos originales**, ni valida los flujos de la aplicación. Si tienes
+conteos obtenidos de la misma instantánea del respaldo, puedes exigir su coincidencia:
+
+```bash
+RESTORE_EXPECTED_COUNTS="1,208,1,5" bash scripts/restore-ensayo.sh archivo.dump
+```
+
+Esos cuatro números son un ejemplo, no los conteos actuales de producción. Los límites por
+defecto son 90 segundos para el arranque y 1.200 para la restauración; se pueden ajustar con
+`RESTORE_READY_TIMEOUT_SECONDS` y `RESTORE_TIMEOUT_SECONDS` (1 a 3.600 segundos).
+
+El flujo `respaldo-diario.yml` ahora exige este ensayo antes de cifrar y conservar el archivo,
+y elimina la copia sin cifrar incluso si un paso falla. La validación local del 18-oct-2026
+usó un respaldo completamente sintético en Postgres 18 sin red y ocho pruebas con dobles
+Docker; no descargó ni restauró datos de producción. La ejecución diaria de GitHub deberá
+validarse al publicar este cambio.
+
 Un respaldo que nunca se restauró no es un respaldo. Ensáyalo al menos una vez al mes y siempre
 antes de una migración grande.
 

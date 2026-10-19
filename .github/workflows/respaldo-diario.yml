@@ -16,9 +16,17 @@ on:
 
 jobs:
   respaldar:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Obtener scripts de respaldo
+        uses: actions/checkout@v4
+
+      - name: Verificar controles del ensayo sin datos reales
+        run: python3 scripts/testing/test-restore-ensayo.py
+
       - name: Verificar que existan los secretos
         env:
           URL: ${{ secrets.DATABASE_PUBLIC_URL }}
@@ -37,13 +45,11 @@ jobs:
             sh -c 'pg_dump -Fc --no-owner --no-privileges "$PGURL"' > respaldo.dump
           ls -lh respaldo.dump
 
-      - name: Validar integridad del respaldo
+      - name: Ensayar restauración aislada y comprobar SQL
         run: |
-          # pg_restore --list lee el catálogo del archivo sin modificar la base.
-          # Si falla, el flujo termina y no se guarda un respaldo inutilizable.
-          pg_restore --list respaldo.dump >/tmp/gaespos-backup-catalog.txt
-          test -s /tmp/gaespos-backup-catalog.txt
-          echo "Catálogo del respaldo válido ($(wc -l </tmp/gaespos-backup-catalog.txt) objetos)"
+          # Restaura con Postgres 18 en un contenedor sin red ni puertos.
+          # Rechaza errores, timeouts y tablas básicas ausentes antes de cifrar.
+          bash scripts/restore-ensayo.sh respaldo.dump
 
       - name: Cifrar
         env:
@@ -61,6 +67,10 @@ jobs:
           path: respaldo.dump.gpg
           retention-days: 14
           if-no-files-found: error
+
+      - name: Eliminar copia sin cifrar
+        if: always()
+        run: rm -f respaldo.dump
 
       - name: Resumen
         run: |
