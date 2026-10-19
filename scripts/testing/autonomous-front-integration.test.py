@@ -124,10 +124,13 @@ out.write_text(('REJECTED' if scenario.get('reject') else 'APPROVED')+'\\nSynthe
 ''')
         if not self.real_docker:
             self.tool('pnpm', f'''from pathlib import Path
-import hashlib,json,os
+import hashlib,json,os,sys
 with Path({str(self.package_env)!r}).open('a') as log:
     log.write(json.dumps([key for key in ('GH_TOKEN','KIMI_MODEL_API_KEY','OPENAI_API_KEY','RESEND_API_KEY','BREVO_API_KEY') if os.environ.get(key)])+'\\n')
 scenario=json.loads(Path({str(self.scenario)!r}).read_text())
+if 'biome' in sys.argv:
+    assert sys.argv[1:]==['--filter','@gaespos/web-tienda','exec','biome','check','.','--error-on-warnings']
+    print('QA_lint'); sys.exit(42)
 if scenario.get('replace_artifact'):
     artifact=Path({str(self.artifact)!r})
     replacement=(artifact/'patch').read_bytes().replace(b'+export const price = 101;',b'+export const price = 999;')
@@ -164,6 +167,10 @@ module.exports=which=>{{
         executable.chmod(0o755)
         (app / 'node_modules/.bin').mkdir(parents=True)
         (app / 'node_modules/.bin/vitest').symlink_to('../../qa-vitest.cjs')
+        biome = app / 'qa-biome.cjs'
+        biome.write_text("#!/usr/bin/env node\nrequire('node:assert/strict').deepEqual(process.argv.slice(2),['check','.','--error-on-warnings']); console.log('QA_lint'); process.exit(42);\n")
+        biome.chmod(0o755)
+        (app / 'node_modules/.bin/biome').symlink_to('../../qa-biome.cjs')
 
     def use_regular_pnpm_shim(self, invalid=None):
         """Reproduce action-setup's non-symlink .bin entry; never execute it."""
@@ -239,8 +246,12 @@ module.exports=which=>{{
             checks = [json.loads(line) for line in self.package_env.read_text().splitlines()]
             testcase.assertEqual(checks, [[], [], []], 'Package checks must not inherit provider/publication credentials')
         payload = json.loads(self.mail.read_text())
+        for label in ('Tarea:', 'Pantallas:', 'Qué propone resolver:', 'Cómo probar:', 'Archivos afectados:', '\n1. ', '\n2. '):
+            testcase.assertIn(label, payload['text'])
+        testcase.assertIn('Synthetic change', payload['text'])
+        testcase.assertIn('solamente cuando', payload['text'])
         testcase.assertIn('pendiente', payload['text'].lower())
-        testcase.assertNotIn('integrado', payload['text'].lower())
+        testcase.assertIn('todavía no integrado', payload['text'].lower())
         testcase.assertIn('https://github.com/qa/synthetic/pull/1', payload['text'])
         remote = self.git('ls-remote', '--heads', 'origin', 'automation/front-cycle-*').stdout
         testcase.assertTrue(remote, 'Expected only a local bare-Git branch publication')
@@ -249,6 +260,27 @@ module.exports=which=>{{
 class AutonomousIntegrationTests(unittest.TestCase):
     def test_four_phase_local_bare_git_and_pending_pr_email(self):
         PhaseFixture(self).full_cycle(self)
+
+    def test_st010_strict_lint_failure_blocks_all_later_phases(self):
+        for docker in ([False, True] if DOCKER else [False]):
+            with self.subTest(real_docker=docker):
+                fixture = PhaseFixture(self, real_docker=docker)
+                backlog = fixture.root / 'automation/front-backlog.md'
+                backlog.write_text('- [ ] ST-010 | Synthetic lint cleanup\n')
+                fixture.git('add', 'automation/front-backlog.md')
+                fixture.git('-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid', 'commit', '-qm', 'lint task')
+                fixture.base = fixture.git('rev-parse', 'HEAD').stdout.strip()
+                fixture.export(self)
+                result = fixture.phase('validate')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('QA_lint', result.stdout)
+                self.assertNotIn('QA_typecheck', result.stdout)
+                self.assertFalse((fixture.artifact / 'validation.json').exists())
+                fixture.git('reset', '--hard', '-q', fixture.base)
+                self.assertNotEqual(fixture.phase('judge').returncode, 0)
+                fixture.git('reset', '--hard', '-q', fixture.base)
+                self.assertNotEqual(fixture.phase('publish').returncode, 0)
+                self.assertFalse(fixture.mail.exists())
 
     def test_empty_backlog_never_invokes_models_or_publisher(self):
         fixture = PhaseFixture(self)

@@ -233,6 +233,9 @@ case "$AUTONOMY_PHASE" in
     before_state="$(state_fingerprint)"
     git diff --check
     run_product_checks() {
+      if [[ "$task_id" == ST-010 ]]; then
+        pnpm --filter @gaespos/web-tienda exec biome check . --error-on-warnings
+      fi
       pnpm --filter @gaespos/web-tienda typecheck
       pnpm --filter @gaespos/web-tienda exec vitest run
       pnpm --filter @gaespos/web-tienda build
@@ -309,7 +312,7 @@ PYPNPM
         *) die "entrada pnpm no soportada para Docker: $pnpm_real" ;;
       esac
       docker_mounts=(-v "$isolated_dir:/workspace:rw" -v "$pnpm_runtime_root:/opt/pnpm-runtime:ro")
-      docker_env=(-e CI=true -e HOME=/tmp/empty)
+      docker_env=(-e CI=true -e HOME=/tmp/empty -e AUTONOMY_TASK_ID="$task_id")
       if [[ "$corepack_mount" == 1 ]]; then
         corepack_cache="${COREPACK_HOME:-${HOME:-/tmp}/.cache/node/corepack}"
         [[ -d "$corepack_cache" ]] || die "cache local de pnpm ausente para Docker sin red"
@@ -319,7 +322,7 @@ PYPNPM
       docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
         --user "$(id -u):$(id -g)" --pids-limit 512 --memory 6g --cpus 4 "${docker_env[@]}" \
         "${docker_mounts[@]}" -w /workspace "$validate_image" bash -euo pipefail -c \
-        "mkdir -p \"\$HOME\"; node /opt/pnpm-runtime/$pnpm_entry --version; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda typecheck; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda exec vitest run; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda build"
+        "mkdir -p \"\$HOME\"; node /opt/pnpm-runtime/$pnpm_entry --version; if [[ \$AUTONOMY_TASK_ID == ST-010 ]]; then node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda exec biome check . --error-on-warnings; fi; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda typecheck; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda exec vitest run; node /opt/pnpm-runtime/$pnpm_entry --filter @gaespos/web-tienda build"
       if [[ "$task_id" == ST-006 ]]; then
         docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
           --user "$(id -u):$(id -g)" --pids-limit 512 --memory 6g --cpus 4 "${docker_env[@]}" \
@@ -421,14 +424,47 @@ PY
     if pr_url=$(GH_TOKEN="$GH_TOKEN" gh pr create --base main --head "$branch" --title "Automated storefront cycle" --body-file "$ARTIFACT_DIR/judge.txt" 2>&1); then
       echo "PR creado: $pr_url"
       if [[ -n "${RESEND_API_KEY:-}${BREVO_API_KEY:-}" && -n "${INCIDENT_ALERT_EMAIL:-}" && -n "${EMAIL_REMITENTE:-}" ]]; then
-        if ! python3 - "$task_id" "$pr_url" "$ARTIFACT_DIR/patch.sha256" <<'PY' | python3 scripts/send-system-email.py
-import json, os, sys
-task, pr, digest_path = sys.argv[1:]
-digest = open(digest_path).read().strip()
-json.dump({
-    'subject': f'GaesSoft automation: PR publicado ({task})',
-    'text': f'Pantalla: storefront frontend ({task})\nEstado: PR creado, pendiente de revisión/merge (no se afirma integración).\nPR: {pr}\nPatch: {digest}\nPruebas: typecheck, vitest y build pasaron en validate; el juez emitió APPROVED.\nPara probar: abre el PR y ejecuta el flujo de la tarea en staging.',
-}, sys.stdout)
+        if ! python3 - "$task_id" "$pr_url" "$ARTIFACT_DIR/patch.sha256" "$ARTIFACT_DIR/metadata.json" "$BACKLOG_FILE" <<'PY' | python3 scripts/send-system-email.py
+import json, re, sys
+from pathlib import Path
+task, pr, digest_path, metadata_path, backlog_path = sys.argv[1:]
+digest = Path(digest_path).read_text().strip()
+description = next((line.split('|', 1)[1].strip() for line in Path(backlog_path).read_text().splitlines()
+                    if re.match(r'^- \[[ x]\] ' + re.escape(task) + r' \|', line)), task)[:1200]
+paths = json.loads(Path(metadata_path).read_text()).get('paths', [])
+screens = set()
+for path in paths:
+    lower = path.lower()
+    if 'mobile-cliente' in lower: screens.add('App cliente')
+    if 'checkout' in lower or 'payment' in lower: screens.add('Checkout')
+    if 'carrito' in lower or 'cart' in lower: screens.add('Carrito')
+    if any(word in lower for word in ('auth', 'login', 'password', 'cuenta')): screens.add('Acceso y cuenta')
+    if any(word in lower for word in ('producto', 'product', 'galeria', 'imagen')): screens.add('Detalle de producto')
+    if any(word in lower for word in ('catalog', 'filter')) or lower == 'apps/web-tienda/src/app/page.tsx': screens.add('Catálogo')
+if not screens: screens.add('Storefront; revisar los archivos del PR para precisar la pantalla')
+steps = {
+    'ST-001': ['Abrir el catálogo con un producto publicado.', 'Comprobar título y abrir su detalle desde la tarjeta.'],
+    'ST-002': ['Abrir un producto con varias fotos y cambiar miniatura.', 'Abrir zoom, cerrar con Escape y comprobar fallback de imagen rota.'],
+    'ST-003': ['Buscar y filtrar productos en el catálogo.', 'Comprobar vacío y reintentar tras un error de red conservando filtros.'],
+    'ST-004': ['Agregar un producto al carrito y cambiar cantidad.', 'Revalidar precio y stock antes de checkout; comprobar avisos de cambios.'],
+    'ST-005': ['Completar contacto y dirección en checkout; volver atrás y regresar.', 'Comprobar datos conservados y que doble clic no duplica el envío; usar solo pagos simulados.'],
+    'ST-006': ['En el APK nuevo abrir catálogo, buscar y aplicar/limpiar filtros.', 'Abrir producto y agregar al carrito; revisar promoción, imagen y total.'],
+    'ST-007': ['Recorrer catálogo, detalle, carrito, checkout y acceso usando Tab y Shift+Tab.', 'Comprobar foco visible, labels y selección por flechas de las opciones.'],
+    'ST-008': ['Abrir catálogo y detalle con red lenta.', 'Comprobar imágenes sin saltos de diseño y recuperación de errores de red.'],
+    'ST-009': ['Usar enlaces sintéticos válido, expirado e inválido de recuperación.', 'Comprobar contraseña y carrito recuperado sin enviar correos reales.'],
+    'ST-010': ['Abrir catálogo y buscar un producto.', 'Abrir detalle y agregarlo al carrito.', 'Cambiar cantidad en carrito y continuar a checkout.', 'Comprobar totales, contacto y navegación de regreso sin confirmar pedido ni pago.'],
+    'ST-011': ['Recorrer búsqueda, detalle y carrito a 360, 768 y 1440 px.', 'Cambiar cantidad, recargar y eliminar el producto; comprobar persistencia.'],
+}
+manual = '\n'.join(f'{i}. {step}' for i, step in enumerate(steps.get(task, ['Revisar el criterio de la tarea y repetir el flujo afectado.']), 1))
+files = '\n'.join('- ' + path[:180] for path in paths[:25])
+if len(paths) > 25: files += f'\n- … {len(paths) - 25} archivos adicionales; consultar PR.'
+checks = 'lint estricto sin advertencias, ' if task == 'ST-010' else ''
+text = (f'Tarea: {task} — {description}\nPantallas: {", ".join(sorted(screens))}\n'
+        f'Qué propone resolver: {description}\nEstado: PR creado, pendiente de revisión/merge; todavía no integrado.\n'
+        f'PR: {pr}\nPatch: {digest}\nPruebas: {checks}typecheck, Vitest y build pasaron en validate; juez APPROVED.\n'
+        'Disponibilidad: probar solamente cuando este PR esté desplegado en staging o incluido en un APK nuevo; no se afirma que ya exista preview.\n'
+        f'Cómo probar:\n{manual}\nArchivos afectados:\n{files}')
+json.dump({'subject': f'GaesSoft automation: PR pendiente de revisión ({task})', 'text': text}, sys.stdout)
 PY
         then
           echo "Aviso por correo no confirmado; el PR ya fue creado" >&2
