@@ -5,6 +5,9 @@ on:
     paths:
       - .github/workflows/android-staging-smoke.yml
       - apps/mobile-cliente/.maestro/**
+      - apps/mobile-kiosko/.maestro/**
+      - scripts/testing/android-staging-*
+      - scripts/testing/publish-staging-apks*
       - scripts/testing/publish-native-result.py
       - scripts/testing/*native*
   workflow_dispatch:
@@ -16,7 +19,7 @@ concurrency:
 jobs:
   native:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,12 +30,28 @@ jobs:
           java-version: '17'
       - name: Validate embedded Maestro expressions before starting an emulator
         run: node scripts/testing/check-native-flows.cjs
-      - name: Download and verify the staging APK and Maestro
+      - name: Verify that both APKs match current runtime sources
+        run: python3 scripts/testing/check-native-source-provenance.py
+      - name: Resolve published APKs or the immutable bootstrap payload
+        id: artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/testing/prepare-native-artifacts.py
+      - name: Check out bootstrap APKs only before the first verified release
+        if: steps.artifacts.outputs.payload == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: 27f1624754dc73de55ce712c7ab88374eade35aa
+          path: .native-apk-payload
+          persist-credentials: false
+      - name: Verify bootstrap APKs
+        if: steps.artifacts.outputs.payload == 'true'
+        run: python3 scripts/testing/prepare-native-artifacts.py payload
+      - name: Inspect both signed APKs and download pinned Maestro
         run: |
           mkdir -p "$RUNNER_TEMP/native"
-          curl --fail --location --retry 2 'https://expo.dev/artifacts/eas/ynM6hBP1H12TyddYVQoJ99i0biLowZ1OrPTw1F2Me5Q.apk' -o "$RUNNER_TEMP/native/client.apk"
-          printf '%s  %s\n' '29145201ac315ec75cb8cd055347e9948052f40e7b82093b00834a5df68abae1' "$RUNNER_TEMP/native/client.apk" | sha256sum -c -
-          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 11 --universal --sdk "$ANDROID_HOME"
+          python3 scripts/testing/check-customer-apk.py "$RUNNER_TEMP/native/client.apk" --version 15 --universal --sdk "$ANDROID_HOME"
+          node scripts/testing/check-kiosko-apk.cjs "$RUNNER_TEMP/native/kiosk.apk"
           curl --fail --location --retry 2 'https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.11.0/maestro.zip' -o "$RUNNER_TEMP/native/maestro.zip"
           printf '%s  %s\n' '5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a' "$RUNNER_TEMP/native/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/native/maestro.zip" -d "$RUNNER_TEMP/native/cli"
@@ -58,6 +77,10 @@ jobs:
         id: sanitize
         if: always()
         run: python3 scripts/testing/sanitize-native-results.py
+      - name: Publish both APKs only after successful Android checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/testing/publish-staging-apks.cjs
       - name: Save native test evidence
         if: always() && steps.sanitize.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -72,5 +95,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QA_NATIVE_STATUS: ${{ job.status }}
-          QA_APK_VERSION: '11'
+          QA_APK_VERSION: '15'
         run: python3 scripts/testing/publish-native-result.py

@@ -2,14 +2,18 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const root = path.resolve("apps/mobile-cliente/.maestro");
+const roots = ["apps/mobile-cliente/.maestro", "apps/mobile-kiosko/.maestro"].map((folder) =>
+  path.resolve(folder),
+);
 const files = process.argv.slice(2);
 if (!files.length)
   files.push(
-    ...fs
-      .readdirSync(root)
-      .filter((x) => x.endsWith(".yml"))
-      .map((x) => path.join(root, x)),
+    ...roots.flatMap((root) =>
+      fs
+        .readdirSync(root)
+        .filter((x) => x.endsWith(".yml"))
+        .map((x) => path.join(root, x)),
+    ),
   );
 let count = 0;
 for (const file of files) {

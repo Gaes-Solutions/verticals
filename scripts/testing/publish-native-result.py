@@ -25,16 +25,19 @@ def api(path, data):
         return json.load(response)
 
 
+manifest = json.loads(Path("scripts/testing/android-staging-artifacts.json").read_text())
 summary = {
     "status": os.environ["QA_NATIVE_STATUS"], "sourceCommit": sha,
     "runUrl": f"https://github.com/{repo}/actions/runs/{run_id}",
-    "apkVersion": int(os.environ["QA_APK_VERSION"]), "environment": "staging", "account": "anonymous-and-synthetic",
+    "apkVersion": int(os.environ["QA_APK_VERSION"]),
+    "apkSourceCommit": manifest["source"]["commit"],
+    "kioskVersion": manifest["kiosk"]["version"], "environment": "staging", "account": "anonymous-and-synthetic",
 }
 files = {"qa-native-result.json": json.dumps(summary, indent=2).encode()}
 results = Path(os.environ["RUNNER_TEMP"]) / "native/results/results.xml"
 if results.is_file():
     files["qa-native-artifacts/results.xml"] = results.read_bytes()[:200000]
-for name in ("install.log", "launcher.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log"):
+for name in ("install.log", "launcher.log", "maestro.log", "account-results.xml", "account.log", "view-hierarchy.xml", "crash.log", "kiosko-install.log", "kiosko-results.xml", "kiosko.log", "kiosko-view-hierarchy.xml", "kiosko-crash.log"):
     file = results.parent / name
     if file.is_file():
         files[f"qa-native-artifacts/{name}"] = file.read_bytes()[-200000:]

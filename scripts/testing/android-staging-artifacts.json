@@ -1,0 +1,29 @@
+{
+  "release": {
+    "tag": "qa-android-gaesland-20261018-b12b7da",
+    "title": "Gaesland · Pruebas Android: cliente 15 y kiosco 4",
+    "sourceCommit": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447"
+  },
+  "source": {
+    "commit": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447",
+    "client": {
+      "files": 90,
+      "sha256": "e534edf0fcb931c97fbef233d8862b1236ec3f21291a27272d46f89b2678db25"
+    },
+    "kiosk": {
+      "files": 56,
+      "sha256": "1c9b02cfef623685202f45eb1ffe43158e705ca5c22005047c6ac8c57e74b8c3"
+    }
+  },
+  "payloadCommit": "27f1624754dc73de55ce712c7ab88374eade35aa",
+  "client": {
+    "filename": "gaesland-pruebas-cliente-v15.apk",
+    "version": 15,
+    "sha256": "84335d136755b2d40b7dd590eb5ddd7af3aa6b16525cbd5fb9837677ab2dad2d"
+  },
+  "kiosk": {
+    "filename": "gaesland-pruebas-kiosko-v4.apk",
+    "version": 4,
+    "sha256": "25c8aad70c6502aa054f80ce416a645514eeed7581fa9ddcd97e255b30fad37a"
+  }
+}

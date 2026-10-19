@@ -25,3 +25,18 @@ for flow in guest account; do
   python3 ../../scripts/testing/sanitize-native-results.py
   cat "$results/$log"
 done
+
+# Kiosk smoke stops at setup: no token, activation, orders or payment requests.
+adb install -r "$RUNNER_TEMP/native/kiosk.apk" > "$results/kiosko-install.log" 2>&1
+if ! maestro test --format junit --output "$results/kiosko-results.xml" "../mobile-kiosko/.maestro/native-setup.yml" > "$results/kiosko.log" 2>&1; then
+  adb exec-out screencap -p > "$results/kiosko-native-failure.png" || true
+  adb shell uiautomator dump /sdcard/native-ui.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/native-ui.xml "$results/kiosko-view-hierarchy.xml" >/dev/null 2>&1 || true
+  adb logcat -d -s AndroidRuntime:E ReactNativeJS:E > "$results/kiosko-crash.log" || true
+  python3 ../../scripts/testing/sanitize-native-results.py
+  cat "$results/kiosko.log"
+  exit 1
+fi
+mv kiosko-setup.png "$results/kiosko-setup.png"
+python3 ../../scripts/testing/sanitize-native-results.py
+cat "$results/kiosko.log"

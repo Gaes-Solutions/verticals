@@ -1,0 +1,15 @@
+appId: com.gaessoft.kiosko.staging
+name: Staging kiosk setup without pairing a device
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: Configurar verificador
+    timeout: 60000
+- assertVisible: Token del dispositivo
+- assertVisible:
+    text: Activar verificador
+    enabled: false
+- assertNotVisible: Validar y activar
+# Leave the token empty. Never open confirmation or activate a device.
+- takeScreenshot: kiosko-setup
