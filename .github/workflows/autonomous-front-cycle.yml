@@ -21,6 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       has_work: ${{ steps.detect_work.outputs.has_work }}
+      artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
       KIMI_BIN: ${{ vars.KIMI_BIN || 'kimi' }}
       KIMI_VERSION: "2.2.0"
@@ -40,7 +41,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p "$ARTIFACT_DIR"
-          if gh pr list --state open --base main --json headRefName --jq '.[] | select(.headRefName | startswith("automation/front-cycle-")) | .headRefName' | grep -q .; then
+          pending_prs="$(gh pr list --state open --base main --json headRefName --jq '.[] | select(.headRefName | startswith("automation/front-cycle-")) | .headRefName')"
+          if [[ -n "$pending_prs" ]]; then
             printf '%s\n' waiting-review > "$ARTIFACT_DIR/waiting-review"
           fi
       - name: Instalar Kimi Code CLI fijado
@@ -60,6 +62,7 @@ jobs:
             echo "has_work=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/upload-artifact@v4
+        id: upload_artifact
         with:
           name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gaes-autonomy-artifact
@@ -73,6 +76,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
       ARTIFACT_DIR: ${{ runner.temp }}/gaes-autonomy-artifact
       AUTONOMY_VALIDATE_ISOLATED: "true"
@@ -85,7 +90,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.executor.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/gaes-autonomy-artifact
       - uses: pnpm/action-setup@v4
         with:
@@ -100,6 +106,7 @@ jobs:
       - name: Validar patch y ejecutar checks
         run: AUTONOMY_PHASE=validate bash scripts/autonomous-front-cycle-phase.sh
       - uses: actions/upload-artifact@v4
+        id: upload_artifact
         with:
           name: autonomous-front-validated-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gaes-autonomy-artifact
@@ -113,6 +120,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     env:
       CODEX_BIN: ${{ vars.CODEX_BIN || 'codex' }}
       CODEX_VERSION: ${{ vars.CODEX_VERSION || '0.130.0' }}
@@ -126,11 +135,13 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: autonomous-front-executor-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.executor.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/gaes-autonomy-artifact
       - uses: actions/download-artifact@v4
         with:
-          name: autonomous-front-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.validate.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/gaes-autonomy-validated
       - name: Transferir solo metadata validada
         run: |
@@ -155,6 +166,7 @@ jobs:
           CODEX_AUTH_READY: "true"
         run: AUTONOMY_PHASE=judge bash scripts/autonomous-front-cycle-phase.sh
       - uses: actions/upload-artifact@v4
+        id: upload_artifact
         with:
           name: autonomous-front-final-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gaes-autonomy-artifact
@@ -180,7 +192,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: autonomous-front-final-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.judge.outputs.artifact_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/gaes-autonomy-artifact
       - name: Publicar solo patch aprobado
         env:
