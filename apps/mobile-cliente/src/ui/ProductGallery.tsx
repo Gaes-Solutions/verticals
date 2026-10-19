@@ -15,10 +15,11 @@ import { colors, commerce, radius } from "../theme";
 import { Icon } from "./Icon";
 import { ProductPhoto } from "./ProductPhoto";
 
-export function ProductGallery({
-  photos: sourcePhotos,
-  title,
-}: { photos: string[]; title: string }) {
+export function ProductGallery({ photos, title }: { photos: string[]; title: string }) {
+  return <Gallery key={JSON.stringify([title, photos])} photos={photos} title={title} />;
+}
+
+function Gallery({ photos: sourcePhotos, title }: { photos: string[]; title: string }) {
   const photos = [...new Set(sourcePhotos)];
   const [index, setIndex] = useState(0);
   const [open, setOpen] = useState(false);

@@ -316,12 +316,13 @@ let stage = "setup";
       ).toBeVisible();
       await p.evaluate(() => window.changeImage("/good.png"));
       await expect(p.getByRole("img", { name: "Imagen QA", exact: true })).toBeVisible();
-      assert.equal(
-        await p
-          .getByRole("img", { name: "Imagen QA", exact: true })
-          .evaluate((el) => el.complete && el.naturalWidth > 0),
-        true,
-      );
+      await expect
+        .poll(() =>
+          p
+            .getByRole("img", { name: "Imagen QA", exact: true })
+            .evaluate((el) => el.complete && el.naturalWidth > 0),
+        )
+        .toBe(true);
       safe(f);
       pass();
     }

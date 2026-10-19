@@ -11,7 +11,7 @@ import {
   RotateCw,
   X,
 } from "lucide-react";
-import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 function Imagen({ src, alt, className }: { src: string; alt: string; className: string }) {
   const [fallo, setFallo] = useState(false);
@@ -34,6 +34,10 @@ export function GaleriaProducto({
   alt,
   zoom,
 }: { fotos: string[]; alt: string; zoom: boolean }) {
+  return <Galeria key={JSON.stringify([alt, fotos, zoom])} fotos={fotos} alt={alt} zoom={zoom} />;
+}
+
+function Galeria({ fotos, alt, zoom }: { fotos: string[]; alt: string; zoom: boolean }) {
   const [activa, setActiva] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   const [escala, setEscala] = useState(1);
@@ -44,6 +48,14 @@ export function GaleriaProducto({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesto = useRef<{ distancia: number; escala: number } | null>(null);
   const escalaActual = useRef(1);
+
+  const limpiarGesto = useCallback(() => {
+    for (const id of pointers.current.keys()) {
+      if (visor.current?.hasPointerCapture(id)) visor.current.releasePointerCapture(id);
+    }
+    pointers.current.clear();
+    gesto.current = null;
+  }, []);
 
   function cambiarEscala(valor: number) {
     const next = Math.max(1, Math.min(4, valor));
@@ -60,6 +72,7 @@ export function GaleriaProducto({
     });
   }
   function seleccionar(indice: number) {
+    limpiarGesto();
     setActiva(indice);
     cambiarEscala(1);
     setAngulo(0);
@@ -68,6 +81,7 @@ export function GaleriaProducto({
 
   useEffect(() => {
     if (!lightbox) {
+      limpiarGesto();
       dialog.current?.close();
       return;
     }
@@ -79,16 +93,18 @@ export function GaleriaProducto({
     const anterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      limpiarGesto();
       document.body.style.overflow = anterior;
       observer.disconnect();
     };
-  }, [lightbox]);
+  }, [lightbox, limpiarGesto]);
 
   function distancia() {
     const [a, b] = [...pointers.current.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   }
   function iniciar(e: PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2)
@@ -121,6 +137,7 @@ export function GaleriaProducto({
     <div>
       <button
         type="button"
+        disabled={!zoom}
         aria-label={zoom ? `Ampliar imagen de ${alt}` : alt}
         onClick={() => {
           if (zoom) {
@@ -147,7 +164,7 @@ export function GaleriaProducto({
         <div className="mt-3 flex gap-2 overflow-x-auto">
           {fotos.map((f, i) => (
             <button
-              key={f}
+              key={`${i}:${f}`}
               type="button"
               aria-label={`Ver foto ${i + 1}`}
               aria-pressed={i === activa}
@@ -168,9 +185,17 @@ export function GaleriaProducto({
         aria-label={`Fotos de ${alt}`}
         onCancel={() => setLightbox(false)}
         onClose={() => setLightbox(false)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            seleccionar(
+              (activa + (event.key === "ArrowRight" ? 1 : -1) + fotos.length) % fotos.length,
+            );
+          }
+        }}
         className="store-image-dialog"
       >
-        <div className="flex items-center justify-between gap-3 border-b p-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b p-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{alt}</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -181,18 +206,19 @@ export function GaleriaProducto({
             type="button"
             aria-label="Cerrar imágenes"
             onClick={() => setLightbox(false)}
-            className="rounded-full p-2 hover:bg-slate-100"
+            className="min-h-11 min-w-11 rounded-full p-2 hover:bg-slate-100"
           >
             <X size={22} />
           </button>
         </div>
         <div
           ref={visor}
-          className="h-[60dvh] touch-none overflow-auto bg-white"
+          className="h-[60dvh] min-h-0 touch-none overflow-auto bg-white"
           onPointerDown={iniciar}
           onPointerMove={mover}
           onPointerUp={terminar}
           onPointerCancel={terminar}
+          onLostPointerCapture={terminar}
           style={{ cursor: escala > 1 ? "grab" : "zoom-in" }}
         >
           <div
@@ -220,13 +246,13 @@ export function GaleriaProducto({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 border-t p-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t p-3">
           {fotos.length > 1 && (
             <button
               type="button"
               aria-label="Foto anterior"
               onClick={() => seleccionar((activa + fotos.length - 1) % fotos.length)}
-              className="rounded-full p-2 hover:bg-slate-100"
+              className="min-h-11 min-w-11 rounded-full p-2 hover:bg-slate-100"
             >
               <ChevronLeft size={20} />
             </button>
@@ -236,7 +262,7 @@ export function GaleriaProducto({
             aria-label="Alejar imagen"
             disabled={escala <= 1}
             onClick={() => cambiarEscala(escala - 0.5)}
-            className="rounded-full border p-2 disabled:opacity-30"
+            className="min-h-11 min-w-11 rounded-full border p-2 disabled:opacity-30"
           >
             <Minus size={20} />
           </button>
@@ -248,7 +274,7 @@ export function GaleriaProducto({
             aria-label="Acercar imagen"
             disabled={escala >= 4}
             onClick={() => cambiarEscala(escala + 0.5)}
-            className="rounded-full border p-2 disabled:opacity-30"
+            className="min-h-11 min-w-11 rounded-full border p-2 disabled:opacity-30"
           >
             <Plus size={20} />
           </button>
@@ -260,7 +286,7 @@ export function GaleriaProducto({
               setAngulo(0);
               visor.current?.scrollTo(0, 0);
             }}
-            className="rounded-full p-2 hover:bg-slate-100"
+            className="min-h-11 min-w-11 rounded-full p-2 hover:bg-slate-100"
           >
             <RotateCcw size={18} />
           </button>
@@ -280,7 +306,7 @@ export function GaleriaProducto({
               type="button"
               aria-label="Foto siguiente"
               onClick={() => seleccionar((activa + 1) % fotos.length)}
-              className="rounded-full p-2 hover:bg-slate-100"
+              className="min-h-11 min-w-11 rounded-full p-2 hover:bg-slate-100"
             >
               <ChevronRight size={20} />
             </button>

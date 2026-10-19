@@ -844,6 +844,10 @@ body {
   background: rgb(9 27 20 / 0.75);
   backdrop-filter: blur(4px);
 }
+.store-image-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
 .store-swipe-button {
   position: relative;
   overflow: hidden;
