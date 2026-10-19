@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="1" failures="0" time="87.021" timestamp="2026-10-19T06:15:56">
+    <testcase id="Gaesland guest catalog, image controls and login recovery" name="Gaesland guest catalog, image controls and login recovery" classname="Gaesland guest catalog, image controls and login recovery" file=".maestro/native-guest.yml" time="86.953" timestamp="2026-10-19T06:15:56" status="SUCCESS"/>
+  </testsuite>
+</testsuites>
