@@ -21,12 +21,15 @@ const configSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   STOREFRONT_READ_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1000),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
-  // Número EXACTO de proxies de confianza frente al API (Railway = 1). Fastify lo
-  // pasa a proxy-addr para tomar solo el último salto de X-Forwarded-For como
-  // req.ip; nunca la IP más a la izquierda que el cliente puede falsificar. Con
-  // `trustProxy: true` (cadena completa) el rate-limit por IP se evade con un XFF
-  // aleatorio por request. 0 = ignorar XFF (usar socket, p.ej. sin proxy).
+  // Legacy hop-count setting. Fastify >=5.12.1 intentionally ignores forwarded
+  // IPs with numeric trustProxy: a hop count cannot authenticate the peer.
+  // Keep fail-closed socket identity; never replace this with trustProxy:true.
+  // Proxy client identity needs an explicit verified ingress contract before
+  // changing this policy (including private-network access to the listener).
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(1),
+  // Explicit peer addresses/CIDRs only. Empty means socket identity; never
+  // infer trusted networks from a hosting provider or a forwarded header.
+  TRUST_PROXY_PEERS: z.string().default(""),
   BILLING_SCHEDULER_ENABLED: z
     .enum(["true", "false"])
     .default("false")

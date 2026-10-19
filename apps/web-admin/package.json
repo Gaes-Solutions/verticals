@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 5174",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "biome check ."
   },
   "dependencies": {
@@ -18,7 +19,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@gaespos/ui": "workspace:*",
@@ -26,7 +27,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
+    "postcss": "^8.5.31",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"

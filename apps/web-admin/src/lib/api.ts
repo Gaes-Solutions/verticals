@@ -18,18 +18,18 @@ export class ApiError extends Error {
   }
 }
 
-let accessToken: string | null = null;
-
 export function setToken(token: string | null): void {
-  accessToken = token;
   if (token) localStorage.setItem("gaespos_admin_token", token);
-  else localStorage.removeItem("gaespos_admin_token");
+  else {
+    localStorage.removeItem("gaespos_admin_token");
+    localStorage.removeItem(PERMISOS_KEY);
+    localStorage.removeItem(UID_KEY);
+  }
 }
 
 export function loadToken(): string | null {
-  if (accessToken) return accessToken;
-  accessToken = localStorage.getItem("gaespos_admin_token");
-  return accessToken;
+  // Another tab can replace or revoke this session. Never reuse its old token.
+  return localStorage.getItem("gaespos_admin_token");
 }
 
 // Permisos del usuario en sesión: la UI oculta lo que no puede hacer.
@@ -41,8 +41,8 @@ export function setPermisos(permisos: string[]): void {
 
 export function puede(permiso: string): boolean {
   try {
-    const lista = JSON.parse(localStorage.getItem(PERMISOS_KEY) ?? "[]") as string[];
-    return lista.includes("*") || lista.includes(permiso);
+    const lista: unknown = JSON.parse(localStorage.getItem(PERMISOS_KEY) ?? "[]");
+    return Array.isArray(lista) && (lista.includes("*") || lista.includes(permiso));
   } catch {
     return false;
   }
@@ -107,25 +107,60 @@ export async function api<T = unknown>(
     const t = loadToken();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
-  const res = await fetch(`${BASE}${path}`, {
-    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
-    headers,
-    ...(opts.signal ? { signal: opts.signal } : {}),
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    // token expirado/ inválido en una llamada autenticada → cerrar sesión y
-    // volver al login en vez de dejar la app en blanco.
-    if (res.status === 401 && opts.auth !== false && loadToken()) {
+  const controller = new AbortController();
+  const timeout = opts.signal ? null : setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
+      headers,
+      signal: opts.signal ?? controller.signal,
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    });
+    // Check the status before parsing: expired sessions can receive proxy HTML.
+    if (
+      res.status === 401 &&
+      opts.auth !== false &&
+      opts.token === undefined &&
+      headers.Authorization &&
+      headers.Authorization === `Bearer ${loadToken()}`
+    ) {
       setToken(null);
       window.location.reload();
     }
-    const message = (data as { message?: string } | null)?.message ?? `Error ${res.status}`;
-    throw new ApiError(res.status, message, data);
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      if (res.ok)
+        throw new ApiError(
+          502,
+          "El servidor devolvió una respuesta no válida. Verifica el resultado antes de repetir una operación.",
+        );
+    }
+    if (!res.ok) {
+      const publicMessage =
+        data && typeof data === "object" && "message" in data && typeof data.message === "string"
+          ? data.message
+          : null;
+      const message =
+        res.status >= 500
+          ? "El servicio no está disponible. Verifica el resultado antes de repetir una operación."
+          : (publicMessage ?? `Error ${res.status}`);
+      throw new ApiError(res.status, message, data);
+    }
+    return data as T;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        408,
+        "La solicitud tardó demasiado. Verifica el resultado antes de repetir una operación.",
+      );
+    }
+    throw error;
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
   }
-  return data as T;
 }
 
 // ── 2FA (TOTP + códigos de respaldo) ────────────────────────────────────────

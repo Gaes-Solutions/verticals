@@ -22,16 +22,26 @@ const config: ExpoConfig = {
   android: {
     package: staging ? "com.gaessoft.kiosko.staging" : "com.gaessoft.kiosko",
     permissions: ["CAMERA"],
+    blockedPermissions: [
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.RECORD_AUDIO",
+    ],
     adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#c2410c" },
   },
   plugins: [
     "expo-router",
-    "expo-audio",
+    ["expo-audio", { microphonePermission: false }],
     ["expo-video", { supportsBackgroundPlayback: false, supportsPictureInPicture: false }],
     "expo-secure-store",
     [
       "expo-camera",
-      { cameraPermission: "El verificador usa la cámara para leer códigos de barras." },
+      {
+        cameraPermission: "El verificador usa la cámara para leer códigos de barras.",
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
     ],
     [
       "expo-splash-screen",

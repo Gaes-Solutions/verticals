@@ -48,3 +48,16 @@ it.each([new Error("PRIVATE_CREDENTIAL"), new ApiError(503, "PRIVATE_CREDENTIAL"
     expect(html).not.toContain("0 resultados");
   },
 );
+
+it("does not describe a service outage as a store preparing to open", async () => {
+  vi.mocked(getTiendaConfig).mockResolvedValue({
+    abierta: false,
+    nombre: "Tienda",
+    lema: null,
+    consultaFallida: true,
+  } as Awaited<ReturnType<typeof getTiendaConfig>>);
+  const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
+  expect(html).toContain("No pudimos consultar la tienda");
+  expect(html).not.toContain("Abriremos pronto");
+  expect(api).not.toHaveBeenCalled();
+});

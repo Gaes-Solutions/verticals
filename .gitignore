@@ -13,9 +13,9 @@ coverage/
 
 # Environments
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+!.env.*.example
 
 # Logs
 *.log
@@ -57,6 +57,12 @@ prisma/migrations/dev/
 
 # Misc
 *.pem
+*.key
+*.jks
+*.keystore
+*.p12
+*.pfx
+credentials.json
 .vercel
 
 # Respaldos de base de datos: contienen datos personales de clientes

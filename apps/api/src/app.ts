@@ -171,7 +171,7 @@ export async function buildApp(
           }
         : { level: config.LOG_LEVEL, serializers },
     disableRequestLogging: false,
-    trustProxy: config.TRUST_PROXY_HOPS,
+    trustProxy: config.TRUST_PROXY_PEERS.trim() || false,
   });
 
   await app.register(errorHandlerPlugin);

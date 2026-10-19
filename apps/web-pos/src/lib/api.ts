@@ -20,10 +20,7 @@ export class ApiError extends Error {
   }
 }
 
-let accessToken: string | null = null;
-
 export function setToken(token: string | null): void {
-  accessToken = token;
   if (token) localStorage.setItem("gaespos_pos_token", token);
   else {
     localStorage.removeItem("gaespos_pos_token");
@@ -32,9 +29,7 @@ export function setToken(token: string | null): void {
 }
 
 export function loadToken(): string | null {
-  if (accessToken) return accessToken;
-  accessToken = localStorage.getItem("gaespos_pos_token");
-  return accessToken;
+  return localStorage.getItem("gaespos_pos_token");
 }
 
 // Permisos del usuario en sesión: la UI oculta lo que no puede hacer.
@@ -72,43 +67,58 @@ export async function api<T = unknown>(
     if (t) headers.Authorization = `Bearer ${t}`;
   }
   const requestToken = headers.Authorization;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
-    headers,
-    ...(opts.signal ? { signal: opts.signal } : {}),
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-  });
-  const text = await res.text();
-  let data: unknown = null;
+  const controller = new AbortController();
+  const timeout = opts.signal ? null : setTimeout(() => controller.abort(), 30_000);
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    if (res.ok)
-      throw new ApiError(
-        502,
-        "El servidor devolvió una respuesta no válida. Verifica el resultado antes de repetir una operación.",
-      );
-  }
-  if (!res.ok) {
-    // token expirado/inválido en llamada autenticada → cerrar sesión y volver al login.
-    if (
-      res.status === 401 &&
-      opts.auth !== false &&
-      requestToken &&
-      requestToken === `Bearer ${loadToken()}`
-    ) {
-      setToken(null);
-      window.location.reload();
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
+      headers,
+      signal: opts.signal ?? controller.signal,
+      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      if (res.ok)
+        throw new ApiError(
+          502,
+          "El servidor devolvió una respuesta no válida. Verifica el resultado antes de repetir una operación.",
+        );
     }
-    const publicMessage =
-      data && typeof data === "object" && "message" in data && typeof data.message === "string"
-        ? data.message
-        : null;
-    const message =
-      res.status >= 500
-        ? "El servicio no está disponible. Verifica el resultado antes de repetir una operación."
-        : (publicMessage ?? `Error ${res.status}`);
-    throw new ApiError(res.status, message, data);
+    if (!res.ok) {
+      // token expirado/inválido en llamada autenticada → cerrar sesión y volver al login.
+      if (
+        res.status === 401 &&
+        opts.auth !== false &&
+        opts.token === undefined &&
+        requestToken &&
+        requestToken === `Bearer ${loadToken()}`
+      ) {
+        setToken(null);
+        window.location.reload();
+      }
+      const publicMessage =
+        data && typeof data === "object" && "message" in data && typeof data.message === "string"
+          ? data.message
+          : null;
+      const message =
+        res.status >= 500
+          ? "El servicio no está disponible. Verifica el resultado antes de repetir una operación."
+          : (publicMessage ?? `Error ${res.status}`);
+      throw new ApiError(res.status, message, data);
+    }
+    return data as T;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        408,
+        "La solicitud tardó demasiado. Verifica el resultado antes de repetir una operación.",
+      );
+    }
+    throw error;
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
   }
-  return data as T;
 }

@@ -39,7 +39,14 @@ async function getToken(slug: string, signal?: AbortSignal): Promise<string> {
     ...(signal ? { signal } : {}),
   });
   if (!res.ok) throw new Error(`Acceso de tienda (${slug}) falló: ${res.status}`);
-  const body = (await res.json()) as { accessToken: string };
+  const body = await res.json();
+  if (
+    !body ||
+    typeof body.accessToken !== "string" ||
+    !body.accessToken.trim() ||
+    body.accessToken.length > 8192
+  )
+    throw new ApiError(503);
   // access token vive 15min; cacheamos 12min por slug para margen
   tokenCache.set(slug, { token: body.accessToken, expira: Date.now() + 12 * 60_000 });
   return body.accessToken;
@@ -63,7 +70,9 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
-  const token = await getToken(await slugActual(), opts.signal);
+  const signal = opts.signal ?? AbortSignal.timeout(20_000);
+  const slug = await slugActual();
+  const token = await getToken(slug, signal);
   const res = await fetch(`${API_URL}/t${path}`, {
     method: opts.method ?? (opts.body ? "POST" : "GET"),
     headers: {
@@ -71,12 +80,13 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
       ...(opts.body ? { "Content-Type": "application/json" } : {}),
     },
     ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
-    ...(opts.signal ? { signal: opts.signal } : {}),
+    signal,
     ...(opts.revalidate !== undefined
       ? { next: { revalidate: opts.revalidate } }
       : { cache: "no-store" }),
   });
   if (!res.ok) {
+    if (res.status === 401 && tokenCache.get(slug)?.token === token) tokenCache.delete(slug);
     const detail = (await res.json().catch(() => null)) as { code?: unknown } | null;
     throw new ApiError(res.status, typeof detail?.code === "string" ? detail.code : undefined);
   }
@@ -89,11 +99,16 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
  * memoria.
  */
 export async function apiRaw(path: string): Promise<Response> {
-  const token = await getToken(await slugActual());
-  return fetch(`${API_URL}/t${path}`, {
+  const signal = AbortSignal.timeout(30_000);
+  const slug = await slugActual();
+  const token = await getToken(slug, signal);
+  const response = await fetch(`${API_URL}/t${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
+    signal,
   });
+  if (response.status === 401 && tokenCache.get(slug)?.token === token) tokenCache.delete(slug);
+  return response;
 }
 
 export interface ProductoPublicado {
@@ -146,6 +161,8 @@ export async function getCategorias(): Promise<CategoriaPublica[]> {
 
 /** Funciones del storefront que el tenant activó (MSI, zoom, rating, cupón…). */
 export interface TiendaConfig {
+  /** Distingue un fallo de consulta de una tienda que aún no ha abierto. */
+  consultaFallida?: boolean;
   /** Encendida y con al menos un producto publicado; lo decide el API. */
   abierta: boolean;
   motivo: "apagada" | "sin_productos" | null;
@@ -212,6 +229,6 @@ export async function getTiendaConfig(): Promise<TiendaConfig> {
     const c = await api<TiendaConfig | null>("/tienda/config-publica", { revalidate: 120 });
     return c ? { ...DEFAULT_CONFIG, ...c } : DEFAULT_CONFIG;
   } catch {
-    return DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG, consultaFallida: true };
   }
 }

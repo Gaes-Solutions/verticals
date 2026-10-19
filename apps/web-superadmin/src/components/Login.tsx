@@ -13,9 +13,18 @@ import {
 } from "../lib/api.js";
 import { BackupCodes } from "./BackupCodes.js";
 
+import { StorageGate, esErrorAlmacenamiento, useStorageRecovery } from "./StorageGate.js";
+
 type Paso = "password" | "setup" | "verify" | "codes";
 
-export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
+export function Login(props: { onLogin: (s: AdminSession) => void }) {
+  return (
+    <StorageGate>
+      <LoginForm {...props} />
+    </StorageGate>
+  );
+}
+function LoginForm({ onLogin }: { onLogin: (s: AdminSession) => void }) {
   const [paso, setPaso] = useState<Paso>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +38,12 @@ export function Login({ onLogin }: { onLogin: (s: AdminSession) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const storageUnavailable = useStorageRecovery();
   function fail(err: unknown, fallback: string) {
+    if (esErrorAlmacenamiento(err)) {
+      storageUnavailable();
+      return;
+    }
     setError(
       err instanceof ApiError && err.status === 401
         ? fallback

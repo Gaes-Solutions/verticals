@@ -2,6 +2,11 @@ import type { PlatformPermission } from "@gaespos/permissions";
 import { useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { ScreenBoundary } from "./components/ScreenBoundary.js";
+import {
+  StorageGate,
+  esErrorAlmacenamiento,
+  useStorageRecovery,
+} from "./components/StorageGate.js";
 import { api, loadToken, setPlatformAccess, setToken } from "./lib/api.js";
 import { AuditPage } from "./pages/AuditPage.js";
 import { CatalogoPage } from "./pages/CatalogoPage.js";
@@ -67,6 +72,15 @@ const NAV: NavItem[] = [
 ];
 
 export function App() {
+  return (
+    <StorageGate>
+      <SessionApp />
+    </StorageGate>
+  );
+}
+
+function SessionApp() {
+  const storageUnavailable = useStorageRecovery();
   const [session, setSession] = useState<AdminSession | null>(null);
   const [seccion, setSeccion] = useState<Seccion>("dashboard");
   const [restoring, setRestoring] = useState(true);
@@ -78,7 +92,13 @@ export function App() {
     let alive = true;
     let busy = false;
     async function refresh() {
-      const token = loadToken();
+      let token: string | null;
+      try {
+        token = loadToken();
+      } catch {
+        storageUnavailable();
+        return;
+      }
       if (!token) {
         if (alive) {
           setSession(null);
@@ -100,9 +120,17 @@ export function App() {
           role: me.role,
           permissions: me.permissions,
         });
-      } catch {
+      } catch (error) {
+        if (esErrorAlmacenamiento(error)) {
+          if (alive) storageUnavailable();
+          return;
+        }
         // A failed restore never renders a cached administrator's permissions.
-        if (alive && loadToken() === token) setSession(null);
+        try {
+          if (alive && loadToken() === token) setSession(null);
+        } catch {
+          if (alive) storageUnavailable();
+        }
       } finally {
         busy = false;
         if (alive) setRestoring(false);
@@ -129,7 +157,7 @@ export function App() {
       window.removeEventListener("focus", focus);
       window.removeEventListener("platform-access-refresh", focus);
     };
-  }, []);
+  }, [storageUnavailable]);
 
   async function handleLogout() {
     if (loggingOut) return;

@@ -3,6 +3,8 @@ import { type FormEvent, useState } from "react";
 import { ApiError, api, setPermisos, setToken } from "../lib/api.js";
 import { BackupCodes } from "./BackupCodes.js";
 
+import { tenantDeUbicacion } from "../lib/tenant-host.js";
+
 const SLUG_KEY = "gaespos_pos_slug";
 
 interface SesionTenant {
@@ -18,28 +20,19 @@ interface RetoMfa {
   mfaToken?: string;
 }
 
-/** En producción el slug sale del subdominio (negocio.gaessoft.mx); en localhost/IP se pide. */
-function tenantDeSubdominio(): string | null {
-  const qp = new URLSearchParams(window.location.search).get("negocio");
-  if (qp?.trim()) return qp.trim().toLowerCase();
-  const host = window.location.hostname;
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
-  const parts = host.split(".");
-  const sub = parts[0];
-  const reservados = ["www", "admin", "app", "pos"];
-  if (host.endsWith(".localhost")) {
-    return sub && !reservados.includes(sub) ? sub : null;
-  }
-  if (host === "localhost") return null;
-  if (parts.length < 3) return null;
-  if (!sub || reservados.includes(sub)) return null;
-  return sub;
-}
+import { StorageGate, esErrorAlmacenamiento, useStorageRecovery } from "./StorageGate.js";
 
 type Paso = "password" | "setup" | "verify" | "codes";
 
-export function Login({ onLogin }: { onLogin: () => void }) {
-  const slugFijo = tenantDeSubdominio();
+export function Login(props: { onLogin: () => void }) {
+  return (
+    <StorageGate>
+      <LoginForm {...props} />
+    </StorageGate>
+  );
+}
+function LoginForm({ onLogin }: { onLogin: () => void }) {
+  const slugFijo = tenantDeUbicacion(window.location.hostname, window.location.search);
   const [paso, setPaso] = useState<Paso>("password");
   // Ya no se pide en la pantalla: el servidor resuelve el negocio por el correo.
   const tenantSlug = slugFijo ?? localStorage.getItem(SLUG_KEY) ?? "";
@@ -56,8 +49,18 @@ export function Login({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const storageUnavailable = useStorageRecovery();
   function fail(err: unknown, fallback: string) {
-    setToken(null);
+    if (esErrorAlmacenamiento(err)) {
+      storageUnavailable();
+      return;
+    }
+    try {
+      setToken(null);
+    } catch {
+      storageUnavailable();
+      return;
+    }
     setError(
       err instanceof ApiError && err.status === 401
         ? fallback

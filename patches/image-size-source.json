@@ -1,0 +1,12 @@
+{
+  "upstream": "https://codeberg.org/image-size/image-size",
+  "version": "2.0.3",
+  "tarball": "https://registry.npmjs.org/image-size/-/image-size-2.0.3.tgz",
+  "integrity": "sha512-9BJAtVCBth+76NwqnEfWr3PiRnYhbquk6K/USuQ1GQajz5NgLzO7tNsnoNjHfO7LuftgkBf+CCH6j28hjMbIYQ==",
+  "advisories": ["GHSA-5p2g-fcmc-qvqq", "GHSA-w3rx-r6r6-pgpr"],
+  "changes": {
+    "dist/types/utils.js": "Backport v2.0.3 readBox/findBox progress and minimum-header checks, retain existing v1 numeric helpers and exported API.",
+    "dist/types/icns.js": "Backport read-header bounds and entryLength>=8 guards, preserving v1 return shape and type values.",
+    "dist/types/jxl.js": "Backport minimum12byte jxlp header check."
+  }
+}

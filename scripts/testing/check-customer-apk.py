@@ -59,6 +59,19 @@ def main():
         "android.permission.USE_BIOMETRIC", "android.permission.VIBRATE",
     } <= permissions, "Required shop capabilities are missing"
     with zipfile.ZipFile(args.apk) as archive:
+        # Android resource shrinking can rename Ionicons.ttf to e.g. res/D1.ttf.
+        # Compare bytes with the approved font instead of its filename.
+        # @expo/vector-icons 14.1.0 Ionicons.ttf; checker also runs in CI without node_modules.
+        expected_font = bytes.fromhex("9c7fb9071a6c28582c6b84468cbff2c7a71e02b17e3a3b4548a159938d22916b")
+        assert any(hashlib.sha256(archive.read(name)).digest() == expected_font
+                   for name in archive.namelist() if name.lower().endswith(".ttf")), (
+            "Icon font asset is missing or differs from the approved dependency"
+        )
+        assert any(b"Lexpo/modules/font/FontLoaderModule;" in archive.read(name)
+                   for name in archive.namelist()
+                   if re.fullmatch(r"classes\d*\.dex", name)), (
+            "Native ExpoFontLoader is missing; a JS font asset alone is not enough"
+        )
         private_files = [name for name in archive.namelist()
                          if Path(name).name.startswith(".env")
                          or Path(name).suffix in {".jks", ".keystore", ".p12"}]

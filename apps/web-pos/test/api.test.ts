@@ -73,4 +73,24 @@ describe("POS API failures", () => {
     );
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("observes external logout instead of reusing an in-memory session", async () => {
+    setToken("a");
+    localStorage.removeItem("gaespos_pos_token");
+    const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetcher);
+    await api("/t/sucursales");
+    expect(fetcher.mock.calls[0]?.[1].headers.Authorization).toBeUndefined();
+  });
+  it("does not clear the session for a rejected explicit MFA token", async () => {
+    setToken("a");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("Unauthorized", { status: 401 })),
+    );
+    await expect(
+      api("/auth/tenant/mfa/verify", { token: "a", body: { code: "invalid" } }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(loadToken()).toBe("a");
+    expect(reload).not.toHaveBeenCalled();
+  });
 });

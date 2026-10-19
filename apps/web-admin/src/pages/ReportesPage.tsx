@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import type { ResumenVentas } from "../lib/types.js";
 
@@ -20,23 +20,36 @@ function money(n: number): string {
 
 export function ReportesPage() {
   const [dias, setDias] = useState(30);
+  const request = useRef(0);
   const [data, setData] = useState<ResumenVentas | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
+    const current = ++request.current;
     setCargando(true);
     setError(null);
     api<ResumenVentas>(`/t/reportes/resumen?dias=${dias}`)
       .then((r) => {
+        if (current !== request.current) return;
         setData(r);
         setError(null);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar reportes"))
-      .finally(() => setCargando(false));
+      .catch((e) => {
+        if (current === request.current)
+          setError(e instanceof Error ? e.message : "Error al cargar reportes");
+      })
+      .finally(() => {
+        if (current === request.current) setCargando(false);
+      });
   }, [dias]);
 
-  useEffect(() => cargar(), [cargar]);
+  useEffect(() => {
+    cargar();
+    return () => {
+      request.current++;
+    };
+  }, [cargar]);
 
   const periodoLabel = PERIODOS.find((p) => p.dias === dias)?.label ?? `${dias} días`;
 
@@ -69,7 +82,7 @@ export function ReportesPage() {
             type="button"
             data-tour="rep-imprimir"
             onClick={() => window.print()}
-            disabled={!data}
+            disabled={!data || cargando || !!error}
             className="gx-btn-secondary disabled:opacity-50"
           >
             Imprimir / PDF

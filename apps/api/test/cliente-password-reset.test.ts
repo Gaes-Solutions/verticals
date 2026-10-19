@@ -56,7 +56,7 @@ describe("POST /auth/cliente/olvidar-contrasena", () => {
     const res = await app.inject({
       method: "POST",
       url: "/auth/cliente/olvidar-contrasena",
-      headers: { "x-forwarded-for": "10.7.0.1" },
+      remoteAddress: "10.7.0.1",
       payload: { tenantSlug: TENANT_SLUG, email: EMAIL },
     });
     expect(res.statusCode).toBe(200);
@@ -75,7 +75,7 @@ describe("POST /auth/cliente/olvidar-contrasena", () => {
     const res = await app.inject({
       method: "POST",
       url: "/auth/cliente/olvidar-contrasena",
-      headers: { "x-forwarded-for": "10.7.0.2" },
+      remoteAddress: "10.7.0.2",
       payload: { tenantSlug: TENANT_SLUG, email: "nadie@cliente.mx" },
     });
     expect(res.statusCode).toBe(200);
@@ -136,12 +136,13 @@ describe("POST /auth/cliente/restablecer-contrasena", () => {
     const prisma = getTenantClient(TENANT_SLUG);
     // Nuevo enlace y lo dejamos expirar a mano (vencer no lo marca usado).
     email.enviados.length = 0;
-    await app.inject({
+    const solicitud = await app.inject({
       method: "POST",
       url: "/auth/cliente/olvidar-contrasena",
-      headers: { "x-forwarded-for": "10.7.0.3" },
+      remoteAddress: "10.7.0.3",
       payload: { tenantSlug: TENANT_SLUG, email: EMAIL },
     });
+    expect(solicitud.statusCode).toBe(200);
     const enviado = email.enviados.find((e) => e.para === EMAIL);
     const t2 = extraerToken(enviado?.html ?? "");
     const cliente = await prisma.cliente.findFirstOrThrow({
@@ -165,20 +166,22 @@ describe("POST /auth/cliente/restablecer-contrasena", () => {
 
   it("pedir un enlace nuevo invalida el anterior aún vigente", async () => {
     email.enviados.length = 0;
-    await app.inject({
+    const solicitud = await app.inject({
       method: "POST",
       url: "/auth/cliente/olvidar-contrasena",
-      headers: { "x-forwarded-for": "10.7.0.4" },
+      remoteAddress: "10.7.0.4",
       payload: { tenantSlug: TENANT_SLUG, email: EMAIL },
     });
+    expect(solicitud.statusCode).toBe(200);
     const primero = extraerToken(email.enviados.find((e) => e.para === EMAIL)?.html ?? "");
     email.enviados.length = 0;
-    await app.inject({
+    const siguiente = await app.inject({
       method: "POST",
       url: "/auth/cliente/olvidar-contrasena",
-      headers: { "x-forwarded-for": "10.7.0.5" },
+      remoteAddress: "10.7.0.5",
       payload: { tenantSlug: TENANT_SLUG, email: EMAIL },
     });
+    expect(siguiente.statusCode).toBe(200);
     const segundo = extraerToken(email.enviados.find((e) => e.para === EMAIL)?.html ?? "");
     expect(segundo).not.toBe(primero);
     // El primero quedó invalidado al solicitar el segundo

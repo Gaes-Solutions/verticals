@@ -19,6 +19,7 @@ import {
   recuperarIntentoSinPedido,
   submitAttempt,
 } from "@/lib/checkout-attempt";
+import { type ConfigCheckout as TiendaConfig, esConfigCheckout } from "@/lib/checkout-config";
 import {
   borrarBorradorCompra,
   guardarBorradorCompra,
@@ -33,11 +34,14 @@ import {
 } from "@/lib/checkout-pending-payment";
 import { esRespuestaCheckout } from "@/lib/checkout-response";
 import type { MedioPagoGuardado } from "@/lib/cliente";
+import { esListaDirecciones } from "@/lib/direcciones-contract";
+import { leerCotizacionEnvio } from "@/lib/envios-contract";
+import { listaTarjetas } from "@/lib/medios-pago-contract";
 import { useCuponCheckout } from "@/lib/use-cupon-checkout";
 import { Barcode, CreditCard, ImageOff, Landmark, Plus, Store, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 interface OpcionEnvio {
   tarifaId: string;
@@ -51,18 +55,6 @@ interface OpcionPickup {
   sucursalId: string;
   nombre: string;
   tiempoPreparacionPromedioMin: number;
-}
-
-interface TiendaConfig {
-  msiHabilitado: boolean;
-  msiMeses: number[];
-  msiMontoMinimo: string;
-  cuponEnCheckout: boolean;
-  envioGratisDesde: string | null;
-  metodosPago?: string[];
-  proveedorPago?: string | null;
-  pagoPublicKey?: string | null;
-  stripeAccountId?: string | null;
 }
 
 interface DireccionGuardada {
@@ -144,6 +136,9 @@ export default function CheckoutPage() {
   const [modoDir, setModoDir] = useState<"guardada" | "nueva">("nueva");
   const [guardarDir, setGuardarDir] = useState(false);
   const [config, setConfig] = useState<TiendaConfig | null>(null);
+  const [errorConfig, setErrorConfig] = useState(false);
+  const [reintentoConfig, setReintentoConfig] = useState(0);
+  const [errorCarrito, setErrorCarrito] = useState(false);
   const [modoEntrega, setModoEntrega] = useState<"envio" | "pickup">("envio");
   const [opcionesEnvio, setOpcionesEnvio] = useState<OpcionEnvio[]>([]);
   const [pickups, setPickups] = useState<OpcionPickup[]>([]);
@@ -190,8 +185,16 @@ export default function CheckoutPage() {
     });
   }
 
+  const actualizarCarrito = useCallback(() => {
+    try {
+      setItems(leerCarrito());
+      setErrorCarrito(false);
+    } catch {
+      setErrorCarrito(true);
+    }
+  }, []);
   useEffect(() => {
-    const actualizar = () => setItems(leerCarrito());
+    const actualizar = actualizarCarrito;
     actualizar();
     window.addEventListener("carrito-actualizado", actualizar);
     window.addEventListener("storage", actualizar);
@@ -199,7 +202,7 @@ export default function CheckoutPage() {
       window.removeEventListener("carrito-actualizado", actualizar);
       window.removeEventListener("storage", actualizar);
     };
-  }, []);
+  }, [actualizarCarrito]);
   useEffect(() => {
     if (!error) return;
     const target = document.getElementById(
@@ -277,20 +280,37 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!borradorListo) return;
     const controller = new AbortController();
-    const options = { signal: controller.signal };
-    setItems(leerCarrito());
+    const options = { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) };
+    setConfig(null);
+    setErrorConfig(false);
     fetch("/api/tienda-config", options)
       .then(async (res) => {
-        if (!res.ok) return;
-        const next = (await res.json()) as TiendaConfig;
+        if (!res.ok) throw new Error();
+        const next: unknown = await res.json();
+        if (!esConfigCheckout(next)) throw new Error();
         if (!controller.signal.aborted) setConfig(next);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted) setErrorConfig(true);
+      });
+    return () => controller.abort();
+  }, [borradorListo, reintentoConfig]);
+
+  useEffect(() => {
+    if (!borradorListo) return;
+    const controller = new AbortController();
+    const options = { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) };
     // prefill con la sesión del cliente si está logueado
     fetch("/api/cuenta/me", options)
       .then(async (res) => {
         if (!res.ok) return;
-        const me = (await res.json()) as { nombre: string; email: string | null };
+        const me = await res.json();
+        if (
+          !me ||
+          typeof me.nombre !== "string" ||
+          (me.email !== null && typeof me.email !== "string")
+        )
+          return;
         if (controller.signal.aborted) return;
         setSesionCliente(true);
         setEmail((prev) => prev || (me.email ?? ""));
@@ -302,9 +322,9 @@ export default function CheckoutPage() {
     fetch("/api/cuenta/medios-pago", options)
       .then(async (res) => {
         if (!res.ok) return;
-        const medios = (await res.json()) as MedioPagoGuardado[];
+        const medios: unknown = await res.json();
         if (controller.signal.aborted) return;
-        if (!Array.isArray(medios) || medios.length === 0) return;
+        if (!listaTarjetas(medios) || medios.length === 0) return;
         setMediosPago(medios);
         setMedioPagoSel(medios[0]?.id ?? "");
       })
@@ -313,9 +333,9 @@ export default function CheckoutPage() {
     fetch("/api/cuenta/direcciones", options)
       .then(async (res) => {
         if (!res.ok) return;
-        const dirs = (await res.json()) as DireccionGuardada[];
+        const dirs: unknown = await res.json();
         if (controller.signal.aborted) return;
-        if (!Array.isArray(dirs) || dirs.length === 0) return;
+        if (!esListaDirecciones(dirs) || dirs.length === 0) return;
         setDirecciones(dirs);
         const def = dirs.find((d) => d.isDefaultEnvio) ?? dirs[0];
         if (def && !borradorRestaurado.current) {
@@ -332,17 +352,19 @@ export default function CheckoutPage() {
     let active = true;
     fetch("/api/checkout/session", { cache: "no-store", signal: AbortSignal.timeout(15_000) })
       .then(async (response) => {
-        const data = (await response.json()) as {
-          context?: string;
-          guestContext?: string;
-          message?: string;
-        };
         if (response.status === 401 || response.status === 403) {
           if (active) setRequiereSesion(true);
           throw new Error("Inicia sesión para retomar tu compra sin perder el carrito.");
         }
-        if (!response.ok || typeof data.context !== "string" || !data.context)
-          throw new Error(data.message ?? "No se pudo preparar la compra.");
+        const data = await response.json();
+        if (
+          !response.ok ||
+          !data ||
+          typeof data.context !== "string" ||
+          !data.context ||
+          data.context.length > 200
+        )
+          throw new Error("No se pudo preparar la compra. Reintenta sin volver a pagar.");
         if (!active) return;
         setDraftScope({
           owner: data.context,
@@ -413,8 +435,8 @@ export default function CheckoutPage() {
     })
       .then(async (res) => {
         if (!res.ok) throw new Error("Entrega no disponible");
-        const cot = (await res.json()) as { pickup: OpcionPickup[] };
-        if (!Array.isArray(cot.pickup)) throw new Error("Cotización inválida");
+        const cot = leerCotizacionEnvio(await res.json());
+        if (!cot) throw new Error("Cotización inválida");
         if (controller.signal.aborted) return;
         setPickups(cot.pickup);
         if (cot.pickup.length === 1) setSucursalId(cot.pickup[0]?.sucursalId ?? "");
@@ -446,8 +468,8 @@ export default function CheckoutPage() {
       )
         .then(async (res) => {
           if (!res.ok) throw new Error("Entrega no disponible");
-          const cot = (await res.json()) as { opcionesEnvio: OpcionEnvio[] };
-          if (!Array.isArray(cot.opcionesEnvio)) throw new Error("Cotización inválida");
+          const cot = leerCotizacionEnvio(await res.json());
+          if (!cot) throw new Error("Cotización inválida");
           if (controller.signal.aborted) return;
           setOpcionesEnvio(cot.opcionesEnvio);
           setTarifaId(cot.opcionesEnvio[0]?.tarifaId ?? "");
@@ -501,6 +523,10 @@ export default function CheckoutPage() {
       : [];
 
   function validar(): boolean {
+    if (errorCarrito || !config) {
+      setError("Comprueba tu carrito y las opciones de pago antes de continuar.");
+      return false;
+    }
     if (cupon.bloquea) {
       setError("Aplica o quita el cupón antes de continuar con tu compra.");
       return false;
@@ -696,7 +722,7 @@ export default function CheckoutPage() {
       setError("Espera a que cargue el formulario seguro antes de enviar el pedido.");
       return;
     }
-    if (!validar()) return;
+    if (!validar() || !comprobarSeleccion()) return;
     const controller = new AbortController();
     checkoutOperation.current = controller;
     setProcesando(true);
@@ -704,6 +730,7 @@ export default function CheckoutPage() {
     try {
       await esperarCarritoGuardado();
       controller.signal.throwIfAborted();
+      if (!comprobarSeleccion()) return;
       const firstSubmission = await submitAttempt(attempt);
       controller.signal.throwIfAborted();
       const current = { ...attempt, submitted: true };
@@ -720,6 +747,7 @@ export default function CheckoutPage() {
         );
         return;
       }
+      if (!comprobarSeleccion()) return;
       const response = await checkoutFetch("/api/checkout", controller.signal, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -757,6 +785,23 @@ export default function CheckoutPage() {
         checkoutOperation.current = null;
         setProcesando(false);
       }
+    }
+  }
+
+  function comprobarSeleccion(): boolean {
+    try {
+      const actuales = leerCarrito();
+      if (JSON.stringify(actuales) !== JSON.stringify(items)) {
+        setItems(actuales);
+        setError(
+          "Tu carrito cambió. Revisa los productos, la entrega y el total antes de continuar.",
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      setErrorCarrito(true);
+      return false;
     }
   }
 
@@ -809,6 +854,36 @@ export default function CheckoutPage() {
     );
   }
 
+  if (errorCarrito) {
+    return (
+      <div className="mx-auto max-w-lg py-8 text-center">
+        <h1 className="text-2xl font-bold">Revisa tu carrito</h1>
+        <p role="alert" className="mt-3 text-danger">
+          No pudimos leer tu carrito en este navegador. Permite el almacenamiento y vuelve a
+          intentar. Si ya intentaste pagar, consulta ese mismo pedido antes de iniciar otra compra.
+        </p>
+        <button type="button" onClick={actualizarCarrito} className="gx-btn-primary mt-4 min-h-11">
+          Volver a leer carrito
+        </button>
+        {attempt?.submitted && (
+          <button
+            type="button"
+            onClick={() => void consultarPedido()}
+            disabled={procesando || requiereSesion}
+            className="gx-btn-secondary mt-3 min-h-11"
+          >
+            Consultar el pedido anterior
+          </button>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="text-center">
@@ -840,7 +915,13 @@ export default function CheckoutPage() {
   }
 
   const pagoDeshabilitado =
-    requiereSesion || !entregaLista || !attempt || attempt.submitted || procesando || cupon.bloquea;
+    requiereSesion ||
+    !config ||
+    !entregaLista ||
+    !attempt ||
+    attempt.submitted ||
+    procesando ||
+    cupon.bloquea;
   const maxMsi = msiOfrecibles.length > 0 ? Math.max(...msiOfrecibles) : 0;
   // Métodos que el tenant ofrece (los anuncia el API según su proveedor). El
   // método activo siempre pertenece a la lista: si la config aún no carga, solo
@@ -884,6 +965,27 @@ export default function CheckoutPage() {
   return (
     <div className="mx-auto max-w-5xl pb-32 lg:pb-10">
       <h1 className="mb-6 font-bold text-2xl">Finalizar compra</h1>
+      {!config && !errorConfig && (
+        <output className="mb-5 block text-sm text-slate-600">Consultando opciones de pago…</output>
+      )}
+      {errorConfig && (
+        <div
+          role="alert"
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"
+        >
+          <p>
+            No pudimos consultar las opciones de pago. Tu selección y los datos del formulario se
+            conservan.
+          </p>
+          <button
+            type="button"
+            className="gx-btn-secondary mt-3 min-h-11"
+            onClick={() => setReintentoConfig((n) => n + 1)}
+          >
+            Volver a consultar opciones de pago
+          </button>
+        </div>
+      )}
       {requiereSesion && (
         <div
           id="checkout-session-notice"

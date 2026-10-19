@@ -20,6 +20,7 @@ WORKDIR /repo
 # Capa cacheable: solo manifests + lockfile para resolver deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY .npmrc ./
+COPY patches ./patches
 COPY apps/api/package.json ./apps/api/
 COPY packages ./packages
 

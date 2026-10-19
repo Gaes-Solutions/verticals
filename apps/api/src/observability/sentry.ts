@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { scrubSentryEvent, scrubSentrySpan } from "./sentry-privacy.js";
 
 let activo = false;
 
@@ -13,6 +14,11 @@ export function initSentry(): void {
     dsn,
     environment: process.env.NODE_ENV ?? "production",
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? "0.1"),
+    // Database instrumentations in this SDK emit db.user even without an
+    // explicit PII opt-in. Strip it from child spans AND the root transaction.
+    beforeSendSpan: scrubSentrySpan,
+    beforeSendTransaction: scrubSentryEvent,
+    beforeSend: scrubSentryEvent,
     ...(process.env.SENTRY_RELEASE ? { release: process.env.SENTRY_RELEASE } : {}),
   });
   activo = true;

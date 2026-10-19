@@ -20,10 +20,7 @@ export class ApiError extends Error {
   }
 }
 
-let accessToken: string | null = null;
-
 export function setToken(token: string | null): void {
-  accessToken = token;
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else {
     localStorage.removeItem(TOKEN_KEY);
@@ -33,9 +30,7 @@ export function setToken(token: string | null): void {
 }
 
 export function loadToken(): string | null {
-  if (accessToken) return accessToken;
-  accessToken = localStorage.getItem(TOKEN_KEY);
-  return accessToken;
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setRole(role: string): void {
@@ -71,6 +66,8 @@ interface ApiOpts {
   token?: string | null;
   /** Si false, no manda Authorization. */
   auth?: boolean;
+  /** Caller-owned cancellation/deadline; otherwise the request has a 30s limit. */
+  signal?: AbortSignal;
 }
 
 export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
@@ -82,17 +79,23 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
   const startedAt = performance.now();
   const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  const timeout = opts.signal ? null : setTimeout(() => controller.abort(), 30_000);
   try {
     const res = await fetch(`${BASE}${path}`, {
-      signal: controller.signal,
+      signal: opts.signal ?? controller.signal,
       method,
       headers,
       ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
     });
     if (res.status === 403) window.dispatchEvent(new Event("platform-access-refresh"));
     // Authentication failures must clear the session even if a proxy returns HTML.
-    if (res.status === 401 && opts.token === undefined && opts.auth !== false && loadToken()) {
+    if (
+      res.status === 401 &&
+      opts.token === undefined &&
+      opts.auth !== false &&
+      token &&
+      loadToken() === token
+    ) {
       setToken(null);
       window.location.reload();
     }
@@ -119,9 +122,15 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
     ) {
       window.dispatchEvent(new CustomEvent("platform-load-error", { detail: { startedAt } }));
     }
+    if (controller.signal.aborted) {
+      throw new ApiError(
+        408,
+        "La solicitud tardó demasiado. Verifica el resultado antes de repetir una operación.",
+      );
+    }
     throw error;
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout !== null) clearTimeout(timeout);
   }
 }
 

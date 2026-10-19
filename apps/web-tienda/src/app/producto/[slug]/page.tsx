@@ -185,6 +185,13 @@ function BreadcrumbJsonLd({ prod, slug }: { prod: ProductoDetalle; slug: string 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const config = await getTiendaConfig();
+  if (config.consultaFallida)
+    return (
+      <EstadoError
+        titulo="No pudimos consultar la tienda"
+        descripcion="La tienda no respondió. Reintenta en unos momentos; esto no significa que el producto ya no esté disponible."
+      />
+    );
   if (!config.abierta) return <TiendaCerrada nombre={config.nombre} lema={config.lema} />;
   let prod: ProductoDetalle;
   try {

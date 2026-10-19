@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, puede } from "../lib/api.js";
 import type { Paged, Producto } from "../lib/types.js";
 
@@ -31,6 +31,10 @@ export function PreciosPage() {
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<ListaDetalle | null>(null);
   const [modalNueva, setModalNueva] = useState(false);
+  const detailRequest = useRef(0);
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+  const [detalleError, setDetalleError] = useState<string | null>(null);
   const puedeModificar = puede("precios.modificar");
 
   const cargar = useCallback(async () => {
@@ -51,10 +55,21 @@ export function PreciosPage() {
   }, [cargar]);
 
   async function abrir(id: string) {
+    const current = ++detailRequest.current;
+    setDetalleId(id);
+    setDetalleCargando(true);
+    setDetalleError(null);
+    setSel(null);
     try {
-      setSel(await api<ListaDetalle>(`/t/precios/listas/${id}`));
-    } catch {
-      setSel(null);
+      const lista = await api<ListaDetalle>(`/t/precios/listas/${id}`);
+      if (current === detailRequest.current) setSel(lista);
+    } catch (error) {
+      if (current === detailRequest.current)
+        setDetalleError(
+          error instanceof Error ? error.message : "No se pudo abrir la lista de precios.",
+        );
+    } finally {
+      if (current === detailRequest.current) setDetalleCargando(false);
     }
   }
 
@@ -101,7 +116,7 @@ export function PreciosPage() {
                 type="button"
                 onClick={() => abrir(l.id)}
                 className={`w-full rounded-lg border p-3 text-left shadow-sm ${
-                  sel?.id === l.id ? "border-brand bg-brand/5" : "border-slate-200 bg-white"
+                  detalleId === l.id ? "border-brand bg-brand/5" : "border-slate-200 bg-white"
                 }`}
               >
                 <p className="font-semibold text-slate-800">{l.nombre}</p>
@@ -114,8 +129,26 @@ export function PreciosPage() {
 
         {/* Detalle de la lista seleccionada */}
         <div>
-          {sel ? (
-            <DetalleLista lista={sel} onCambio={() => abrir(sel.id).then(cargar)} />
+          {detalleCargando ? (
+            <output>Cargando lista de precios…</output>
+          ) : detalleError ? (
+            <div role="alert" className="space-y-3 rounded-lg bg-danger-light p-4 text-danger">
+              <p>{detalleError}</p>
+              <button
+                type="button"
+                className="gx-btn-secondary"
+                onClick={() => detalleId && void abrir(detalleId)}
+              >
+                Reintentar lista
+              </button>
+            </div>
+          ) : sel ? (
+            <DetalleLista
+              key={sel.id}
+              lista={sel}
+              puedeModificar={puedeModificar}
+              onCambio={() => abrir(sel.id).then(cargar)}
+            />
           ) : (
             <p className="rounded-xl bg-white p-6 text-center text-slate-400 shadow-sm">
               Selecciona una lista para ver y editar sus precios.
@@ -137,7 +170,11 @@ export function PreciosPage() {
   );
 }
 
-function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () => void }) {
+function DetalleLista({
+  lista,
+  onCambio,
+  puedeModificar,
+}: { lista: ListaDetalle; onCambio: () => void; puedeModificar: boolean }) {
   const [busq, setBusq] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [precio, setPrecio] = useState("");
@@ -149,15 +186,30 @@ function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () =
       setResultados([]);
       return;
     }
+    let alive = true;
+    setResultados([]);
     const t = setTimeout(async () => {
-      const r = await api<Paged<Producto>>(`/t/productos?q=${encodeURIComponent(busq)}&pageSize=8`);
-      setResultados(r.items);
+      try {
+        const r = await api<Paged<Producto>>(
+          `/t/productos?q=${encodeURIComponent(busq)}&pageSize=8`,
+        );
+        if (alive) {
+          setResultados(r.items);
+          setError(null);
+        }
+      } catch {
+        if (alive) setError("No se pudieron buscar los productos. Inténtalo de nuevo.");
+      }
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, [busq]);
 
   async function agregar() {
-    if (!sel || !(Number.parseFloat(precio) > 0)) return;
+    if (!puedeModificar || !puede("precios.modificar") || !sel || !(Number.parseFloat(precio) > 0))
+      return;
     setError(null);
     try {
       await api(`/t/precios/listas/${lista.id}/items`, {
@@ -174,6 +226,7 @@ function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () =
   }
 
   async function quitar(varianteId: string) {
+    if (!puedeModificar || !puede("precios.modificar")) return;
     setError(null);
     try {
       await api(`/t/precios/listas/${lista.id}/items/${varianteId}`, { method: "DELETE" });
@@ -191,56 +244,58 @@ function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () =
       </p>
 
       {/* Agregar producto a la lista */}
-      <div className="mb-4 rounded-lg bg-slate-50 p-3">
-        <p className="mb-2 text-sm font-medium text-slate-700">Poner precio a un producto</p>
-        {sel ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex-1 text-sm text-slate-700">{sel.nombre}</span>
-            <input
-              type="number"
-              step="0.01"
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              placeholder="Precio"
-              className="gx-input w-28"
-            />
-            <button type="button" onClick={agregar} className="gx-btn-primary">
-              Guardar
-            </button>
-            <button type="button" onClick={() => setSel(null)} className="gx-btn-ghost">
-              Cancelar
-            </button>
-          </div>
-        ) : (
-          <>
-            <input
-              value={busq}
-              onChange={(e) => setBusq(e.target.value)}
-              placeholder="Buscar producto…"
-              className="gx-input"
-            />
-            {resultados.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {resultados.map((p) => {
-                  const v = p.variantes[0];
-                  if (!v) return null;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setSel({ varianteId: v.id, nombre: p.nombre })}
-                      className="block min-h-10 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white"
-                    >
-                      {p.nombre} <span className="text-slate-400">· {v.sku}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-      </div>
+      {puedeModificar && (
+        <div className="mb-4 rounded-lg bg-slate-50 p-3">
+          <p className="mb-2 text-sm font-medium text-slate-700">Poner precio a un producto</p>
+          {sel ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex-1 text-sm text-slate-700">{sel.nombre}</span>
+              <input
+                type="number"
+                step="0.01"
+                value={precio}
+                onChange={(e) => setPrecio(e.target.value)}
+                placeholder="Precio"
+                className="gx-input w-28"
+              />
+              <button type="button" onClick={agregar} className="gx-btn-primary">
+                Guardar
+              </button>
+              <button type="button" onClick={() => setSel(null)} className="gx-btn-ghost">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                value={busq}
+                onChange={(e) => setBusq(e.target.value)}
+                placeholder="Buscar producto…"
+                className="gx-input"
+              />
+              {resultados.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {resultados.map((p) => {
+                    const v = p.variantes[0];
+                    if (!v) return null;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSel({ varianteId: v.id, nombre: p.nombre })}
+                        className="block min-h-10 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-white"
+                      >
+                        {p.nombre} <span className="text-slate-400">· {v.sku}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        </div>
+      )}
 
       {/* Items */}
       {lista.items.length === 0 ? (
@@ -263,13 +318,15 @@ function DetalleLista({ lista, onCambio }: { lista: ListaDetalle; onCambio: () =
                     ${Number.parseFloat(it.precio).toFixed(2)}
                   </td>
                   <td className="gx-td text-right">
-                    <button
-                      type="button"
-                      onClick={() => quitar(it.varianteId)}
-                      className="gx-btn-danger"
-                    >
-                      Quitar
-                    </button>
+                    {puedeModificar && (
+                      <button
+                        type="button"
+                        onClick={() => quitar(it.varianteId)}
+                        className="gx-btn-danger"
+                      >
+                        Quitar
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

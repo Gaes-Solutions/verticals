@@ -67,6 +67,13 @@ export default async function CatalogoPage({
   const filtrando = hayFiltrosActivos(sp);
 
   const tienda = await getTiendaConfig();
+  if (tienda.consultaFallida)
+    return (
+      <EstadoError
+        titulo="No pudimos consultar la tienda"
+        descripcion="La tienda no respondió. Reintenta en unos momentos; esto no significa que esté cerrada."
+      />
+    );
   if (!tienda.abierta) return <TiendaCerrada nombre={tienda.nombre} lema={tienda.lema} />;
 
   let data: CatalogoResponse;

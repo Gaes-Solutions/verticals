@@ -19,6 +19,10 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
   const [items, setItems] = useState<Notificacion[]>([]);
   const [noLeidas, setNoLeidas] = useState(0);
   const [abierto, setAbierto] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const bloqueado = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const cargar = useCallback(() => {
@@ -26,8 +30,10 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
       .then((r) => {
         setItems(r.items);
         setNoLeidas(r.noLeidas);
+        setError(null);
       })
-      .catch(() => {});
+      .catch(() => setError("No se pudieron actualizar las notificaciones. Inténtalo de nuevo."))
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => {
@@ -51,10 +57,22 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
   }, [abierto]);
 
   async function marcarLeida(n: Notificacion) {
+    if (bloqueado.current) return;
     if (!n.leida) {
-      await api(`/t/notificaciones/${n.id}/leer`, { method: "POST" }).catch(() => {});
-      setNoLeidas((c) => Math.max(0, c - 1));
-      setItems((arr) => arr.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
+      bloqueado.current = true;
+      setGuardando(true);
+      setError(null);
+      try {
+        await api(`/t/notificaciones/${n.id}/leer`, { method: "POST" });
+        setNoLeidas((c) => Math.max(0, c - 1));
+        setItems((arr) => arr.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
+      } catch {
+        setError("No se pudo marcar la notificación como leída. Inténtalo de nuevo.");
+        return;
+      } finally {
+        bloqueado.current = false;
+        setGuardando(false);
+      }
     }
     if (n.link && onOpenLink) {
       setAbierto(false);
@@ -63,9 +81,20 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
   }
 
   async function marcarTodas() {
-    await api("/t/notificaciones/leer-todas", { method: "POST" }).catch(() => {});
-    setItems((arr) => arr.map((x) => ({ ...x, leida: true })));
-    setNoLeidas(0);
+    if (bloqueado.current) return;
+    bloqueado.current = true;
+    setGuardando(true);
+    setError(null);
+    try {
+      await api("/t/notificaciones/leer-todas", { method: "POST" });
+      setItems((arr) => arr.map((x) => ({ ...x, leida: true })));
+      setNoLeidas(0);
+    } catch {
+      setError("No se pudieron marcar las notificaciones como leídas. Inténtalo de nuevo.");
+    } finally {
+      bloqueado.current = false;
+      setGuardando(false);
+    }
   }
 
   return (
@@ -92,14 +121,27 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
               <button
                 type="button"
                 onClick={marcarTodas}
-                className="text-brand text-xs hover:underline"
+                disabled={guardando}
+                className="text-brand text-xs hover:underline disabled:opacity-50"
               >
                 Marcar todas
               </button>
             )}
           </div>
+          {error && (
+            <div role="alert" className="space-y-2 bg-red-50 px-4 py-3 text-red-700 text-sm">
+              <p>{error}</p>
+              <button type="button" onClick={cargar} disabled={guardando} className="underline">
+                Volver a cargar
+              </button>
+            </div>
+          )}
           <div className="max-h-96 overflow-y-auto">
-            {items.length === 0 ? (
+            {cargando ? (
+              <p className="px-4 py-8 text-center text-slate-400 text-sm">
+                Cargando notificaciones…
+              </p>
+            ) : items.length === 0 && !error ? (
               <p className="px-4 py-8 text-center text-slate-400 text-sm">Sin notificaciones</p>
             ) : (
               items.map((n) => (
@@ -107,6 +149,7 @@ export function NotificacionesBell({ onOpenLink }: { onOpenLink?: (link: string)
                   key={n.id}
                   type="button"
                   onClick={() => marcarLeida(n)}
+                  disabled={guardando}
                   className={`block w-full border-slate-50 border-b px-4 py-3 text-left hover:bg-slate-50 ${
                     n.leida ? "" : "bg-brand/5"
                   }`}

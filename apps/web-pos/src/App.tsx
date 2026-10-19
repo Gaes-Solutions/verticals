@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DesktopCatalogStatus } from "./components/DesktopCatalogStatus.js";
 import { Login } from "./components/Login.js";
 import { OfflineCatalog } from "./components/OfflineCatalog.js";
 import { PosScreen } from "./components/PosScreen.js";
 import { RegisterSetup } from "./components/RegisterSetup.js";
+import { StorageGate } from "./components/StorageGate.js";
 import { loadToken, setToken } from "./lib/api.js";
 import { type LocalCatalogAccess, clearCatalogResume } from "./lib/local-catalog.js";
 import type { CashierIdentity } from "./lib/session.js";
@@ -16,9 +17,24 @@ export interface Session {
   caja: Caja | null;
 }
 export function App() {
+  return (
+    <StorageGate>
+      <SessionApp />
+    </StorageGate>
+  );
+}
+
+function SessionApp() {
   const [offline, setOffline] = useState<LocalCatalogAccess | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authenticated, setAuthenticated] = useState(() => !!loadToken());
+  useEffect(() => {
+    const changed = (event: StorageEvent) => {
+      if (event.key === "gaespos_pos_token" || event.key === null) window.location.reload();
+    };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, []);
   function handleLogout() {
     clearCatalogResume();
     setOffline(null);

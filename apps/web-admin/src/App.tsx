@@ -44,8 +44,23 @@ import { type ComponentType, type FormEvent, useEffect, useState } from "react";
 import { Login } from "./components/Login.js";
 import { NotificacionesBell } from "./components/NotificacionesBell.js";
 import { Signup } from "./components/Signup.js";
+import {
+  StorageGate,
+  esErrorAlmacenamiento,
+  useStorageRecovery,
+} from "./components/StorageGate.js";
 import { Tour } from "./components/Tour.js";
-import { ApiError, cambiarMiPassword, loadToken, puede, setToken } from "./lib/api.js";
+import { validarIdentidadAdmin } from "./lib/admin-identity.js";
+import {
+  ApiError,
+  api,
+  cambiarMiPassword,
+  loadToken,
+  puede,
+  setPermisos,
+  setToken,
+  setUserId,
+} from "./lib/api.js";
 import { AutomatizacionesPage } from "./pages/AutomatizacionesPage.js";
 import { AyudaPage } from "./pages/AyudaPage.js";
 import { CfdiPage } from "./pages/CfdiPage.js";
@@ -273,12 +288,23 @@ const PAGE_COMPONENTS: Record<Seccion, ComponentType> = {
 };
 
 export function App() {
+  return (
+    <StorageGate>
+      <SessionApp />
+    </StorageGate>
+  );
+}
+
+function SessionApp() {
+  const storageUnavailable = useStorageRecovery();
   const [session, setSession] = useState<AdminSession | null>(null);
   const [seccion, setSeccion] = useState<Seccion>(() => {
     const connect = new URLSearchParams(window.location.search).get("connect");
     return connect === "done" || connect === "refresh" ? "suscripcion" : "inicio";
   });
   const [restoring, setRestoring] = useState(true);
+  const [restoreError, setRestoreError] = useState(false);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -312,23 +338,130 @@ export function App() {
     }
   }, [session, seccion, visibleNav]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A retry must create a fresh access verification.
   useEffect(() => {
-    if (!loadToken()) {
-      setRestoring(false);
-      return;
+    let alive = true;
+    let busy = false;
+    let controller: AbortController | null = null;
+    async function refresh() {
+      let token: string | null;
+      try {
+        token = loadToken();
+      } catch {
+        storageUnavailable();
+        return;
+      }
+      if (!token) {
+        if (alive) {
+          setSession(null);
+          setRestoreError(false);
+          setRestoring(false);
+        }
+        return;
+      }
+      if (busy) return;
+      busy = true;
+      controller = new AbortController();
+      const pending = controller;
+      const deadline = window.setTimeout(() => pending.abort(), 30_000);
+      try {
+        const me = validarIdentidadAdmin(
+          await api<unknown>("/auth/tenant/me", { signal: pending.signal }),
+        );
+        if (!alive || loadToken() !== token) return;
+        setPermisos(me.permissions);
+        setUserId(me.id);
+        setSession({ nombre: me.nombre, tenantSlug: me.tenantSlug });
+        setRestoreError(false);
+      } catch (error) {
+        if (esErrorAlmacenamiento(error)) {
+          if (alive) storageUnavailable();
+          return;
+        }
+        let current: string | null;
+        try {
+          current = loadToken();
+        } catch {
+          if (alive) storageUnavailable();
+          return;
+        }
+        if (alive && current === token) {
+          // Do not render cached privileges when the current access is unknown.
+          try {
+            setPermisos([]);
+          } catch {
+            storageUnavailable();
+            return;
+          }
+          setSession(null);
+          setRestoreError(true);
+        }
+      } finally {
+        window.clearTimeout(deadline);
+        busy = false;
+        if (alive) setRestoring(false);
+      }
     }
-    // El token vive; intentamos usarlo, si falla el primer fetch el usuario re-loguea.
-    setSession({ nombre: "Administrador", tenantSlug: "" });
-    setRestoring(false);
-  }, []);
+    void refresh();
+    const focus = () => void refresh();
+    const storage = (event: StorageEvent) => {
+      if (event.key === "gaespos_admin_token" || event.key === null) {
+        // Discard pages and dialogs belonging to the previous account immediately.
+        window.location.reload();
+      }
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 30_000);
+    window.addEventListener("focus", focus);
+    window.addEventListener("storage", storage);
+    return () => {
+      alive = false;
+      controller?.abort();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", focus);
+      window.removeEventListener("storage", storage);
+    };
+  }, [restoreAttempt, storageUnavailable]);
 
   function handleLogout() {
     setToken(null);
     setSession(null);
+    setRestoreError(false);
+    setSeccion("inicio");
+    setMenuOpen(false);
+    setUserMenuOpen(false);
+    setAccountOpen(false);
+    setHelpPanel(null);
+    setPasswordOpen(false);
   }
 
   if (restoring) {
     return <div className="flex h-full items-center justify-center text-slate-400">Cargando…</div>;
+  }
+
+  if (restoreError) {
+    return (
+      <section role="alert" className="mx-auto max-w-lg space-y-4 p-6">
+        <h1 className="font-bold text-lg">No pudimos verificar tu acceso</h1>
+        <p>Revisa tu conexión e inténtalo de nuevo antes de continuar.</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="gx-btn-primary"
+            onClick={() => {
+              setRestoring(true);
+              setRestoreAttempt((attempt) => attempt + 1);
+            }}
+          >
+            Reintentar
+          </button>
+          <button type="button" className="gx-btn-secondary" onClick={handleLogout}>
+            Salir
+          </button>
+        </div>
+      </section>
+    );
   }
 
   if (!session) {
