@@ -28,7 +28,11 @@ done
 
 # Kiosk smoke stops at setup: no token, activation, orders or payment requests.
 adb install -r "$RUNNER_TEMP/native/kiosk.apk" > "$results/kiosko-install.log" 2>&1
-if ! maestro test --format junit --output "$results/kiosko-results.xml" "../mobile-kiosko/.maestro/native-setup.yml" > "$results/kiosko.log" 2>&1; then
+# Maestro 2.11 writes screenshots into its run bundle, not the working directory.
+# Keep the full bundle private; publish only the expected setup screenshot.
+kiosko_private="$RUNNER_TEMP/native/kiosko-private"
+mkdir "$kiosko_private"
+if ! maestro test --test-output-dir "$kiosko_private" --format junit --output "$results/kiosko-results.xml" "../mobile-kiosko/.maestro/native-setup.yml" > "$results/kiosko.log" 2>&1; then
   adb exec-out screencap -p > "$results/kiosko-native-failure.png" || true
   adb shell uiautomator dump /sdcard/native-ui.xml >/dev/null 2>&1 || true
   adb pull /sdcard/native-ui.xml "$results/kiosko-view-hierarchy.xml" >/dev/null 2>&1 || true
@@ -37,6 +41,13 @@ if ! maestro test --format junit --output "$results/kiosko-results.xml" "../mobi
   cat "$results/kiosko.log"
   exit 1
 fi
-mv kiosko-setup.png "$results/kiosko-setup.png"
+mapfile -d '' kiosko_screenshots < <(find "$kiosko_private" -type f -path '*/takeScreenshot/kiosko-setup.png' -print0)
+if [[ ${#kiosko_screenshots[@]} -ne 1 || ! -s "${kiosko_screenshots[0]:-}" ]]; then
+  echo "Expected exactly one nonempty kiosk setup screenshot in this run's private Maestro bundle." >> "$results/kiosko.log"
+  python3 ../../scripts/testing/sanitize-native-results.py
+  cat "$results/kiosko.log"
+  exit 1
+fi
+cp "${kiosko_screenshots[0]}" "$results/kiosko-setup.png"
 python3 ../../scripts/testing/sanitize-native-results.py
 cat "$results/kiosko.log"
