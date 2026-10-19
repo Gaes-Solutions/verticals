@@ -66,7 +66,7 @@ no a todos los teléfonos o conexiones. No se detectó un bloqueo permanente en
 esas muestras. Sigue siendo importante distinguir ese aviso de la pantalla nativa
 de arranque del APK; no se modificó la carga nativa en esta entrega.
 
-## Publicación y comprobación final
+## Primera publicación y comprobación
 
 - Fuente `22c5ae265d140e177038ed23c5207a19dcfc6578`, que incluye `8824ad1` y
   `774075b`, subida a la rama de trabajo y staging. Railway `web-tienda`, ambiente
@@ -82,10 +82,32 @@ de arranque del APK; no se modificó la carga nativa en esta entrega.
   su prueba de regresión y se comprobó también en la página publicada completa.
 - Capturas publicadas: `/tmp/gaes-purchase-published-320.png` y
   `/tmp/gaes-purchase-published-viewport320.png` (viewport para inspección legible).
-- Tres entradas nuevas de Chromium sobre la versión final: catálogo visible a
+- Tres entradas nuevas de Chromium sobre la versión `22c5ae2`: catálogo visible a
   **1519, 980 y 970 ms**; evento de carga completa a **1520, 981 y 970 ms**.
   El marcador «Cargando catálogo» desapareció después de **599, 503 y 478 ms**.
   Sin errores JavaScript ni escrituras. Es una observación de esas muestras; no
   representa una garantía de tiempo para otras redes, dispositivos o para el APK.
 - Producción y APK no se modificaron. La última pasada no encontró nuevos fallos
   en los casos anteriores; esto no certifica todos los flujos del sistema.
+
+
+## Ajuste posterior de la presentación móvil
+
+La inspección del viewport publicado de 320 px detectó que el subtotal normal
+se partía en dos líneas. En móviles, el resumen usa ahora una cuadrícula con
+el botón de compra debajo, a todo el ancho. El precio conserva espacio suficiente.
+Un `ResizeObserver` reserva debajo de la página la altura real del panel, incluidos
+los avisos, para evitar que tape los últimos controles; al ocultarlo se limpia
+la reserva de espacio.
+
+- Fuente del ajuste: `04340c1d0829f28e3ded952725df8328ea3b7184`.
+- Compilación web correcta y typecheck del repositorio **30/30**.
+- Los **27 escenarios locales** siguen aprobados. Se añadió a la comprobación
+  inicial una aserción de precio en una sola línea y espacio inferior suficiente.
+- La comprobación publicada añade esas aserciones y verifica que al vaciar el
+  carrito se retiren tanto la clase como la variable de espacio reservado.
+- Railway staging `web-tienda`: despliegue
+  `dc9ee5ae-d037-4818-b5f6-d6fbd9667d9a` **SUCCESS** para el SHA anterior.
+- Repetición publicada: **7/7 escenarios aprobados**, sin pedidos ni escrituras
+  remotas. Captura `/tmp/gaes-purchase-published-viewport320.png` inspeccionada:
+  `$509.00` se lee en una línea y el botón ocupa la fila completa.
