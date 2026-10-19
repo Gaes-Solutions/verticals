@@ -28,8 +28,11 @@ run_agent_with_timeout() {
   [[ "$unit" == "h" ]] && seconds=$((raw_seconds * 3600))
   setsid "$@" &
   local pid=$!
+  local timeout_marker
+  timeout_marker=$(mktemp)
   (
     sleep "$seconds"
+    printf timeout > "$timeout_marker"
     echo "Proceso agotó el límite de ${duration}; terminando su grupo" >&2
     kill -TERM "$pid" 2>/dev/null || true
     kill -TERM -- "-$pid" 2>/dev/null || true
@@ -38,16 +41,15 @@ run_agent_with_timeout() {
     kill -KILL -- "-$pid" 2>/dev/null || true
   ) &
   local watchdog=$!
-  set +e
-  wait "$pid"
-  local code=$?
-  set -e
+  local code=0
+  wait "$pid" || code=$?
   kill "$watchdog" 2>/dev/null || true
   wait "$watchdog" 2>/dev/null || true
-  if [[ "$code" != "0" ]]; then
-    return 124
-  fi
-  return 0
+  local timed_out=false
+  [[ ! -s "$timeout_marker" ]] || timed_out=true
+  rm -f "$timeout_marker"
+  if [[ "$timed_out" == "true" ]]; then return 124; fi
+  return "$code"
 }
 
 send_email() {
@@ -77,6 +79,9 @@ trap on_exit EXIT
 
 branch="automation/front-cycle-$(date -u +%Y%m%d-%H%M%S)"
 git switch -c "$branch"
+# Keep the base only in this shell; agents cannot hide changes by committing.
+cycle_base_commit=$(git rev-parse HEAD)
+readonly cycle_base_commit
 
 backlog_line=$(grep -m1 -E '^- \[ \] ST-[0-9]+ \|' "$BACKLOG_FILE" || true)
 if [[ -z "$backlog_line" ]]; then
@@ -87,21 +92,61 @@ task_id=$(printf '%s' "$backlog_line" | sed -E 's/^- \[ \] (ST-[0-9]+) \|.*/\1/'
 task_text=$(printf '%s' "$backlog_line" | cut -d'|' -f2- | sed 's/^ //')
 
 run_checks() {
-  git diff --check
-  pnpm --filter @gaespos/web-tienda typecheck
-  pnpm --filter @gaespos/web-tienda exec vitest run
-  pnpm --filter @gaespos/web-tienda build
+  # This function is called under `if !`; Bash disables implicit errexit in
+  # that context. Every mandatory check must propagate its own failure.
+  git diff --check || return $?
+  pnpm --filter @gaespos/web-tienda typecheck || return $?
+  pnpm --filter @gaespos/web-tienda exec vitest run || return $?
+  pnpm --filter @gaespos/web-tienda build || return $?
   # Solo las tareas de mobile ejecutan la suite mobile; una tarea de tienda
   # no debe quedar roja por una regresión ajena a su superficie.
   if [[ "$task_id" == "ST-006" ]]; then
-    pnpm --filter @gaespos/mobile-cliente typecheck
-    pnpm --filter @gaespos/mobile-cliente test -- --run
+    pnpm --filter @gaespos/mobile-cliente typecheck || return $?
+    pnpm --filter @gaespos/mobile-cliente test -- --run || return $?
   fi
 }
+
+assert_front_scope() {
+  [[ "$(git rev-parse HEAD)" == "$cycle_base_commit" ]] || { echo "HEAD cambió durante el ciclo; publicación bloqueada." >&2; return 1; }
+  python3 - "$task_id" "${1:-}" <<'PY_SCOPE'
+from pathlib import Path
+import hashlib
+import subprocess
+import sys
+allowed = ['apps/web-tienda/src/', 'apps/web-tienda/test/', 'apps/web-tienda/tests/', 'apps/web-tienda/public/']
+if sys.argv[1] == 'ST-006':
+    allowed += ['apps/mobile-cliente/app/', 'apps/mobile-cliente/src/', 'apps/mobile-cliente/assets/', 'apps/mobile-cliente/test/', 'apps/mobile-cliente/tests/']
+# --no-renames exposes both sides of a move, including deleted sensitive files.
+tracked = subprocess.check_output(['git', 'diff', '--no-renames', '--name-only', '-z', 'HEAD', '--'])
+untracked = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z'])
+digest = hashlib.sha256()
+# Include the index separately: git-add/reset may preserve identical worktree bytes.
+digest.update(subprocess.check_output(['git', 'diff', '--cached', '--binary', '--no-ext-diff', '--no-renames', 'HEAD', '--']))
+for raw in sorted(set((tracked + untracked).split(b'\0'))):
+    if not raw:
+        continue
+    name = raw.decode('utf-8', errors='strict')
+    file = Path(name)
+    sensitive = any(part.startswith('.env') or part in {'migrations', '.github'} for part in file.parts)
+    sensitive |= file.suffix.lower() in {'.jks', '.keystore', '.p12', '.pem', '.key'}
+    linked = any(part.is_symlink() for part in (file, *file.parents))
+    if not name.startswith(tuple(allowed)) or sensitive or linked:
+        raise SystemExit('Cambio fuera del alcance frontend permitido; publicación bloqueada.')
+    digest.update(raw + b'\0')
+    if file.exists():
+        digest.update(str(file.stat().st_mode).encode() + b'\0' + hashlib.sha256(file.read_bytes()).digest())
+    else:
+        digest.update(b'deleted\0')
+if sys.argv[2] == 'fingerprint':
+    print(digest.hexdigest())
+PY_SCOPE
+}
+
 TASK_PROMPT="Tarea ${task_id}: ${task_text} Implementa solo esta tarea y sus pruebas. Conserva el alcance y no adelantes tareas posteriores."
 
 judge_prompt=$(cat <<'EOF'
 Eres el juez Codex. Revisa solo los archivos cambiados por esta tarea.
+No modifiques archivos, no hagas commits ni staging; la revisión es de solo lectura.
 Primero ejecuta `git status --short` y `git diff --stat`; lee únicamente esos archivos.
 No ejecutes pruebas, builds, lint ni explores node_modules: el ejecutor ya dejó las
 validaciones en verde. No recorras el repositorio completo.
@@ -118,7 +163,7 @@ for attempt in 1 2; do
 Eres el ejecutor Kimi. Implementa esta tarea en el repositorio actual:
 $TASK_PROMPT
 
-Reglas: no hagas push, no hagas deploy, no ejecutes migraciones, no modifiques secretos.
+Reglas: no hagas commits ni staging, no hagas push, no hagas deploy, no ejecutes migraciones, no modifiques secretos.
 Ejecuta las pruebas relevantes y deja los cambios en el worktree.
 ${feedback:+El intento anterior recibió estas observaciones. Corrígelas ahora:\n$feedback}
 EOF
@@ -128,14 +173,7 @@ EOF
   run_agent_with_timeout "$KIMI_TIMEOUT" "$KIMI_BIN" -p "$kimi_prompt" --output-format text >"$kimi_output_file" 2>&1
   kimi_status=$?
   cat "$kimi_output_file"
-  # Kimi puede dejar un proceso hijo de su servidor abierto después de
-  # completar la edición; el watchdog devuelve 124 aunque el worktree ya
-  # contiene una entrega completa. Solo continuamos en ese caso si existe un
-  # diff real; las validaciones y Codex siguen siendo obligatorios.
-  if [[ "$kimi_status" == "124" ]] && ! git diff --quiet; then
-    echo "Kimi dejó cambios antes de cerrar su proceso; continúo con validaciones." >&2
-    kimi_status=0
-  fi
+  rm -f "$kimi_output_file"
   set -e
   if [[ "$kimi_status" != "0" ]]; then
     feedback="Kimi falló o agotó ${KIMI_TIMEOUT} en el intento ${attempt}; revisa la salida y corrige la tarea."
@@ -147,6 +185,10 @@ EOF
     fi
     continue
   fi
+  if ! assert_front_scope; then
+    feedback="Hay cambios fuera de la lista de frontend permitida. Retíralos antes de continuar."
+    continue
+  fi
   if ! checks=$(run_checks 2>&1); then
     feedback="Las validaciones fallaron en el intento ${attempt}:\n${checks}"
     continue
@@ -156,15 +198,28 @@ EOF
   # Codex no necesita el watchdog de Kimi: su CLI ya respeta timeout y el
   # envoltorio anterior podía dejar el proceso de espera vivo después de que
   # el juez terminara. Usa timeout directo para que la etapa cierre siempre.
+  if ! reviewed_snapshot=$(assert_front_scope fingerprint); then
+    feedback="No se pudo fijar el estado validado antes de la revisión."
+    continue
+  fi
+  judge_message_file=$(mktemp)
   set +e
-  judge_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral "$judge_prompt" 2>&1)
+  judge_cli_output=$(timeout --signal=TERM --kill-after=30s "$CODEX_TIMEOUT" "$CODEX_BIN" exec --dangerously-bypass-approvals-and-sandbox --ephemeral --output-last-message "$judge_message_file" "$judge_prompt" 2>&1)
   judge_status=$?
   set -e
+  judge_output=$(cat "$judge_message_file")
+  rm -f "$judge_message_file"
   printf '%s\n' "$judge_output" | tee /tmp/codex-judge.txt
-  if [[ "$judge_status" != "0" && "$judge_status" != "124" ]]; then
-    echo "Codex terminó con código $judge_status; se tratará como rechazo." >&2
+  if [[ "$judge_status" != "0" ]]; then
+    feedback="Codex no completó una revisión válida (código ${judge_status}); no se admite aprobación parcial ni por timeout."
+    continue
   fi
-  judge_decision=$(printf '%s\n' "$judge_output" | sed -n '/^APPROVED$/p;/^REJECTED$/p' | sed -n '1p')
+  if ! after_review_snapshot=$(assert_front_scope fingerprint) || [[ "$after_review_snapshot" != "$reviewed_snapshot" ]]; then
+    feedback="El juez modificó el índice o archivos después de las validaciones. Se requiere otra ejecución y revisión sin modificaciones."
+    continue
+  fi
+  # Parse the final answer, not CLI logs or a later APPROVED quoted in evidence.
+  judge_decision=$(printf '%s\n' "$judge_output" | head -n 1)
   if [[ "$judge_decision" == "APPROVED" ]]; then
     approved=true
     break
@@ -176,6 +231,8 @@ if [[ "$approved" != "true" ]]; then
   echo "Kimi no logró una entrega aprobada después de dos intentos." >&2
   exit 1
 fi
+
+assert_front_scope
 
 # El avance de la cola ocurre únicamente después del dictamen APPROVED.
 # El estado/cache de Codex vive temporalmente dentro del checkout del runner.

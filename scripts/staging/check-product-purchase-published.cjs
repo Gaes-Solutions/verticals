@@ -152,9 +152,10 @@ let stage = "setup";
     await expect(
       p.getByRole("link", { name: "Carrito, cantidad no disponible", exact: true }),
     ).toBeVisible();
-    const idError = await p
-      .getByRole("spinbutton", { name: "Cantidad", exact: true })
-      .getAttribute("aria-describedby");
+    const cantidad = p.getByRole("spinbutton", { name: "Cantidad", exact: true });
+    // Header and purchase controls hydrate independently; wait for the purchase read-error state.
+    await expect(cantidad).toHaveAttribute("aria-describedby", /\S+/);
+    const idError = await cantidad.getAttribute("aria-describedby");
     assert(idError);
     await expect(p.locator(`[id="${idError}"]`)).toContainText("No pudimos leer tu carrito.");
     await p.evaluate(() => {
