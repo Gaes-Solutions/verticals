@@ -1,0 +1,10 @@
+{
+  "status": "cancelled",
+  "sourceCommit": "0d2ceb96b5022ec9325b98b0dfc66ba983ecdb44",
+  "runUrl": "https://github.com/Gaes-Solutions/verticals/actions/runs/39204243703",
+  "apkVersion": 15,
+  "apkSourceCommit": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447",
+  "kioskVersion": 4,
+  "environment": "staging",
+  "account": "anonymous-and-synthetic"
+}
