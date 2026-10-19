@@ -28,11 +28,34 @@ describe("ResendClient", () => {
     expect(res).toEqual({ emailId: "em_abc123", proveedor: "resend", aceptado: true });
     const [url, init] = spy.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.resend.com/emails");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer re_test_123");
     const body = JSON.parse(init.body as string);
     expect(body.from).toBe(OPTS.remitenteDefault);
     expect(body.to).toEqual(["cliente@test.mx"]);
     expect(body.subject).toBe("Hola");
+  });
+
+  it("aborta un envío bloqueado con un límite de 30 segundos", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const signal = init?.signal;
+      if (!signal) throw new Error("Missing request deadline");
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    });
+    const pending = new ResendClient(OPTS).enviar({
+      para: "cliente@test.mx",
+      asunto: "Synthetic deadline test",
+      html: "<p>Test</p>",
+    });
+    const assertion = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+    controller.abort(new DOMException("Synthetic timeout", "TimeoutError"));
+    await assertion;
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it("error HTTP del API → SEND_FAILED", async () => {

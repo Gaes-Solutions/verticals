@@ -39,6 +39,7 @@ export class ResendClient implements EmailProvider {
     }
     const res = await fetch(`${this.baseUrl}/emails`, {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",

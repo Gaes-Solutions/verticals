@@ -111,12 +111,16 @@ Responde solo el JSON con la cuenta contable que mejor aplica.`;
 
   async summarize(input: AiSummarizeInput): Promise<AiSummarizeResult> {
     const max = input.maxPalabras ?? 50;
-    const resp = await this.client.messages.create({
-      model: this.model,
-      max_tokens: max * 4,
-      system: `Resume en máximo ${max} palabras, español MX, claro y conciso.`,
-      messages: [{ role: "user", content: input.texto }],
-    });
+    // Bound the entire request, including response parsing; the incident scheduler owns retries.
+    const resp = await this.client.messages.create(
+      {
+        model: this.model,
+        max_tokens: max * 4,
+        system: `Resume en máximo ${max} palabras, español MX, claro y conciso.`,
+        messages: [{ role: "user", content: input.texto }],
+      },
+      { timeout: 60_000, maxRetries: 0, signal: AbortSignal.timeout(60_000) },
+    );
     const textBlock = resp.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new AiError("Respuesta sin texto", "INVALID_RESPONSE");

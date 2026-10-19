@@ -121,19 +121,27 @@ no se enviaron correos ni se crearon PR de producto en estas pruebas.
 
 ### Ejecutor opcional de incidentes
 
-`apps/api/src/scripts/run-approved-incident.ts` también rechaza cualquier
-proveedor distinto de `codex` antes de consultar incidentes o iniciar una CLI.
-Ocho pruebas aisladas verifican desactivación, proveedor retirado/inválido y el
-camino Codex con salida marcada como pendiente de revisión. No usan DB, claves
-ni modelos reales. Se repiten explícitamente en PR Verify con:
+`apps/api/src/scripts/run-approved-incident.ts` rechaza proveedores distintos de
+`codex` antes de consultar incidentes. La revisión posterior encontró que arrancar
+una CLI en el servidor del API heredaba credenciales y usaba opciones incompatibles.
+Por seguridad, este comando ahora prepara únicamente una entrega JSON saneada y
+persistida; **no inicia una CLI ni aplica cambios**. La aprobación se consume con
+una comparación atómica y el evento `agent_handoff` se guarda en la misma transacción.
+Un trabajador externo aislado sigue siendo necesario para ejecutar esa entrega;
+esta ruta no está conectada automáticamente al ciclo de frontend.
+
+Las pruebas aisladas cubren privacidad, concurrencia, decisiones del administrador,
+versión de la propuesta y preparación de entregas, sin claves, DB ni modelos reales:
 
 ```bash
 pnpm --filter @gaespos/api exec vitest run --config test/run-approved-incident-unit.config.ts
 ```
 
-El archivo `.unit.ts` usa una configuración sin el setup de DB de la suite API;
-no cambia ese setup global ni se suma a los 1401 casos API de la ronda anterior.
-Esta retirada no activa el ejecutor de incidentes ni acredita una ejecución real.
+La configuración `.unit.ts` evita el setup de DB de la suite API. Las pruebas de
+persistencia y concurrencia reales están en `incidents-persistence.test.ts` y se
+corren aparte dentro de la suite API sobre PostgreSQL desechable. El contrato y
+las limitaciones de entrega están en [automatizacion-incidentes.md](automatizacion-incidentes.md).
+Ninguna de estas pruebas activa agentes o acredita una ejecución con modelos reales.
 
 ### Comprobación adicional de readiness y Android
 

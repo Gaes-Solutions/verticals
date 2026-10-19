@@ -1,68 +1,70 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { masterPrisma } from "@gaespos/db";
+import { type Prisma, masterPrisma } from "@gaespos/db";
+import {
+  sanitizeIncidentContext,
+  sanitizeIncidentRoute,
+  sanitizeIncidentText,
+} from "../observability/incident-sanitizer.js";
 
-const exec = promisify(execFile);
 const provider = process.env.AGENT_RUNNER_PROVIDER ?? "codex";
 const enabled = process.env.AGENT_RUNNER_ENABLED === "true";
 
-if (!enabled) throw new Error("AGENT_RUNNER_ENABLED=true es obligatorio para ejecutar agentes");
+if (!enabled) throw new Error("AGENT_RUNNER_ENABLED=true es obligatorio para preparar entregas");
 if (provider !== "codex")
   throw new Error("AGENT_RUNNER_PROVIDER debe ser codex; otros proveedores están retirados");
 
-const incident = await masterPrisma.systemIncident.findFirst({
-  where: { status: "audited", auditDecision: "approved" },
-  orderBy: { lastSeenAt: "asc" },
-});
-if (!incident) {
-  console.log("No hay incidentes aprobados pendientes para el agente.");
-  await masterPrisma.$disconnect();
-  process.exit(0);
-}
-
-const prompt = `Trabaja SOLO sobre este incidente aprobado. Usa una rama/worktree aislada. No hagas push, deploy, migraciones ni cambios de secretos. Revisa el código, implementa una corrección mínima y segura, ejecuta typecheck y pruebas relevantes. Si no puedes demostrar la corrección, deja solo un informe. Incidente ${incident.id}: ${JSON.stringify({ service: incident.service, message: incident.message, stack: incident.stack, route: incident.route, proposal: incident.aiProposal })}`;
-const args = [
-  "exec",
-  "--worktree",
-  "--sandbox",
-  "workspace-write",
-  "--ephemeral",
-  "--output-last-message",
-  `/tmp/gaes-incident-${incident.id}.txt`,
-  prompt,
-];
-
+// Never start an agent on the API host: a write sandbox and a stripped environment
+// do not prevent reading business credentials elsewhere on that host. This command
+// prepares a durable handoff only. A separate credential-free worker must review it.
 try {
-  const result = await exec(provider, args, {
-    cwd: process.cwd(),
-    timeout: 15 * 60_000,
-    maxBuffer: 2_000_000,
+  const incident = await masterPrisma.systemIncident.findFirst({
+    where: { status: "audited", auditDecision: "approved" },
+    orderBy: { lastSeenAt: "asc" },
   });
-  await masterPrisma.systemIncidentEvent.create({
-    data: {
+  if (!incident) {
+    console.log("No hay incidentes aprobados pendientes para entregar.");
+  } else if (!incident.aiProposal) {
+    throw new Error("El incidente aprobado no tiene una propuesta revisable");
+  } else {
+    const handoff = {
+      version: 1,
       incidentId: incident.id,
-      kind: "agent_execution",
-      payload: {
-        provider,
-        output: (result.stdout || result.stderr).slice(-50_000),
-        applied: false,
-        requiresReview: true,
-      },
-    },
-  });
-  console.log(
-    `Agente ${provider} terminó. La salida quedó registrada; requiere revisión antes de aplicar cambios.`,
-  );
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  await masterPrisma.systemIncidentEvent.create({
-    data: {
-      incidentId: incident.id,
-      kind: "agent_execution_failed",
-      payload: { provider, message },
-    },
-  });
-  throw error;
+      provider,
+      service: sanitizeIncidentText(incident.service).slice(0, 200),
+      message: sanitizeIncidentText(incident.message).slice(0, 2_000),
+      stack: incident.stack ? sanitizeIncidentText(incident.stack).slice(0, 8_000) : null,
+      route: incident.route ? sanitizeIncidentRoute(incident.route) : null,
+      proposal: sanitizeIncidentContext(incident.aiProposal) as Prisma.InputJsonValue,
+      applied: false,
+      requiresReview: true,
+      execution: "external-isolated-worker-required",
+    };
+    const delivered = await masterPrisma.$transaction(async (tx) => {
+      const claimed = await tx.systemIncident.updateMany({
+        where: {
+          id: incident.id,
+          status: "audited",
+          auditDecision: "approved",
+          updatedAt: incident.updatedAt,
+        },
+        data: { auditDecision: "approved_handoff" },
+      });
+      if (claimed.count !== 1) return false;
+      await tx.systemIncidentEvent.create({
+        data: { incidentId: incident.id, kind: "agent_handoff", payload: handoff },
+      });
+      return true;
+    });
+    if (delivered) console.log(JSON.stringify(handoff));
+    else console.log("La aprobación cambió o ya fue entregada; no se generó otra entrega.");
+  }
+} catch {
+  // Driver errors can include connection strings; never print them in CLI logs.
+  throw new Error("No se pudo preparar la entrega; no se ejecutó ningún agente");
 } finally {
-  await masterPrisma.$disconnect();
+  try {
+    await masterPrisma.$disconnect();
+  } catch {
+    console.error("No se pudo cerrar la conexión del preparador de entregas");
+    process.exitCode = 1;
+  }
 }

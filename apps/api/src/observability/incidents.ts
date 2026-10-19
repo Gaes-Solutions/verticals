@@ -1,10 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AiProvider } from "@gaespos/ai";
 import type { MasterPrismaClient } from "@gaespos/db";
 import type { EmailProvider } from "@gaespos/email";
 import type { FastifyBaseLogger } from "fastify";
 
-const SECRET_KEY = /(authorization|cookie|token|secret|password|passwd|api[-_]?key|signature|otp)/i;
+import {
+  sanitizeIncidentContext,
+  sanitizeIncidentRoute,
+  sanitizeIncidentText,
+} from "./incident-sanitizer.js";
+export { sanitizeIncidentContext, sanitizeIncidentText } from "./incident-sanitizer.js";
 
 export interface IncidentInput {
   error: unknown;
@@ -16,41 +21,15 @@ export interface IncidentInput {
   context?: Record<string, unknown>;
 }
 
-export function sanitizeIncidentContext(value: unknown, depth = 0): unknown {
-  if (depth > 3) return "[truncado]";
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return typeof value === "string" ? value.slice(0, 1000) : value;
-  }
-  if (Array.isArray(value))
-    return value.slice(0, 20).map((item) => sanitizeIncidentContext(item, depth + 1));
-  if (typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 40)) {
-      out[key] = SECRET_KEY.test(key) ? "[redactado]" : sanitizeIncidentContext(item, depth + 1);
-    }
-    return out;
-  }
-  return String(value).slice(0, 200);
-}
-
 function errorParts(error: unknown): { message: string; stack?: string } {
   if (error instanceof Error)
     return error.stack
-      ? { message: redact(error.message.slice(0, 2000)), stack: redact(error.stack.slice(0, 8000)) }
-      : { message: redact(error.message.slice(0, 2000)) };
-  return { message: redact(String(error).slice(0, 2000)) };
-}
-
-function redact(value: string): string {
-  return value.replace(
-    /(authorization|cookie|token|secret|password|api[-_]?key)\s*[:=]\s*[^\s,;]+/gi,
-    "$1=[redactado]",
-  );
+      ? {
+          message: sanitizeIncidentText(error.message).slice(0, 2000),
+          stack: sanitizeIncidentText(error.stack).slice(0, 8000),
+        }
+      : { message: sanitizeIncidentText(error.message).slice(0, 2000) };
+  return { message: sanitizeIncidentText(String(error)).slice(0, 2000) };
 }
 
 export function incidentFingerprint(
@@ -64,7 +43,12 @@ export function incidentFingerprint(
     .trim();
   return createHash("sha256")
     .update(
-      [input.service ?? "api", input.method ?? "", input.route ?? "", normalized].join("|"),
+      [
+        input.service ?? "api",
+        input.method ?? "",
+        input.route ? sanitizeIncidentRoute(input.route) : "",
+        normalized,
+      ].join("|"),
       "utf8",
     )
     .digest("hex");
@@ -78,48 +62,67 @@ export async function recordIncident(
     const parts = errorParts(input.error);
     const fingerprint = incidentFingerprint(input);
     const context = sanitizeIncidentContext(input.context) as object;
-    const existing = await master.systemIncident.findUnique({
-      where: { fingerprint },
-      select: { id: true, lastNotifiedAt: true },
-    });
     const base = {
       message: parts.message,
       ...(parts.stack ? { stack: parts.stack } : {}),
       context,
+      ...(input.route ? { route: sanitizeIncidentRoute(input.route) } : {}),
     };
-    const incident = existing
-      ? await master.systemIncident.update({
-          where: { id: existing.id },
-          data: {
-            occurrenceCount: { increment: 1 },
-            lastSeenAt: new Date(),
-            nextReviewAt: new Date(),
-            ...base,
+    return await master.$transaction(async (tx) => {
+      const incident = await tx.systemIncident.upsert({
+        where: { fingerprint },
+        update: { occurrenceCount: { increment: 1 }, lastSeenAt: new Date(), ...base },
+        create: {
+          fingerprint,
+          service: sanitizeIncidentText(input.service ?? "api").slice(0, 200),
+          environment: process.env.NODE_ENV ?? "development",
+          ...base,
+          ...(input.route ? { route: sanitizeIncidentRoute(input.route) } : {}),
+          ...(input.method ? { method: input.method.slice(0, 20) } : {}),
+          ...(input.requestId
+            ? { requestId: sanitizeIncidentText(input.requestId).slice(0, 200) }
+            : {}),
+          ...(input.tenantSlug
+            ? { tenantSlug: sanitizeIncidentText(input.tenantSlug).slice(0, 200) }
+            : {}),
+        },
+      });
+      // A new occurrence of a closed incident requires a new proposal and approval.
+      await tx.systemIncident.updateMany({
+        where: { id: incident.id, status: "resolved" },
+        data: {
+          status: "open",
+          auditDecision: null,
+          auditNotes: null,
+          resolvedAt: null,
+          aiSummary: null,
+          aiProposal: { invalidated: true, requiresHumanApproval: true, autoFixAllowed: false },
+          aiModel: null,
+          nextReviewAt: new Date(),
+        },
+      });
+      await tx.systemIncidentEvent.create({
+        data: {
+          incidentId: incident.id,
+          kind: "occurrence",
+          payload: {
+            message: parts.message,
+            requestId: input.requestId
+              ? sanitizeIncidentText(input.requestId).slice(0, 200)
+              : undefined,
           },
-        })
-      : await master.systemIncident.create({
-          data: {
-            fingerprint,
-            service: input.service ?? "api",
-            environment: process.env.NODE_ENV ?? "development",
-            ...base,
-            ...(input.route ? { route: input.route } : {}),
-            ...(input.method ? { method: input.method } : {}),
-            ...(input.requestId ? { requestId: input.requestId } : {}),
-            ...(input.tenantSlug ? { tenantSlug: input.tenantSlug } : {}),
-          },
-        });
-    await master.systemIncidentEvent.create({
-      data: {
-        incidentId: incident.id,
-        kind: "occurrence",
-        payload: { message: parts.message, requestId: input.requestId },
-      },
+        },
+      });
+      return incident.id;
     });
-    return incident.id;
   } catch {
     return undefined;
   }
+}
+
+export function incidentAlertCooldownMs(): number {
+  const configured = Number(process.env.INCIDENT_ALERT_COOLDOWN_MIN ?? 30);
+  return (Number.isFinite(configured) && configured >= 1 ? configured : 30) * 60_000;
 }
 
 export async function notifyIncident(
@@ -130,24 +133,72 @@ export async function notifyIncident(
 ): Promise<void> {
   const to = process.env.INCIDENT_ALERT_EMAIL;
   if (!to) return;
+  if (email.codigo === "mock") {
+    logger?.warn({ incidentId }, "No hay proveedor real de correo para alertas");
+    return;
+  }
   try {
     const incident = await master.systemIncident.findUnique({ where: { id: incidentId } });
-    if (!incident) return;
-    const cooldown = Number(process.env.INCIDENT_ALERT_COOLDOWN_MIN ?? 30) * 60_000;
-    if (incident.lastNotifiedAt && Date.now() - incident.lastNotifiedAt.getTime() < cooldown)
-      return;
-    await email.enviar({
-      para: to,
-      asunto: `[GaesPOS] ${incident.severity.toUpperCase()} ${incident.service}: ${incident.message.slice(0, 100)}`,
-      texto: `Incidente ${incident.id}\n${incident.message}\nOcurrencias: ${incident.occurrenceCount}`,
-      html: `<h2>Incidente ${incident.id}</h2><p>${escapeHtml(incident.message)}</p><p>Ocurrencias: ${incident.occurrenceCount}</p>`,
+    if (!incident || incident.status === "ignored" || incident.status === "resolved") return;
+    const claimedAt = new Date();
+    const deliveryId = randomUUID();
+    const claimed = await master.$transaction(async (tx) => {
+      const claim = await tx.systemIncident.updateMany({
+        where: {
+          id: incident.id,
+          status: { in: ["open", "proposed", "audited"] },
+          OR: [
+            { lastNotifiedAt: null },
+            { lastNotifiedAt: { lte: new Date(claimedAt.getTime() - incidentAlertCooldownMs()) } },
+          ],
+        },
+        data: { lastNotifiedAt: claimedAt },
+      });
+      if (!claim.count) return false;
+      await tx.systemIncidentEvent.updateMany({
+        where: { incidentId: incident.id, kind: "alert_delivery_pending" },
+        data: { kind: "alert_delivery_superseded" },
+      });
+      await tx.systemIncidentEvent.create({
+        data: {
+          id: deliveryId,
+          incidentId: incident.id,
+          kind: "alert_delivery_pending",
+          payload: { claimedAt: claimedAt.toISOString() },
+        },
+      });
+      return true;
     });
-    await master.systemIncident.update({
-      where: { id: incident.id },
-      data: { lastNotifiedAt: new Date() },
-    });
-  } catch (error) {
-    logger?.warn({ error, incidentId }, "No se pudo enviar alerta de incidente");
+    if (!claimed) return;
+    try {
+      const delivery = await email.enviar({
+        para: to,
+        asunto: `[GaesPOS] ${incident.severity.toUpperCase()} ${sanitizeIncidentText(incident.service)}: ${sanitizeIncidentText(incident.message).slice(0, 100)}`,
+        texto: `Incidente ${incident.id}\n${sanitizeIncidentText(incident.message)}\nOcurrencias: ${incident.occurrenceCount}`,
+        html: `<h2>Incidente ${incident.id}</h2><p>${escapeHtml(sanitizeIncidentText(incident.message))}</p><p>Ocurrencias: ${incident.occurrenceCount}</p>`,
+      });
+      if (!delivery.aceptado) throw new Error("El proveedor no aceptó la alerta");
+      await master.systemIncidentEvent.updateMany({
+        where: { id: deliveryId, kind: "alert_delivery_pending" },
+        data: { kind: "alert_delivery_sent" },
+      });
+    } catch (error) {
+      await master.$transaction(async (tx) => {
+        const released = await tx.systemIncident.updateMany({
+          where: { id: incident.id, lastNotifiedAt: claimedAt },
+          data: { lastNotifiedAt: null },
+        });
+        if (released.count) {
+          await tx.systemIncidentEvent.updateMany({
+            where: { id: deliveryId, kind: "alert_delivery_pending" },
+            data: { kind: "alert_delivery_failed" },
+          });
+        }
+      });
+      throw error;
+    }
+  } catch {
+    logger?.warn({ incidentId }, "No se pudo enviar alerta de incidente");
   }
 }
 
@@ -158,30 +209,75 @@ export async function reviewIncident(
 ): Promise<void> {
   const incident = await master.systemIncident.findUnique({ where: { id: incidentId } });
   if (!incident || incident.status !== "open") return;
-  const prompt = `Analiza este incidente de software de forma segura. No ejecutes ni propongas comandos destructivos. Devuelve resumen, causa probable, pasos de corrección, pruebas y riesgo. Incidente: ${JSON.stringify({ service: incident.service, message: incident.message, stack: incident.stack, route: incident.route, occurrences: incident.occurrenceCount })}`;
-  const result = await ai.summarize({ texto: prompt, maxPalabras: 180 });
-  await master.systemIncident.update({
-    where: { id: incident.id },
-    data: {
-      status: "proposed",
-      aiSummary: result.resumen,
-      aiProposal: {
-        summary: result.resumen,
-        requiresHumanApproval: true,
-        autoFixAllowed: false,
-        testPlan: ["typecheck", "tests unitarios", "revisión de diff"],
+  const claimTime = new Date();
+  const leaseUntil = new Date(claimTime.getTime() + 15 * 60_000);
+  const claim = await master.systemIncident.updateMany({
+    where: {
+      id: incident.id,
+      status: "open",
+      updatedAt: incident.updatedAt,
+      occurrenceCount: incident.occurrenceCount,
+      nextReviewAt: { lte: claimTime },
+    },
+    data: { nextReviewAt: leaseUntil },
+  });
+  if (!claim.count) return;
+  const leased = await master.systemIncident.findUnique({ where: { id: incident.id } });
+  if (!leased || leased.status !== "open" || leased.nextReviewAt.getTime() !== leaseUntil.getTime())
+    return;
+  try {
+    const prompt = `Analiza este incidente de software de forma segura. No ejecutes ni propongas comandos destructivos. Devuelve resumen, causa probable, pasos de corrección, pruebas y riesgo. Incidente: ${JSON.stringify({ service: sanitizeIncidentText(leased.service), message: sanitizeIncidentText(leased.message), stack: leased.stack ? sanitizeIncidentText(leased.stack) : null, route: leased.route ? sanitizeIncidentRoute(leased.route) : null, occurrences: leased.occurrenceCount })}`;
+    const result = await ai.summarize({ texto: prompt, maxPalabras: 180 });
+    if (typeof result.resumen !== "string" || !result.resumen.trim())
+      throw new Error("La IA no devolvió una propuesta válida");
+    await master.$transaction(async (tx) => {
+      const changed = await tx.systemIncident.updateMany({
+        where: {
+          id: incident.id,
+          status: "open",
+          updatedAt: leased.updatedAt,
+          occurrenceCount: leased.occurrenceCount,
+          nextReviewAt: { equals: leaseUntil, gt: new Date() },
+        },
+        data: {
+          status: "proposed",
+          aiSummary: sanitizeIncidentText(result.resumen).slice(0, 4000),
+          aiProposal: {
+            summary: sanitizeIncidentText(result.resumen).slice(0, 4000),
+            requiresHumanApproval: true,
+            autoFixAllowed: false,
+            testPlan: ["typecheck", "tests unitarios", "revisión de diff"],
+          },
+          aiModel: sanitizeIncidentText(result.modelo).slice(0, 200),
+          nextReviewAt: new Date(Date.now() + 24 * 60 * 60_000),
+        },
+      });
+      if (!changed.count) return;
+      await tx.systemIncidentEvent.create({
+        data: {
+          incidentId: incident.id,
+          kind: "ai_proposal",
+          payload: {
+            summary: sanitizeIncidentText(result.resumen).slice(0, 4000),
+            model: sanitizeIncidentText(result.modelo).slice(0, 200),
+            autoFixAllowed: false,
+          },
+        },
+      });
+    });
+  } catch (error) {
+    await master.systemIncident.updateMany({
+      where: {
+        id: incident.id,
+        status: "open",
+        updatedAt: leased.updatedAt,
+        occurrenceCount: leased.occurrenceCount,
+        nextReviewAt: { equals: leaseUntil, gt: new Date() },
       },
-      aiModel: result.modelo,
-      nextReviewAt: new Date(Date.now() + 24 * 60 * 60_000),
-    },
-  });
-  await master.systemIncidentEvent.create({
-    data: {
-      incidentId: incident.id,
-      kind: "ai_proposal",
-      payload: { summary: result.resumen, model: result.modelo, autoFixAllowed: false },
-    },
-  });
+      data: { nextReviewAt: new Date(Date.now() + 60_000) },
+    });
+    throw error;
+  }
 }
 
 function escapeHtml(value: string): string {
