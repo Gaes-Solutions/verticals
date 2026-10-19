@@ -12,7 +12,7 @@ export function HeaderAcciones() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState("");
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState<number | null>(null);
 
   // El campo refleja el término activo en la URL: al volver de un detalle o
   // navegar atrás/adelante no queda un texto viejo distinto al resultado.
@@ -22,7 +22,13 @@ export function HeaderAcciones() {
   }, [qUrl]);
 
   useEffect(() => {
-    const refresh = () => setCount(leerCarrito().reduce((acc, i) => acc + i.cantidad, 0));
+    const refresh = () => {
+      try {
+        setCount(leerCarrito().reduce((acc, i) => acc + Math.round(i.cantidad * 1000), 0) / 1000);
+      } catch {
+        setCount(null);
+      }
+    };
     refresh();
     window.addEventListener("carrito-actualizado", refresh);
     return () => window.removeEventListener("carrito-actualizado", refresh);
@@ -73,11 +79,13 @@ export function HeaderAcciones() {
         <Link
           href="/carrito"
           className="store-header-link store-cart"
-          aria-label={`Carrito, ${count} productos`}
+          aria-label={
+            count === null ? "Carrito, cantidad no disponible" : `Carrito, ${count} productos`
+          }
         >
           <span className="relative">
             <ShoppingCart size={27} />
-            <b className="store-cart-count">{count}</b>
+            <b className="store-cart-count">{count ?? "—"}</b>
           </span>
           <span>
             <small>Tu compra</small>

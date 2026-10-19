@@ -18,6 +18,7 @@ function ListaWishlist({ inicial }: { inicial: WishlistItem[] }) {
   const [incierto, setIncierto] = useState(!listaWishlist(inicial));
   const { ocupado, error, ejecutar } = useSolicitudCuenta();
   const [agregado, setAgregado] = useState<string | null>(null);
+  const [errorCarrito, setErrorCarrito] = useState("");
 
   function quitar(itemId: string) {
     if (incierto) return;
@@ -51,20 +52,33 @@ function ListaWishlist({ inicial }: { inicial: WishlistItem[] }) {
       router.push(`/producto/${i.slugSeo}`);
       return;
     }
-    agregar({
-      varianteId: i.varianteId,
-      titulo: i.tituloPublico,
-      precio: i.precio,
-      cantidad: 1,
-      slugSeo: i.slugSeo,
-      ...(i.foto ? { imagenUrl: i.foto } : {}),
-    });
-    setAgregado(i.itemId);
-    setTimeout(() => setAgregado(null), 1500);
+    setErrorCarrito("");
+    try {
+      agregar({
+        varianteId: i.varianteId,
+        titulo: i.tituloPublico,
+        precio: i.precio,
+        cantidad: 1,
+        slugSeo: i.slugSeo,
+        ...(i.foto ? { imagenUrl: i.foto } : {}),
+      });
+      setAgregado(i.itemId);
+      setTimeout(() => setAgregado(null), 1500);
+    } catch {
+      setAgregado(null);
+      setErrorCarrito(
+        "No pudimos confirmar el cambio. Revisa tu carrito y sus cantidades antes de volver a intentar.",
+      );
+    }
   }
 
   return (
     <div>
+      {errorCarrito && (
+        <p role="alert" className="mb-2 text-danger text-sm">
+          {errorCarrito}
+        </p>
+      )}
       {error && (
         <p role="alert" className="mb-2 text-danger text-sm">
           {error}

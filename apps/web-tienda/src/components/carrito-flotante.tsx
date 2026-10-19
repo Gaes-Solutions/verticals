@@ -1,6 +1,12 @@
 "use client";
 
-import { type CarritoLineaLocal, actualizarCantidad, leerCarrito } from "@/lib/carrito-store";
+import {
+  type AdicionCarrito,
+  type CarritoLineaLocal,
+  guardarCarrito,
+  leerCarrito,
+  propietarioCarrito,
+} from "@/lib/carrito-store";
 import { ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,30 +16,66 @@ import { ImagenCompra } from "./imagen-compra";
 export function CarritoFlotante() {
   const pathname = usePathname();
   const [items, setItems] = useState<CarritoLineaLocal[]>([]);
-  const [ultimo, setUltimo] = useState<CarritoLineaLocal | null>(null);
+  const [ultimo, setUltimo] = useState<AdicionCarrito | null>(null);
+  const recibo = useRef<AdicionCarrito | null>(null);
+  const [aviso, setAviso] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const refresh = () => setItems(leerCarrito());
     const invalidarConfirmacion = () => {
       if (timer.current) clearTimeout(timer.current);
+      recibo.current = null;
       setUltimo(null);
     };
+    const refresh = () => {
+      try {
+        const actuales = leerCarrito();
+        setItems(actuales);
+        if (
+          recibo.current &&
+          (recibo.current.owner !== propietarioCarrito() ||
+            JSON.stringify(actuales) !== JSON.stringify(recibo.current.despues))
+        )
+          invalidarConfirmacion();
+      } catch {
+        invalidarConfirmacion();
+        setItems([]);
+      }
+    };
+    const contexto = () => {
+      invalidarConfirmacion();
+      setAviso("");
+      refresh();
+    };
     const agregado = (event: Event) => {
-      const linea = (event as CustomEvent<CarritoLineaLocal>).detail;
-      setUltimo(linea);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setUltimo(null), 5500);
+      const linea = (event as CustomEvent<AdicionCarrito>).detail;
+      try {
+        if (
+          !linea ||
+          !Array.isArray(linea.antes) ||
+          !Array.isArray(linea.despues) ||
+          linea.owner !== propietarioCarrito() ||
+          JSON.stringify(leerCarrito()) !== JSON.stringify(linea.despues)
+        )
+          return;
+        recibo.current = linea;
+        setUltimo(linea);
+        setAviso("");
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(invalidarConfirmacion, 5500);
+      } catch {
+        invalidarConfirmacion();
+      }
     };
     refresh();
     window.addEventListener("carrito-actualizado", refresh);
     window.addEventListener("carrito-agregado", agregado);
     window.addEventListener("carrito-externo-actualizado", invalidarConfirmacion);
-    window.addEventListener("carrito-contexto-cambiado", invalidarConfirmacion);
+    window.addEventListener("carrito-contexto-cambiado", contexto);
     return () => {
       window.removeEventListener("carrito-actualizado", refresh);
       window.removeEventListener("carrito-agregado", agregado);
       window.removeEventListener("carrito-externo-actualizado", invalidarConfirmacion);
-      window.removeEventListener("carrito-contexto-cambiado", invalidarConfirmacion);
+      window.removeEventListener("carrito-contexto-cambiado", contexto);
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
@@ -43,15 +85,45 @@ export function CarritoFlotante() {
     return () => document.body.classList.remove("store-has-cart");
   }, [visible]);
   if (!visible) return null;
-  const unidades = items.reduce((n, p) => n + p.cantidad, 0);
+  const unidades = items.reduce((n, p) => n + Math.round(p.cantidad * 1000), 0) / 1000;
   const total = items.reduce((n, p) => n + Number(p.precio) * p.cantidad, 0);
   const formato = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
   function deshacer() {
-    if (!ultimo) return;
-    const actual = leerCarrito().find((p) => p.varianteId === ultimo.varianteId);
-    if (actual) actualizarCantidad(actual.varianteId, actual.cantidad - ultimo.cantidad);
+    const r = recibo.current;
+    if (!r) return;
+    recibo.current = null;
     setUltimo(null);
+    if (timer.current) clearTimeout(timer.current);
+    try {
+      if (
+        r.owner !== propietarioCarrito() ||
+        JSON.stringify(leerCarrito()) !== JSON.stringify(r.despues)
+      ) {
+        setAviso("Tu carrito cambió. Revisa tu selección antes de quitar productos.");
+        return;
+      }
+      try {
+        guardarCarrito(r.antes);
+      } catch {
+        if (
+          r.owner !== propietarioCarrito() ||
+          JSON.stringify(leerCarrito()) !== JSON.stringify(r.antes)
+        )
+          throw new Error();
+      }
+      setAviso("");
+    } catch {
+      setAviso(
+        "No pudimos confirmar que se deshizo. Revisa tu carrito antes de volver a intentar.",
+      );
+    }
   }
+  function cerrarConfirmacion() {
+    recibo.current = null;
+    setUltimo(null);
+    if (timer.current) clearTimeout(timer.current);
+  }
+
   return (
     <aside className="store-floating-cart" aria-label="Tu compra">
       {ultimo && (
@@ -60,13 +132,27 @@ export function CarritoFlotante() {
             <Check size={16} className="shrink-0" />
             <span className="truncate">Agregaste {ultimo.titulo}</span>
           </output>
-          <button type="button" onClick={deshacer} className="shrink-0 font-semibold underline">
+          <button
+            type="button"
+            onClick={deshacer}
+            className="min-h-11 shrink-0 px-1 font-semibold underline"
+          >
             Deshacer
           </button>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setUltimo(null)}>
+          <button
+            type="button"
+            className="min-h-11 min-w-11 shrink-0"
+            aria-label="Cerrar confirmación"
+            onClick={cerrarConfirmacion}
+          >
             <X size={15} />
           </button>
         </div>
+      )}
+      {aviso && (
+        <p role="alert" className="p-3 text-sm text-danger">
+          {aviso}
+        </p>
       )}
       <div className="store-floating-cart-content">
         <div className="store-cart-preview" aria-hidden="true">
@@ -75,11 +161,11 @@ export function CarritoFlotante() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs text-slate-500">
-            {unidades} {unidades === 1 ? "producto" : "productos"} · Subtotal
+            {items.length} {items.length === 1 ? "producto" : "productos"} · Subtotal estimado
           </p>
-          <p className="text-lg font-bold text-slate-900">{formato.format(total)}</p>
+          <p className="break-all text-lg font-bold text-slate-900">{formato.format(total)}</p>
         </div>
-        <Link href="/carrito" className="store-button">
+        <Link href="/carrito" className="store-button min-h-11">
           Ver mi compra <ArrowRight size={16} />
         </Link>
       </div>

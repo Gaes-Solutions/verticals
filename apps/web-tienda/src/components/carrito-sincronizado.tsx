@@ -9,12 +9,24 @@ import {
   leerCarritoPendiente,
   leerLineasGuardadas,
   mismasCantidades,
+  propietarioCarrito,
   recibirCarrito,
 } from "@/lib/carrito-store";
+import { seleccionCarritoValida } from "@/lib/verificar-carrito-contract";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 const SYNC_ERROR =
   "No pudimos sincronizar tu carrito. Tu selección se conserva; vuelve a intentarlo.";
+const STORAGE_ERROR =
+  "No pudimos leer los datos del carrito en este navegador. Revisa sus permisos de almacenamiento y vuelve a intentar.";
+function leerAlmacenamiento(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    throw new Error(STORAGE_ERROR);
+  }
+}
+
 function errorRespuesta(data: unknown) {
   const error = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
   return Object.assign(new Error(typeof error.message === "string" ? error.message : SYNC_ERROR), {
@@ -39,12 +51,17 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
     let coupon: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const pendingKey = `gaespos_carrito_pendiente:${owner}`;
-    const pending = leerCarritoPendiente(localStorage.getItem(pendingKey));
-    setLocal(
-      owner ? (pending?.items ?? leerLineasGuardadas(localStorage.getItem("gaespos_carrito"))) : [],
-    );
-    fijarCarritoVersion(null);
     setMessage(owner ? "Sincronizando carrito…" : "");
+    try {
+      const pending = owner ? leerCarritoPendiente(leerAlmacenamiento(pendingKey)) : null;
+      setLocal(
+        owner ? (pending?.items ?? leerLineasGuardadas(leerAlmacenamiento("gaespos_carrito"))) : [],
+      );
+    } catch {
+      setLocal([]);
+      setMessage(STORAGE_ERROR);
+    }
+    fijarCarritoVersion(null);
     function apply(cart: Cart | null) {
       const previous = new Map(leerCarrito().map((item) => [item.varianteId, item]));
       version = cart?.version ?? null;
@@ -91,14 +108,14 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
           const result = await request();
           if (!result || !alive) return;
           const remoteVersion = result.cart?.version ?? null;
-          let saved = leerCarritoPendiente(localStorage.getItem(pendingKey));
-          const guestRaw = localStorage.getItem("gaespos_carrito");
+          let saved = leerCarritoPendiente(leerAlmacenamiento(pendingKey));
+          const guestRaw = leerAlmacenamiento("gaespos_carrito");
           const guest = leerLineasGuardadas(guestRaw);
           if (!saved && !result.cart?.items.length && guest.length > 0) {
             // Move the guest selection into this empty account durably before clearing it.
             saved = { version: remoteVersion, items: guest };
             localStorage.setItem(pendingKey, JSON.stringify(saved));
-            if (localStorage.getItem("gaespos_carrito") === guestRaw)
+            if (leerAlmacenamiento("gaespos_carrito") === guestRaw)
               localStorage.removeItem("gaespos_carrito");
           }
           if (saved && mismasCantidades(saved.items, result.cart?.items ?? [])) {
@@ -184,11 +201,11 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
                 throw new Error(
                   "No pudimos terminar de guardar tu carrito. Reintenta antes de pagar.",
                 );
-              if (ready && !dirty && !localStorage.getItem(pendingKey)) return;
+              if (ready && !dirty && !leerAlmacenamiento(pendingKey)) return;
               await sync();
-              if (syncFailed || (ready && !dirty && localStorage.getItem(pendingKey))) break;
+              if (syncFailed || (ready && !dirty && leerAlmacenamiento(pendingKey))) break;
             }
-            if (!ready || dirty || localStorage.getItem(pendingKey))
+            if (!ready || dirty || leerAlmacenamiento(pendingKey))
               throw new Error(
                 "Tu carrito tiene cambios por sincronizar. Actualízalo antes de pagar; tu selección se conserva.",
               );
@@ -209,7 +226,12 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
       ready = false;
       version = null;
       fijarCarritoVersion(null);
-      localStorage.removeItem(pendingKey);
+      try {
+        localStorage.removeItem(pendingKey);
+      } catch {
+        setMessage(STORAGE_ERROR);
+        return;
+      }
       void sync();
     };
     window.addEventListener("carrito-finalizado", completed);
@@ -251,17 +273,42 @@ export function CarritoSincronizado({ owner }: { owner: string | null }) {
             type="button"
             className="font-semibold text-marca underline"
             onClick={() => {
-              const merged = new Map(leerCarrito().map((item) => [item.varianteId, item]));
-              for (const item of local) {
-                const current = merged.get(item.varianteId);
-                merged.set(item.varianteId, {
-                  ...item,
-                  cantidad: Math.max(item.cantidad, current?.cantidad ?? 0),
-                });
+              try {
+                if (propietarioCarrito() !== owner) {
+                  setMessage(
+                    "La cuenta cambió. Actualiza el carrito antes de agregar tu selección.",
+                  );
+                  return;
+                }
+                const guestRaw = leerAlmacenamiento("gaespos_carrito");
+                const merged = new Map(leerCarrito().map((item) => [item.varianteId, item]));
+                for (const item of local) {
+                  const current = merged.get(item.varianteId);
+                  merged.set(item.varianteId, {
+                    ...item,
+                    cantidad: Math.max(item.cantidad, current?.cantidad ?? 0),
+                  });
+                }
+                const seleccion = [...merged.values()];
+                if (!seleccionCarritoValida(seleccion)) {
+                  setMessage(
+                    "La selección combinada supera los límites del carrito. Revisa los productos antes de agregarla; ambas selecciones se conservan.",
+                  );
+                  return;
+                }
+                guardarCarrito(seleccion);
+                if (
+                  propietarioCarrito() === owner &&
+                  JSON.stringify(leerLineasGuardadas(guestRaw)) === JSON.stringify(local) &&
+                  leerAlmacenamiento("gaespos_carrito") === guestRaw
+                )
+                  localStorage.removeItem("gaespos_carrito");
+                setLocal([]);
+              } catch {
+                setMessage(
+                  "No pudimos confirmar el cambio. Tus selecciones se conservan; revisa el carrito antes de volver a intentar.",
+                );
               }
-              guardarCarrito([...merged.values()]);
-              localStorage.removeItem("gaespos_carrito");
-              setLocal([]);
             }}
           >
             Agregar a este carrito

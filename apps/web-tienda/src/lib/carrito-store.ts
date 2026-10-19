@@ -1,4 +1,5 @@
 "use client";
+import { seleccionCarritoValida } from "./verificar-carrito-contract";
 
 export interface CarritoLineaLocal {
   varianteId: string;
@@ -7,6 +8,11 @@ export interface CarritoLineaLocal {
   cantidad: number;
   imagenUrl?: string;
   slugSeo?: string;
+}
+export interface AdicionCarrito extends CarritoLineaLocal {
+  antes: CarritoLineaLocal[];
+  despues: CarritoLineaLocal[];
+  owner: string | null;
 }
 
 let KEY = "gaespos_carrito";
@@ -118,15 +124,33 @@ export function guardarCarrito(items: CarritoLineaLocal[]): void {
 }
 
 export function agregar(linea: CarritoLineaLocal): void {
+  if (!seleccionCarritoValida([linea]))
+    throw new Error("Revisa la cantidad antes de agregar el producto.");
   const items = leerCarrito();
+  const antes = items.map((item) => ({ ...item }));
+  const owner = propietario;
   const existente = items.find((i) => i.varianteId === linea.varianteId);
   if (existente) {
-    existente.cantidad += linea.cantidad;
+    const cantidad =
+      (Math.round(existente.cantidad * 1000) + Math.round(linea.cantidad * 1000)) / 1000;
+    Object.assign(existente, linea, { cantidad });
   } else {
-    items.push(linea);
+    items.push({ ...linea });
   }
+  if (
+    !seleccionCarritoValida(items) ||
+    typeof linea.precio !== "string" ||
+    !linea.precio.trim() ||
+    !Number.isFinite(Number(linea.precio)) ||
+    Number(linea.precio) < 0
+  )
+    throw new Error("Revisa las cantidades y el límite de 100 productos distintos del carrito.");
   guardarCarrito(items);
-  window.dispatchEvent(new CustomEvent<CarritoLineaLocal>("carrito-agregado", { detail: linea }));
+  window.dispatchEvent(
+    new CustomEvent<AdicionCarrito>("carrito-agregado", {
+      detail: { ...linea, antes, despues: items.map((item) => ({ ...item })), owner },
+    }),
+  );
 }
 
 export function actualizarCantidad(varianteId: string, cantidad: number): void {

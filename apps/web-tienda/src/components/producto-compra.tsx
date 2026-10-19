@@ -1,11 +1,12 @@
 "use client";
 
-import { agregar, leerCarrito } from "@/lib/carrito-store";
+import { cantidadCompra } from "@/lib/cantidad-compra";
+import { agregar, leerCarrito, propietarioCarrito } from "@/lib/carrito-store";
 import { etiquetaUnidad } from "@/lib/etiquetas";
 import { Check, Minus, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AvisoStock } from "./aviso-stock";
 import { CalculadoraEnvio } from "./calculadora-envio";
 
@@ -33,7 +34,15 @@ export interface OfertaCompra {
   descuentoPct: number;
 }
 
-export function ProductoCompra({
+export function ProductoCompra(props: Parameters<typeof CompraContexto>[0]) {
+  const identidad = JSON.stringify([
+    props.productoPublicadoId ?? props.slugSeo ?? props.titulo,
+    props.variantes.map((v) => v.id),
+  ]);
+  return <CompraContexto key={identidad} {...props} />;
+}
+
+function CompraContexto({
   variantes,
   precioOverride,
   titulo,
@@ -79,12 +88,58 @@ export function ProductoCompra({
   const [enCarrito, setEnCarrito] = useState<Record<string, number>>({});
   const [errorCantidad, setErrorCantidad] = useState<string | null>(null);
   const [agregado, setAgregado] = useState(false);
+  const [lista, setLista] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [contextoMostrado, setContextoMostrado] = useState(0);
+  const contextoActual = useRef(0);
+  const activo = useRef(false);
+  const bloqueado = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const owner = useRef<string | null>(null);
+  const confirmacion = useRef<string | null>(null);
+  const errorId = useId();
   useEffect(() => {
-    const actualizar = () =>
-      setEnCarrito(Object.fromEntries(leerCarrito().map((i) => [i.varianteId, i.cantidad])));
+    activo.current = true;
+    const limpiar = () => {
+      if (timer.current) clearTimeout(timer.current);
+      bloqueado.current = false;
+      confirmacion.current = null;
+      setAgregado(false);
+      setGuardando(false);
+    };
+    const actualizar = () => {
+      try {
+        const items = leerCarrito();
+        if (confirmacion.current !== null && confirmacion.current !== JSON.stringify(items))
+          limpiar();
+        setEnCarrito(Object.fromEntries(items.map((i) => [i.varianteId, i.cantidad])));
+        owner.current = propietarioCarrito();
+        setLista(true);
+      } catch {
+        setLista(false);
+        limpiar();
+        setErrorCantidad(
+          "No pudimos leer tu carrito. Revisa que el navegador permita guardar datos.",
+        );
+      }
+    };
+    const contexto = () => {
+      contextoActual.current++;
+      setContextoMostrado(contextoActual.current);
+      limpiar();
+      setCantidadTexto("1");
+      setErrorCantidad(null);
+      actualizar();
+    };
     actualizar();
     window.addEventListener("carrito-actualizado", actualizar);
-    return () => window.removeEventListener("carrito-actualizado", actualizar);
+    window.addEventListener("carrito-contexto-cambiado", contexto);
+    return () => {
+      activo.current = false;
+      if (timer.current) clearTimeout(timer.current);
+      window.removeEventListener("carrito-actualizado", actualizar);
+      window.removeEventListener("carrito-contexto-cambiado", contexto);
+    };
   }, []);
 
   const variante = variantes[sel] ?? variantes[0];
@@ -93,47 +148,114 @@ export function ProductoCompra({
   const precioNum = oferta ? Number(oferta.precioPromocion) : precioLista;
   const precio = String(precioNum);
   const stockElegido = stockPorVariante ? (stockPorVariante[variante.id] ?? 0) : stockPublico;
-  const sinStock = stockElegido != null && stockElegido <= 0;
   const paso = tipoVenta === "unidad" ? 1 : 0.001;
+  const sinStock = stockElegido != null && (!Number.isFinite(stockElegido) || stockElegido < paso);
   const cantidad = Number(cantidadTexto);
   const restante =
-    stockElegido == null ? null : Math.max(0, stockElegido - (enCarrito[variante.id] ?? 0));
+    stockElegido == null
+      ? null
+      : !Number.isFinite(stockElegido)
+        ? 0
+        : Math.max(
+            0,
+            (Math.floor(stockElegido * 1000 + 0.000001) -
+              Math.round((enCarrito[variante.id] ?? 0) * 1000)) /
+              1000,
+          );
   const limiteAlcanzado = restante != null && restante < paso;
-  const cantidadFormatoValido =
-    Number.isFinite(cantidad) &&
-    cantidad >= paso &&
-    (tipoVenta !== "unidad" || Number.isInteger(cantidad)) &&
-    Math.abs(cantidad * 1000 - Math.round(cantidad * 1000)) < 0.000001;
-  const cantidadValida = cantidadFormatoValido && (restante == null || cantidad <= restante);
+  const fraccion = tipoVenta !== "unidad";
+  const formato = cantidadCompra(cantidadTexto, fraccion, 0, null);
+  const cantidadFormatoValido = formato.ok;
+  const cantidadValida = cantidadCompra(
+    cantidadTexto,
+    fraccion,
+    enCarrito[variante.id] ?? 0,
+    stockElegido ?? null,
+  ).ok;
+  const precioCrudo = oferta?.precioPromocion ?? precioOverride ?? variante.precioBase;
+  const precioValido =
+    /^\d{1,12}(?:\.\d{1,8})?$/.test(precioCrudo) && Number.isFinite(precioNum) && precioNum >= 0;
 
   function alCarrito() {
-    if (!variante || sinStock || !cantidadValida) {
+    if (
+      !variante ||
+      !activo.current ||
+      !lista ||
+      bloqueado.current ||
+      contextoMostrado !== contextoActual.current
+    )
+      return false;
+    if (owner.current !== propietarioCarrito()) return false;
+    if (!precioValido) {
+      setErrorCantidad("No pudimos confirmar el precio de esta opción.");
+      return false;
+    }
+    try {
+      const items = leerCarrito();
+      const propietario = owner.current;
+      const actual = items.find((i) => i.varianteId === variante.id);
+      const validacion = cantidadCompra(
+        cantidadTexto,
+        fraccion,
+        actual?.cantidad ?? 0,
+        stockElegido ?? null,
+      );
+      if (!validacion.ok) {
+        setErrorCantidad(validacion.mensaje);
+        return false;
+      }
+      if (!actual && items.length >= 100) {
+        setErrorCantidad(
+          "Tu carrito admite hasta 100 productos distintos. Revísalo antes de agregar otro.",
+        );
+        return false;
+      }
+      bloqueado.current = true;
+      setGuardando(true);
+      setErrorCantidad(null);
+      try {
+        agregar({
+          varianteId: variante.id,
+          titulo: variantes.length > 1 ? `${titulo} · ${etiquetaVariante(variante, sel)}` : titulo,
+          precio,
+          cantidad: validacion.cantidad,
+          ...(imagenUrl ? { imagenUrl } : {}),
+          ...(slugSeo ? { slugSeo } : {}),
+        });
+      } catch {
+        // The local write can succeed before the sync callback fails. Never add again automatically.
+        const guardado = leerCarrito().find((i) => i.varianteId === variante.id);
+        if (
+          propietario !== propietarioCarrito() ||
+          guardado?.cantidad !== validacion.total ||
+          guardado.precio !== precio
+        )
+          throw new Error();
+        setErrorCantidad(
+          "Selección guardada en este navegador. Revisa cualquier aviso de sincronización en tu carrito.",
+        );
+      }
+      if (propietario !== propietarioCarrito()) throw new Error();
+      confirmacion.current = JSON.stringify(leerCarrito());
+      return true;
+    } catch {
+      bloqueado.current = false;
+      setGuardando(false);
       setErrorCantidad(
-        limiteAlcanzado
-          ? "Ya tienes en el carrito las unidades disponibles de esta opción."
-          : restante != null && cantidad > restante
-            ? `Puedes agregar hasta ${restante} de esta opción.`
-            : tipoVenta === "unidad"
-              ? "Escribe una cantidad entera mayor que cero."
-              : "Escribe una cantidad mayor que cero, con hasta 3 decimales.",
+        "No pudimos confirmar el cambio. Revisa tu carrito antes de volver a intentar.",
       );
       return false;
     }
-    setErrorCantidad(null);
-    agregar({
-      varianteId: variante.id,
-      titulo: variantes.length > 1 ? `${titulo} · ${etiquetaVariante(variante, sel)}` : titulo,
-      precio,
-      cantidad,
-      ...(imagenUrl ? { imagenUrl } : {}),
-      ...(slugSeo ? { slugSeo } : {}),
-    });
-    return true;
   }
   function onAgregar() {
     if (!alCarrito()) return;
     setAgregado(true);
-    setTimeout(() => setAgregado(false), 1500);
+    timer.current = setTimeout(() => {
+      bloqueado.current = false;
+      setGuardando(false);
+      setAgregado(false);
+      confirmacion.current = null;
+    }, 1500);
   }
   function onComprarAhora() {
     if (!alCarrito()) return;
@@ -147,11 +269,11 @@ export function ProductoCompra({
   return (
     <div className="mt-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        {oferta && (
+        {oferta && Number.isFinite(precioLista) && precioLista >= 0 && (
           <span className="text-slate-400 text-lg line-through">${precioLista.toFixed(2)}</span>
         )}
-        <p className="font-bold text-3xl text-marca">
-          ${precioNum.toFixed(2)}
+        <p className="max-w-full break-all font-bold text-3xl text-marca">
+          {precioValido ? `$${precioNum.toFixed(2)}` : "Precio no disponible"}
           {unidad && <span className="ml-1 font-normal text-slate-400 text-sm">{unidad}</span>}
         </p>
         {oferta && oferta.descuentoPct > 0 && (
@@ -170,7 +292,9 @@ export function ProductoCompra({
         {(stockPorVariante
           ? stockElegido != null && stockElegido > 0 && stockElegido <= 5
           : stockBajo) &&
-          stockElegido != null && (
+          stockElegido != null &&
+          Number.isFinite(stockElegido) &&
+          stockElegido > 0 && (
             <span className="gx-badge-warn">
               Disponibles: {stockElegido} {unidad ?? ""}
             </span>
@@ -194,6 +318,10 @@ export function ProductoCompra({
                 type="button"
                 aria-pressed={i === sel}
                 onClick={() => {
+                  if (timer.current) clearTimeout(timer.current);
+                  bloqueado.current = false;
+                  confirmacion.current = null;
+                  setGuardando(false);
                   setSel(i);
                   setCantidadTexto("1");
                   setErrorCantidad(null);
@@ -221,9 +349,16 @@ export function ProductoCompra({
             type="button"
             aria-label="Reducir cantidad"
             disabled={cantidad <= paso || !Number.isFinite(cantidad)}
-            className="p-3 disabled:opacity-30"
+            className="min-h-11 min-w-11 p-3 disabled:opacity-30"
             onClick={() => {
-              setCantidadTexto(String(Math.max(paso, Math.round((cantidad - paso) * 1000) / 1000)));
+              setCantidadTexto((texto) =>
+                String(
+                  Math.max(
+                    paso,
+                    (Math.round(Number(texto) * 1000) - Math.round(paso * 1000)) / 1000,
+                  ),
+                ),
+              );
               setErrorCantidad(null);
             }}
           >
@@ -233,7 +368,7 @@ export function ProductoCompra({
             type="number"
             min={paso}
             step={paso}
-            max={restante ?? undefined}
+            max={Math.min(100000, restante ?? 100000)}
             value={cantidadTexto}
             onChange={(e) => {
               setCantidadTexto(e.target.value);
@@ -241,17 +376,28 @@ export function ProductoCompra({
             }}
             aria-label="Cantidad"
             aria-invalid={!cantidadValida}
+            aria-describedby={errorCantidad ? errorId : undefined}
             className="w-16 bg-transparent py-3 text-center outline-none focus:ring-2 focus:ring-marca"
           />
           <button
             type="button"
             aria-label="Aumentar cantidad"
             disabled={
-              !Number.isFinite(cantidad) || (restante != null && cantidad + paso > restante)
+              !cantidadFormatoValido || cantidad + paso > Math.min(100000, restante ?? 100000)
             }
-            className="p-3 disabled:opacity-30"
+            className="min-h-11 min-w-11 p-3 disabled:opacity-30"
             onClick={() => {
-              setCantidadTexto(String(Math.round((cantidad + paso) * 1000) / 1000));
+              setCantidadTexto((texto) =>
+                String(
+                  Math.min(
+                    100000,
+                    Math.min(
+                      restante ?? 100000,
+                      (Math.round(Number(texto) * 1000) + Math.round(paso * 1000)) / 1000,
+                    ),
+                  ),
+                ),
+              );
               setErrorCantidad(null);
             }}
           >
@@ -259,29 +405,43 @@ export function ProductoCompra({
           </button>
         </div>
         <button
+          key={`agregar:${contextoMostrado}`}
           type="button"
           onClick={onAgregar}
-          disabled={sinStock || limiteAlcanzado}
-          className="gx-btn-secondary disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!lista || !precioValido || guardando || sinStock || limiteAlcanzado}
+          className="gx-btn-secondary min-h-11 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {agregado && <Check size={16} strokeWidth={2.5} />}
           {agregado ? "Agregado" : "Agregar al carrito"}
         </button>
         {comprarAhora && (
           <button
+            key={`comprar:${contextoMostrado}`}
             type="button"
             onClick={onComprarAhora}
-            disabled={sinStock || limiteAlcanzado}
-            className="gx-btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!lista || !precioValido || guardando || sinStock || limiteAlcanzado}
+            className="gx-btn-primary min-h-11 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Comprar ahora
           </button>
         )}
       </div>
       {errorCantidad && (
-        <p role="alert" className="mt-3 text-sm text-danger">
+        <p id={errorId} role="alert" className="mt-3 text-sm text-danger">
           {errorCantidad}
         </p>
+      )}
+      {!lista && (
+        <button
+          type="button"
+          className="gx-btn-secondary mt-3 min-h-11"
+          onClick={() => {
+            setErrorCantidad(null);
+            window.dispatchEvent(new Event("carrito-actualizado"));
+          }}
+        >
+          Volver a leer carrito
+        </button>
       )}
       {limiteAlcanzado && !sinStock && (
         <p className="mt-3 text-sm text-slate-600">
@@ -295,7 +455,10 @@ export function ProductoCompra({
             <span className="inline-flex items-center gap-1 font-medium text-ok">
               <Check size={16} strokeWidth={2.5} /> Agregado al carrito
             </span>
-            <Link href="/carrito" className="font-medium text-marca hover:underline">
+            <Link
+              href="/carrito"
+              className="inline-flex min-h-11 items-center font-medium text-marca hover:underline"
+            >
               Ver carrito
             </Link>
           </p>
