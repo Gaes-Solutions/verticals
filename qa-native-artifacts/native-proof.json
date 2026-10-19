@@ -1,0 +1,26 @@
+{
+  "reusable": true,
+  "repository": "Gaes-Solutions/verticals",
+  "runId": 39204599746,
+  "workflowHead": "3a0488053bd91034cfeae7df71ba429e96d725af",
+  "workflowPath": ".github/workflows/android-staging-smoke.yml",
+  "branch": "trabajo/codex-tienda-08sep",
+  "jobId": 117904671570,
+  "apkSourceCommit": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447",
+  "payloadCommit": "27f1624754dc73de55ce712c7ab88374eade35aa",
+  "apkSha256": {
+    "client": "84335d136755b2d40b7dd590eb5ddd7af3aa6b16525cbd5fb9837677ab2dad2d",
+    "kiosk": "25c8aad70c6502aa054f80ce416a645514eeed7581fa9ddcd97e255b30fad37a"
+  },
+  "successfulSteps": [
+    "Enable KVM for the disposable runner",
+    "Inspect both signed APKs and download pinned Maestro",
+    "Prepare isolated synthetic shopper credentials",
+    "Resolve published APKs or the immutable bootstrap payload",
+    "Run reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808",
+    "Sanitize all publishable text evidence",
+    "Validate embedded Maestro expressions before starting an emulator",
+    "Verify that both APKs match current runtime sources"
+  ],
+  "scope": "Pinned Android smoke only; publication failure is excluded from native proof"
+}
