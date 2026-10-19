@@ -1,14 +1,14 @@
 {
   "release": {
-    "tag": "qa-android-gaesland-20261019-e448f21",
-    "title": "Gaesland \u00b7 Pruebas Android: cliente 16 y kiosco 4",
-    "sourceCommit": "e448f21bc51798f1777a6735c3da12e66c045f17"
+    "tag": "qa-android-gaesland-20261019-4798c6a",
+    "title": "Gaesland · Pruebas Android: cliente 17 y kiosco 4",
+    "sourceCommit": "4798c6a17a7ec7d17ddf824acc1e6b29f05e8234"
   },
   "source": {
-    "commit": "e448f21bc51798f1777a6735c3da12e66c045f17",
+    "commit": "4798c6a17a7ec7d17ddf824acc1e6b29f05e8234",
     "client": {
       "files": 92,
-      "sha256": "414b6256a89015d8ac1a577c3782c00134ab712571fec7a00d4a300272ce8201"
+      "sha256": "d669027c7e2a4fdd7a6e5933c58b03a814bf0a5e8d54e36f7f31e6d1877765f4"
     },
     "kiosk": {
       "files": 56,
@@ -16,18 +16,18 @@
     }
   },
   "buildSources": {
-    "client": "e448f21bc51798f1777a6735c3da12e66c045f17",
+    "client": "4798c6a17a7ec7d17ddf824acc1e6b29f05e8234",
     "kiosk": "b12b7dab48c5a3e5fa78ef450f4c5ad1c9e62447"
   },
   "client": {
-    "filename": "gaesland-pruebas-cliente-v16.apk",
-    "version": 16,
-    "sha256": "b24d3a17f64ba6063fd01a60c6a9896cdd76a0cad66f0a00e50f182a58cb9f60"
+    "filename": "gaesland-pruebas-cliente-v17.apk",
+    "version": 17,
+    "sha256": "1e0054c85731d64b12f7854e838fa3c53bfbdbf8abf1607e6cc4ef91a0a67557"
   },
   "kiosk": {
     "filename": "gaesland-pruebas-kiosko-v4.apk",
     "version": 4,
     "sha256": "25c8aad70c6502aa054f80ce416a645514eeed7581fa9ddcd97e255b30fad37a"
   },
-  "payloadCommit": "e18bc4a9514b2704c625948ca9c487772bb4b67b"
+  "payloadCommit": "32e74bef301af9142edb60d5ca18b30a2c0318fa"
 }
