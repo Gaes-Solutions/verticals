@@ -33,6 +33,8 @@ let stage = "setup";
         { raw, failRead, failWrite },
       );
       const p = await context.newPage();
+      p.setDefaultTimeout(15000);
+      p.setDefaultNavigationTimeout(15000);
       const faults = { errors: [], writes: [] };
       p.on("pageerror", (error) => faults.errors.push(error.message));
       await p.route("**/api/**", (route) => {
@@ -42,8 +44,11 @@ let stage = "setup";
         }
         return route.continue();
       });
-      await p.goto(`${base}/producto/demo-lampara`, { waitUntil: "networkidle" });
+      await p.goto(`${base}/producto/demo-lampara`, { waitUntil: "domcontentloaded" });
       await expect(p.getByRole("heading", { level: 1 })).toHaveText("Lámpara de mesa");
+      await expect(
+        p.getByRole("button", { name: "Agregar al carrito", exact: true }),
+      ).toBeEnabled();
       return { p, faults };
     };
     const safe = async (p, faults) => {
