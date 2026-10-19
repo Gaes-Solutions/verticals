@@ -165,6 +165,39 @@ module.exports=which=>{{
         (app / 'node_modules/.bin').mkdir(parents=True)
         (app / 'node_modules/.bin/vitest').symlink_to('../../qa-vitest.cjs')
 
+    def use_regular_pnpm_shim(self, invalid=None):
+        """Reproduce action-setup's non-symlink .bin entry; never execute it."""
+        source = Path(PNPM).expanduser().resolve()
+        package = source.parent.parent / 'pnpm' if source.parent.name == '.bin' else source.parent.parent
+        metadata = json.loads((package / 'package.json').read_text())
+        if metadata.get('name') == 'corepack':
+            cache = Path(self.env.get('COREPACK_HOME', '')) / 'v1/pnpm/10.33.2'
+            package = cache
+        target = self.temp / 'setup-pnpm/node_modules/pnpm'
+        target.parent.mkdir(parents=True)
+        shutil.copytree(package, target)
+        shim = target.parent / '.bin/pnpm'
+        shim.parent.mkdir()
+        shim.write_text('#!/bin/sh\necho SHIM_MUST_NOT_EXECUTE >&2\nexit 93\n')
+        shim.chmod(0o755)
+        if invalid:
+            metadata = json.loads((target / 'package.json').read_text())
+            if invalid == 'escape':
+                outside = target.parent / 'pnpm.cjs'
+                outside.write_text('throw Error("outside package");\n')
+                metadata['bin']['pnpm'] = '../pnpm.cjs'
+            elif invalid == 'name':
+                metadata['name'] = 'not-pnpm'
+            elif invalid == 'symlink':
+                outside = target.parent / 'pnpm.cjs'
+                outside.write_text('throw Error("outside package");\n')
+                (target / 'bin/pnpm.cjs').unlink()
+                (target / 'bin/pnpm.cjs').symlink_to(outside)
+            (target / 'package.json').write_text(json.dumps(metadata))
+        (self.bin / 'pnpm').unlink()
+        (self.bin / 'pnpm').symlink_to(shim)
+        return shim
+
     def phase(self, name):
         env = dict(self.env, AUTONOMY_PHASE=name)
         if name == 'executor':
@@ -312,6 +345,24 @@ class AutonomousIntegrationTests(unittest.TestCase):
 class AutonomousDockerIntegrationTests(unittest.TestCase):
     def test_real_docker_four_phases(self):
         PhaseFixture(self, real_docker=True).full_cycle(self)
+
+    def test_real_docker_regular_action_setup_shim(self):
+        fixture = PhaseFixture(self, real_docker=True)
+        shim = fixture.use_regular_pnpm_shim()
+        self.assertFalse(shim.is_symlink())
+        fixture.full_cycle(self)
+
+    def test_real_docker_regular_shim_rejects_invalid_package(self):
+        for invalid in ('escape', 'name', 'symlink'):
+            with self.subTest(invalid=invalid):
+                fixture = PhaseFixture(self, real_docker=True)
+                fixture.use_regular_pnpm_shim(invalid)
+                fixture.export(self)
+                result = fixture.phase('validate')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('paquete pnpm hermano inválido', result.stderr)
+                self.assertNotIn('SHIM_MUST_NOT_EXECUTE', result.stderr)
+                self.assertFalse((fixture.artifact / 'validation.json').exists())
 
     def test_real_docker_type_failure_cannot_be_masked_by_passing_build(self):
         fixture = PhaseFixture(self, real_docker=True, docker_case='typefail')

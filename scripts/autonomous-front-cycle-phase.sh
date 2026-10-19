@@ -281,6 +281,31 @@ PY
       case "$pnpm_real" in
         */bin/pnpm.cjs) pnpm_runtime_root="$(dirname "$(dirname "$pnpm_real")")"; pnpm_entry='bin/pnpm.cjs'; corepack_mount=0 ;;
         */corepack/dist/pnpm.js) pnpm_runtime_root="$(dirname "$(dirname "$pnpm_real")")"; pnpm_entry='dist/pnpm.js'; corepack_mount=1 ;;
+        */node_modules/.bin/pnpm)
+          # action-setup may write a regular shell shim, not a symlink. Resolve
+          # its sibling package metadata without executing or parsing that shim.
+          pnpm_package="$(python3 - "$pnpm_real" <<'PYPNPM'
+import json, pathlib, re, sys
+try:
+    package = (pathlib.Path(sys.argv[1]).parent.parent / 'pnpm').resolve(strict=True)
+    metadata = json.loads((package / 'package.json').read_text())
+    entry = metadata.get('bin', {}).get('pnpm')
+    if metadata.get('name') != 'pnpm' or not isinstance(entry, str):
+        raise ValueError()
+    target = (package / entry).resolve(strict=True)
+    relative = target.relative_to(package).as_posix()
+    if target.name != 'pnpm.cjs' or not target.is_file() or not re.fullmatch(r'[A-Za-z0-9_./-]+', relative):
+        raise ValueError()
+    print(str(package))
+    print(relative)
+except (OSError, ValueError, TypeError, AttributeError):
+    sys.exit(1)
+PYPNPM
+          )" || die "paquete pnpm hermano inválido para Docker"
+          mapfile -t pnpm_package_parts <<< "$pnpm_package"
+          [[ "${#pnpm_package_parts[@]}" == 2 ]] || die "ruta de paquete pnpm inválida"
+          pnpm_runtime_root="${pnpm_package_parts[0]}"; pnpm_entry="${pnpm_package_parts[1]}"; corepack_mount=0
+          ;;
         *) die "entrada pnpm no soportada para Docker: $pnpm_real" ;;
       esac
       docker_mounts=(-v "$isolated_dir:/workspace:rw" -v "$pnpm_runtime_root:/opt/pnpm-runtime:ro")
