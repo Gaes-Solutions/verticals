@@ -76,6 +76,12 @@ let stage = "setup";
     await p.locator("aside nav").getByRole("button", { name: label, exact: true }).click();
   };
   const snapshot = async (name) => {
+    await p.waitForFunction(() => {
+      const menu = document.querySelector("#menu-sistema");
+      if (!menu) return true;
+      const box = menu.getBoundingClientRect();
+      return innerWidth < 768 ? box.right <= 0 : Math.abs(box.left) < 1;
+    });
     const file = path.join(views, `${name}.png`);
     await p.screenshot({ path: file, fullPage: true });
     fs.chmodSync(file, 0o600);
@@ -436,6 +442,11 @@ let stage = "setup";
     await expect(
       p.getByRole("heading", { name: "🎉 Ya tienes lo básico listo", exact: true }),
     ).toBeVisible();
+    const recommendation = p.locator("section").filter({ hasText: "Siguiente paso recomendado" });
+    await expect(
+      recommendation.getByRole("heading", { name: "Protege el acceso", exact: true }),
+    ).toBeVisible();
+    await expect(recommendation).not.toContainText("Completa los datos de tu negocio");
     const finalStock = (await read("/t/inventario?pageSize=100")).items.find(
       (row) => row.varianteId === product.variantes[0].id,
     );

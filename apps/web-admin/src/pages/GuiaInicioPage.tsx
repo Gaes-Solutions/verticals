@@ -293,7 +293,9 @@ export function GuiaInicioPage() {
   const total = pasosMedibles.length;
   const pct = total > 0 ? Math.round((completos / total) * 100) : 0;
   const listo = total > 0 && completos === total;
-  const siguiente = pasos.find((p) => !p.opcional && !pasoHecho(p, data.pasos)) ?? pasos[0];
+  const siguiente =
+    pasos.find((p) => !p.opcional && !pasoHecho(p, data.pasos)) ??
+    pasos.find((p) => p.opcional && !pasoHecho(p, data.pasos));
   const etapas = [...new Set(pasos.map((p) => p.etapa))];
 
   return (
