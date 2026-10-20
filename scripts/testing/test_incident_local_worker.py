@@ -14,6 +14,7 @@ def load(name,file):
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 worker=load('localworker','incident-local-worker.py')
 proxy=load('egress','incident-egress-proxy.py')
+setup=load('setupworker','setup-incident-local.py')
 
 class LocalWorker(unittest.TestCase):
     def setUp(self):
@@ -70,5 +71,27 @@ class Egress(unittest.TestCase):
     def test_public_dns_answers_allowed_only_for_fixed_host(self):
         with patch.object(proxy.socket,'getaddrinfo',return_value=[(2,1,6,'',('1.1.1.1',443))]):
             self.assertEqual(proxy.target_address('chatgpt.com:443')[-1],('1.1.1.1',443))
+
+class Preparation(unittest.TestCase):
+    def test_intermediate_controller_is_private_and_existing_session_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp);(home/'.codex').mkdir();auth=home/'.codex/auth.json'
+            auth.write_text(json.dumps({'auth_mode':'chatgpt','OPENAI_API_KEY':None,'tokens':{'access_token':'synthetic-original'}}));auth.chmod(0o600)
+            token=home/'.local/share/gaes-automation/incident-worker-token';token.parent.mkdir(parents=True);token.write_text('synthetic-bridge-credential-0123456789');token.chmod(0o600)
+            with patch.object(setup.subprocess,'run',return_value=subprocess.CompletedProcess([],0,b'synthetic-github-token',b'')):
+                state=setup.prepare(home,SCRIPTS.parent)
+                self.assertEqual((state/'controller').stat().st_mode&0o777,0o700)
+                self.assertEqual((state/'controller/scripts').stat().st_mode&0o777,0o700)
+                saved=state/'chatgpt/auth.json';saved.write_text('dedicated-session-retained')
+                setup.prepare(home,SCRIPTS.parent)
+                self.assertEqual(saved.read_text(),'dedicated-session-retained')
+                self.assertIn('synthetic-original',auth.read_text())
+    def test_api_auth_rejected_before_github_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp);(home/'.codex').mkdir();auth=home/'.codex/auth.json'
+            auth.write_text(json.dumps({'auth_mode':'apikey','OPENAI_API_KEY':'synthetic-api'}));auth.chmod(0o600)
+            with patch.object(setup.subprocess,'run') as gh:
+                with self.assertRaises(ValueError):setup.prepare(home,SCRIPTS.parent)
+                gh.assert_not_called()
 
 if __name__=='__main__':unittest.main()

@@ -52,7 +52,7 @@ Description=Gaes isolated incident worker cycle
 
 [Service]
 Type=oneshot
-WorkingDirectory={quote(controller)}
+WorkingDirectory={str(controller).replace('%', '%%')}
 ExecStart=/usr/bin/python3 {quote(script)} once --state {quote(state)}
 UMask=0077
 NoNewPrivileges=true

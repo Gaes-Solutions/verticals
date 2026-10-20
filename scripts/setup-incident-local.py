@@ -14,7 +14,7 @@ def prepare(home=Path.home(), source=Path(__file__).resolve().parent.parent):
         raise ValueError('unsafe installation path')
     state.mkdir(parents=True,exist_ok=True,mode=0o700)
     os.chmod(state,0o700)
-    for name in ('controller/scripts','credentials','chatgpt','runs'):
+    for name in ('controller','controller/scripts','credentials','chatgpt','runs'):
         (state/name).mkdir(parents=True,exist_ok=True,mode=0o700)
         os.chmod(state/name,0o700)
     auth=home/'.codex/auth.json'

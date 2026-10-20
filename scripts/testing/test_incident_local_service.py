@@ -70,7 +70,7 @@ class InstallerTests(unittest.TestCase):
         service = (units / installer.SERVICE).read_text()
         timer = (units / installer.TIMER).read_text()
         self.assertIn(f'ExecStart=/usr/bin/python3 "{self.script}" once --state "{self.state}"', service)
-        self.assertIn(f'WorkingDirectory="{self.state / "controller"}"', service)
+        self.assertIn(f'WorkingDirectory={self.state / "controller"}\n', service)
         for setting in ['Type=oneshot', 'UMask=0077', 'NoNewPrivileges=true', 'PrivateTmp=false', 'TimeoutStartSec=75min']:
             self.assertIn(setting, service)
         for setting in ['OnBootSec=2min', 'OnUnitInactiveSec=10min', 'Persistent=true', f'Unit={installer.SERVICE}', 'WantedBy=timers.target']:
@@ -176,6 +176,13 @@ class InstallerTests(unittest.TestCase):
         service = installer.definitions(self.state)[installer.SERVICE]
         self.assertNotIn('/bin/sh', service)
 
+
+class RealUnitSyntax(unittest.TestCase):
+    def test_working_directory_is_literal_absolute_path_not_shell_quoted(self):
+        definitions=installer.definitions(Path('/home/test/.local/share/worker'))
+        service=definitions[installer.SERVICE]
+        self.assertIn('WorkingDirectory=/home/test/.local/share/worker/controller\n',service)
+        self.assertNotIn('WorkingDirectory="',service)
 
 if __name__ == '__main__':
     unittest.main()

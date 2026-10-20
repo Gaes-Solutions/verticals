@@ -17,8 +17,8 @@
 | Transporte Python | 26/26 |
 | Fases y arquitectura | 32/32 |
 | Autenticación y cupo de suscripción | 25/25 |
-| Instalador del temporizador | 9/9 |
-| Coordinador y proxy | 10/10 |
+| Instalador del temporizador | 10/10 |
+| Coordinador, preparación y proxy | 12/12 |
 | PostgreSQL temporal | 12/12 |
 
 También pasaron los 30 typechecks del repositorio y la verificación de GitHub del commit `83eed98`.
@@ -32,3 +32,13 @@ Resultado: corrección correcta, cinco casos aprobados, parche generado. No se u
 Evidencia local: `/tmp/gaes-subscription-real-proof.json`; PostgreSQL: `/tmp/gaes-api-isolated-SIrHeH/results.json` (base eliminada).
 
 El modo remoto de pago está deshabilitado con `AUTONOMOUS_INCIDENT_ENABLED=false`. El estado operativo del temporizador se consulta con los comandos del [manual local](../incident-local-subscription.md); un temporizador programado puede estar esperando incidentes aprobados o cupo disponible.
+
+## Activación comprobada en la PC
+
+Se instaló y habilitó `gaes-incident-local.timer` mediante el D-Bus de usuario. Estado comprobado: temporizador `active/waiting`, servicio oneshot terminado con `result=success` y código 0. La primera vuelta devolvió `idle`: se comprobó el cupo y se consultó correctamente la cola, sin incidentes aprobados disponibles. Al terminar la vuelta quedaba 24 % de cupo incluido; ese valor es una instantánea, no una reserva.
+
+El estado `inactive/dead` del servicio entre ciclos es normal: el temporizador permanece activo y lo vuelve a iniciar diez minutos después de terminar cada vuelta. El trabajador no depende de esta terminal. No se publicaron correcciones del negocio ni se modificó producción durante esta activación.
+
+La instalación real detectó y permitió corregir dos defectos adicionales: permisos heredados demasiado amplios en el directorio intermedio del controlador y comillas de shell inválidas en `WorkingDirectory` de systemd. Las regresiones nuevas cubren ambos casos.
+
+Evidencia de activación: `/tmp/gaes-subscription-local-activation.json`.
