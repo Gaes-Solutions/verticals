@@ -107,7 +107,16 @@ class Worker:
         import base64
         env.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='http.https://github.com/.extraheader',
                    GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + base64.b64encode(('x-access-token:' + token).encode()).decode())
-        execute(['git', '-c', 'core.hooksPath=/dev/null', 'clone', '--quiet', '--no-checkout', '--single-branch', '--branch', 'staging', 'https://github.com/' + REPO + '.git', str(directory)], env=env, timeout=180)
+        try:
+            execute(['git', '-c', 'core.hooksPath=/dev/null', 'clone', '--quiet', '--no-checkout', '--single-branch', '--branch', 'staging', 'https://github.com/' + REPO + '.git', str(directory)], env=env, timeout=90)
+        except (RuntimeError,subprocess.TimeoutExpired):
+            if directory.is_symlink():raise RuntimeError('unsafe partial clone')
+            if directory.exists():shutil.rmtree(directory)
+            # Same repository, existing user key, strict pre-existing GitHub host key.
+            # Port 443 recovers from intermittent HTTPS/SSH-22 routing failures.
+            ssh_env=clean_env(home)
+            ssh_env['GIT_SSH_COMMAND']='ssh -o HostKeyAlias=github.com -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15 -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=2'
+            execute(['git','-c','core.hooksPath=/dev/null','clone','--quiet','--no-checkout','--single-branch','--branch','staging','ssh://git@ssh.github.com:443/'+REPO+'.git',str(directory)],env=ssh_env,timeout=90)
         if sha is None:
             sha = execute(['git', 'rev-parse', 'origin/staging'], cwd=directory).decode().strip()
         if not re.fullmatch('[a-f0-9]{40}', sha):
@@ -201,6 +210,7 @@ class Worker:
         self.run.mkdir(parents=True, mode=0o700)
         self.artifacts = self.run / 'artifacts'
         self.artifacts.mkdir(mode=0o700)
+        checkpoint(self.state,'checking',phase='checkout',runId=self.run_id)
         executor, sha = self.clone('executor')
         audit=self.load_helper('incident-release-audit')
         checkpoint(self.state,'checking',phase='release_audit',runId=self.run_id)

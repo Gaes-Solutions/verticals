@@ -29,6 +29,21 @@ class LocalWorker(unittest.TestCase):
         with patch.dict(os.environ,{'OPENAI_API_KEY':'forbidden','DATABASE_URL_MASTER':'forbidden','GH_TOKEN':'forbidden'}):
             env=worker.clean_env(self.root)
         self.assertEqual(set(env),{'PATH','HOME','LANG','CI','GIT_TERMINAL_PROMPT'})
+    def test_clone_recovers_over_ssh443_without_disabling_host_key_checks_or_forwarding_token(self):
+        self.w.run=self.root/'run';self.w.run.mkdir();self.w.credentials.mkdir();token=self.w.credentials/'github-token';token.write_text('synthetic-token');token.chmod(0o600)
+        def execute(args,**kwargs):
+            if 'https://github.com/Gaes-Solutions/verticals.git' in args:
+                partial=self.w.run/'executor';partial.mkdir();(partial/'partial').write_text('incomplete')
+                raise subprocess.TimeoutExpired('synthetic network',90)
+            if any(value.startswith('ssh://') for value in args):
+                self.assertFalse((self.w.run/'executor').exists())
+                env=kwargs['env'];self.assertNotIn('GIT_CONFIG_VALUE_0',env)
+                self.assertIn('StrictHostKeyChecking=yes',env['GIT_SSH_COMMAND']);self.assertIn('HostKeyAlias=github.com',env['GIT_SSH_COMMAND'])
+                self.assertIn('ssh://git@ssh.github.com:443/Gaes-Solutions/verticals.git',args)
+            return b'a'*40 if 'rev-parse' in args else b''
+        with patch.object(worker,'execute',side_effect=execute):directory,sha=self.w.clone('executor')
+        self.assertEqual(sha,'a'*40);self.assertEqual(directory,self.w.run/'executor')
+
     def test_container_always_cleans_after_timeout(self):
         with patch.object(worker,'execute',side_effect=subprocess.TimeoutExpired('docker',1)) as run,patch.object(worker.subprocess,'run') as cleanup:
             with self.assertRaises(subprocess.TimeoutExpired):self.w.container([],{},['true'])

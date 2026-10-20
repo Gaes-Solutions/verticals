@@ -19,3 +19,9 @@ En el worker local, cada parche requiere el perfil completo de validación antes
 Los ocho requisitos manuales permanecen pendientes: hardware, APK en dispositivos físicos, pagos reales/3DS, CFDI real, entrega real de correo, DNS/TLS de dominio propio, despliegue/rollback y restauración de respaldos productivos. Las simulaciones no aprueban estos requisitos. `releaseReady` permanece falso. Los tokens locales no se copian a los contenedores de pruebas. La IA conserva autenticación de ChatGPT, sin fallback a una API de pago.
 
 El timer requiere que esta PC esté encendida y su gestor de usuario disponible. Los límites de suscripción pueden pausar correcciones con IA; no pausan las comprobaciones independientes.
+
+## Requisitos de la PC
+
+El puente multimedia necesita bubblewrap, prlimit y setpriv en `/usr/bin`, y ffmpeg/ffprobe del sistema o de la instalación privada ya verificada en `~/.local/ffmpeg`. Solo se ejecutan esos binarios confiables. El socket se crea mediante un descriptor de directorio para admitir las rutas largas de las ejecuciones de systemd. El servidor comprueba la misma identidad local antes de aceptar trabajo.
+
+El checkout utiliza HTTPS y, ante un fallo, reintenta el mismo repositorio por SSH en el puerto 443 con la llave existente y verificación estricta de la llave de GitHub; no acepta llaves nuevas automáticamente. El estado muestra preparación desde el inicio del checkout.

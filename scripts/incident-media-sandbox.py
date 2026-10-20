@@ -100,9 +100,14 @@ class Handler(socketserver.StreamRequestHandler):
 def serve(path,root):
     if path.exists() or path.is_symlink() or not root.is_dir() or root.is_symlink():raise ValueError('unsafe bridge paths')
     # Serial requests bound host CPU and memory; there is no generic shell/RPC.
-    with socketserver.UnixStreamServer(str(path),Handler) as server:
-        os.chmod(path,0o600);server.media_root=root
-        server.serve_forever(poll_interval=0.2)
+    directory=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        # Linux AF_UNIX limits address length to 107 bytes. Bind through a pinned
+        # directory FD; the private socket inode remains in the long run path.
+        with socketserver.UnixStreamServer(f'/proc/self/fd/{directory}/{path.name}',Handler) as server:
+            os.chmod(path,0o600);server.media_root=root
+            server.serve_forever(poll_interval=0.2)
+    finally:os.close(directory)
 
 
 def client(args):

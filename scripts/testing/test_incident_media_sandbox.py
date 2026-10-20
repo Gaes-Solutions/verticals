@@ -79,6 +79,28 @@ class MediaBridge(unittest.TestCase):
                 self.assertEqual(spawn.call_args.args[0][:2],['/usr/bin/setpriv','--no-new-privs'])
         process.terminate.assert_called_once();process.wait.assert_called_once()
 
+    def test_real_protocol_handles_long_private_runtime_paths_and_rejects_unknown_commands(self):
+        import socket,json,time,sys
+        directory=self.root/('long-private-run-'+('x'*90));directory.mkdir(mode=0o700)
+        path=directory/'decoder.sock';self.assertGreater(len(str(path)),108)
+        process=subprocess.Popen([sys.executable,str(Path(m.__file__)),'--socket',str(path),'--root',str(self.root)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env={'PATH':'/usr/bin:/bin','HOME':str(self.root)})
+        try:
+            for _ in range(100):
+                if path.is_socket():break
+                if process.poll() is not None:self.fail('bridge exited before creating socket')
+                time.sleep(0.01)
+            self.assertTrue(path.is_socket());self.assertEqual(path.stat().st_mode&0o777,0o600)
+            fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY)
+            try:
+                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as connection:
+                    connection.settimeout(2);connection.connect(f'/proc/self/fd/{fd}/decoder.sock')
+                    connection.sendall(b'{"args":["sh","-c","forbidden"]}\n')
+                    with connection.makefile('rb') as response: result=json.loads(response.readline())
+                self.assertEqual(result['exitCode'],1)
+            finally:os.close(fd)
+        finally:
+            process.terminate();process.wait(timeout=3)
+
     def test_rejected_request_never_starts_host_command(self):
         with patch.object(m.subprocess,'run') as run,self.assertRaises(ValueError):m.decode(self.root,['sh','-c','forbidden'])
         run.assert_not_called()
