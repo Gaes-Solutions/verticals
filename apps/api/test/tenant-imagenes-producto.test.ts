@@ -128,6 +128,69 @@ describe("fotos de producto", () => {
     ).toBe(404);
   });
 
+  it("publicar individualmente copia las fotos subidas antes de publicar", async () => {
+    const producto = await app.inject({
+      method: "POST",
+      url: "/t/productos",
+      headers: auth(),
+      payload: {
+        skuPadre: "FOTO-BEFORE-PUBLISH",
+        nombre: "Foto antes de publicar",
+        precioBase: "50",
+      },
+    });
+    expect(producto.statusCode, producto.body).toBe(201);
+    const id = producto.json().id;
+    const imagen = await subir(png, "image/png", id);
+    expect(imagen.statusCode, imagen.body).toBe(201);
+    const publicado = await app.inject({
+      method: "POST",
+      url: "/t/ecommerce/productos-publicados",
+      headers: auth(),
+      payload: {
+        productoId: id,
+        tituloPublico: "Foto antes de publicar",
+        slugSeo: "foto-antes-de-publicar",
+      },
+    });
+    expect(publicado.statusCode, publicado.body).toBe(201);
+    expect(publicado.json().fotosArray).toEqual([imagen.json().cdnUrl]);
+  });
+
+  it("republicar respeta una galería elegida explícitamente", async () => {
+    const producto = await app.inject({
+      method: "POST",
+      url: "/t/productos",
+      headers: auth(),
+      payload: { skuPadre: "FOTO-CUSTOM-PUBLISH", nombre: "Foto elegida", precioBase: "50" },
+    });
+    expect(producto.statusCode, producto.body).toBe(201);
+    const id = producto.json().id;
+    expect((await subir(png, "image/png", id)).statusCode).toBe(201);
+    const payload = {
+      productoId: id,
+      tituloPublico: "Foto elegida",
+      slugSeo: "foto-elegida",
+      fotosArray: ["https://legacy.example.invalid/photo.jpg"],
+    };
+    const first = await app.inject({
+      method: "POST",
+      url: "/t/ecommerce/productos-publicados",
+      headers: auth(),
+      payload,
+    });
+    expect(first.statusCode, first.body).toBe(201);
+    expect(first.json().fotosArray).toEqual(payload.fotosArray);
+    const again = await app.inject({
+      method: "POST",
+      url: "/t/ecommerce/productos-publicados",
+      headers: auth(),
+      payload: { productoId: id, tituloPublico: "Título actualizado", slugSeo: payload.slugSeo },
+    });
+    expect(again.statusCode, again.body).toBe(201);
+    expect(again.json().fotosArray).toEqual(payload.fotosArray);
+  });
+
   it("no guarda fotos de un producto que no existe", async () => {
     const res = await subir(jpg, "image/jpeg", "no-existe");
     expect(res.statusCode).toBe(404);

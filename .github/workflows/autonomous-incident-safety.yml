@@ -13,6 +13,7 @@ on:
       - scripts/testing/run-platform-workflows*.cjs
       - scripts/testing/shopper-*workflows.cjs
       - scripts/testing/shopper-fixture.cjs
+      - scripts/testing/owner-onboarding-workflows.cjs
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py
@@ -32,6 +33,7 @@ on:
       - scripts/testing/run-platform-workflows*.cjs
       - scripts/testing/shopper-*workflows.cjs
       - scripts/testing/shopper-fixture.cjs
+      - scripts/testing/owner-onboarding-workflows.cjs
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py

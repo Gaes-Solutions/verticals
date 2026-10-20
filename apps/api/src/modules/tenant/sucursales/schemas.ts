@@ -17,6 +17,8 @@ export const sucursalCreateSchema = z.object({
 
 export const sucursalUpdateSchema = sucursalCreateSchema.partial().extend({
   isActive: z.boolean().optional(),
+  telefono: z.string().max(50).nullable().optional(),
+  emailContacto: z.string().email().nullable().optional(),
 });
 
 export const sucursalIdParamSchema = z.object({

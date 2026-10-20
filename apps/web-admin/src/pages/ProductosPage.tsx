@@ -57,6 +57,7 @@ export function ProductosPage() {
   const [query, setQuery] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [avisoStock, setAvisoStock] = useState<string | null>(null);
   const [modal, setModal] = useState<Producto | "nuevo" | null>(null);
   const [aArchivar, setAArchivar] = useState<Producto | null>(null);
   const puedeCrear = puede("productos.crear");
@@ -116,6 +117,23 @@ export function ProductosPage() {
         placeholder="Buscar por nombre o SKU…"
         className="gx-input mb-4 max-w-md"
       />
+      {avisoStock && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          <p>{avisoStock}</p>
+          <button
+            type="button"
+            className="gx-btn-secondary mt-2"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("gaes-nav", { detail: "inventario" }))
+            }
+          >
+            Revisar inventario
+          </button>
+        </div>
+      )}
 
       {error && !cargando && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-light p-3 text-danger text-sm">
@@ -192,7 +210,8 @@ export function ProductosPage() {
         <ProductoModal
           producto={modal === "nuevo" ? null : modal}
           onClose={() => setModal(null)}
-          onSaved={() => {
+          onSaved={(aviso) => {
+            if (aviso) setAvisoStock(aviso);
             setModal(null);
             void cargar();
           }}
@@ -222,6 +241,68 @@ export function ProductosPage() {
   );
 }
 
+function catalogoInicial(producto: Producto | null) {
+  const variante = producto?.variantes[0];
+  return {
+    sku: variante?.sku ?? producto?.skuPadre ?? "",
+    nombre: producto?.nombre ?? "",
+    precioBase: variante?.precioBase ?? "",
+    categoriaId: producto?.categoriaId ?? "",
+    editaPrecio: !producto || producto.variantes.length <= 1,
+  };
+}
+function impuestosIniciales(producto: Producto | null) {
+  return {
+    aplicaIva: producto?.aplicaIva ?? true,
+    aplicaIeps: producto?.aplicaIeps ?? false,
+    tasaIeps: producto?.tasaIeps ?? "",
+    requiresBalanza: producto?.requiresBalanza ?? false,
+    unidadMedida: producto?.unidadMedida ?? "pza",
+    claveSat: producto?.claveSat ?? "",
+    claveUnidadSat: producto?.claveUnidadSat ?? "H87",
+  };
+}
+function validarCamposProducto(
+  nombre: string,
+  sku: string,
+  precio: string,
+  stock: string,
+  editaPrecio: boolean,
+) {
+  const stockValido = stock === "" || (Number.isFinite(Number(stock)) && Number(stock) >= 0);
+  const precioValido = precio !== "" && Number.isFinite(Number(precio)) && Number(precio) >= 0;
+  return {
+    stockValido,
+    datosValidos:
+      Boolean(nombre.trim()) &&
+      (!editaPrecio || (Boolean(sku.trim()) && precioValido)) &&
+      stockValido,
+  };
+}
+function datosComunesProducto(input: {
+  nombre: string;
+  categoriaId: string;
+  aplicaIva: boolean;
+  aplicaIeps: boolean;
+  tasaIeps: string;
+  requiresBalanza: boolean;
+  unidadMedida: string;
+  claveSat: string;
+  claveUnidadSat: string;
+}) {
+  return {
+    nombre: input.nombre.trim(),
+    aplicaIva: input.aplicaIva,
+    aplicaIeps: input.aplicaIeps,
+    requiresBalanza: input.requiresBalanza,
+    unidadMedida: input.unidadMedida,
+    ...(input.aplicaIeps && input.tasaIeps ? { tasaIeps: input.tasaIeps } : {}),
+    ...(input.claveSat.trim() ? { claveSat: input.claveSat.trim() } : {}),
+    ...(input.claveUnidadSat.trim() ? { claveUnidadSat: input.claveUnidadSat.trim() } : {}),
+    ...(input.categoriaId ? { categoriaId: input.categoriaId } : {}),
+  };
+}
+
 function ProductoModal({
   producto,
   onClose,
@@ -229,24 +310,34 @@ function ProductoModal({
 }: {
   producto: Producto | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (aviso?: string) => void;
 }) {
   const editando = producto !== null;
   // Precio/código se editan sobre la variante base; solo para productos de una variante.
-  const editaPrecio = !editando || (producto?.variantes.length ?? 0) <= 1;
-  const [sku, setSku] = useState(producto?.variantes[0]?.sku ?? producto?.skuPadre ?? "");
-  const [nombre, setNombre] = useState(producto?.nombre ?? "");
-  const [precioBase, setPrecioBase] = useState(producto?.variantes[0]?.precioBase ?? "");
+  const catalogo = catalogoInicial(producto);
+  const inicial = impuestosIniciales(producto);
+  const editaPrecio = catalogo.editaPrecio;
+  const [sku, setSku] = useState(catalogo.sku);
+  const [nombre, setNombre] = useState(catalogo.nombre);
+  const [precioBase, setPrecioBase] = useState(catalogo.precioBase);
   const [stockInicial, setStockInicial] = useState("");
-  const [aplicaIva, setAplicaIva] = useState(producto?.aplicaIva ?? true);
-  const [aplicaIeps, setAplicaIeps] = useState(producto?.aplicaIeps ?? false);
-  const [tasaIeps, setTasaIeps] = useState(producto?.tasaIeps ?? "");
-  const [requiresBalanza, setRequiresBalanza] = useState(producto?.requiresBalanza ?? false);
-  const [unidadMedida, setUnidadMedida] = useState(producto?.unidadMedida ?? "pza");
-  const [claveSat, setClaveSat] = useState(producto?.claveSat ?? "");
-  const [claveUnidadSat, setClaveUnidadSat] = useState(producto?.claveUnidadSat ?? "H87");
+  const puedeStock = puede("inventario.leer") && puede("inventario.ajustar");
+  const { stockValido, datosValidos } = validarCamposProducto(
+    nombre,
+    sku,
+    precioBase,
+    stockInicial,
+    editaPrecio,
+  );
+  const [aplicaIva, setAplicaIva] = useState(inicial.aplicaIva);
+  const [aplicaIeps, setAplicaIeps] = useState(inicial.aplicaIeps);
+  const [tasaIeps, setTasaIeps] = useState(inicial.tasaIeps);
+  const [requiresBalanza, setRequiresBalanza] = useState(inicial.requiresBalanza);
+  const [unidadMedida, setUnidadMedida] = useState(inicial.unidadMedida);
+  const [claveSat, setClaveSat] = useState(inicial.claveSat);
+  const [claveUnidadSat, setClaveUnidadSat] = useState(inicial.claveUnidadSat);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [categoriaId, setCategoriaId] = useState(producto?.categoriaId ?? "");
+  const [categoriaId, setCategoriaId] = useState(catalogo.categoriaId);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -256,60 +347,46 @@ function ProductoModal({
       .catch(() => setCategorias([]));
   }, []);
 
+  const bloqueado = guardando || !datosValidos;
   async function guardar() {
+    if (bloqueado) return;
     setError(null);
     setGuardando(true);
     try {
-      const impuestos = {
+      const comunes = datosComunesProducto({
+        nombre,
+        categoriaId,
         aplicaIva,
         aplicaIeps,
+        tasaIeps,
         requiresBalanza,
         unidadMedida,
-        ...(aplicaIeps && tasaIeps ? { tasaIeps } : {}),
-        // Sin estas claves el SAT no acepta el concepto: facturar responde 409.
-        ...(claveSat.trim() ? { claveSat: claveSat.trim() } : {}),
-        ...(claveUnidadSat.trim() ? { claveUnidadSat: claveUnidadSat.trim() } : {}),
-      };
-      if (editando && producto) {
+        claveSat,
+        claveUnidadSat,
+      });
+      if (producto) {
         await api(`/t/productos/${producto.id}`, {
           method: "PATCH",
           body: {
-            nombre,
-            ...impuestos,
-            ...(categoriaId ? { categoriaId } : {}),
-            ...(editaPrecio ? { precioBase, sku } : {}),
+            ...comunes,
+            ...(editaPrecio ? { precioBase, sku: sku.trim() } : {}),
           },
         });
       } else {
         const creado = await api<Producto>("/t/productos", {
           body: {
-            skuPadre: sku,
-            nombre,
+            ...comunes,
+            skuPadre: sku.trim(),
             precioBase,
             tasaIva: "16",
-            ...impuestos,
-            ...(categoriaId ? { categoriaId } : {}),
           },
         });
         // Existencias iniciales (opcional): se dan de alta en la sucursal principal.
-        const nStock = Number(stockInicial);
-        const varianteId = creado.variantes[0]?.id;
-        if (nStock > 0 && varianteId) {
-          const sucursales = await api<{ id: string }[] | Paged<{ id: string }>>("/t/sucursales")
-            .then((r) => (Array.isArray(r) ? r : r.items))
-            .catch(() => [] as { id: string }[]);
-          const sucursalId = sucursales[0]?.id;
-          if (sucursalId) {
-            await api("/t/inventario/ajustes", {
-              body: {
-                varianteId,
-                sucursalId,
-                tipo: "ajuste_positivo",
-                cantidad: stockInicial,
-                motivo: "Stock inicial",
-              },
-            }).catch(() => undefined);
-          }
+        if (!(await registrarExistenciasIniciales(creado, stockInicial))) {
+          onSaved(
+            `El producto «${nombre}» ya está creado. No se confirmaron sus existencias iniciales. Revisa Inventario antes de capturarlas de nuevo para evitar duplicarlas.`,
+          );
+          return;
         }
       }
       onSaved();
@@ -358,7 +435,7 @@ function ProductoModal({
               />
             </Field>
           )}
-          {!editando && (
+          {!editando && puedeStock && (
             <Field label="Existencias iniciales (opcional)">
               <input
                 type="number"
@@ -483,7 +560,16 @@ function ProductoModal({
           <p className="text-slate-500 text-xs">
             Es como se vende y se muestra el precio en la tienda ("$45.00 / kg", "por pieza").
           </p>
-          {error && <p className="text-sm text-danger">{error}</p>}
+          {!stockValido && (
+            <p role="alert" className="text-sm text-danger">
+              Las existencias iniciales deben ser un número mayor o igual a cero.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
         </div>
         <div className="mt-5 flex gap-2">
           <button type="button" onClick={onClose} className="gx-btn-secondary flex-1">
@@ -493,7 +579,7 @@ function ProductoModal({
             type="button"
             data-tour="prod-f-guardar"
             onClick={guardar}
-            disabled={guardando || !nombre || (editaPrecio && (!sku || !precioBase))}
+            disabled={bloqueado}
             className="gx-btn-primary flex-1 disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar"}
@@ -502,6 +588,26 @@ function ProductoModal({
       </div>
     </div>
   );
+}
+
+async function registrarExistenciasIniciales(
+  producto: Producto,
+  cantidad: string,
+): Promise<boolean> {
+  if (Number(cantidad) <= 0) return true;
+  try {
+    const varianteId = producto.variantes[0]?.id;
+    if (!varianteId) return false;
+    const respuesta = await api<{ id: string }[] | Paged<{ id: string }>>("/t/sucursales/opciones");
+    const sucursalId = (Array.isArray(respuesta) ? respuesta : respuesta.items)[0]?.id;
+    if (!sucursalId) return false;
+    await api("/t/inventario/ajustes", {
+      body: { varianteId, sucursalId, tipo: "ajuste_positivo", cantidad, motivo: "Stock inicial" },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // <label> y no <div>: envolver el control asocia la etiqueta con él, así el

@@ -25,12 +25,19 @@ test("unknown and additional workflow arguments fail before connecting", () => {
     ["--shopper-e2e", "extra"],
     ["--retail-e2e", "--shopper-order-e2e"],
     ["--shopper-order-e2e", "--help"],
+    ["--owner-onboarding-e2e", "extra"],
   ]) {
     refuses(args, "postgresql://qa:synthetic-only@127.0.0.1:1/postgres", /Invalid workflow mode/);
   }
 });
 test("every allowed workflow rejects query host overrides and fragments before connecting", () => {
-  for (const args of [[], ["--retail-e2e"], ["--shopper-e2e"], ["--shopper-order-e2e"]]) {
+  for (const args of [
+    [],
+    ["--retail-e2e"],
+    ["--shopper-e2e"],
+    ["--shopper-order-e2e"],
+    ["--owner-onboarding-e2e"],
+  ]) {
     for (const suffix of ["?host=business.invalid", "?schema=business", "#business"])
       refuses(
         args,

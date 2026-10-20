@@ -23,7 +23,22 @@ interface Paso {
   doneKey?: string;
 }
 
+const PASO_NEGOCIO: Paso = {
+  key: "negocio",
+  etapa: "1. Personas y seguridad",
+  titulo: "Completa los datos de tu negocio",
+  descripcion:
+    "Captura la dirección y el contacto de tu sucursal, especialmente si ofrecerás recogida.",
+  accion: "Guardar nombre, dirección y medios de contacto desde Configuración.",
+  resultado: "Tus clientes saben dónde recoger y cómo contactarte.",
+  seccion: "configuracion",
+  perm: "configuracion.leer",
+  opcional: true,
+  doneKey: "datosNegocio",
+};
+
 const PASOS_MAYOREO: Paso[] = [
+  PASO_NEGOCIO,
   {
     key: "vendedores",
     etapa: "1. Personas y seguridad",
@@ -147,6 +162,7 @@ const PASOS_MAYOREO: Paso[] = [
 ];
 
 const PASOS_GENERICO: Paso[] = [
+  PASO_NEGOCIO,
   {
     key: "vendedores",
     etapa: "1. Personas y seguridad",

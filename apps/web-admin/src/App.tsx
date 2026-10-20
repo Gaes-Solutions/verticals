@@ -515,6 +515,8 @@ function SessionApp() {
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Menú del sistema"
+            aria-expanded={menuOpen}
+            aria-controls="menu-sistema"
             className="rounded p-2 hover:bg-slate-800"
           >
             <Menu size={22} />
@@ -549,6 +551,7 @@ function SessionApp() {
       )}
 
       <aside
+        id="menu-sistema"
         className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-900 text-slate-100 transition-transform md:static md:z-auto md:w-56 md:translate-x-0 ${
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}

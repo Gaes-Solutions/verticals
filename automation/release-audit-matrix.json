@@ -213,6 +213,12 @@
       "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-order-e2e"],
       "timeoutSeconds": 2400,
       "mandatory": true
+    },
+    {
+      "id": "owner-onboarding-e2e",
+      "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--owner-onboarding-e2e"],
+      "timeoutSeconds": 2400,
+      "mandatory": true
     }
   ],
   "manualRequired": [

@@ -69,6 +69,27 @@ let stage = "setup";
     await expect(
       page.getByRole("heading", { name: fixture.titulo, level: 1, exact: true }),
     ).toBeVisible();
+    if (fixture.imageExpected) {
+      const byHost = await context.request.get(`${base}/producto/${fixture.slugSeo}`, {
+        headers: { Host: "qa-new-owner.shops.example.test" },
+      });
+      assert.equal(byHost.status(), 200);
+      assert((await byHost.text()).includes(fixture.titulo));
+      const unknown = await context.request.get(`${base}/producto/${fixture.slugSeo}`, {
+        headers: { Host: "unregistered-owner.shops.example.test", "x-tienda-slug": "qa-new-owner" },
+      });
+      assert.equal(unknown.status(), 503);
+      assert(!(await unknown.text()).includes(fixture.titulo));
+      const photo = page.getByRole("img", { name: fixture.titulo, exact: true }).first();
+      await expect(photo).toBeVisible();
+      await expect.poll(() => photo.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+      await page
+        .getByRole("button", { name: `Ampliar imagen de ${fixture.titulo}`, exact: true })
+        .click();
+      await page.getByRole("button", { name: "Acercar imagen", exact: true }).click();
+      await page.getByRole("button", { name: "Girar imagen 90 grados", exact: true }).click();
+      await page.getByRole("button", { name: "Cerrar imágenes", exact: true }).click();
+    }
     await page.getByRole("button", { name: "Agregar al carrito", exact: true }).click();
     await expect(
       page.getByRole("link", { name: "Carrito, 1 productos", exact: true }),

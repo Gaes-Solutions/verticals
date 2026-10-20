@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FormField as Campo } from "../components/FormField.js";
 import { ApiError, api, puede } from "../lib/api.js";
 
 const COND_LABEL: Record<string, string> = {
@@ -311,15 +312,6 @@ function NuevoClienteModal({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
-      {children}
     </div>
   );
 }

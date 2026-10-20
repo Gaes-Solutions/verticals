@@ -1,5 +1,6 @@
 import { Percent } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { DatosSucursal } from "../components/DatosSucursal.js";
 import { ApiError, api, puede } from "../lib/api.js";
 
 interface ConfigVentas {
@@ -14,6 +15,7 @@ export function ConfiguracionPage() {
         <h1 className="font-bold text-2xl text-slate-800">Configuración</h1>
         <p className="text-slate-500 text-sm">Ajustes del negocio. Todo configurable por ti.</p>
       </div>
+      {puede("sucursales.leer") && <DatosSucursal />}
       <TopeDescuento />
     </div>
   );

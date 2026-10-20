@@ -75,17 +75,20 @@ export const TOURS: TourDef[] = [
         abrir: "prod-nuevo",
         anchor: "prod-f-nombre",
         titulo: "1) El nombre",
-        texto: "Escribe aquí cómo se llama el producto. Es lo único obligatorio junto al precio.",
+        texto:
+          "Escribe aquí cómo se llama el producto. El nombre, el precio y una clave propia o código de barras identifican tu producto.",
       },
       {
         anchor: "prod-f-precio",
         titulo: "2) El precio de venta",
-        texto: "Aquí va a cuánto lo vendes. Con nombre y precio ya puedes cobrarlo.",
+        texto:
+          "Aquí va a cuánto lo vendes. Revisa el importe y captura también el código del producto para poder guardarlo.",
       },
       {
         anchor: "prod-f-sku",
-        titulo: "3) Código de barras (opcional)",
-        texto: "Si lo escaneas en caja, captura aquí su clave/código. Si no, déjalo vacío.",
+        titulo: "3) Código del producto",
+        texto:
+          "Captura el código de barras si lo tiene. Si no, escribe una clave propia y única, por ejemplo PROD-001.",
       },
       {
         anchor: "prod-f-guardar",

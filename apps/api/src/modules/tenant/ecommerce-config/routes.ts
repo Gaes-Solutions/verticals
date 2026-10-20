@@ -322,12 +322,16 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
   app.post("/productos-publicados", async (req, reply) => {
     req.requirePerm(PERMISSIONS.ECOMMERCE_PUBLICAR_PRODUCTO);
     const body = publicarProductoSchema.parse(req.body);
-    const producto = await req.tenantPrisma.producto.findUnique({ where: { id: body.productoId } });
+    const producto = await req.tenantPrisma.producto.findUnique({
+      where: { id: body.productoId },
+      include: { imagenes: { orderBy: { orden: "asc" }, select: { cdnUrl: true } } },
+    });
     if (!producto) {
       return reply
         .code(404)
         .send({ statusCode: 404, error: "Not Found", message: "Producto no encontrado" });
     }
+    const fotos = body.fotosArray ?? producto.imagenes.map((imagen) => imagen.cdnUrl);
     const pub = await req.tenantPrisma.productoPublicado.upsert({
       where: { productoId: body.productoId },
       create: {
@@ -337,7 +341,7 @@ const ecommerceConfigRoutes: FastifyPluginAsync = async (app) => {
         slugSeo: body.slugSeo,
         ...(body.descripcionMd ? { descripcionMd: body.descripcionMd } : {}),
         ...(body.descripcionCortaMd ? { descripcionCortaMd: body.descripcionCortaMd } : {}),
-        ...(body.fotosArray ? { fotosArray: body.fotosArray } : {}),
+        fotosArray: fotos,
         ...(body.precioPublicoOverride
           ? { precioPublicoOverride: body.precioPublicoOverride }
           : {}),

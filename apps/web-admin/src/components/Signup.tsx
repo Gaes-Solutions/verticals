@@ -6,6 +6,7 @@ import {
   signupTenant,
   verticalesActivas,
 } from "../lib/api.js";
+import { FormField as Campo } from "./FormField.js";
 
 const VERTICALES: { value: string; label: string }[] = [
   { value: "retail_mayoreo", label: "Retail / Mayoreo" },
@@ -33,6 +34,9 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
   const [slugTocado, setSlugTocado] = useState(false);
   const [vertical, setVertical] = useState("retail_mayoreo");
   const [activas, setActivas] = useState<string[] | null>(null);
+  const [catalogoIntento, setCatalogoIntento] = useState(0);
+  const [catalogoCargando, setCatalogoCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState<string | null>(null);
   const [planCode, setPlanCode] = useState("");
   const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,29 +45,42 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
   const [loading, setLoading] = useState(false);
   const [creado, setCreado] = useState<{ slug: string; trialEndsAt: string | null } | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: el contador permite volver a solicitar el mismo catálogo sin perder el formulario
   useEffect(() => {
-    planesPublicos()
-      .then((p) => {
+    let vigente = true;
+    setCatalogoCargando(true);
+    setCatalogoError(null);
+    Promise.all([planesPublicos(), verticalesActivas()])
+      .then(([p, r]) => {
+        if (!vigente) return;
+        const giros = r.verticales.filter((value) => VERTICALES.some((v) => v.value === value));
+        if (!p.length || !giros.length) {
+          throw new Error("El registro no está disponible por el momento. Intenta de nuevo.");
+        }
         setPlanes(p);
-        if (p[0]) setPlanCode(p[0].code);
-      })
-      .catch(() => setPlanes([]));
-  }, []);
-
-  // Solo se ofrecen los giros que atiende la plataforma.
-  useEffect(() => {
-    verticalesActivas()
-      .then((r) => {
-        setActivas(r.verticales);
-        setVertical((actual) =>
-          r.verticales.includes(actual) ? actual : (r.verticales[0] ?? actual),
+        setPlanCode((actual) =>
+          p.some((plan) => plan.code === actual) ? actual : (p[0]?.code ?? ""),
         );
+        setActivas(giros);
+        setVertical((actual) => (giros.includes(actual) ? actual : (giros[0] ?? actual)));
       })
-      .catch(() => setActivas(null));
-  }, []);
+      .catch(() => {
+        if (vigente)
+          setCatalogoError(
+            "No pudimos cargar las opciones de registro. Reintenta sin borrar tus datos.",
+          );
+      })
+      .finally(() => {
+        if (vigente) setCatalogoCargando(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [catalogoIntento]);
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
+    if (loading || catalogoCargando || catalogoError || !planCode) return;
     setError(null);
     setLoading(true);
     try {
@@ -114,7 +131,7 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
         <h1 className="mb-1 text-2xl font-bold text-slate-800">Crea tu cuenta</h1>
         <p className="mb-6 text-sm text-slate-500">Empieza gratis con un periodo de prueba.</p>
 
-        <div className="space-y-3">
+        <fieldset disabled={loading} className="space-y-3">
           <Campo label="Nombre del negocio">
             <input
               value={name}
@@ -123,6 +140,9 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
                 if (!slugTocado) setSlug(slugify(e.target.value));
               }}
               required
+              minLength={2}
+              maxLength={120}
+              autoComplete="organization"
               className="gx-input"
             />
           </Campo>
@@ -134,16 +154,19 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
                 setSlug(slugify(e.target.value));
               }}
               required
+              minLength={3}
+              maxLength={40}
               className="gx-input"
             />
           </Campo>
           <Campo label="Giro">
             <select
               value={vertical}
+              disabled={catalogoCargando || Boolean(catalogoError)}
               onChange={(e) => setVertical(e.target.value)}
               className="gx-input"
             >
-              {VERTICALES.filter((v) => !activas || activas.includes(v.value)).map((v) => (
+              {VERTICALES.filter((v) => activas?.includes(v.value)).map((v) => (
                 <option key={v.value} value={v.value}>
                   {v.label}
                 </option>
@@ -159,7 +182,12 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               >
                 {planes.map((p) => (
                   <option key={p.id} value={p.code}>
-                    {p.name} · ${(p.priceCents / 100).toFixed(0)} {p.currency}
+                    {p.name} ·{" "}
+                    {new Intl.NumberFormat("es-MX", {
+                      style: "currency",
+                      currency: p.currency,
+                    }).format(p.priceCents / 100)}{" "}
+                    {p.currency}
                   </option>
                 ))}
               </select>
@@ -170,12 +198,16 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
               value={adminName}
               onChange={(e) => setAdminName(e.target.value)}
               required
+              minLength={2}
+              maxLength={120}
+              autoComplete="name"
               className="gx-input"
             />
           </Campo>
           <Campo label="Correo">
             <input
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -185,20 +217,48 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
           <Campo label="Contraseña (mín. 8)">
             <input
               type="password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              maxLength={120}
               className="gx-input"
             />
           </Campo>
-        </div>
+        </fieldset>
 
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        {loading && (
+          <output className="mt-3 block text-sm text-slate-500">
+            Estamos preparando tu negocio. Mantén esta pantalla abierta hasta terminar.
+          </output>
+        )}
+        {catalogoCargando && (
+          <output className="mt-3 block text-sm text-slate-500">
+            Cargando opciones de registro…
+          </output>
+        )}
+        {catalogoError && (
+          <div className="mt-3 text-sm text-danger">
+            <p role="alert">{catalogoError}</p>
+            <button
+              type="button"
+              onClick={() => setCatalogoIntento((n) => n + 1)}
+              className="gx-btn-secondary mt-2"
+            >
+              Reintentar opciones
+            </button>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-danger">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
-          disabled={loading || !planCode}
+          disabled={loading || !planCode || catalogoCargando || Boolean(catalogoError)}
           className="mt-5 w-full rounded-lg bg-brand py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {loading ? "Creando…" : "Crear cuenta"}
@@ -211,15 +271,6 @@ export function Signup({ onVolver }: { onVolver: () => void }) {
           Ya tengo cuenta — iniciar sesión
         </button>
       </form>
-    </div>
-  );
-}
-
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
-      {children}
     </div>
   );
 }

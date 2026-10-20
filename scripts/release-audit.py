@@ -30,7 +30,7 @@ ALLOWED_COMMANDS = {
     "web-admin-unit", "web-pos-unit", "platform-workflows", "mobile-cliente-unit",
     "mobile-kiosko-unit", "mobile-negocio-unit", "storefront-controlled",
     "retail-e2e", "shopper-e2e", "web-builds",
-    "package-unit", "other-surface-unit", "automation-safety", "node-safety", "lint-scope", "shopper-order-e2e",
+    "package-unit", "other-surface-unit", "automation-safety", "node-safety", "lint-scope", "shopper-order-e2e", "owner-onboarding-e2e",
 }
 FIXED_COMMANDS = {
     "monorepo-typecheck": ["pnpm", "typecheck"],
@@ -47,6 +47,7 @@ FIXED_COMMANDS = {
     "retail-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--retail-e2e"],
     "shopper-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-e2e"],
     "shopper-order-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-order-e2e"],
+    "owner-onboarding-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--owner-onboarding-e2e"],
     "web-builds": ["pnpm", "--recursive", "--workspace-concurrency=1", "--filter", "@gaespos/web-tienda", "--filter", "@gaespos/web-admin", "--filter", "@gaespos/web-pos", "--filter", "@gaespos/web-superadmin", "build"],
 }
 
@@ -261,6 +262,10 @@ def diagnostic_paths(check_id: str, temporary: Path) -> list[Path]:
                       if directory.is_dir() and not directory.is_symlink()
                       for p in directory.iterdir()
                       if p.name in ('shard-1.log','shard-2.log','results.json'))
+    if check_id == 'owner-onboarding-e2e':
+        directory=temporary/'gaes-owner-onboarding'
+        if directory.is_dir() and not directory.is_symlink():
+            return sorted(p for p in directory.iterdir() if p.name in ('api.log','owner-web.log','pos-web.log','shopper-web.log','failure.txt'))
     if check_id == 'storefront-controlled':
         directory=temporary/'gaes-full-storefront-audit'
         if directory.is_dir() and not directory.is_symlink():

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type TourDef,
   deshabilitarTour,
@@ -17,6 +17,16 @@ interface Rect {
 
 const PAD = 6;
 
+function dentroViewport(r: DOMRect) {
+  return r.width > 0 && r.left >= 0 && r.right <= window.innerWidth + 1;
+}
+
+function mostrarMenu(visible: boolean) {
+  const menu = document.querySelector<HTMLButtonElement>('[aria-controls="menu-sistema"]');
+  if (!menu || (visible && !window.matchMedia("(max-width: 767px)").matches)) return;
+  if ((menu.getAttribute("aria-expanded") === "true") !== visible) menu.click();
+}
+
 /**
  * Recorrido guiado tipo coach-marks: navega a la sección, abre el diálogo si el
  * paso lo pide (`abrir`), resalta el elemento real (`anchor`, botón o campo) con
@@ -27,6 +37,7 @@ export function Tour() {
   const [tour, setTour] = useState<TourDef | null>(null);
   const [paso, setPaso] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
 
   const iniciar = useCallback((def: TourDef) => {
     setTour(def);
@@ -35,8 +46,18 @@ export function Tour() {
 
   const cerrar = useCallback(() => {
     if (tour) marcarTourVisto(tour.id);
+    dialog.current?.close();
+    mostrarMenu(false);
     setTour(null);
     setRect(null);
+  }, [tour]);
+
+  useEffect(() => {
+    if (!tour || !dialog.current) return;
+    const element = dialog.current;
+    if (!element.open) element.showModal();
+    element.querySelector<HTMLButtonElement>("[data-tour-close]")?.focus();
+    return () => element.close();
   }, [tour]);
 
   // Lanzamiento bajo demanda desde cualquier parte de la app.
@@ -78,6 +99,7 @@ export function Tour() {
     if (step.seccion) {
       window.dispatchEvent(new CustomEvent("gaes-nav", { detail: step.seccion }));
     }
+    mostrarMenu(Boolean(step.anchor?.startsWith("nav-")));
     if (!step.anchor) {
       setRect(null);
       return;
@@ -90,8 +112,10 @@ export function Tour() {
       if (el) {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
         const r = el.getBoundingClientRect();
-        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-        return;
+        if (dentroViewport(r)) {
+          setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+          return;
+        }
       }
       // Si el elemento aún no existe y el paso pide abrir un diálogo, lo abrimos.
       if (step.abrir && !clicado) {
@@ -129,11 +153,20 @@ export function Tour() {
   const esPrimero = paso === 0;
 
   return (
-    <div className="fixed inset-0 z-[60]" aria-label={tour.nombre}>
+    <dialog
+      ref={dialog}
+      onCancel={(event) => {
+        event.preventDefault();
+        cerrar();
+      }}
+      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-inherit backdrop:bg-transparent"
+      aria-label={tour.nombre}
+    >
       {/* Capa oscura que atrapa toques fuera del resaltado */}
       <button
         type="button"
         aria-label="Cerrar recorrido"
+        tabIndex={-1}
         onClick={cerrar}
         className="absolute inset-0 h-full w-full cursor-default bg-slate-900/60"
       />
@@ -180,6 +213,7 @@ export function Tour() {
             <button
               type="button"
               onClick={cerrar}
+              data-tour-close
               className="rounded-lg px-2 py-1 font-medium text-slate-400 text-sm hover:bg-slate-100 hover:text-slate-600"
             >
               Salir ✕
@@ -237,6 +271,6 @@ export function Tour() {
           </p>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

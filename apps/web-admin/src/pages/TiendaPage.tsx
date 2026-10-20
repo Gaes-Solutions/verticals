@@ -252,453 +252,463 @@ export function TiendaPage() {
         </div>
       )}
 
-      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-4 font-bold text-slate-800">Configuración</h2>
-        <div className="mb-3">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={config.activa ?? false}
-              disabled={sinProductos}
-              onChange={(e) => setConfig({ ...config, activa: e.target.checked })}
-            />
-            Tienda activa (visible al público)
-          </label>
-          {sinProductos && (
-            <p className="mt-1 text-warn text-xs">
-              Publica al menos un producto (más abajo) para poder activarla.
-            </p>
-          )}
-          {encendidaVacia && (
-            <p className="mt-1 text-warn text-xs">
-              Tu tienda está encendida, pero no se muestra al público hasta que publiques al menos
-              un producto (más abajo).
-            </p>
-          )}
-        </div>
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Nombre de la tienda</span>
-          <input
-            value={config.nombre ?? ""}
-            onChange={(e) => {
-              const nombre = e.target.value;
-              const sugerir = !subdominioGuardado && !subdominioTocado;
-              setConfig({
-                ...config,
-                nombre,
-                ...(sugerir ? { subdominio: sugerirSubdominio(nombre) } : {}),
-              });
-            }}
-            className="gx-input"
-          />
-        </label>
-        <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">Subdominio</span>
-          <input
-            data-tour="tienda-subdominio"
-            value={config.subdominio ?? ""}
-            onChange={(e) => {
-              setSubdominioTocado(true);
-              setConfig({ ...config, subdominio: e.target.value.toLowerCase() });
-            }}
-            placeholder="mi-tienda"
-            className="gx-input"
-          />
-          {apexTienda && config.subdominio && (
-            <span className="mt-1 block break-all text-slate-600 text-xs">
-              Tu dirección:{" "}
-              <b>
-                https://{config.subdominio}.{apexTienda}
-              </b>
-            </span>
-          )}
-          <span className="mt-1 block text-slate-400 text-xs">
-            {subdominioGuardado
-              ? "Si lo cambias, los QR que ya imprimiste dejan de funcionar."
-              : "Se llena solo con el nombre de la tienda; puedes cambiarlo."}
-          </span>
-        </label>
-        <label className="mb-1 block">
-          <span className="mb-1 block text-sm font-medium text-slate-700">
-            Dominio propio <span className="font-normal text-slate-400">(opcional)</span>
-          </span>
-          <input
-            value={config.dominioPropio ?? ""}
-            onChange={(e) =>
-              setConfig({ ...config, dominioPropio: e.target.value.trim().toLowerCase() || null })
-            }
-            placeholder="tienda.minegocio.com"
-            className="gx-input"
-          />
-          <span className="mt-1 block text-slate-400 text-xs">
-            Usa tu propio dominio en vez del subdominio. Tras guardar, sigue las instrucciones de
-            DNS para conectarlo y verificarlo.
-          </span>
-        </label>
-        <DominioPropio refreshKey={dominioKey} />
-        <button
-          type="button"
-          data-tour="tienda-guardar"
-          onClick={guardarConfig}
-          disabled={guardando || !configLoaded || !canConfigure}
-          className="gx-btn-primary mt-4 disabled:opacity-50"
-        >
-          {guardando ? "Guardando…" : "Guardar"}
-        </button>
-        {configLoaded && (
-          <QrTienda
-            url={config.urlPublica ?? null}
-            nombre={config.nombre ?? ""}
-            abierta={(config.activa ?? false) && productosPublicados !== 0}
-          />
-        )}
-      </section>
-
-      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-bold text-slate-800">Funciones de la tienda</h2>
-        <p className="mb-4 text-slate-500 text-sm">
-          Activa solo lo que quieras mostrar. Se aplican a tu tienda al guardar.
-        </p>
-
-        <div className="mb-4 rounded-lg border border-slate-200 p-3">
-          <label className="flex items-center gap-2 font-medium text-slate-800 text-sm">
-            <input
-              type="checkbox"
-              checked={config.msiHabilitado ?? false}
-              onChange={(e) => setConfig({ ...config, msiHabilitado: e.target.checked })}
-            />
-            Meses sin intereses (MSI)
-          </label>
-          {config.msiHabilitado && (
-            <div className="mt-3 pl-6">
-              <p className="mb-1 text-slate-500 text-xs">Plazos que ofreces:</p>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {[3, 6, 9, 12, 18, 24].map((m) => {
-                  const activos = config.msiMeses ?? [3, 6, 12];
-                  const on = activos.includes(m);
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() =>
-                        setConfig({
-                          ...config,
-                          msiMeses: on
-                            ? activos.filter((x) => x !== m)
-                            : [...activos, m].sort((a, b) => a - b),
-                        })
-                      }
-                      className={`rounded-lg border px-3 py-1 text-sm ${
-                        on
-                          ? "border-brand bg-brand text-white"
-                          : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      {m} meses
-                    </button>
-                  );
-                })}
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-slate-500 text-xs">
-                  Monto mínimo de compra para ofrecer MSI ($)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={Number(config.msiMontoMinimo ?? 0)}
-                  onChange={(e) => setConfig({ ...config, msiMontoMinimo: e.target.value })}
-                  className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-
-        <Toggle
-          label="Galería de fotos con zoom"
-          checked={config.galeriaZoom ?? true}
-          onChange={(v) => setConfig({ ...config, galeriaZoom: v })}
-        />
-        <Toggle
-          label="Mostrar calificación (estrellas) en el producto"
-          checked={config.mostrarRatingProducto ?? true}
-          onChange={(v) => setConfig({ ...config, mostrarRatingProducto: v })}
-        />
-        <Toggle
-          label="Campo de cupón en el checkout"
-          checked={config.cuponEnCheckout ?? true}
-          onChange={(v) => setConfig({ ...config, cuponEnCheckout: v })}
-        />
-        <Toggle
-          label='Botón "Comprar ahora" (compra rápida)'
-          checked={config.comprarAhora ?? true}
-          onChange={(v) => setConfig({ ...config, comprarAhora: v })}
-        />
-        <Toggle
-          label="Permitir que el cliente cancele su compra (antes de envío)"
-          checked={config.cancelacionCliente ?? true}
-          onChange={(v) => setConfig({ ...config, cancelacionCliente: v })}
-        />
-        <Toggle
-          label="Factura (CFDI) self-service desde la cuenta del cliente"
-          checked={config.facturacionSelfService ?? true}
-          onChange={(v) => setConfig({ ...config, facturacionSelfService: v })}
-        />
-        <Toggle
-          label="Preguntas y respuestas públicas en el producto"
-          checked={config.preguntasPublicas ?? true}
-          onChange={(v) => setConfig({ ...config, preguntasPublicas: v })}
-        />
-
-        <button
-          type="button"
-          onClick={guardarConfig}
-          disabled={guardando || !configLoaded || !canConfigure}
-          className="gx-btn-primary mt-4 disabled:opacity-50"
-        >
-          {guardando ? "Guardando…" : "Guardar funciones"}
-        </button>
-      </section>
-
-      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-bold text-slate-800">Pasarela de pago</h2>
-        <p className="mb-4 text-slate-500 text-sm">
-          Con qué procesador cobras los pagos en línea (checkout de la tienda y links de cobro).
-        </p>
-        <div className="mb-1 rounded-lg border border-slate-200 p-3">
-          <span className="mb-2 block font-medium text-slate-800 text-sm">Procesador de pago</span>
-          <select
-            value={config.pasarelaPagoProvider ?? ""}
-            onChange={(e) =>
-              setConfig({
-                ...config,
-                pasarelaPagoProvider: (e.target.value || null) as "conekta" | "stripe" | null,
-              })
-            }
-            className="gx-input sm:w-72"
-          >
-            <option value="">Sin cobro en línea (solo demo / mock)</option>
-            <option value="conekta">Conekta (tarjeta, OXXO, SPEI — México)</option>
-            <option value="stripe">Stripe (tarjeta internacional)</option>
-          </select>
-          {!config.pasarelaPagoProvider && (
-            <p className="mt-2 text-warn text-xs">
-              Sin procesador, los pagos no se cobran de verdad. Configura las llaves del proveedor
-              en el servidor antes de activarlo.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-bold text-slate-800">Envíos automáticos y notificaciones</h2>
-        <p className="mb-4 text-slate-500 text-sm">
-          Conecta una paquetería para generar guías solas y avisar a tus clientes por push.
-        </p>
-
-        {canConfigure && (
-          <ShippingServicePicker
-            value={config.envioVarianteId ?? null}
-            onChange={(envioVarianteId) => setConfig({ ...config, envioVarianteId })}
-            disabled={guardando || !configLoaded}
-          />
-        )}
-
-        <div className="mb-4 rounded-lg border border-slate-200 p-3">
-          <span className="mb-2 block font-medium text-slate-800 text-sm">
-            Tiempo estimado de entrega (días)
-          </span>
-          <p className="mb-3 text-slate-500 text-xs">
-            Se muestra en la tienda como "Entrega en X–Y días" cuando tienes tarifas de envío
-            activas. Si solo vendes con recogida en tienda, la tienda muestra "Recoge hoy".
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <label className="block">
-              <span className="mb-1 block text-slate-500 text-xs">Mínimo</span>
+      <fieldset disabled={!configLoaded || configLoading || guardando || !canConfigure}>
+        <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-4 font-bold text-slate-800">Configuración</h2>
+          <div className="mb-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
-                type="number"
-                min={0}
-                max={90}
-                value={Number(config.etaDiasEnvioMin ?? 3)}
-                onChange={(e) => setConfig({ ...config, etaDiasEnvioMin: e.target.value })}
-                className="gx-input w-24"
+                type="checkbox"
+                checked={config.activa ?? false}
+                disabled={sinProductos}
+                onChange={(e) => setConfig({ ...config, activa: e.target.checked })}
               />
+              Tienda activa (visible al público)
             </label>
-            <label className="block">
-              <span className="mb-1 block text-slate-500 text-xs">Máximo</span>
-              <input
-                type="number"
-                min={0}
-                max={90}
-                value={Number(config.etaDiasEnvioMax ?? 5)}
-                onChange={(e) => setConfig({ ...config, etaDiasEnvioMax: e.target.value })}
-                className="gx-input w-24"
-              />
-            </label>
+            {sinProductos && (
+              <p className="mt-1 text-warn text-xs">
+                Publica al menos un producto (más abajo) para poder activarla.
+              </p>
+            )}
+            {encendidaVacia && (
+              <p className="mt-1 text-warn text-xs">
+                Tu tienda está encendida, pero no se muestra al público hasta que publiques al menos
+                un producto (más abajo).
+              </p>
+            )}
           </div>
-        </div>
-
-        <div className="mb-4 rounded-lg border border-slate-200 p-3">
-          <span className="mb-2 block font-medium text-slate-800 text-sm">
-            Paquetería (agregador)
-          </span>
-          <select
-            value={config.paqueteriaProvider ?? ""}
-            onChange={(e) =>
-              setConfig({
-                ...config,
-                paqueteriaProvider: (e.target.value || null) as "skydropx" | "envia" | null,
-              })
-            }
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+          <label className="mb-3 block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">
+              Nombre de la tienda
+            </span>
+            <input
+              value={config.nombre ?? ""}
+              onChange={(e) => {
+                const nombre = e.target.value;
+                const sugerir = !subdominioGuardado && !subdominioTocado;
+                setConfig({
+                  ...config,
+                  nombre,
+                  ...(sugerir ? { subdominio: sugerirSubdominio(nombre) } : {}),
+                });
+              }}
+              className="gx-input"
+            />
+          </label>
+          <label className="mb-4 block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">Subdominio</span>
+            <input
+              data-tour="tienda-subdominio"
+              value={config.subdominio ?? ""}
+              onChange={(e) => {
+                setSubdominioTocado(true);
+                setConfig({ ...config, subdominio: e.target.value.toLowerCase() });
+              }}
+              placeholder="mi-tienda"
+              className="gx-input"
+            />
+            {apexTienda && config.subdominio && (
+              <span className="mt-1 block break-all text-slate-600 text-xs">
+                Tu dirección:{" "}
+                <b>
+                  https://{config.subdominio}.{apexTienda}
+                </b>
+              </span>
+            )}
+            <span className="mt-1 block text-slate-400 text-xs">
+              {subdominioGuardado
+                ? "Si lo cambias, los QR que ya imprimiste dejan de funcionar."
+                : "Se llena solo con el nombre de la tienda; puedes cambiarlo."}
+            </span>
+          </label>
+          <label className="mb-1 block">
+            <span className="mb-1 block text-sm font-medium text-slate-700">
+              Dominio propio <span className="font-normal text-slate-400">(opcional)</span>
+            </span>
+            <input
+              value={config.dominioPropio ?? ""}
+              onChange={(e) =>
+                setConfig({ ...config, dominioPropio: e.target.value.trim().toLowerCase() || null })
+              }
+              placeholder="tienda.minegocio.com"
+              className="gx-input"
+            />
+            <span className="mt-1 block text-slate-400 text-xs">
+              Usa tu propio dominio en vez del subdominio. Tras guardar, sigue las instrucciones de
+              DNS para conectarlo y verificarlo.
+            </span>
+          </label>
+          <DominioPropio refreshKey={dominioKey} />
+          <button
+            type="button"
+            data-tour="tienda-guardar"
+            onClick={guardarConfig}
+            disabled={guardando || !configLoaded || !canConfigure}
+            className="gx-btn-primary mt-4 disabled:opacity-50"
           >
-            <option value="">Sin conectar (alta manual de guías)</option>
-            <option value="skydropx">Skydropx</option>
-            <option value="envia">Envía.com</option>
-          </select>
-
-          {config.paqueteriaProvider && (
-            <div className="mt-3 space-y-2 pl-1">
-              <Toggle
-                label="Generar la guía automáticamente al confirmarse el pago"
-                checked={config.paqueteriaAutoGuia ?? false}
-                onChange={(v) => setConfig({ ...config, paqueteriaAutoGuia: v })}
-              />
-              <Toggle
-                label="Mostrar tarifas en vivo del proveedor (informativo)"
-                checked={config.tarifasEnVivo ?? false}
-                onChange={(v) => setConfig({ ...config, tarifasEnVivo: v })}
-              />
-              <label className="block">
-                <span className="mb-1 block text-slate-500 text-xs">
-                  Peso por paquete por defecto (kg)
-                </span>
-                <input
-                  type="number"
-                  min={0.1}
-                  step={0.1}
-                  value={Number(config.paqueteriaPesoDefaultKg ?? 1)}
-                  onChange={(e) =>
-                    setConfig({ ...config, paqueteriaPesoDefaultKg: e.target.value })
-                  }
-                  className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
+            {guardando ? "Guardando…" : "Guardar"}
+          </button>
+          {configLoaded && (
+            <QrTienda
+              url={config.urlPublica ?? null}
+              nombre={config.nombre ?? ""}
+              abierta={(config.activa ?? false) && productosPublicados !== 0}
+            />
           )}
-        </div>
+        </section>
 
-        <div className="rounded-lg border border-slate-200 p-3">
-          <Toggle
-            label="Notificaciones push a clientes (tienda instalable / PWA)"
-            checked={config.pushHabilitado ?? false}
-            onChange={(v) => setConfig({ ...config, pushHabilitado: v })}
-          />
-          {config.pushHabilitado && (
-            <div className="mt-2 pl-6">
-              <p className="mb-1 text-slate-500 text-xs">Avisar al cliente cuando:</p>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ["pago_confirmado", "Pago confirmado"],
-                    ["enviado", "Pedido enviado"],
-                    ["entregado", "Pedido entregado"],
-                  ] as const
-                ).map(([key, label]) => {
-                  const activos = config.pushEventos ?? ["pago_confirmado", "enviado", "entregado"];
-                  const on = activos.includes(key);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() =>
-                        setConfig({
-                          ...config,
-                          pushEventos: on ? activos.filter((x) => x !== key) : [...activos, key],
-                        })
-                      }
-                      className={`rounded-lg border px-3 py-1 text-sm ${
-                        on
-                          ? "border-brand bg-brand text-white"
-                          : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+        <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-bold text-slate-800">Funciones de la tienda</h2>
+          <p className="mb-4 text-slate-500 text-sm">
+            Activa solo lo que quieras mostrar. Se aplican a tu tienda al guardar.
+          </p>
+
+          <div className="mb-4 rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center gap-2 font-medium text-slate-800 text-sm">
+              <input
+                type="checkbox"
+                checked={config.msiHabilitado ?? false}
+                onChange={(e) => setConfig({ ...config, msiHabilitado: e.target.checked })}
+              />
+              Meses sin intereses (MSI)
+            </label>
+            {config.msiHabilitado && (
+              <div className="mt-3 pl-6">
+                <p className="mb-1 text-slate-500 text-xs">Plazos que ofreces:</p>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {[3, 6, 9, 12, 18, 24].map((m) => {
+                    const activos = config.msiMeses ?? [3, 6, 12];
+                    const on = activos.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() =>
+                          setConfig({
+                            ...config,
+                            msiMeses: on
+                              ? activos.filter((x) => x !== m)
+                              : [...activos, m].sort((a, b) => a - b),
+                          })
+                        }
+                        className={`rounded-lg border px-3 py-1 text-sm ${
+                          on
+                            ? "border-brand bg-brand text-white"
+                            : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {m} meses
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="block">
+                  <span className="mb-1 block text-slate-500 text-xs">
+                    Monto mínimo de compra para ofrecer MSI ($)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={Number(config.msiMontoMinimo ?? 0)}
+                    onChange={(e) => setConfig({ ...config, msiMontoMinimo: e.target.value })}
+                    className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <button
-          type="button"
-          onClick={guardarConfig}
-          disabled={guardando || !configLoaded || !canConfigure}
-          className="gx-btn-primary mt-4 disabled:opacity-50"
-        >
-          {guardando ? "Guardando…" : "Guardar envíos"}
-        </button>
-      </section>
+          <Toggle
+            label="Galería de fotos con zoom"
+            checked={config.galeriaZoom ?? true}
+            onChange={(v) => setConfig({ ...config, galeriaZoom: v })}
+          />
+          <Toggle
+            label="Mostrar calificación (estrellas) en el producto"
+            checked={config.mostrarRatingProducto ?? true}
+            onChange={(v) => setConfig({ ...config, mostrarRatingProducto: v })}
+          />
+          <Toggle
+            label="Campo de cupón en el checkout"
+            checked={config.cuponEnCheckout ?? true}
+            onChange={(v) => setConfig({ ...config, cuponEnCheckout: v })}
+          />
+          <Toggle
+            label='Botón "Comprar ahora" (compra rápida)'
+            checked={config.comprarAhora ?? true}
+            onChange={(v) => setConfig({ ...config, comprarAhora: v })}
+          />
+          <Toggle
+            label="Permitir que el cliente cancele su compra (antes de envío)"
+            checked={config.cancelacionCliente ?? true}
+            onChange={(v) => setConfig({ ...config, cancelacionCliente: v })}
+          />
+          <Toggle
+            label="Factura (CFDI) self-service desde la cuenta del cliente"
+            checked={config.facturacionSelfService ?? true}
+            onChange={(v) => setConfig({ ...config, facturacionSelfService: v })}
+          />
+          <Toggle
+            label="Preguntas y respuestas públicas en el producto"
+            checked={config.preguntasPublicas ?? true}
+            onChange={(v) => setConfig({ ...config, preguntasPublicas: v })}
+          />
 
-      <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-bold text-slate-800">Políticas de la tienda</h2>
-        <p className="mb-4 text-slate-500 text-sm">
-          Aparecen en el pie de página de tu tienda. Vienen con un texto base con los datos de tu
-          negocio: revísalo, ajústalo a cómo trabajas y guárdalo.
-        </p>
-        {(
-          [
-            ["envios", "Envíos"],
-            ["devoluciones", "Cambios y devoluciones"],
-            ["privacidad", "Aviso de privacidad"],
-            ["terminos", "Términos y condiciones"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="mb-3 block">
-            <span className="mb-1 block font-medium text-slate-700 text-sm">{label}</span>
-            <textarea
-              value={config.politicasHtml?.[key] ?? ""}
+          <button
+            type="button"
+            onClick={guardarConfig}
+            disabled={guardando || !configLoaded || !canConfigure}
+            className="gx-btn-primary mt-4 disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar funciones"}
+          </button>
+        </section>
+
+        <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-bold text-slate-800">Pasarela de pago</h2>
+          <p className="mb-4 text-slate-500 text-sm">
+            Con qué procesador cobras los pagos en línea (checkout de la tienda y links de cobro).
+          </p>
+          <div className="mb-1 rounded-lg border border-slate-200 p-3">
+            <span className="mb-2 block font-medium text-slate-800 text-sm">
+              Procesador de pago
+            </span>
+            <select
+              value={config.pasarelaPagoProvider ?? ""}
               onChange={(e) =>
                 setConfig({
                   ...config,
-                  politicasHtml: { ...(config.politicasHtml ?? {}), [key]: e.target.value },
+                  pasarelaPagoProvider: (e.target.value || null) as "conekta" | "stripe" | null,
                 })
               }
-              rows={config.politicasHtml?.[key] ? 8 : 3}
-              placeholder={config.politicasSugeridas?.[key] ?? ""}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="gx-input sm:w-72"
+            >
+              <option value="">Sin cobro en línea (solo demo / mock)</option>
+              <option value="conekta">Conekta (tarjeta, OXXO, SPEI — México)</option>
+              <option value="stripe">Stripe (tarjeta internacional)</option>
+            </select>
+            {!config.pasarelaPagoProvider && (
+              <p className="mt-2 text-warn text-xs">
+                Sin procesador, los pagos no se cobran de verdad. Configura las llaves del proveedor
+                en el servidor antes de activarlo.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-bold text-slate-800">Envíos automáticos y notificaciones</h2>
+          <p className="mb-4 text-slate-500 text-sm">
+            Conecta una paquetería para generar guías solas y avisar a tus clientes por push.
+          </p>
+
+          {canConfigure && (
+            <ShippingServicePicker
+              value={config.envioVarianteId ?? null}
+              onChange={(envioVarianteId) => setConfig({ ...config, envioVarianteId })}
+              disabled={guardando || !configLoaded}
             />
-            {config.politicasSugeridas?.[key] && !config.politicasHtml?.[key] && (
-              <button
-                type="button"
-                className="gx-btn-ghost mt-1 text-xs"
-                onClick={() =>
+          )}
+
+          <div className="mb-4 rounded-lg border border-slate-200 p-3">
+            <span className="mb-2 block font-medium text-slate-800 text-sm">
+              Tiempo estimado de entrega (días)
+            </span>
+            <p className="mb-3 text-slate-500 text-xs">
+              Se muestra en la tienda como "Entrega en X–Y días" cuando tienes tarifas de envío
+              activas. Si solo vendes con recogida en tienda, la tienda muestra "Recoge hoy".
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <label className="block">
+                <span className="mb-1 block text-slate-500 text-xs">Mínimo</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  value={Number(config.etaDiasEnvioMin ?? 3)}
+                  onChange={(e) => setConfig({ ...config, etaDiasEnvioMin: e.target.value })}
+                  className="gx-input w-24"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-slate-500 text-xs">Máximo</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  value={Number(config.etaDiasEnvioMax ?? 5)}
+                  onChange={(e) => setConfig({ ...config, etaDiasEnvioMax: e.target.value })}
+                  className="gx-input w-24"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-lg border border-slate-200 p-3">
+            <span className="mb-2 block font-medium text-slate-800 text-sm">
+              Paquetería (agregador)
+            </span>
+            <select
+              value={config.paqueteriaProvider ?? ""}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  paqueteriaProvider: (e.target.value || null) as "skydropx" | "envia" | null,
+                })
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:w-72"
+            >
+              <option value="">Sin conectar (alta manual de guías)</option>
+              <option value="skydropx">Skydropx</option>
+              <option value="envia">Envía.com</option>
+            </select>
+
+            {config.paqueteriaProvider && (
+              <div className="mt-3 space-y-2 pl-1">
+                <Toggle
+                  label="Generar la guía automáticamente al confirmarse el pago"
+                  checked={config.paqueteriaAutoGuia ?? false}
+                  onChange={(v) => setConfig({ ...config, paqueteriaAutoGuia: v })}
+                />
+                <Toggle
+                  label="Mostrar tarifas en vivo del proveedor (informativo)"
+                  checked={config.tarifasEnVivo ?? false}
+                  onChange={(v) => setConfig({ ...config, tarifasEnVivo: v })}
+                />
+                <label className="block">
+                  <span className="mb-1 block text-slate-500 text-xs">
+                    Peso por paquete por defecto (kg)
+                  </span>
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={Number(config.paqueteriaPesoDefaultKg ?? 1)}
+                    onChange={(e) =>
+                      setConfig({ ...config, paqueteriaPesoDefaultKg: e.target.value })
+                    }
+                    className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-3">
+            <Toggle
+              label="Notificaciones push a clientes (tienda instalable / PWA)"
+              checked={config.pushHabilitado ?? false}
+              onChange={(v) => setConfig({ ...config, pushHabilitado: v })}
+            />
+            {config.pushHabilitado && (
+              <div className="mt-2 pl-6">
+                <p className="mb-1 text-slate-500 text-xs">Avisar al cliente cuando:</p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["pago_confirmado", "Pago confirmado"],
+                      ["enviado", "Pedido enviado"],
+                      ["entregado", "Pedido entregado"],
+                    ] as const
+                  ).map(([key, label]) => {
+                    const activos = config.pushEventos ?? [
+                      "pago_confirmado",
+                      "enviado",
+                      "entregado",
+                    ];
+                    const on = activos.includes(key);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() =>
+                          setConfig({
+                            ...config,
+                            pushEventos: on ? activos.filter((x) => x !== key) : [...activos, key],
+                          })
+                        }
+                        className={`rounded-lg border px-3 py-1 text-sm ${
+                          on
+                            ? "border-brand bg-brand text-white"
+                            : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={guardarConfig}
+            disabled={guardando || !configLoaded || !canConfigure}
+            className="gx-btn-primary mt-4 disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar envíos"}
+          </button>
+        </section>
+
+        <section className="mb-8 rounded-xl bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-bold text-slate-800">Políticas de la tienda</h2>
+          <p className="mb-4 text-slate-500 text-sm">
+            Aparecen en el pie de página de tu tienda. Vienen con un texto base con los datos de tu
+            negocio: revísalo, ajústalo a cómo trabajas y guárdalo.
+          </p>
+          {(
+            [
+              ["envios", "Envíos"],
+              ["devoluciones", "Cambios y devoluciones"],
+              ["privacidad", "Aviso de privacidad"],
+              ["terminos", "Términos y condiciones"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="mb-3 block">
+              <span className="mb-1 block font-medium text-slate-700 text-sm">{label}</span>
+              <textarea
+                value={config.politicasHtml?.[key] ?? ""}
+                onChange={(e) =>
                   setConfig({
                     ...config,
-                    politicasHtml: {
-                      ...(config.politicasHtml ?? {}),
-                      [key]: config.politicasSugeridas?.[key] ?? "",
-                    },
+                    politicasHtml: { ...(config.politicasHtml ?? {}), [key]: e.target.value },
                   })
                 }
-              >
-                Usar este texto y editarlo
-              </button>
-            )}
-          </label>
-        ))}
-        <button
-          type="button"
-          onClick={guardarConfig}
-          disabled={guardando || !configLoaded || !canConfigure}
-          className="gx-btn-primary mt-2 disabled:opacity-50"
-        >
-          {guardando ? "Guardando…" : "Guardar políticas"}
-        </button>
-      </section>
+                rows={config.politicasHtml?.[key] ? 8 : 3}
+                placeholder={config.politicasSugeridas?.[key] ?? ""}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+              {config.politicasSugeridas?.[key] && !config.politicasHtml?.[key] && (
+                <button
+                  type="button"
+                  className="gx-btn-ghost mt-1 text-xs"
+                  onClick={() =>
+                    setConfig({
+                      ...config,
+                      politicasHtml: {
+                        ...(config.politicasHtml ?? {}),
+                        [key]: config.politicasSugeridas?.[key] ?? "",
+                      },
+                    })
+                  }
+                >
+                  Usar este texto y editarlo
+                </button>
+              )}
+            </label>
+          ))}
+          <button
+            type="button"
+            onClick={guardarConfig}
+            disabled={guardando || !configLoaded || !canConfigure}
+            className="gx-btn-primary mt-2 disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar políticas"}
+          </button>
+        </section>
+      </fieldset>
 
       {canPublish && (
         <section className="rounded-xl bg-white p-5 shadow-sm">

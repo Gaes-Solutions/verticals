@@ -572,8 +572,8 @@ export function PosScreen({ session, onLogout }: { session: Session; onLogout: (
           )}
           {cashResult?.status === "ready" && (
             <output className="my-3 block text-sm">
-              Venta {cashResult.result.folio} · ${cashResult.result.total} · Estado actual:{" "}
-              {cashResult.ventaEstado}
+              Venta {cashResult.result.folio} · {money(Number(cashResult.result.total))} · Estado
+              actual: {cashResult.ventaEstado}
             </output>
           )}
           {cashResult?.status === "not_found" && (

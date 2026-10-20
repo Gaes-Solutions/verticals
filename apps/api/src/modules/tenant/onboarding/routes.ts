@@ -9,14 +9,22 @@ const onboardingRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (req) => {
     req.requirePerm(PERMISSIONS.CONFIGURACION_LEER);
     const p = req.tenantPrisma;
-    const [productos, listas, clientesB2b, usuarios, comisiones, ventas] = await Promise.all([
-      p.producto.count(),
-      p.listaPrecio.count({ where: { isDefault: false } }),
-      p.clienteB2b.count(),
-      p.usuario.count(),
-      p.reglaComision.count(),
-      p.venta.count(),
-    ]);
+    const [productos, listas, clientesB2b, usuarios, comisiones, ventas, sucursal] =
+      await Promise.all([
+        p.producto.count({ where: { isActive: true, archivedAt: null } }),
+        p.listaPrecio.count({ where: { isDefault: false, isActive: true } }),
+        p.clienteB2b.count({ where: { isActive: true } }),
+        p.usuario.count({
+          where: { isActive: true, roles: { some: { rol: { isActive: true } } } },
+        }),
+        p.reglaComision.count({ where: { isActive: true } }),
+        p.venta.count({ where: { estado: "cobrada" } }),
+        p.sucursal.findFirst({
+          where: { isActive: true, archivedAt: null },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+          select: { nombre: true, direccion: true },
+        }),
+      ]);
 
     const tenant = await app.masterPrisma.tenant.findUnique({
       where: { slug: req.tenantSlug },
@@ -26,6 +34,7 @@ const onboardingRoutes: FastifyPluginAsync = async (app) => {
     return {
       vertical: tenant?.vertical ?? "otro",
       pasos: {
+        datosNegocio: Boolean(sucursal?.nombre.trim()) && direccionCompleta(sucursal?.direccion),
         productos: productos > 0,
         listaPrecios: listas > 0,
         clientesB2b: clientesB2b > 0,
@@ -37,5 +46,14 @@ const onboardingRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 };
+
+function direccionCompleta(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const direccion = value as Record<string, unknown>;
+  const texto = (key: string) => (typeof direccion[key] === "string" ? direccion[key].trim() : "");
+  return Boolean(
+    texto("calle") && (texto("municipio") || texto("ciudad")) && /^[0-9]{5}$/.test(texto("cp")),
+  );
+}
 
 export default onboardingRoutes;
