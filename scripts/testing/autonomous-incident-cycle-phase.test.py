@@ -49,12 +49,16 @@ class IncidentPhases(unittest.TestCase):
         return subprocess.run(args,cwd=cwd or self.root,env=env,capture_output=True,text=True,check=True)
     def executable(self,name,body):
         p=self.bin/name; p.write_text('#!/usr/bin/env python3\n'+body); p.chmod(0o755)
-    def codex(self,attack='',judge='APPROVED'):
+    def codex(self,attack='',judge='APPROVED',chatgpt=False,version=None):
+        expected_version=version or ('0.163.0' if chatgpt else '0.130.0')
         self.executable('codex',f'''import sys,os,json
 from pathlib import Path
-if '--version' in sys.argv: print('codex-cli 0.130.0'); sys.exit(0)
+if '--version' in sys.argv: print('codex-cli {expected_version}'); sys.exit(0)
 assert sys.argv[1:4]==['-a','never','exec']
 assert '--ephemeral' in sys.argv and '--sandbox' in sys.argv
+if {chatgpt!r}:
+    assert '--ignore-user-config' in sys.argv and 'forced_login_method=\"chatgpt\"' in sys.argv and 'model_provider=\"openai\"' in sys.argv
+    assert sys.argv[sys.argv.index('--model')+1]=='gpt-6.1-sol'
 assert not any(k in os.environ for k in ['GH_TOKEN','OPENAI_API_KEY','BREVO_API_KEY','RESEND_API_KEY','DATABASE_URL_MASTER'])
 if '--output-last-message' in sys.argv:
     assert sys.argv[sys.argv.index('--sandbox')+1]=='read-only'
@@ -65,6 +69,14 @@ else:
     p=Path({TARGET!r}); p.write_text(p.read_text()+'export const fixed = true;\\n')
     {attack if not attack.startswith('JUDGE:') else 'pass'}
 '''.replace('    JUDGE:','    '))
+    def subscription_auth(self):
+        self.env['CODEX_AUTH_MODE']='chatgpt'
+        tokens={name:'synthetic-oauth-'+name+'-never-upload' for name in ('access_token','refresh_token','id_token')}
+        (self.auth/'auth.json').write_text(json.dumps({'auth_mode':'chatgpt','OPENAI_API_KEY':None,'tokens':tokens}))
+        (self.auth/'auth.json').chmod(0o600)
+        self.codex(chatgpt=True)
+        return tokens
+
     def pnpm(self,attack):
         self.executable('pnpm',f'''import sys,os
 from pathlib import Path
@@ -169,6 +181,56 @@ if sys.argv[1:3]==['pr','create']:
     def test_main_target_and_auto_merge_are_blocked(self):
         self.phase('executor',False,{'BASE_BRANCH':'main'})
         self.phase('executor',False,{'AUTO_MERGE':'true'})
+    def test_subscription_mode_pins_cli_model_auth_and_ignores_user_config(self):
+        self.subscription_auth(); self.through()
+        self.assertTrue((self.art/'judgment.json').exists())
+
+    def test_subscription_mode_rejects_api_credentials_or_missing_oauth_fields(self):
+        self.env['CODEX_AUTH_MODE']='chatgpt'; self.codex(chatgpt=True)
+        for auth in [
+            {'auth_mode':'apikey','OPENAI_API_KEY':'synthetic-api-forbidden'},
+            {'auth_mode':'chatgpt','tokens':{'access_token':'synthetic-only-access'}},
+            {'auth_mode':'chatgpt','OPENAI_API_KEY':'synthetic-api-forbidden','tokens':{x:'synthetic-token' for x in ('access_token','refresh_token','id_token')}},
+        ]:
+            with self.subTest(auth_mode=auth['auth_mode']):
+                (self.auth/'auth.json').write_text(json.dumps(auth));self.phase('executor',False)
+                self.assertFalse((self.art/'metadata.json').exists())
+
+    def test_subscription_mode_requires_exact_0163_cli(self):
+        self.subscription_auth(); self.codex(chatgpt=True,version='0.130.0'); self.phase('executor',False)
+        self.codex(chatgpt=True,version='0.163.1'); self.phase('executor',False)
+
+    def test_each_original_oauth_token_is_scanned_even_when_auth_rotates(self):
+        for field in ('access_token','refresh_token','id_token'):
+            with self.subTest(field=field):
+                tokens=self.subscription_auth()
+                attack=f"auth=Path(os.environ['CODEX_HOME'])/'auth.json'; secret=json.loads(auth.read_text())['tokens'][{field!r}]; auth.write_text(json.dumps({{'auth_mode':'chatgpt','tokens':{{'access_token':'new-access','refresh_token':'new-refresh','id_token':'new-id'}}}})); p=Path({TARGET!r}); p.write_text(p.read_text()+secret)"
+                self.codex(attack,chatgpt=True); result,_=self.phase('executor',False)
+                self.assertNotIn(tokens[field],result.stdout+result.stderr)
+                self.assertFalse((self.art/'metadata.json').exists())
+
+    def test_rotated_new_oauth_token_is_also_scanned(self):
+        self.subscription_auth()
+        attack=f"auth=Path(os.environ['CODEX_HOME'])/'auth.json'; data=json.loads(auth.read_text()); data['tokens']['access_token']='synthetic-brand-new-oauth-secret'; auth.write_text(json.dumps(data)); p=Path({TARGET!r}); p.write_text(p.read_text()+data['tokens']['access_token'])"
+        self.codex(attack,chatgpt=True); self.phase('executor',False)
+        self.assertFalse((self.art/'metadata.json').exists())
+
+    def test_outer_docker_flag_cannot_disable_sandbox_without_kernel_attestation(self):
+        result,work=self.phase('executor',False,{'INCIDENT_OUTER_SANDBOX':'docker'})
+        self.assertNotIn('fixed = true',(work/TARGET).read_text())
+        self.assertFalse((self.art/'metadata.json').exists())
+
+    def test_local_publisher_records_urn_without_fabricating_a_github_actions_run(self):
+        self.through(); self.phase('publish',True,{'INCIDENT_LOCAL_RUN_ID':'12345678-1234-4234-8234-123456789abc','GITHUB_RUN_ID':''})
+        result=json.loads((self.art/'result.json').read_text())
+        self.assertEqual(result['runUrl'],'urn:gaes:incident-worker:12345678-1234-4234-8234-123456789abc')
+        self.assertNotIn('/actions/runs/',result['runUrl'])
+
+    def test_invalid_local_uuid_blocks_publisher_before_any_external_side_effect(self):
+        self.through(); self.phase('publish',False,{'INCIDENT_LOCAL_RUN_ID':'not-a-uuid'})
+        self.assertFalse((self.art/'result.json').exists())
+        self.assertFalse((self.root/'gh.log').exists())
+
     def test_wrong_codex_version_and_private_auth_permissions(self):
         self.executable('codex',"print('codex-cli 0.131.0')")
         self.phase('executor',False)

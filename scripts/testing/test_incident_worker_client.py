@@ -23,6 +23,8 @@ client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
 TOKEN = 'synthetic-worker-credential-never-real-00000000'
 IDENTITY = {'GITHUB_REPOSITORY': client.REPO, 'GITHUB_RUN_ID': '123456789'}
+LOCAL_RUN_ID = '12345678-1234-4567-89ab-123456789abc'
+LOCAL_IDENTITY = {'GITHUB_REPOSITORY': client.REPO, 'INCIDENT_LOCAL_RUN_ID': LOCAL_RUN_ID}
 
 
 def worker():
@@ -278,6 +280,54 @@ class ResultIdentityTests(unittest.TestCase):
                 with self.subTest(type=type(result)), self.assertRaises(ValueError):
                     client.report_body(value, result)
 
+    def test_local_result_and_failed_report_use_a_uuid_urn_without_fabricated_github_run(self):
+        value = worker()
+        result = {**result_for(value), 'runUrl': f'urn:gaes:incident-worker:{LOCAL_RUN_ID}'}
+        with patch.dict(os.environ, LOCAL_IDENTITY, clear=True):
+            self.assertNotIn('GITHUB_RUN_ID', os.environ)
+            self.assertEqual(client.run_url(), result['runUrl'])
+            self.assertEqual(client.report_body(value, result), result)
+            failed = client.report_body(value)
+            self.assertEqual(failed['runUrl'], result['runUrl'])
+            self.assertEqual(failed['outcome'], 'failed')
+            self.assertEqual(failed['claimId'], value['claimId'])
+            self.assertNotIn('prUrl', failed)
+
+    def test_local_identity_has_priority_even_when_github_run_is_present(self):
+        with patch.dict(os.environ, {**IDENTITY, **LOCAL_IDENTITY}, clear=True):
+            self.assertEqual(client.run_url(), f'urn:gaes:incident-worker:{LOCAL_RUN_ID}')
+
+    def test_invalid_local_identity_fails_closed_instead_of_using_valid_github_run(self):
+        invalid = ['', 'not-a-uuid', LOCAL_RUN_ID.upper(),
+                   '12345678-1234-1567-89ab-123456789abc',
+                   '12345678-1234-4567-79ab-123456789abc',
+                   '00000000-0000-0000-0000-000000000000',
+                   'https://localhost/run', 'javascript:alert(1)',
+                   LOCAL_RUN_ID + '?token=secret', LOCAL_RUN_ID + '\n']
+        for local_id in invalid:
+            with self.subTest(local_id=local_id), patch.dict(os.environ, {**IDENTITY, 'INCIDENT_LOCAL_RUN_ID': local_id}, clear=True):
+                with self.assertRaises(ValueError):
+                    client.run_url()
+                with self.assertRaises(ValueError):
+                    client.report_body(worker())
+
+    def test_local_run_still_requires_the_fixed_repository(self):
+        for repo in ['', 'Other/repo', client.REPO + '.evil', client.REPO.lower()]:
+            with self.subTest(repo=repo), patch.dict(os.environ, {**LOCAL_IDENTITY, 'GITHUB_REPOSITORY': repo}, clear=True):
+                with self.assertRaises(ValueError):
+                    client.run_url()
+
+    def test_local_result_rejects_other_urns_github_runs_and_arbitrary_url_schemes(self):
+        value = worker()
+        bad_urls = [f'urn:gaes:incident-worker:{LOCAL_RUN_ID[:-1]}d',
+                    'urn:gaes:incident-worker:not-a-uuid',
+                    result_for(value)['runUrl'], 'https://evil.example/run',
+                    'http://127.0.0.1/run', 'javascript:alert(1)']
+        with patch.dict(os.environ, LOCAL_IDENTITY, clear=True):
+            for url in bad_urls:
+                with self.subTest(url=url), self.assertRaises(ValueError):
+                    client.report_body(value, {**result_for(value), 'runUrl': url})
+
     def test_untrusted_github_repository_and_non_numeric_run_id_are_refused(self):
         for identity in [{}, {**IDENTITY, 'GITHUB_REPOSITORY': 'evil/repo'},
                          {**IDENTITY, 'GITHUB_RUN_ID': '../1'}, {**IDENTITY, 'GITHUB_RUN_ID': '1\n2'},
@@ -320,6 +370,20 @@ class CommandBoundaryTests(unittest.TestCase):
                     client.main()
                 self.assertFalse(path.exists())
                 self.assertFalse(output.exists())
+
+    def test_local_cli_report_keeps_the_eight_field_result_bound_to_its_run(self):
+        with tempfile.TemporaryDirectory(prefix='incident-local-command-test-') as temp:
+            path, result_path = Path(temp) / 'worker.json', Path(temp) / 'result.json'
+            value = worker()
+            result = {**result_for(value), 'runUrl': f'urn:gaes:incident-worker:{LOCAL_RUN_ID}'}
+            client.write_private(path, value)
+            client.write_private(result_path, result)
+            with patch.dict(os.environ, LOCAL_IDENTITY, clear=True), \
+                 patch.object(sys, 'argv', [str(SOURCE), 'report', '--worker', str(path), '--result', str(result_path)]), \
+                 patch.object(client, 'request', return_value={'accepted': True, 'idempotent': False}) as request, redirect_stdout(io.StringIO()):
+                client.main()
+            request.assert_called_once_with('result', result)
+            self.assertEqual(len(request.call_args.args[1]), 8)
 
     def test_report_validates_ack_and_never_accepts_truthy_values_or_extra_fields(self):
         for ack in [{'accepted': True, 'idempotent': False}, {'accepted': True, 'idempotent': True},

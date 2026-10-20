@@ -97,3 +97,7 @@ recuperación de reserva abandonada, proveedor que rechaza y revisión IA invali
 por una decisión humana. Los proveedores son dobles locales sin comunicación externa.
 
 Resultados de esta ronda: [auditoría del 19 de octubre](testing/incident-automation-audit-2026-10-19.md).
+
+## Ejecución local sin API key
+
+La opción elegida por el usuario es el [trabajador local con su suscripción de ChatGPT](incident-local-subscription.md). El workflow remoto con clave API permanece deshabilitado. El ejecutor local conserva reservas, revisión independiente y PR borrador a staging.

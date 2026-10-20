@@ -7,6 +7,7 @@ import {
   type IncidentWorkerHandoff,
   type IncidentWorkerResult,
   claimIncidentWork,
+  incidentWorkerResultSchema,
   recordIncidentWorkResult,
 } from "../src/modules/internal/incident-worker-service.js";
 import { notifyIncident, recordIncident, reviewIncident } from "../src/observability/incidents.js";
@@ -317,6 +318,39 @@ describe("incident worker durable queue on real PostgreSQL", () => {
         where: { incidentId: id, kind: "agent_worker_result" },
       }),
     ).toBe(2);
+  });
+
+  it("persists an idempotent local worker result with an explicit UUIDv4 URN", async () => {
+    const now = new Date();
+    const id = await approveWorkerIncident(now);
+    const claim = await claimIncidentWork(masterPrisma, now);
+    if (!claim) throw new Error("Expected a claimed synthetic incident");
+    expect(claim.incidentId).toBe(id);
+    const result = incidentWorkerResultSchema.parse({
+      ...workerResult(claim, "pr_created"),
+      runUrl: `urn:gaes:incident-worker:${randomUUID()}`,
+    });
+    expect(await recordIncidentWorkResult(masterPrisma, result, now)).toEqual({
+      accepted: true,
+      idempotent: false,
+    });
+    expect(await recordIncidentWorkResult(masterPrisma, result, now)).toEqual({
+      accepted: true,
+      idempotent: true,
+    });
+    const persisted = await masterPrisma.systemIncident.findUniqueOrThrow({
+      where: { id },
+      include: { events: true },
+    });
+    expect(persisted.auditDecision).toBe("approved_pr");
+    expect(persisted.resolvedAt).toBeNull();
+    const events = persisted.events.filter((event) => event.kind === "agent_worker_result");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload).toMatchObject({
+      result: { runUrl: result.runUrl },
+      applied: false,
+      requiresReview: true,
+    });
   });
 
   it("a created PR remains audited and explicitly unimplemented", async () => {

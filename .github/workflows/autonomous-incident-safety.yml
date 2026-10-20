@@ -6,7 +6,11 @@ on:
     paths:
       - .github/workflows/autonomous-incident-*.yml
       - scripts/autonomous-incident-*.sh
-      - scripts/incident-worker-client.py
+      - scripts/incident-*.py
+      - scripts/codex-subscription-preflight.py
+      - scripts/install-incident-local-service.py
+      - scripts/setup-incident-local.py
+      - scripts/local-worker/**
       - scripts/testing/*incident*py
       - apps/api/src/modules/internal/**
       - apps/api/test/incident-worker*
@@ -15,7 +19,11 @@ on:
     paths:
       - .github/workflows/autonomous-incident-*.yml
       - scripts/autonomous-incident-*.sh
-      - scripts/incident-worker-client.py
+      - scripts/incident-*.py
+      - scripts/codex-subscription-preflight.py
+      - scripts/install-incident-local-service.py
+      - scripts/setup-incident-local.py
+      - scripts/local-worker/**
       - scripts/testing/*incident*py
       - apps/api/src/modules/internal/**
       - apps/api/test/incident-worker*
@@ -53,6 +61,9 @@ jobs:
           bash -n scripts/autonomous-incident-cycle-phase.sh
           python3 scripts/testing/test_incident_worker_client.py
           python3 scripts/testing/autonomous-incident-cycle-phase.test.py
+          python3 scripts/testing/test_codex_subscription_preflight.py
+          python3 scripts/testing/test_incident_local_service.py
+          python3 scripts/testing/test_incident_local_worker.py
       - name: Install pristine dependencies and generate clients
         run: |
           pnpm install --frozen-lockfile

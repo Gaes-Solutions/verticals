@@ -82,3 +82,7 @@ El workflow `autonomous-incident-safety.yml` repite las pruebas sintéticas sin 
 Evidencia local de persistencia: `/tmp/gaes-api-isolated-R2bzHy/results.json`.
 La base temporal fue eliminada. Las pruebas no habilitaron el cron ni consumieron incidentes del negocio.
 El puente HTTP se habilita mediante su token; `AGENT_RUNNER_ENABLED` continúa siendo la protección del comando CLI antiguo, no del workflow nuevo.
+
+## Actualización: preferencia de no usar API de pago
+
+El usuario eligió usar su suscripción de ChatGPT en esta PC. La ruta preferida pasa a ser el [trabajador local](../incident-local-subscription.md); no requiere publicar el workflow remoto en `main` ni configurar `OPENAI_API_KEY`. El token del puente se conserva para autenticar exclusivamente la entrega y los resultados en staging. La variable del trabajador remoto se mantiene en `false`.

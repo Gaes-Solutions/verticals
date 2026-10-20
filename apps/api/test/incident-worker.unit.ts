@@ -499,11 +499,50 @@ describe("scoped worker results", () => {
       expect(db.events().filter((item) => item.kind === "agent_worker_result")).toHaveLength(0);
     },
   );
+  it.each(["pr_created", "failed", "blocked"] as const)(
+    "accepts a bound local UUIDv4 run for %s without pretending it is a GitHub run",
+    async (outcome) => {
+      const { db, handoff } = await claimed();
+      const local = {
+        ...resultFor(handoff, outcome),
+        runUrl: "urn:gaes:incident-worker:12345678-1234-4567-89ab-123456789abc",
+      };
+      const parsed = incidentWorkerResultSchema.parse(local);
+      expect(await recordIncidentWorkResult(db.master, parsed, NOW)).toMatchObject({
+        accepted: true,
+      });
+      expect(db.events().at(-1)?.payload).toMatchObject({ result: { runUrl: local.runUrl } });
+      expect(await recordIncidentWorkResult(db.master, parsed, NOW)).toMatchObject({
+        idempotent: true,
+      });
+    },
+  );
+
+  it.each([
+    "urn:gaes:incident-worker:12345678-1234-1567-89ab-123456789abc",
+    "urn:gaes:incident-worker:12345678-1234-4567-79ab-123456789abc",
+    "urn:gaes:incident-worker:12345678-1234-4567-89AB-123456789ABC",
+    "urn:gaes:incident-worker:12345678-1234-4567-89ab-123456789abc?token=secret",
+    "urn:other:incident-worker:12345678-1234-4567-89ab-123456789abc",
+    "urn:gaes:incident-worker:not-a-uuid",
+    "https://localhost:1234/run",
+    "http://github.com/Gaes-Solutions/verticals/actions/runs/123",
+    "javascript:alert(1)",
+    "urn:gaes:incident-worker:12345678-1234-4567-89ab-123456789abc\n",
+    "https://github.com/Gaes-Solutions/verticals/actions/runs/123\r\n",
+  ])("rejects untrusted local execution identifiers: %s", async (runUrl) => {
+    const { handoff } = await claimed();
+    expect(incidentWorkerResultSchema.safeParse({ ...resultFor(handoff), runUrl }).success).toBe(
+      false,
+    );
+  });
+
   it.each([
     { runUrl: "https://github.com/other/repo/actions/runs/123" },
     { runUrl: "https://github.com/Gaes-Solutions/verticals/actions/runs/123?token=secret" },
     { runUrl: "https://github.com.evil.test/Gaes-Solutions/verticals/actions/runs/123" },
     { prUrl: "https://github.com/Gaes-Solutions/other/pull/123" },
+    { prUrl: "https://github.com/Gaes-Solutions/verticals/pull/123\n" },
     { baseSha: "a".repeat(39) },
     { patchSha: "b".repeat(40) },
     { details: "synthetic-secret" },

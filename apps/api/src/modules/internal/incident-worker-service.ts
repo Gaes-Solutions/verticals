@@ -37,17 +37,27 @@ export interface IncidentWorkerHandoff extends IncidentWorkerPayload {
 
 const sha40 = z.string().regex(/^[a-f0-9]{40}$/);
 const sha64 = z.string().regex(/^[a-f0-9]{64}$/);
+const runUrl = z
+  .union([
+    z.string().regex(/^https:\/\/github\.com\/Gaes-Solutions\/verticals\/actions\/runs\/[1-9]\d*$/),
+    z
+      .string()
+      .regex(
+        /^urn:gaes:incident-worker:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
+  ])
+  // JavaScript's $ also matches before a trailing line break; do not normalize callback identities.
+  .refine((value) => value === value.trim());
 const resultCommon = z.object({
   incidentId: z.string().min(1).max(100),
   claimId: z.string().uuid(),
   payloadDigest: sha64,
-  runUrl: z
-    .string()
-    .regex(/^https:\/\/github\.com\/Gaes-Solutions\/verticals\/actions\/runs\/[1-9]\d*$/),
+  runUrl,
 });
 const prUrl = z
   .string()
-  .regex(/^https:\/\/github\.com\/Gaes-Solutions\/verticals\/pull\/[1-9]\d*$/);
+  .regex(/^https:\/\/github\.com\/Gaes-Solutions\/verticals\/pull\/[1-9]\d*$/)
+  .refine((value) => value === value.trim());
 export const incidentWorkerResultSchema = z.discriminatedUnion("outcome", [
   resultCommon
     .extend({ outcome: z.literal("pr_created"), prUrl, baseSha: sha40, patchSha: sha64 })

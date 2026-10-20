@@ -109,12 +109,24 @@ def request(endpoint, body):
         return decode(response.read(65537))
 
 
-def report_body(worker, result=None):
+def run_url():
+    if os.environ.get('GITHUB_REPOSITORY') != REPO:
+        raise ValueError('untrusted repository identity')
+    if 'INCIDENT_LOCAL_RUN_ID' in os.environ:
+        local_id = os.environ['INCIDENT_LOCAL_RUN_ID']
+        if not matches(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', local_id):
+            raise ValueError('untrusted local run identity')
+        return f'urn:gaes:incident-worker:{local_id}'
     run_id = os.environ.get('GITHUB_RUN_ID', '')
-    if os.environ.get('GITHUB_REPOSITORY') != REPO or not matches(r'[1-9][0-9]*', run_id):
+    if not matches(r'[1-9][0-9]*', run_id):
         raise ValueError('untrusted run identity')
+    return f'https://github.com/{REPO}/actions/runs/{run_id}'
+
+
+def report_body(worker, result=None):
+    identity_url = run_url()
     body = {k: worker[k] for k in ('incidentId', 'claimId', 'payloadDigest')}
-    body.update(outcome='failed', runUrl=f'https://github.com/{REPO}/actions/runs/{run_id}')
+    body.update(outcome='failed', runUrl=identity_url)
     if result is None:
         return body
     expected = {'incidentId', 'claimId', 'payloadDigest', 'outcome', 'runUrl', 'prUrl', 'baseSha', 'patchSha'}
