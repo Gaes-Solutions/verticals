@@ -195,9 +195,8 @@ class Worker:
     def once(self):
         pending=self.load_helper('incident-pending-results')
         delivery=pending.replay_pending(self.state,self.scripts/'incident-worker-client.py',self.credentials/'incident-token')
-        if delivery['pending'] and not delivery['blocked']:
-            checkpoint(self.state,'report_pending',reason='publication_result_pending')
-            return
+        # Delivery retries block new claims below, but must never starve the
+        # independent deterministic audit when the callback server is down.
         # Recover only resources belonging to this singleton after an abrupt stop.
         for kind in ('container', 'network'):
             ids=execute(['docker', kind, 'ls', '-q', '--filter', 'label=gaes.incident.local=true'],timeout=15).decode().split()

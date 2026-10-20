@@ -8,7 +8,8 @@ import subprocess
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+import uuid
+from unittest.mock import Mock, patch
 
 SCRIPTS=Path(__file__).resolve().parents[1]
 def load(name,file):
@@ -73,6 +74,21 @@ class LocalWorker(unittest.TestCase):
             self.w.once()
         quota.assert_not_called();transport.assert_not_called()
         self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'report_pending')
+
+    def test_pending_publication_retry_never_starves_due_audit_or_starts_models(self):
+        for blocked in (False, True):
+            for outcome in ('passed', 'failed'):
+                with self.subTest(blocked=blocked, outcome=outcome):
+                    self.pending.replay_pending=lambda *a:{'pending':1,'delivered':0,'blocked':blocked}
+                    audit=Mock(return_value={'overall':outcome})
+                    self.audit.run_audit=audit
+                    with patch.object(worker,'execute',return_value=b''),patch.object(self.w,'clone',return_value=(self.root,'a'*40)),patch.object(self.w,'quota') as quota,patch.object(self.w,'transport') as transport,patch.object(self.w,'phase') as phase:
+                        self.w.once()
+                    audit.assert_called_once_with(self.w,self.root,'a'*40)
+                    quota.assert_not_called();transport.assert_not_called();phase.assert_not_called()
+                    self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'audit_complete' if outcome=='passed' else 'audit_attention_required')
+                    # A different cycle always owns its own artifact directory.
+                    self.w.run_id=str(uuid.uuid4())
 
     def test_published_pr_is_saved_before_ack_and_ack_failure_never_reports_failed(self):
         events=[]
