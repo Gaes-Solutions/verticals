@@ -30,7 +30,7 @@ ALLOWED_COMMANDS = {
     "web-admin-unit", "web-pos-unit", "platform-workflows", "mobile-cliente-unit",
     "mobile-kiosko-unit", "mobile-negocio-unit", "storefront-controlled",
     "retail-e2e", "shopper-e2e", "web-builds",
-    "package-unit", "other-surface-unit", "automation-safety", "node-safety", "lint-scope",
+    "package-unit", "other-surface-unit", "automation-safety", "node-safety", "lint-scope", "shopper-order-e2e",
 }
 FIXED_COMMANDS = {
     "monorepo-typecheck": ["pnpm", "typecheck"],
@@ -46,6 +46,7 @@ FIXED_COMMANDS = {
     "storefront-controlled": ["node", "scripts/testing/run-storefront-browser-regressions.cjs"],
     "retail-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--retail-e2e"],
     "shopper-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-e2e"],
+    "shopper-order-e2e": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-order-e2e"],
     "web-builds": ["pnpm", "--recursive", "--workspace-concurrency=1", "--filter", "@gaespos/web-tienda", "--filter", "@gaespos/web-admin", "--filter", "@gaespos/web-pos", "--filter", "@gaespos/web-superadmin", "build"],
 }
 
@@ -85,7 +86,7 @@ result=unittest.TextTestRunner(verbosity=2).run(suite)
 sys.exit(0 if result.wasSuccessful() and not result.skipped else 1)
 """ % AUTOMATION_TESTS
 FIXED_COMMANDS["automation-safety"] = ["python3", "-c", AUTOMATION_PROGRAM]
-FIXED_COMMANDS["node-safety"] = ["node", "--test", "scripts/testing/run-api-isolated.test.cjs", "scripts/testing/publish-staging-apks.test.cjs"]
+FIXED_COMMANDS["node-safety"] = ["node", "--test", "scripts/testing/run-api-isolated.test.cjs", "scripts/testing/publish-staging-apks.test.cjs", "scripts/testing/run-platform-workflows.test.cjs"]
 FIXED_COMMANDS["lint-scope"] = ["pnpm", "exec", "biome", "check", "apps/api/src/observability", "apps/api/src/jobs/incident-auditor-scheduler.ts", "apps/api/src/modules/admin/incidents-routes.ts", "apps/api/src/modules/internal", "apps/api/src/scripts/run-approved-incident.ts", "apps/api/test/incidents-persistence.test.ts", "apps/api/test/run-approved-incident.unit.ts", "apps/api/test/incidents.unit.ts", "apps/api/test/log-privacy.unit.ts", "apps/api/test/incidents-admin.unit.ts", "apps/api/test/incidents-response.unit.ts", "apps/api/test/incident-worker.unit.ts", "apps/web-tienda", "--max-diagnostics=50"]
 
 

@@ -2,11 +2,65 @@
  * Blocks browser mutations. Does not submit checkout or send messages. */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const http = require("node:http");
+const path = require("node:path");
 const { chromium, expect } = require("@playwright/test");
-const base = process.env.STOREFRONT_TEST_URL || "https://web-tienda-staging.up.railway.app";
-assert(
-  ["localhost", "127.0.0.1", "web-tienda-staging.up.railway.app"].includes(new URL(base).hostname),
-);
+async function localStorefront() {
+  const app = path.join(process.cwd(), "apps/web-tienda");
+  const esbuild = require(
+    require.resolve("esbuild", { paths: [app, path.join(process.cwd(), "node_modules/vite")] }),
+  );
+  const bundle = await esbuild.build({
+    absWorkingDir: app,
+    stdin: {
+      resolveDir: app,
+      loader: "tsx",
+      contents: `import {createRoot} from 'react-dom/client';import Seguimiento from './src/app/seguimiento/page';import Gracias from './src/app/gracias/page';createRoot(document.getElementById('root')).render(location.pathname==='/gracias'?<Gracias/>:<Seguimiento/>);`,
+    },
+    bundle: true,
+    write: false,
+    jsx: "automatic",
+    define: { "process.env.NODE_ENV": '"production"' },
+    plugins: [
+      {
+        name: "controlled-navigation",
+        setup(build) {
+          build.onResolve({ filter: /^next\/(link|navigation)$/ }, (args) => ({
+            path: args.path,
+            namespace: "qa-next",
+          }));
+          build.onLoad({ filter: /.*/, namespace: "qa-next" }, (args) => ({
+            loader: "tsx",
+            resolveDir: app,
+            contents:
+              args.path === "next/link"
+                ? "export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}"
+                : "const params=new URLSearchParams(location.search);const router={replace:(url)=>location.replace(url)};export function useSearchParams(){return params}export function useRouter(){return router}",
+          }));
+        },
+      },
+    ],
+  });
+  const server = http.createServer((req, res) => {
+    if (req.url === "/bundle.js") {
+      res.setHeader("content-type", "application/javascript");
+      return res.end(bundle.outputFiles[0].contents);
+    }
+    if (req.url === "/styles.css") {
+      res.setHeader("content-type", "text/css");
+      return res.end(fs.readFileSync("/tmp/gaes-audit-storefront.css"));
+    }
+    if (req.url.startsWith("/api/")) {
+      res.statusCode = 500;
+      return res.end("Unmocked synthetic API request");
+    }
+    res.end(
+      '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><body><main id="root" style="padding:16px"></main><script src="/bundle.js"></script></body></html>',
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return server;
+}
 const fixture = {
   folioPublico: "QA-1",
   statusPedido: "recibido",
@@ -16,11 +70,52 @@ const fixture = {
   guiaTracking: null,
   eventos: [],
 };
+async function respondTracking(r, mode) {
+  if (r.request().method() !== "GET") return r.abort();
+  if (new URL(r.request().url()).pathname !== "/api/seguimiento") return r.continue();
+  mode.calls++;
+  if (mode.kind === "network") return r.abort();
+  const fixedResponses = {
+    notfound: { status: 404, json: { message: "Pedido no encontrado" } },
+    unavailable: { status: 503, json: { message: "Servicio temporalmente no disponible" } },
+    invalid: { json: {} },
+  };
+  if (fixedResponses[mode.kind]) return r.fulfill(fixedResponses[mode.kind]);
+  if (mode.kind === "timeout") {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return r.fulfill({ json: mode.data }).catch(() => {});
+  }
+  if (mode.kind === "delayed")
+    return new Promise((resolve) =>
+      mode.pending.push(async () => {
+        await r.fulfill({ json: mode.data }).catch(() => {});
+        resolve();
+      }),
+    );
+  return r.fulfill({ json: mode.data });
+}
 (async () => {
-  const browser = await chromium.launch();
+  const published = process.env.STOREFRONT_TEST_URL;
+  if (published && published !== "https://web-tienda-staging.up.railway.app")
+    throw Error("Staging only");
+  const server = published ? null : await localStorefront();
+  const base = published || `http://127.0.0.1:${server.address().port}`;
+  let browser;
+  try {
+    browser = await chromium.launch();
+  } catch (error) {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    throw error;
+  }
   let failed = 0;
   async function test(name, run) {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      serviceWorkers: "block",
+    });
+    await context.route("**/*", (route) =>
+      new URL(route.request().url()).origin === base ? route.continue() : route.abort(),
+    );
     try {
       await context.addInitScript(() => {
         const timeout = AbortSignal.timeout.bind(AbortSignal);
@@ -31,32 +126,7 @@ const fixture = {
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       const mode = { kind: "valid", data: fixture, calls: 0, pending: [] };
-      await page.route("**/api/**", async (r) => {
-        if (r.request().method() !== "GET") return r.abort();
-        if (new URL(r.request().url()).pathname !== "/api/seguimiento") return r.continue();
-        mode.calls++;
-        if (mode.kind === "network") return r.abort();
-        if (mode.kind === "notfound")
-          return r.fulfill({ status: 404, json: { message: "Pedido no encontrado" } });
-        if (mode.kind === "unavailable")
-          return r.fulfill({
-            status: 503,
-            json: { message: "Servicio temporalmente no disponible" },
-          });
-        if (mode.kind === "invalid") return r.fulfill({ json: {} });
-        if (mode.kind === "timeout") {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          return r.fulfill({ json: mode.data }).catch(() => {});
-        }
-        if (mode.kind === "delayed")
-          return new Promise((resolve) =>
-            mode.pending.push(async () => {
-              await r.fulfill({ json: mode.data }).catch(() => {});
-              resolve();
-            }),
-          );
-        return r.fulfill({ json: mode.data });
-      });
+      await page.route("**/api/**", (route) => respondTracking(route, mode));
       await run({ page, mode });
       assert.deepEqual(errors, []);
       console.log(`PASS ${name}`);
@@ -248,6 +318,7 @@ const fixture = {
     });
   } finally {
     await browser.close();
+    if (server) await new Promise((resolve) => server.close(resolve));
   }
   if (failed) process.exitCode = 1;
   else

@@ -142,7 +142,8 @@
         "node",
         "--test",
         "scripts/testing/run-api-isolated.test.cjs",
-        "scripts/testing/publish-staging-apks.test.cjs"
+        "scripts/testing/publish-staging-apks.test.cjs",
+        "scripts/testing/run-platform-workflows.test.cjs"
       ],
       "timeoutSeconds": 1800,
       "mandatory": true
@@ -204,6 +205,12 @@
     {
       "id": "shopper-e2e",
       "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-e2e"],
+      "timeoutSeconds": 2400,
+      "mandatory": true
+    },
+    {
+      "id": "shopper-order-e2e",
+      "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-order-e2e"],
       "timeoutSeconds": 2400,
       "mandatory": true
     }

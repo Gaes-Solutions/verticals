@@ -60,6 +60,17 @@ class ReleaseAudit(unittest.TestCase):
         excluded=io.BytesIO();audit.retain_diagnostics('api-isolated',self.directory,set(audit.diagnostic_paths('api-isolated',self.directory)),excluded)
         self.assertEqual(excluded.getvalue(),b'')
 
+    def test_controlled_browser_diagnostics_use_the_declared_temporary_directory(self):
+        import io
+        folder = self.directory / 'gaes-full-storefront-audit'
+        folder.mkdir()
+        (folder / 'order-status.log').write_text('synthetic status failure detail')
+        (folder / 'summary.json').write_text('{"ok":false}')
+        output = io.BytesIO()
+        audit.retain_diagnostics('storefront-controlled', self.directory, set(), output)
+        self.assertIn(b'synthetic status failure detail', output.getvalue())
+        self.assertIn(b'"ok":false', output.getvalue())
+
     def test_large_diagnostics_are_bounded_and_preserve_failure_tail(self):
         import io
         folder=self.directory/'gaes-api-isolated-new';folder.mkdir()
@@ -70,7 +81,7 @@ class ReleaseAudit(unittest.TestCase):
     def test_matrix_contains_every_fixed_check_and_builds_first_serially(self):
         matrix, digest = audit.load_matrix(ROOT)
         self.assertEqual({row['id'] for row in matrix['checks']}, audit.ALLOWED_COMMANDS)
-        self.assertEqual(len(matrix['checks']), 19)
+        self.assertEqual(len(matrix['checks']), 20)
         self.assertEqual(len(digest), 64)
         self.assertEqual(matrix['checks'][0]['id'], 'web-builds')
         self.assertIn('--workspace-concurrency=1', matrix['checks'][0]['command'])
@@ -87,7 +98,7 @@ class ReleaseAudit(unittest.TestCase):
         trusted.write_text(json.dumps(self.matrix()))
         matrix, digest = audit.load_matrix(repo, trusted)
         self.assertEqual(digest, audit.sha256(trusted))
-        self.assertEqual(len(matrix['checks']), 19)
+        self.assertEqual(len(matrix['checks']), 20)
 
     def test_incomplete_duplicate_wrong_commands_or_missing_manual_gates_are_refused_upfront(self):
         original = self.matrix()
@@ -173,11 +184,11 @@ class ReleaseAudit(unittest.TestCase):
             return {'checkId': check['id'], 'status': 'passed', 'durationMs': 1, 'exitCode': 0, 'logSha256': '0' * 64}
         with patch.object(audit, 'run_check', side_effect=run_check), patch('sys.argv', ['release-audit.py', '--repo', str(repo), '--output', str(output)]):
             self.assertEqual(audit.main(), 0)
-        self.assertEqual(len(observed[0]['results']), 19)
+        self.assertEqual(len(observed[0]['results']), 20)
         self.assertTrue(all(row['status'] == 'notrun' for row in observed[0]['results']))
         report = json.loads(output.read_text())
         self.assertEqual(report['overall'], 'passed')
-        self.assertEqual(len(report['results']), 19)
+        self.assertEqual(len(report['results']), 20)
         self.assertIn('manualRequired', report)
 
     def test_interruption_preserves_incomplete_report_and_unexecuted_scope(self):

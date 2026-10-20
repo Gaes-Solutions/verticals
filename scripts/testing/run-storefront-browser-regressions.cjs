@@ -2,7 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
-const output = "/tmp/gaes-full-storefront-audit";
+const output = path.join(require("node:os").tmpdir(), "gaes-full-storefront-audit");
 fs.mkdirSync(output, { recursive: true });
 const css = "/tmp/gaes-audit-storefront.css";
 if (!fs.existsSync(css))
@@ -43,6 +43,7 @@ async function worker() {
     const env = { ...process.env, ...(prefix ? { [`${prefix}_QA_CSS`]: css } : {}) };
     // Optional published modes must not silently change which fixture harness runs.
     for (const key of [
+      "STOREFRONT_TEST_URL",
       "VERIFICATION_QA_URL",
       "RECOVERY_QA_URL",
       "SUGGESTIONS_QA_URL",

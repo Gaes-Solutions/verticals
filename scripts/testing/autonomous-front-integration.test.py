@@ -58,6 +58,7 @@ class PhaseFixture:
             (self.bin / 'pnpm').symlink_to(pnpm_path)
         self.env = {
             'PATH': f'{self.bin}:{host_path}', 'HOME': str(self.home), 'LANG': 'C.UTF-8',
+            'RUNNER_TEMP': str(self.temp), 'TMPDIR': str(self.temp),
             'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null',
             'ARTIFACT_DIR': str(self.artifact),
             'CODEX_BIN': str(self.bin / 'codex'),

@@ -104,6 +104,9 @@ module.exports = async function seedShopper(app, helpers, db) {
     },
     token,
   );
+  if (process.env.SHOPPER_ORDER_FLOW_TESTS === "true") {
+    await request("PUT", `/t/envios/pickup/${branches[0].id}`, { activa: true }, token);
+  }
   const tc = db.getTenantClient(slug);
   const customer = await tc.cliente.create({
     data: {
@@ -175,6 +178,15 @@ module.exports = async function seedShopper(app, helpers, db) {
   return {
     recovery,
     baseline,
+    ...(process.env.SHOPPER_ORDER_FLOW_TESTS === "true"
+      ? {
+          order: {
+            email: "guest-order@shopper.example.invalid",
+            sucursalId: branches[0].id,
+            checkoutAttempts: await tc.checkoutAttempt.count(),
+          },
+        }
+      : {}),
     titulo: "Producto QA",
     slugSeo: "producto-qa",
     varianteId: variant,

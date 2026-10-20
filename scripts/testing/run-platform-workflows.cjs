@@ -6,13 +6,44 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
-const { Client } = require(`${process.cwd()}/apps/api/node_modules/pg`);
 const repo = process.cwd();
+const args = process.argv.slice(2);
+const apiTests = args[0] === "--api-tests";
+const allowedModes = new Set(["--retail-e2e", "--shopper-e2e", "--shopper-order-e2e"]);
+if (apiTests) {
+  for (const file of args.slice(1)) {
+    if (!/^test\/[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:test|unit)\.ts$/.test(file) || file.includes(".."))
+      throw Error("Invalid API test file argument");
+    try {
+      const target = path.join(repo, "apps/api", file);
+      for (const parent of ["apps", "apps/api", "apps/api/test"])
+        if (fs.lstatSync(path.join(repo, parent)).isSymbolicLink()) throw Error("symlink parent");
+      if (fs.lstatSync(target).isSymbolicLink() || !fs.statSync(target).isFile())
+        throw Error("invalid file");
+    } catch {
+      throw Error("API test file must exist and must not be a symlink");
+    }
+  }
+} else if (args.length > 1 || (args.length === 1 && !allowedModes.has(args[0])))
+  throw Error(
+    "Invalid workflow mode: use no arguments, --retail-e2e, --shopper-e2e, --shopper-order-e2e or --api-tests",
+  );
+let source;
+try {
+  source = new URL(process.env.DATABASE_URL_MASTER);
+} catch {
+  throw Error("A localhost PostgreSQL URL is required");
+}
+if (
+  !["postgres:", "postgresql:"].includes(source.protocol) ||
+  !["localhost", "127.0.0.1", "[::1]"].includes(source.hostname)
+)
+  throw Error("Only localhost PostgreSQL databases allowed");
+if (source.search || source.hash)
+  throw Error("Database URL query parameters and fragments are forbidden");
+const { Client } = require(`${repo}/apps/api/node_modules/pg`);
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "gaes-platform-flows-"));
 fs.chmodSync(temp, 0o700);
-const source = new URL(process.env.DATABASE_URL_MASTER);
-if (!["localhost", "127.0.0.1"].includes(source.hostname))
-  throw Error("Only localhost databases allowed");
 const dbName = `qa_platform_${Date.now()}${Math.floor(Math.random() * 1e9)}`;
 const qaUrl = new URL(source);
 qaUrl.pathname = `/${dbName}`;
@@ -53,7 +84,8 @@ for (const [key, tool] of [
     });
   if (executable) env[key] = fs.realpathSync(executable);
 }
-const shopper = process.argv[2] === "--shopper-e2e";
+const shopperOrder = process.argv[2] === "--shopper-order-e2e";
+const shopper = process.argv[2] === "--shopper-e2e" || shopperOrder;
 if (shopper)
   Object.assign(env, {
     SHOPPER_FLOW_TESTS: "true",
@@ -62,6 +94,12 @@ if (shopper)
     TIENDA_TENANT_SLUG: "test-e2e-shopper",
     STOREFRONT_SERVICE_KEY: require("node:crypto").randomBytes(32).toString("hex"),
     SHOPPER_FIXTURE_FILE: path.join(temp, "shopper.json"),
+  });
+if (shopperOrder)
+  Object.assign(env, {
+    SHOPPER_ORDER_FLOW_TESTS: "true",
+    SHOPPER_ORDER_RESULT_FILE: path.join(temp, "shopper-order-result.json"),
+    SHOPPER_ORDER_PROVIDER_FILE: path.join(temp, "shopper-order-providers.json"),
   });
 const retail = process.argv[2] === "--retail-e2e";
 if (retail)
@@ -109,34 +147,50 @@ async function ready(url, child) {
   }
   throw Error("QA server startup timed out");
 }
+async function assertPortsUnused() {
+  // Fail if the fixed QA ports are already occupied; do not reuse an unknown server.
+  for (const url of apiTests
+    ? []
+    : [
+        "http://127.0.0.1:3059/health",
+        ...(shopper
+          ? ["http://127.0.0.1:3058"]
+          : ["http://127.0.0.1:5179", "http://127.0.0.1:5180"]),
+        ...(retail ? ["http://127.0.0.1:5181"] : []),
+      ]) {
+    let occupied = false;
+    try {
+      await fetch(url, { signal: AbortSignal.timeout(1000) });
+      occupied = true;
+    } catch {}
+    if (occupied) throw Error(`QA port is in use: ${new URL(url).port}`);
+  }
+}
+async function stopChildren() {
+  for (const child of children) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {}
+  }
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  for (const child of children) {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {}
+  }
+}
 (async () => {
   const pg = new Client({ connectionString: source.href });
   await pg.connect();
   let created = false;
   try {
-    // Fail if the fixed QA ports are already occupied; do not reuse an unknown server.
-    for (const url of process.argv[2] === "--api-tests"
-      ? []
-      : [
-          "http://127.0.0.1:3059/health",
-          ...(shopper
-            ? ["http://127.0.0.1:3058"]
-            : ["http://127.0.0.1:5179", "http://127.0.0.1:5180"]),
-          ...(retail ? ["http://127.0.0.1:5181"] : []),
-        ]) {
-      let occupied = false;
-      try {
-        await fetch(url, { signal: AbortSignal.timeout(1000) });
-        occupied = true;
-      } catch {}
-      if (occupied) throw Error(`QA port is in use: ${new URL(url).port}`);
-    }
+    await assertPortsUnused();
     await pg.query(`CREATE DATABASE "${dbName}"`);
     created = true;
     command(["--filter", "@gaespos/db", "prisma:migrate:deploy"]);
     command(["--filter", "@gaespos/db", "seed:master"]);
-    if (process.argv[2] === "--api-tests") {
-      command(["--filter", "@gaespos/api", "exec", "vitest", "run", ...process.argv.slice(3)]);
+    if (apiTests) {
+      command(["--filter", "@gaespos/api", "exec", "vitest", "run", ...args.slice(1)]);
       return;
     }
     const fixture = path.join(temp, "api.mts");
@@ -160,11 +214,23 @@ for(const role of ['superadmin','support','billing']) {
  accounts.push({id:a.id,email,password,role});
 }
 fs.writeFileSync(process.env.PLATFORM_FLOW_ACCOUNTS!,JSON.stringify(accounts),{mode:0o600});
+const providerCalls={payment:0,email:0};
+const orderOnly=process.env.SHOPPER_ORDER_FLOW_TESTS==='true';
+function forbiddenProvider(kind) {
+ providerCalls[kind]++;
+ fs.writeFileSync(process.env.SHOPPER_ORDER_PROVIDER_FILE!,JSON.stringify(providerCalls),{mode:0o600});
+ throw new Error('No external provider is allowed in shopper order QA');
+}
+if(orderOnly) fs.writeFileSync(process.env.SHOPPER_ORDER_PROVIDER_FILE!,JSON.stringify(providerCalls),{mode:0o600});
 const app=await buildTestApp();
 if(process.env.SHOPPER_FLOW_TESTS==='true') {
  const seed=(await import('${repo}/scripts/testing/shopper-fixture.cjs')).default;
  const fixture=await seed(app,{createTestTenant,createTenantUser,hash},{getTenantClient});
  fs.writeFileSync(process.env.SHOPPER_FIXTURE_FILE!,JSON.stringify(fixture),{mode:0o600});
+}
+if(orderOnly) {
+ app.pagoProviderFactory=()=>forbiddenProvider('payment');
+ app.emailProviderFactory=()=>forbiddenProvider('email');
 }
 await app.listen({host:'127.0.0.1',port:3059});
 process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect();process.exit(0)});
@@ -190,8 +256,11 @@ process.on('SIGTERM',async()=>{await app.close();await masterPrisma.$disconnect(
         { NODE_ENV: "production" },
       );
       await ready(env.SHOPPER_TEST_URL, shop);
-      command(["exec", "node", "scripts/testing/shopper-workflows.cjs"]);
-      command(["exec", "node", "scripts/testing/shopper-recovery-workflows.cjs"]);
+      if (shopperOrder) command(["exec", "node", "scripts/testing/shopper-order-workflows.cjs"]);
+      else {
+        command(["exec", "node", "scripts/testing/shopper-workflows.cjs"]);
+        command(["exec", "node", "scripts/testing/shopper-recovery-workflows.cjs"]);
+      }
       const invariant = path.join(temp, "shopper-invariants.mts");
       fs.writeFileSync(
         invariant,
@@ -203,8 +272,39 @@ const fixture=JSON.parse(fs.readFileSync(process.env.SHOPPER_FIXTURE_FILE!,'utf8
 const tc=getTenantClient('test-e2e-shopper');
 try {
  const current={orders:await tc.pedido.count(),ecommerceOrders:await tc.pedidoEcommerce.count(),sales:await tc.venta.count(),inventory:(await tc.inventarioSucursal.findMany({where:{varianteId:fixture.varianteId}})).map(r=>({varianteId:r.varianteId,stock:String(r.stockActual),reserved:String(r.stockReservado)}))};
- assert.deepEqual(current,fixture.baseline);
- console.log('PASS disposable DB invariant: no POS/ecommerce orders/sales/stock/reservations changed');
+ if(process.env.SHOPPER_ORDER_FLOW_TESTS==='true') {
+  const result=JSON.parse(fs.readFileSync(process.env.SHOPPER_ORDER_RESULT_FILE!,'utf8'));
+  assert.deepEqual(Object.keys(result).sort(),['email','folioPublico','replayCount','total']);
+  assert.equal(result.email,fixture.order.email);
+  assert.equal(result.total,fixture.precio);
+  assert.equal(result.replayCount,2);
+  assert.deepEqual(current,{...fixture.baseline,ecommerceOrders:fixture.baseline.ecommerceOrders+1});
+  assert.equal(await tc.checkoutAttempt.count(),fixture.order.checkoutAttempts+1);
+  const orders=await tc.pedidoEcommerce.findMany();
+  assert.equal(orders.length,1);
+  const order=orders[0]!;
+  assert.equal(order.folioPublico,result.folioPublico);
+  assert.equal(order.emailComprador,result.email);
+  assert.equal(Number(order.total),Number(fixture.precio));
+  assert.equal(order.clienteId,null);
+  assert.equal(order.statusPago,'pendiente');
+  assert.equal(order.statusPedido,'recibido');
+  assert.equal(order.metodoPago,'cod');
+  assert.equal(order.metodoEnvio,'click_collect');
+  assert.equal(order.sucursalPickupId,fixture.order.sucursalId);
+  assert.equal(order.paymentProvider,null);
+  assert.equal(order.paymentAccountId,null);
+  assert.equal(order.ventaIdGenerada,null);
+  assert.equal(order.paymentIntentId,'mostrador_'+result.folioPublico);
+  const attempts=await tc.checkoutAttempt.findMany();
+  assert.equal(attempts[0]?.pedidoId,order.id);
+  assert.equal(attempts[0]?.status,'ready');
+  assert.deepEqual(JSON.parse(fs.readFileSync(process.env.SHOPPER_ORDER_PROVIDER_FILE!,'utf8')),{payment:0,email:0});
+  console.log('PASS disposable DB order invariant: one unique unpaid pickup order/attempt; no providers, POS orders, sales or stock changes');
+ } else {
+  assert.deepEqual(current,fixture.baseline);
+  console.log('PASS disposable DB invariant: no POS/ecommerce orders/sales/stock/reservations changed');
+ }
 } finally {await disconnectAllTenantClients()}
 `,
         { mode: 0o600 },
@@ -266,17 +366,7 @@ try {
     command(["exec", "node", "scripts/testing/tenant-role-screens.cjs"]);
     command(["exec", "node", "scripts/testing/platform-role-screens.cjs"]);
   } finally {
-    for (const child of children) {
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {}
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    for (const child of children) {
-      try {
-        process.kill(-child.pid, "SIGKILL");
-      } catch {}
-    }
+    await stopChildren();
     if (created) {
       await pg.query(
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",

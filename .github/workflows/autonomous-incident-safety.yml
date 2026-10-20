@@ -10,6 +10,9 @@ on:
       - scripts/release-audit.py
       - automation/release-audit-matrix.json
       - scripts/testing/test_release_audit.py
+      - scripts/testing/run-platform-workflows*.cjs
+      - scripts/testing/shopper-*workflows.cjs
+      - scripts/testing/shopper-fixture.cjs
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py
@@ -26,6 +29,9 @@ on:
       - scripts/release-audit.py
       - automation/release-audit-matrix.json
       - scripts/testing/test_release_audit.py
+      - scripts/testing/run-platform-workflows*.cjs
+      - scripts/testing/shopper-*workflows.cjs
+      - scripts/testing/shopper-fixture.cjs
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py
@@ -79,6 +85,9 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @gaespos/db prisma:generate
+      - name: Verify isolated harness and artifact publication guards
+        run: |
+          node --test scripts/testing/run-api-isolated.test.cjs scripts/testing/publish-staging-apks.test.cjs scripts/testing/run-platform-workflows.test.cjs
       - name: Verify incident API without a business database or providers
         run: |
           pnpm --filter @gaespos/api typecheck

@@ -177,8 +177,17 @@ if sys.argv[1:3]==['pr','create']:
         self.phase('executor')
         self.phase('validate',False)
         self.assertFalse((self.art/'validation.json').exists())
-        log=self.root/'checks.log'
-        self.assertFalse(log.exists() and 'api\n' in log.read_text())
+        metadata=json.loads((self.art/'metadata.json').read_text())
+        self.assertEqual(metadata['validation_profile'],'release')
+        audit=self.art/'patch-release-audit.json'
+        if audit.exists():
+            report=json.loads(audit.read_text())
+            matrix=CONTROLLER.parent.parent/'automation/release-audit-matrix.json'
+            self.assertEqual({row['checkId'] for row in report['results']},{row['id'] for row in json.loads(matrix.read_text())['checks']})
+            self.assertEqual(report['controllerMatrixSha256'],hashlib.sha256(matrix.read_bytes()).hexdigest())
+        else:
+            log=self.root/'checks.log'
+            self.assertFalse(log.exists() and 'api\n' in log.read_text())
 
     def test_full_release_profile_cannot_be_downgraded_between_roles(self):
         self.env['INCIDENT_FULL_RELEASE_AUDIT']='true'

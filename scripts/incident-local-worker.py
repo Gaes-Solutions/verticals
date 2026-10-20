@@ -247,7 +247,7 @@ class Worker:
                      '--env', 'POSTGRES_USER=qa', '--env', 'POSTGRES_PASSWORD=synthetic-only', '--env', 'POSTGRES_DB=postgres', PG_IMAGE], timeout=120)
             for _ in range(30):
                 try:
-                    execute(['docker', 'exec', postgres, 'pg_isready', '-U', 'qa', '-d', 'postgres'], timeout=5)
+                    execute(['docker', 'exec', postgres, 'pg_isready', '-h', '127.0.0.1', '-U', 'qa', '-d', 'postgres'], timeout=5)
                     break
                 except RuntimeError:
                     time.sleep(1)

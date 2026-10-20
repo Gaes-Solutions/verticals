@@ -102,7 +102,7 @@ def run_audit(worker, checkout, sha):
                         '--env','POSTGRES_USER=qa','--env','POSTGRES_PASSWORD=synthetic-only','--env','POSTGRES_DB=postgres','postgres:16-alpine'],timeout=120)
         for _ in range(30):
             try:
-                worker_command(['docker','exec',postgres,'pg_isready','-U','qa','-d','postgres'],timeout=5)
+                worker_command(['docker','exec',postgres,'pg_isready','-h','127.0.0.1','-U','qa','-d','postgres'],timeout=5)
                 break
             except Exception:
                 time.sleep(1)
