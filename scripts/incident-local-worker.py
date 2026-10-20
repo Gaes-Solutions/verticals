@@ -278,6 +278,24 @@ class Worker:
                 cleanup(['docker', 'rm', '-f', postgres])
 
 
+
+def audit_progress(state, value):
+    # An older completed report never describes a currently running commit.
+    ident=value.get('runId','')
+    if value.get('status')!='checking' or not isinstance(ident,str) or not re.fullmatch('[a-f0-9-]{36}',ident):
+        return None
+    path=state/'runs'/ident/'artifacts/release-audit.json'
+    if not path.is_file() or any(p.is_symlink() for p in (path,*path.parents)) or path.stat().st_size>2_000_000:
+        return {'overall':'preparing','releaseReady':False}
+    report=json.loads(path.read_text())
+    results=report.get('results',[])
+    if not isinstance(results,list) or not all(isinstance(row,dict) for row in results):
+        return {'overall':'unknown','releaseReady':False}
+    return {'overall':report.get('overall','unknown'),'baseSha':report.get('baseSha'),
+            'counts':{status:sum(row.get('status')==status for row in results) for status in ('passed','failed','blocked','notrun')},
+            'releaseReady':False}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', choices=['once', 'status'])
@@ -296,6 +314,8 @@ def main():
             value['releaseAudit']={key:audit.get(key) for key in ('overall','baseSha','finishedAt','counts','manualRequired','releaseReady')}
         else:
             value['releaseAudit']={'overall':'not_run','releaseReady':False}
+        progress=audit_progress(state,value)
+        if progress is not None: value['releaseAudit']['inProgress']=progress
         health=state/'health.json'
         value['health']=json.loads(health.read_text()).get('status','unknown') if health.is_file() and not health.is_symlink() else 'not_run'
         print(json.dumps(value))

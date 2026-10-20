@@ -60,6 +60,7 @@ AUTOMATION_TESTS = [
     ("test_incident_pending_results.py", None),
     ("test_incident_worker_client.py", None),
     ("test_incident_health.py", None),
+    ("test_incident_release_audit.py", None),
     ("test_release_audit.py", None),
     ("autonomous-front-cycle.test.py", None),
     ("autonomous-front-cycle-phase.test.py", None),

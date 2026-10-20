@@ -58,6 +58,44 @@ class LocalWorker(unittest.TestCase):
         quota.assert_not_called();transport.assert_not_called()
         self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'report_pending')
 
+    def test_published_pr_is_saved_before_ack_and_ack_failure_never_reports_failed(self):
+        events=[]
+        self.pending.save_pending=lambda *args:events.append('saved')
+        def transport(command,*args):
+            events.append(command)
+            (self.w.artifacts/'worker.json').write_text(json.dumps({'incidentId':'synthetic','claimId':'claim-one'}))
+        # The initial replay precedes the claim. Subsequent replay follows durable save.
+        first=[True]
+        def ordered_replay(*args):
+            if first[0]: first[0]=False;return {'pending':0,'delivered':0,'blocked':False}
+            events.append('ack');raise RuntimeError('synthetic network failure')
+        self.pending.replay_pending=ordered_replay
+        with patch.object(worker,'execute',return_value=b''),patch.object(worker,'cleanup'),patch.object(self.w,'clone',return_value=(self.root,'a'*40)),patch.object(self.w,'quota',return_value={'status':'ready'}),patch.object(self.w,'phase'),patch.object(self.w,'publish',side_effect=lambda *a:events.append('published')),patch.object(self.w,'transport',side_effect=transport):
+            self.w.once()
+        self.assertEqual(events,['claim','published','saved','ack'])
+        self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'report_pending')
+
+    def test_ambiguous_publication_blocks_without_reporting_failed(self):
+        def transport(command,*args):
+            self.assertEqual(command,'claim')
+            (self.w.artifacts/'worker.json').write_text(json.dumps({'incidentId':'synthetic','claimId':'claim-one'}))
+        with patch.object(worker,'execute',return_value=b''),patch.object(worker,'cleanup'),patch.object(self.w,'clone',return_value=(self.root,'a'*40)),patch.object(self.w,'quota',return_value={'status':'ready'}),patch.object(self.w,'phase'),patch.object(self.w,'publish',side_effect=RuntimeError('synthetic ambiguous publication')),patch.object(self.w,'transport',side_effect=transport) as bridge:
+            self.w.once()
+        self.assertEqual(bridge.call_count,1)
+        self.assertTrue((self.root/'publication-review.json').is_file())
+        self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'publication_review_required')
+
+    def test_running_audit_is_visible_without_reusing_old_pass_as_current_evidence(self):
+        value={'status':'checking','runId':'a'*8+'-'+'b'*4+'-'+'c'*4+'-'+'d'*4+'-'+'e'*12}
+        self.assertEqual(worker.audit_progress(self.root,value)['overall'],'preparing')
+        path=self.root/'runs'/value['runId']/'artifacts/release-audit.json';path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({'overall':'running','baseSha':'f'*40,'results':[{'status':'passed'},{'status':'notrun'}]}))
+        result=worker.audit_progress(self.root,value)
+        self.assertEqual(result['counts']['passed'],1);self.assertEqual(result['counts']['notrun'],1)
+        self.assertFalse(result['releaseReady'])
+        self.assertIsNone(worker.audit_progress(self.root,{'status':'idle','runId':value['runId']}))
+        self.assertIsNone(worker.audit_progress(self.root,{'status':'checking','runId':'../../forbidden'}))
+
     def test_role_copies_auth_and_uses_internal_proxy(self):
         self.w.run=self.root/'run';self.w.run.mkdir();self.w.auth.mkdir();(self.w.auth/'auth.json').write_text('{"synthetic":"session"}');self.w.artifacts=self.root/'artifacts';self.w.artifacts.mkdir()
         with patch.object(self.w,'quota',return_value={'status':'ready'}),patch.object(worker,'execute',return_value=b''),patch.object(worker.subprocess,'run'),patch.object(self.w,'container') as run:

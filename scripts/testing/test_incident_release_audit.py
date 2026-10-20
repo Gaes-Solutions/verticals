@@ -35,4 +35,16 @@ class AuditCoordinator(unittest.TestCase):
         with patch.object(m,'worker_command',side_effect=command):result=m.run_audit(w,self.root,'a'*40)
         self.assertEqual(result['overall'],'incomplete');self.assertTrue(all(r['status']=='blocked' for r in result['results']))
         self.assertFalse(result['releaseReady'])
+    def test_interrupted_incremental_report_keeps_completed_passes(self):
+        import hashlib
+        controller=self.root/'controller';(controller/'automation').mkdir(parents=True);(controller/'scripts').mkdir();(controller/'scripts/release-audit.py').write_text('trusted')
+        matrix=controller/'automation/release-audit-matrix.json';matrix.write_text(json.dumps({'checks':[{'id':'one'},{'id':'two'}],'manualRequired':['physical-device']}))
+        artifacts=self.root/'artifacts';artifacts.mkdir()
+        def container(*a,**kw):
+            m.write_json(artifacts/'release-audit.json',{'baseSha':'a'*40,'controllerMatrixSha256':hashlib.sha256(matrix.read_bytes()).hexdigest(),'results':[{'checkId':'one','status':'passed','durationMs':2,'exitCode':0,'logSha256':'b'*64},{'checkId':'two','status':'notrun','durationMs':0,'exitCode':None,'logSha256':None}]})
+            raise __import__('subprocess').TimeoutExpired('synthetic',1)
+        w=types.SimpleNamespace(state=self.root,controller=controller,artifacts=artifacts,run_id='run-partial',container=container)
+        with patch.object(m,'worker_command',return_value=b''): result=m.run_audit(w,self.root,'a'*40)
+        self.assertEqual(result['overall'],'incomplete');self.assertEqual(result['counts'],{'passed':1,'failed':0,'blocked':1})
+        self.assertEqual(result['results'][1]['reason'],'check_not_executed')
 if __name__=='__main__':unittest.main()

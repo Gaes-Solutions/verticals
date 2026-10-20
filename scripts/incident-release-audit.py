@@ -130,7 +130,7 @@ def run_audit(worker, checkout, sha):
         if not isinstance(row,dict) or row.get('checkId') not in expected or row.get('checkId') in seen:
             invalid=True;break
         seen.add(row['checkId'])
-        if row.get('status')=='not_run':
+        if row.get('status') in ('notrun','not_run'):
             row.update(status='blocked',reason='check_not_executed',durationMs=0,exitCode=None,logSha256=None)
         if row.get('status') not in ('passed','failed','blocked') or (row.get('status')=='passed' and row.get('exitCode')!=0):
             invalid=True;break

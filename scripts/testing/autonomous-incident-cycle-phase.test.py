@@ -172,6 +172,20 @@ if sys.argv[1:3]==['pr','create']:
         self.pnpm("assert (Path(os.environ['HOME'])/'.cache/ms-playwright/browser.marker').read_text()=='synthetic-browser'; assert not (Path(os.environ['HOME'])/'.npmrc').exists()")
         self.phase('validate')
 
+    def test_full_release_profile_never_falls_back_to_api_only(self):
+        self.env['INCIDENT_FULL_RELEASE_AUDIT']='true'
+        self.phase('executor')
+        self.phase('validate',False)
+        self.assertFalse((self.art/'validation.json').exists())
+        log=self.root/'checks.log'
+        self.assertFalse(log.exists() and 'api\n' in log.read_text())
+
+    def test_full_release_profile_cannot_be_downgraded_between_roles(self):
+        self.env['INCIDENT_FULL_RELEASE_AUDIT']='true'
+        self.phase('executor')
+        self.phase('validate',False,{'INCIDENT_FULL_RELEASE_AUDIT':'false'})
+        self.assertFalse((self.art/'validation.json').exists())
+
     def test_no_business_keys_or_remote_database(self):
         self.phase('executor')
         self.phase('validate',False,{'BREVO_API_KEY':'synthetic-business'})
