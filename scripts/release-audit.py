@@ -252,6 +252,37 @@ def run_process(command, repo, env, out, timeout):
         cleanup_new_processes(before, env.get('RELEASE_AUDIT_ISOLATED') == 'true')
 
 
+
+def diagnostic_paths(check_id: str, temporary: Path) -> list[Path]:
+    if check_id == 'api-isolated':
+        return sorted(p for directory in temporary.glob('gaes-api-isolated-*')
+                      if directory.is_dir() and not directory.is_symlink()
+                      for p in directory.iterdir()
+                      if p.name in ('shard-1.log','shard-2.log','results.json'))
+    if check_id == 'storefront-controlled':
+        directory=temporary/'gaes-full-storefront-audit'
+        if directory.is_dir() and not directory.is_symlink():
+            return sorted(p for p in directory.iterdir() if p.suffix=='.log' or p.name=='summary.json')
+    return []
+
+
+def retain_diagnostics(check_id: str, temporary: Path, previous: set[Path], output) -> None:
+    # Retain only known synthetic harness logs, never fixture accounts or HOME.
+    for path in diagnostic_paths(check_id,temporary):
+        if path in previous or path.is_symlink() or not path.is_file():
+            continue
+        output.write(('\n[private synthetic diagnostic: '+path.name+']\n').encode())
+        with path.open('rb') as source:
+            size=path.stat().st_size
+            if size>2*1024*1024:
+                output.write(source.read(256*1024))
+                source.seek(-1024*1024,os.SEEK_END)
+                output.write(b'\n[diagnostic middle truncated]\n')
+                output.write(source.read(1024*1024))
+            else:
+                shutil.copyfileobj(source,output,64*1024)
+
+
 def run_check(repo: Path, check: dict, env: dict[str, str], log: Path) -> dict:
     check_id, command = check['id'], check['command']
     validate_command(check_id, command)
@@ -260,6 +291,8 @@ def run_check(repo: Path, check: dict, env: dict[str, str], log: Path) -> dict:
     log.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     run_env = dict(env)
+    temporary=Path(env.get('TMPDIR','/tmp'))
+    prior_diagnostics=set(diagnostic_paths(check_id,temporary))
     if check_id == 'web-builds':
         run_env['NODE_ENV'] = 'production'
     with os.fdopen(fd, 'wb') as out:
@@ -277,6 +310,8 @@ def run_check(repo: Path, check: dict, env: dict[str, str], log: Path) -> dict:
             status, reason = 'blocked', 'timeout'
         except OSError:
             status, reason = 'blocked', 'runner_os_error'
+        finally:
+            retain_diagnostics(check_id,temporary,prior_diagnostics,out)
     # The retained evidence is bounded; container disk limits remain separate.
     max_log = 50 * 1024 * 1024
     if log.stat().st_size > max_log:

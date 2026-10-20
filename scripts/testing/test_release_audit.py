@@ -46,6 +46,27 @@ class ReleaseAudit(unittest.TestCase):
     def check(self, name='monorepo-typecheck'):
         return {'id': name, 'command': audit.FIXED_COMMANDS[name], 'timeoutSeconds': 10}
 
+    def test_synthetic_diagnostics_survive_container_cleanup_without_fixture_secrets(self):
+        import io
+        folder=self.directory/'gaes-api-isolated-new';folder.mkdir()
+        (folder/'shard-1.log').write_text('synthetic failing assertion')
+        (folder/'results.json').write_text('{"passed":false}')
+        (folder/'accounts.json').write_text('must not retain fixture passwords')
+        (folder/'shard-2.log').symlink_to(folder/'accounts.json')
+        output=io.BytesIO();audit.retain_diagnostics('api-isolated',self.directory,set(),output)
+        data=output.getvalue()
+        self.assertIn(b'synthetic failing assertion',data);self.assertIn(b'"passed":false',data)
+        self.assertNotIn(b'passwords',data)
+        excluded=io.BytesIO();audit.retain_diagnostics('api-isolated',self.directory,set(audit.diagnostic_paths('api-isolated',self.directory)),excluded)
+        self.assertEqual(excluded.getvalue(),b'')
+
+    def test_large_diagnostics_are_bounded_and_preserve_failure_tail(self):
+        import io
+        folder=self.directory/'gaes-api-isolated-new';folder.mkdir()
+        (folder/'shard-1.log').write_bytes(b'x'*(3*1024*1024)+b'LAST ASSERTION')
+        output=io.BytesIO();audit.retain_diagnostics('api-isolated',self.directory,set(),output)
+        self.assertLess(len(output.getvalue()),1400000);self.assertIn(b'LAST ASSERTION',output.getvalue())
+
     def test_matrix_contains_every_fixed_check_and_builds_first_serially(self):
         matrix, digest = audit.load_matrix(ROOT)
         self.assertEqual({row['id'] for row in matrix['checks']}, audit.ALLOWED_COMMANDS)
