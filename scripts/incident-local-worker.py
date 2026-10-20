@@ -78,7 +78,7 @@ class Worker:
         name = 'gaes-incident-role-' + str(uuid.uuid4())
         args = ['docker', 'run', '--rm', '--name', name, '--init', '--user', f'{os.getuid()}:{os.getgid()}',
                 '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=384',
-                '--label', 'gaes.incident.local=true', '--memory=6g', '--cpus=3', '--read-only', '--tmpfs', '/tmp:rw,nosuid,nodev,size=1g',
+                '--label', 'gaes.incident.local=true', '--memory=6g', '--cpus=3', '--read-only', '--tmpfs', '/tmp:rw,nosuid,nodev,size=2g',
                 '--network', network]
         for source, target, readonly in mounts:
             args += ['--mount', f'type=bind,source={source},target={target}' + (',readonly' if readonly else '')]
@@ -143,7 +143,7 @@ class Worker:
         else:
             env.update(RUNNER_TEMP='/tmp', FRESH_RUNNER='true', GITHUB_ACTIONS='true', DATABASE_URL_MASTER='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres', DATABASE_URL_TENANT='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres')
             # Install from the pristine base before the controller applies the generated patch.
-            command = ['bash', '-c', 'mkdir -p "$HOME"; pnpm install --frozen-lockfile >/tmp/install.log 2>&1 && pnpm --filter @gaespos/db prisma:generate >>/tmp/install.log 2>&1 && pnpm exec playwright install chromium >>/tmp/install.log 2>&1 && unset DATABASE_URL_TENANT && exec bash /controller/scripts/autonomous-incident-cycle-phase.sh']
+            command = ['bash', '-c', 'mkdir -p "$HOME"; pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store >/tmp/install.log 2>&1 && pnpm --filter @gaespos/db prisma:generate >>/tmp/install.log 2>&1 && pnpm exec playwright install chromium >>/tmp/install.log 2>&1 && unset DATABASE_URL_TENANT && exec bash /controller/scripts/autonomous-incident-cycle-phase.sh']
         if name in ('executor', 'judge'):
             private_net = 'gaes-incident-net-' + str(uuid.uuid4())
             proxy = 'gaes-incident-proxy-' + str(uuid.uuid4())
