@@ -1,9 +1,12 @@
 import type { ExpoConfig } from "expo/config";
+import { mobileBusinessBuildConfig } from "./src/build-variant";
+
+const build = mobileBusinessBuildConfig(process.env.APP_VARIANT, process.env.EXPO_PUBLIC_API_URL);
 
 const config: ExpoConfig = {
-  name: "GaesSoft Negocio",
+  name: build.name,
   slug: "gaessoft-negocio",
-  scheme: "gaessoft-negocio",
+  scheme: build.scheme,
   owner: "gaes-soft",
   version: "0.1.0",
   orientation: "portrait",
@@ -11,11 +14,11 @@ const config: ExpoConfig = {
   newArchEnabled: true,
   icon: "./assets/icon.png",
   ios: {
-    bundleIdentifier: "com.gaessoft.negocio",
+    bundleIdentifier: build.package,
     supportsTablet: true,
   },
   android: {
-    package: "com.gaessoft.negocio",
+    package: build.package,
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#0f766e",
@@ -39,8 +42,8 @@ const config: ExpoConfig = {
     ],
   ],
   extra: {
-    // Sobrescribible por build (EAS) con EXPO_PUBLIC_API_URL.
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "https://app.angaes.com/api",
+    appVariant: build.variant,
+    apiUrl: build.apiUrl,
     eas: {
       projectId: "a2855c15-cbf0-4cec-96bb-80c57cd4d63a",
     },

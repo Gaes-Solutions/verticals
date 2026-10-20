@@ -1,8 +1,9 @@
 import Constants from "expo-constants";
+import { mobileBusinessBuildConfig } from "./build-variant";
 
-const fromExtra = (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl;
+const extra = Constants.expoConfig?.extra as { apiUrl?: string; appVariant?: string } | undefined;
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? fromExtra ?? "https://app.angaes.com/api";
+export const API_URL = mobileBusinessBuildConfig(extra?.appVariant, extra?.apiUrl).apiUrl;
 
 /** Clave del token en el almacenamiento seguro del sistema. */
 export const TOKEN_KEY = "gaessoft_negocio_token";
