@@ -7,12 +7,14 @@ El perfil EAS `preview` de GaesSoft Negocio apuntaba a `https://app.angaes.com/a
 ## Corrección
 
 `development` y `preview` ahora usan `https://verticals-staging.up.railway.app/api`, el nombre visible **GaesSoft Negocio (Pruebas)**, el scheme `gaessoft-negocio-staging` y los identificadores Android/iOS `com.gaessoft.negocio.staging`. Solo el perfil EAS `production` conserva el identificador original y apunta a producción. La configuración de la app valida el perfil y la URL juntos y rechaza combinaciones cruzadas o variantes desconocidas.
+La comprobación de perfiles queda fuera del código JavaScript distribuido; el bundle Metro no incluye la URL de producción.
 
 ## Validación
 
-- 112 pruebas unitarias de Negocio aprobadas; incluyen cinco casos de aislamiento de perfiles.
+- 114 pruebas unitarias de Negocio aprobadas; incluyen siete casos de aislamiento de perfiles y bundle, con resolución real de Expo para staging y producción.
 - Typecheck de `mobile-negocio` aprobado.
 - Configuración Expo resuelta para `staging` y `production`; API, nombres, schemes e identificadores coinciden.
+- Exportación Metro de Android completada: bundle de 3.44 MB sin la URL de producción ni patrones de llaves privadas de proveedor.
 - Cliente 17 y kiosco 4: firma, paquete, permisos y certificados verificados localmente. El workflow Android de GitHub pasó el 19 de octubre, comprobando ambos APK actuales en un emulador Android.
 - El dominio público existente de Gaesland respondió con DNS CNAME, HTTPS válido y el negocio esperado. Un subdominio aleatorio sin asignación devolvió 503.
 

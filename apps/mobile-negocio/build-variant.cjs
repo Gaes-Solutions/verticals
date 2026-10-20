@@ -1,12 +1,10 @@
-export const MOBILE_BUSINESS_API = {
+const MOBILE_BUSINESS_API = {
   staging: "https://verticals-staging.up.railway.app/api",
   production: "https://app.angaes.com/api",
-} as const;
-
-export type MobileBusinessVariant = keyof typeof MOBILE_BUSINESS_API;
+};
 
 /** Testing builds default to staging; production requires an explicit profile. */
-export function mobileBusinessBuildConfig(requested: string | undefined, apiOverride?: string) {
+function mobileBusinessBuildConfig(requested, apiOverride) {
   const variant = requested ?? "staging";
   if (variant !== "staging" && variant !== "production") {
     throw new Error("APP_VARIANT debe ser staging o production");
@@ -24,5 +22,7 @@ export function mobileBusinessBuildConfig(requested: string | undefined, apiOver
     name: staging ? "GaesSoft Negocio (Pruebas)" : "GaesSoft Negocio",
     scheme: staging ? "gaessoft-negocio-staging" : "gaessoft-negocio",
     package: staging ? "com.gaessoft.negocio.staging" : "com.gaessoft.negocio",
-  } as const;
+  };
 }
+
+module.exports = { MOBILE_BUSINESS_API, mobileBusinessBuildConfig };

@@ -1,9 +1,12 @@
 import Constants from "expo-constants";
-import { mobileBusinessBuildConfig } from "./build-variant";
 
 const extra = Constants.expoConfig?.extra as { apiUrl?: string; appVariant?: string } | undefined;
 
-export const API_URL = mobileBusinessBuildConfig(extra?.appVariant, extra?.apiUrl).apiUrl;
+if (!extra?.apiUrl || (extra.appVariant !== "staging" && extra.appVariant !== "production")) {
+  throw new Error("La app Negocio necesita un perfil y una API válidos al compilarse.");
+}
+
+export const API_URL = extra.apiUrl;
 
 /** Clave del token en el almacenamiento seguro del sistema. */
 export const TOKEN_KEY = "gaessoft_negocio_token";

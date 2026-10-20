@@ -1,5 +1,5 @@
 import type { ExpoConfig } from "expo/config";
-import { mobileBusinessBuildConfig } from "./src/build-variant";
+import { mobileBusinessBuildConfig } from "./build-variant.cjs";
 
 const build = mobileBusinessBuildConfig(process.env.APP_VARIANT, process.env.EXPO_PUBLIC_API_URL);
 
