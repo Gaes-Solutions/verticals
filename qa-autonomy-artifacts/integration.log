@@ -1,0 +1,24 @@
+Controller snapshot SHA256: e331ef86868644810cdfa8f610a085c49a6b757a0e4a79d3b5a53d495718a9b7
+test_real_docker_allows_generated_incremental_cache (__main__.AutonomousDockerIntegrationTests.test_real_docker_allows_generated_incremental_cache) ... ok
+test_real_docker_four_phases (__main__.AutonomousDockerIntegrationTests.test_real_docker_four_phases) ... ok
+test_real_docker_regular_action_setup_shim (__main__.AutonomousDockerIntegrationTests.test_real_docker_regular_action_setup_shim) ... ok
+test_real_docker_regular_shim_rejects_invalid_package (__main__.AutonomousDockerIntegrationTests.test_real_docker_regular_shim_rejects_invalid_package) ... ok
+test_real_docker_rejects_source_copy_mutation (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_copy_mutation) ... ok
+test_real_docker_rejects_source_directory_named_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_rejects_source_directory_named_build) ... ok
+test_real_docker_type_failure_cannot_be_masked_by_passing_build (__main__.AutonomousDockerIntegrationTests.test_real_docker_type_failure_cannot_be_masked_by_passing_build) ... ok
+test_both_roles_reject_own_auth_key_in_artifacts (__main__.AutonomousIntegrationTests.test_both_roles_reject_own_auth_key_in_artifacts) ... ok
+test_empty_backlog_never_invokes_models_or_publisher (__main__.AutonomousIntegrationTests.test_empty_backlog_never_invokes_models_or_publisher) ... ok
+test_failed_executor_never_creates_transferable_patch (__main__.AutonomousIntegrationTests.test_failed_executor_never_creates_transferable_patch) ... ok
+test_four_phase_local_bare_git_and_pending_pr_email (__main__.AutonomousIntegrationTests.test_four_phase_local_bare_git_and_pending_pr_email) ... ok
+test_judge_cannot_change_only_index_flags (__main__.AutonomousIntegrationTests.test_judge_cannot_change_only_index_flags) ... ok
+test_judge_cannot_rewrite_validation_evidence (__main__.AutonomousIntegrationTests.test_judge_cannot_rewrite_validation_evidence) ... ok
+test_pending_task_rejects_no_work_marker (__main__.AutonomousIntegrationTests.test_pending_task_rejects_no_work_marker) ... ok
+test_rejected_judge_cannot_publish (__main__.AutonomousIntegrationTests.test_rejected_judge_cannot_publish) ... ok
+test_sensitive_path_is_rejected_before_it_is_written (__main__.AutonomousIntegrationTests.test_sensitive_path_is_rejected_before_it_is_written) ... ok
+test_st010_strict_lint_failure_blocks_all_later_phases (__main__.AutonomousIntegrationTests.test_st010_strict_lint_failure_blocks_all_later_phases) ... ok
+test_validator_rejects_self_consistent_artifact_replacement (__main__.AutonomousIntegrationTests.test_validator_rejects_self_consistent_artifact_replacement) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 28.015s
+
+OK

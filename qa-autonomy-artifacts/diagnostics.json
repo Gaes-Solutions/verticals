@@ -1,0 +1,11 @@
+{
+  "selectedPath": "/home/runner/setup-pnpm/node_modules/.bin/pnpm",
+  "selectedRealpath": "/home/runner/setup-pnpm/node_modules/.bin/pnpm",
+  "actionPath": "/home/runner/setup-pnpm/node_modules/.bin/pnpm",
+  "actionRealpath": "/home/runner/setup-pnpm/node_modules/.bin/pnpm",
+  "corepackCache10332PresentBeforeChecks": false,
+  "image": "node:24-bookworm-slim@sha256:ec857ea6bb60cb3d0fa4d97495590c5fe7d51be8572c307b55957eeb06569cf7",
+  "corepackCache10332PresentAfterChecks": false,
+  "selectedVersion": "10.33.2",
+  "actionVersion": "10.33.2"
+}
