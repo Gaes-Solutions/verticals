@@ -87,6 +87,8 @@ def run_audit(worker, checkout, sha):
     began=stamp()
     output=worker.artifacts/'release-audit.json'
     postgres='gaes-release-audit-'+worker.run_id
+    install_home=worker.artifacts.parent/'audit-home'
+    install_home.mkdir(mode=0o700)
     env={'HOME':'/tmp/audit-install-home','RUNNER_TEMP':'/tmp','CI':'true',
          'DATABASE_URL_MASTER':'postgresql://qa:synthetic-only@127.0.0.1:5432/postgres',
          'RELEASE_AUDIT_ISOLATED':'true',
@@ -96,6 +98,7 @@ def run_audit(worker, checkout, sha):
     failure=None
     try:
         worker_command(['docker','run','-d','--rm','--name',postgres,'--label','gaes.incident.local=true',
+                        '--memory=3g','--tmpfs','/var/lib/postgresql/data:rw,nosuid,nodev,size=2g',
                         '--env','POSTGRES_USER=qa','--env','POSTGRES_PASSWORD=synthetic-only','--env','POSTGRES_DB=postgres','postgres:16-alpine'],timeout=120)
         for _ in range(30):
             try:
@@ -105,7 +108,7 @@ def run_audit(worker, checkout, sha):
                 time.sleep(1)
         else:
             raise RuntimeError('synthetic_database_unavailable')
-        worker.container([(worker.controller,'/controller',True),(checkout,'/workspace',False),(worker.artifacts,'/artifacts',False)],env,command,
+        worker.container([(worker.controller,'/controller',True),(checkout,'/workspace',False),(worker.artifacts,'/artifacts',False),(install_home,'/tmp/audit-install-home',False)],env,command,
                          network='container:'+postgres,timeout=3900,accepted=(0,1))
     except subprocess.TimeoutExpired:
         failure='audit_budget_exhausted'

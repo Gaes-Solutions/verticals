@@ -141,6 +141,9 @@ class Worker:
             mounts.append((role_auth, '/local-worker/auth', False))
             env.update(CODEX_AUTH_READY='true', CODEX_HOME='/local-worker/auth')
         else:
+            qa_home=self.run/'validate-home'
+            qa_home.mkdir(mode=0o700)
+            mounts.append((qa_home,'/tmp/worker-home',False))
             env.update(RUNNER_TEMP='/tmp', FRESH_RUNNER='true', GITHUB_ACTIONS='true', DATABASE_URL_MASTER='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres', DATABASE_URL_TENANT='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres')
             # Install from the pristine base before the controller applies the generated patch.
             command = ['bash', '-c', 'mkdir -p "$HOME"; pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store >/tmp/install.log 2>&1 && pnpm --filter @gaespos/db prisma:generate >>/tmp/install.log 2>&1 && pnpm exec playwright install chromium >>/tmp/install.log 2>&1 && unset DATABASE_URL_TENANT && exec bash /controller/scripts/autonomous-incident-cycle-phase.sh']
@@ -228,6 +231,7 @@ class Worker:
             validator, _ = self.clone('validate', sha)
             postgres = 'gaes-incident-qa-' + self.run_id
             execute(['docker', 'run', '-d', '--rm', '--name', postgres, '--label', 'gaes.incident.local=true',
+                     '--memory=3g', '--tmpfs', '/var/lib/postgresql/data:rw,nosuid,nodev,size=2g',
                      '--env', 'POSTGRES_USER=qa', '--env', 'POSTGRES_PASSWORD=synthetic-only', '--env', 'POSTGRES_DB=postgres', PG_IMAGE], timeout=120)
             for _ in range(30):
                 try:

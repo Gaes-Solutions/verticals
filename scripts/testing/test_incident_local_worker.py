@@ -106,6 +106,16 @@ class LocalWorker(unittest.TestCase):
         self.assertTrue(run.call_args.kwargs['network'].startswith('gaes-incident-net-'))
         self.assertEqual(env['HTTPS_PROXY'],'http://openai-proxy:3128')
         self.assertFalse(any('/credentials' in str(source) or str(source)==str(Path.home()) for source,_,_ in mounts))
+    def test_validation_browser_home_is_private_exec_capable_bind_without_auth(self):
+        self.w.run=self.root/'run';self.w.run.mkdir();self.w.artifacts=self.root/'artifacts';self.w.artifacts.mkdir()
+        with patch.object(self.w,'container') as run:
+            self.w.phase('validate',self.root)
+        mounts,env,_=run.call_args.args
+        home=next(source for source,target,ro in mounts if target=='/tmp/worker-home')
+        self.assertEqual(home.stat().st_mode&0o777,0o700)
+        self.assertFalse(any(target=='/local-worker/auth' for _,target,_ in mounts))
+        self.assertEqual(env['HOME'],'/tmp/worker-home')
+
     def test_private_credentials_reject_symlinks_and_public_permissions(self):
         target=self.root/'private';target.write_text('synthetic');target.chmod(0o600)
         link=self.root/'link';link.symlink_to(target)
