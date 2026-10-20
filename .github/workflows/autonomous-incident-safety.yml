@@ -7,6 +7,9 @@ on:
       - .github/workflows/autonomous-incident-*.yml
       - scripts/autonomous-incident-*.sh
       - scripts/incident-*.py
+      - scripts/release-audit.py
+      - automation/release-audit-matrix.json
+      - scripts/testing/test_release_audit.py
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py
@@ -20,6 +23,9 @@ on:
       - .github/workflows/autonomous-incident-*.yml
       - scripts/autonomous-incident-*.sh
       - scripts/incident-*.py
+      - scripts/release-audit.py
+      - automation/release-audit-matrix.json
+      - scripts/testing/test_release_audit.py
       - scripts/codex-subscription-preflight.py
       - scripts/install-incident-local-service.py
       - scripts/setup-incident-local.py
@@ -64,6 +70,10 @@ jobs:
           python3 scripts/testing/test_codex_subscription_preflight.py
           python3 scripts/testing/test_incident_local_service.py
           python3 scripts/testing/test_incident_local_worker.py
+          python3 scripts/testing/test_incident_pending_results.py
+          python3 scripts/testing/test_incident_health.py
+          python3 scripts/testing/test_incident_release_audit.py
+          python3 scripts/testing/test_release_audit.py
       - name: Install pristine dependencies and generate clients
         run: |
           pnpm install --frozen-lockfile

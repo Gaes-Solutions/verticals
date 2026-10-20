@@ -6,7 +6,7 @@ set -euo pipefail
 : "${EXECUTOR_TIMEOUT:=12m}"
 : "${JUDGE_TIMEOUT:=8m}"
 : "${CODEX_BIN:=codex}"
-: "${CONTROLLER_VERSION:=2026-10-20-incident-v2}"
+: "${CONTROLLER_VERSION:=2026-10-20-incident-v3}"
 : "${CODEX_AUTH_MODE:=api}"
 [[ "$CODEX_AUTH_MODE" == api || "$CODEX_AUTH_MODE" == chatgpt ]] || { echo "invalid authentication mode" >&2; exit 1; }
 export CODEX_AUTH_MODE
@@ -228,7 +228,7 @@ if hashlib.sha256(Path(os.environ['INCIDENT_CONTROLLER_PATH']).read_bytes()).hex
 w=Path(os.environ['INCIDENT_WORKER_FILE'])
 if hashlib.sha256(w.read_bytes()).hexdigest()!=os.environ['WORKER_SHA']: raise SystemExit('worker input changed')
 worker=json.loads(w.read_bytes())
-expected={'base_sha':os.environ['BASE_SHA'],'task_id':os.environ['TASK_ID'],'worker_sha256':os.environ['WORKER_SHA'],'payload_digest':worker['payloadDigest'],'incident_id':worker['incidentId'],'handoff_id':worker['handoffId'],'claim_id':worker['claimId'],'controller_sha256':os.environ['CONTROLLER_SHA'],'controller_version':os.environ['CONTROLLER_VERSION']}
+expected={'base_sha':os.environ['BASE_SHA'],'task_id':os.environ['TASK_ID'],'worker_sha256':os.environ['WORKER_SHA'],'payload_digest':worker['payloadDigest'],'incident_id':worker['incidentId'],'handoff_id':worker['handoffId'],'claim_id':worker['claimId'],'controller_sha256':os.environ['CONTROLLER_SHA'],'controller_version':os.environ['CONTROLLER_VERSION'],'validation_profile':'release' if os.environ.get('INCIDENT_FULL_RELEASE_AUDIT')=='true' else 'api'}
 def allowed(p):
     q=PurePosixPath(p)
     if str(q)!=p or q.is_absolute() or any(x in ('..','.') or x.startswith('.') for x in q.parts): return False
@@ -264,7 +264,7 @@ elif mode in ('metadata','verify'):
         if (a/'metadata.json').is_symlink() or json.loads((a/'metadata.json').read_bytes())!=metadata: raise SystemExit('metadata binding mismatch')
 elif mode=='fingerprint':
     h=hashlib.sha256()
-    for name in ('worker.json','patch','metadata.json','validation.json'):
+    for name in ('worker.json','patch','metadata.json','validation.json','patch-release-audit.json'):
         p=a/name
         if p.is_symlink(): raise SystemExit('artifact symlink')
         h.update(name.encode()+b'\0'); h.update(p.read_bytes() if p.is_file() else b'<missing>')
@@ -277,6 +277,11 @@ elif mode in ('validation','judgment'):
         evidence=json.loads(p.read_bytes())
         if any(evidence.get(k)!=v for k,v in m.items()): raise SystemExit('evidence binding mismatch')
         if not re.fullmatch('[0-9a-f]{64}',evidence.get('state_fingerprint','')): raise SystemExit('invalid evidence state')
+        audit=a/'patch-release-audit.json'
+        if evidence.get('validation_profile')=='release':
+            if audit.is_symlink() or not audit.is_file() or evidence.get('release_audit_sha256')!=hashlib.sha256(audit.read_bytes()).hexdigest(): raise SystemExit('release audit evidence changed')
+            report=json.loads(audit.read_bytes())
+            if report.get('overall')!='passed' or report.get('baseSha')!=expected['base_sha']: raise SystemExit('release audit did not pass')
     if mode=='judgment':
         v=json.loads((a/'validation.json').read_bytes()); j=json.loads((a/'judgment.json').read_bytes())
         if j.get('decision')!='APPROVED' or j.get('validation_state')!=v['state_fingerprint']: raise SystemExit('judge did not approve this validation')
@@ -294,6 +299,9 @@ import json,os
 from pathlib import Path
 a=Path(os.environ['ARTIFACT_DIR']); kind=os.environ['EVIDENCE_KIND']; m=json.loads((a/'metadata.json').read_bytes())
 v={**m,'state_fingerprint':os.environ['EVIDENCE_STATE']}
+if m.get('validation_profile')=='release':
+    import hashlib
+    v['release_audit_sha256']=hashlib.sha256((a/'patch-release-audit.json').read_bytes()).hexdigest()
 if kind=='judgment':
     v.update(decision='APPROVED',validation_state=json.loads((a/'validation.json').read_bytes())['state_fingerprint'])
 (a/(kind+'.json')).write_text(json.dumps(v,sort_keys=True))
@@ -323,6 +331,18 @@ PY_QA
     ln -s "$(realpath "$HOME/.cache/ms-playwright")" "$checks_home/.cache/ms-playwright"
   fi
   local rc=0
+  if [[ "${INCIDENT_FULL_RELEASE_AUDIT:-false}" == true ]]; then
+    local controller_dir
+    controller_dir="$(dirname "$INCIDENT_CONTROLLER_PATH")"
+    env -i PATH="$PATH" HOME="$checks_home" TMPDIR="${RUNNER_TEMP:-/tmp}" CI=true LANG=C.UTF-8 \
+      RELEASE_AUDIT_ISOLATED=true DATABASE_URL_MASTER="$qa_url" \
+      timeout --signal=TERM --kill-after=30s 38m python3 "$controller_dir/release-audit.py" \
+      --repo "$PWD" --matrix "$controller_dir/../automation/release-audit-matrix.json" \
+      --output "$ARTIFACT_DIR/patch-release-audit.json" >>"$checks_log" 2>&1 || rc=1
+    rm -rf "$checks_home"; rm -f "$checks_log"
+    [[ "$rc" == 0 ]] || die "complete release verification did not pass"
+    return
+  fi
   for command in typecheck build unit api; do
     case "$command" in
       typecheck|build) args=(pnpm --filter @gaespos/api "$command");;

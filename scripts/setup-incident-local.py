@@ -14,7 +14,7 @@ def prepare(home=Path.home(), source=Path(__file__).resolve().parent.parent):
         raise ValueError('unsafe installation path')
     state.mkdir(parents=True,exist_ok=True,mode=0o700)
     os.chmod(state,0o700)
-    for name in ('controller','controller/scripts','credentials','chatgpt','runs'):
+    for name in ('controller','controller/scripts','controller/automation','credentials','chatgpt','runs'):
         (state/name).mkdir(parents=True,exist_ok=True,mode=0o700)
         os.chmod(state/name,0o700)
     auth=home/'.codex/auth.json'
@@ -42,10 +42,12 @@ def prepare(home=Path.home(), source=Path(__file__).resolve().parent.parent):
     if gh.returncode or not gh.stdout.strip():raise ValueError('GitHub login required')
     private_write(state/'credentials/github-token',gh.stdout.strip())
     names=['incident-local-worker.py','incident-egress-proxy.py','incident-worker-client.py',
-           'codex-subscription-preflight.py','autonomous-incident-cycle-phase.sh','install-incident-local-service.py']
+           'codex-subscription-preflight.py','autonomous-incident-cycle-phase.sh','install-incident-local-service.py',
+           'incident-release-audit.py','release-audit.py','incident-health.py','incident-pending-results.py']
     for name in names:
         destination=state/'controller/scripts'/name
         private_write(destination,(source/'scripts'/name).read_bytes())
+    private_write(state/'controller/automation/release-audit-matrix.json',(source/'automation/release-audit-matrix.json').read_bytes())
     return state
 
 

@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "id": "web-builds",
+      "command": [
+        "pnpm",
+        "--recursive",
+        "--workspace-concurrency=1",
+        "--filter",
+        "@gaespos/web-tienda",
+        "--filter",
+        "@gaespos/web-admin",
+        "--filter",
+        "@gaespos/web-pos",
+        "--filter",
+        "@gaespos/web-superadmin",
+        "build"
+      ],
+      "timeoutSeconds": 2400,
+      "mandatory": true
+    },
+    {
+      "id": "monorepo-typecheck",
+      "command": ["pnpm", "typecheck"],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "lint-scope",
+      "command": [
+        "pnpm",
+        "exec",
+        "biome",
+        "check",
+        "apps/api/src/observability",
+        "apps/api/src/jobs/incident-auditor-scheduler.ts",
+        "apps/api/src/modules/admin/incidents-routes.ts",
+        "apps/api/src/modules/internal",
+        "apps/api/src/scripts/run-approved-incident.ts",
+        "apps/api/test/incidents-persistence.test.ts",
+        "apps/api/test/run-approved-incident.unit.ts",
+        "apps/api/test/incidents.unit.ts",
+        "apps/api/test/log-privacy.unit.ts",
+        "apps/api/test/incidents-admin.unit.ts",
+        "apps/api/test/incidents-response.unit.ts",
+        "apps/api/test/incident-worker.unit.ts",
+        "apps/web-tienda",
+        "--max-diagnostics=50"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "api-unit",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@gaespos/api",
+        "exec",
+        "vitest",
+        "run",
+        "--config",
+        "test/run-approved-incident-unit.config.ts"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "api-isolated",
+      "command": ["node", "scripts/testing/run-api-isolated.cjs"],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "package-unit",
+      "command": [
+        "pnpm",
+        "--recursive",
+        "--workspace-concurrency=1",
+        "--filter",
+        "@gaespos/ai",
+        "--filter",
+        "@gaespos/api-client",
+        "--filter",
+        "@gaespos/billing",
+        "--filter",
+        "@gaespos/db",
+        "--filter",
+        "@gaespos/email",
+        "--filter",
+        "@gaespos/fiscal",
+        "--filter",
+        "@gaespos/mensajeria",
+        "--filter",
+        "@gaespos/pagos",
+        "--filter",
+        "@gaespos/paqueterias",
+        "--filter",
+        "@gaespos/permissions",
+        "--filter",
+        "@gaespos/pricing",
+        "--filter",
+        "@gaespos/recargas",
+        "--filter",
+        "@gaespos/sync",
+        "--filter",
+        "@gaespos/sync-client",
+        "test"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "other-surface-unit",
+      "command": [
+        "pnpm",
+        "--recursive",
+        "--workspace-concurrency=1",
+        "--filter",
+        "@gaespos/web-vendedor",
+        "--filter",
+        "@gaespos/pos-desktop",
+        "test"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "automation-safety",
+      "command": [
+        "python3",
+        "-c",
+        "import importlib.util,sys,unittest\nfrom pathlib import Path\nsuite=unittest.TestSuite()\nfor index,(filename,classname) in enumerate([('test_codex_subscription_preflight.py', None), ('test_incident_local_service.py', None), ('test_incident_local_worker.py', None), ('test_incident_pending_results.py', None), ('test_incident_worker_client.py', None), ('test_incident_health.py', None), ('test_release_audit.py', None), ('autonomous-front-cycle.test.py', None), ('autonomous-front-cycle-phase.test.py', None), ('autonomous-front-integration.test.py', 'AutonomousIntegrationTests'), ('autonomous-incident-cycle-phase.test.py', None), ('prepare-native-artifacts.test.py', None), ('verify-native-smoke-proof.test.py', None), ('test-restore-ensayo.py', None), ('test-system-email.py', None)]):\n path=Path('scripts/testing')/filename\n spec=importlib.util.spec_from_file_location('release_safety_'+str(index),path)\n module=importlib.util.module_from_spec(spec);sys.modules[spec.name]=module;spec.loader.exec_module(module)\n suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(getattr(module,classname)) if classname else unittest.defaultTestLoader.loadTestsFromModule(module))\nresult=unittest.TextTestRunner(verbosity=2).run(suite)\nsys.exit(0 if result.wasSuccessful() and not result.skipped else 1)\n"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "node-safety",
+      "command": [
+        "node",
+        "--test",
+        "scripts/testing/run-api-isolated.test.cjs",
+        "scripts/testing/publish-staging-apks.test.cjs"
+      ],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "web-tienda-unit",
+      "command": ["pnpm", "--filter", "@gaespos/web-tienda", "test"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "web-admin-unit",
+      "command": ["pnpm", "--filter", "@gaespos/web-admin", "exec", "vitest", "run"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "web-pos-unit",
+      "command": ["pnpm", "--filter", "@gaespos/web-pos", "test"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "platform-workflows",
+      "command": ["node", "scripts/testing/run-platform-workflows.cjs"],
+      "timeoutSeconds": 1800,
+      "mandatory": true
+    },
+    {
+      "id": "mobile-cliente-unit",
+      "command": ["pnpm", "--filter", "@gaespos/mobile-cliente", "test"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "mobile-kiosko-unit",
+      "command": ["pnpm", "--filter", "@gaespos/mobile-kiosko", "test"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "mobile-negocio-unit",
+      "command": ["pnpm", "--filter", "@gaespos/mobile-negocio", "test"],
+      "timeoutSeconds": 900,
+      "mandatory": true
+    },
+    {
+      "id": "storefront-controlled",
+      "command": ["node", "scripts/testing/run-storefront-browser-regressions.cjs"],
+      "timeoutSeconds": 3600,
+      "mandatory": true
+    },
+    {
+      "id": "retail-e2e",
+      "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--retail-e2e"],
+      "timeoutSeconds": 2400,
+      "mandatory": true
+    },
+    {
+      "id": "shopper-e2e",
+      "command": ["node", "scripts/testing/run-platform-workflows.cjs", "--shopper-e2e"],
+      "timeoutSeconds": 2400,
+      "mandatory": true
+    }
+  ],
+  "manualRequired": [
+    "hardware-printer-cash-drawer-scanner-camera",
+    "physical-device-apk-client-kiosko-negocio",
+    "live-payment-stripe-connect-conekta-3ds",
+    "live-cfdi-facturama",
+    "real-email-delivery-resend-brevo",
+    "real-dns-tls-domain",
+    "production-deploy-and-rollback",
+    "production-backup-restore"
+  ]
+}

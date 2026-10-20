@@ -13,6 +13,8 @@ import tempfile
 
 SERVICE = 'gaes-incident-local.service'
 TIMER = 'gaes-incident-local.timer'
+HEALTH_SERVICE = 'gaes-incident-health.service'
+HEALTH_TIMER = 'gaes-incident-health.timer'
 MANAGER = '/org/freedesktop/systemd1'
 DESTINATION = 'org.freedesktop.systemd1'
 MANAGED = '# Managed by Gaes incident local worker installer.\n'
@@ -76,6 +78,38 @@ WantedBy=timers.target
     return {SERVICE: service, TIMER: timer}
 
 
+def health_definitions(state):
+    controller = state / 'controller'
+    script = controller / 'scripts' / 'incident-health.py'
+    service = MANAGED + f'''[Unit]
+Description=Gaes independent staging availability audit
+
+[Service]
+Type=oneshot
+WorkingDirectory={str(controller).replace('%', '%%')}
+ExecStart=/usr/bin/python3 {quote(script)} --state {quote(state)}
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=false
+TimeoutStartSec=90s
+StandardOutput=journal
+StandardError=journal
+'''
+    timer = MANAGED + f'''[Unit]
+Description=Audit Gaes staging availability independently of model quota
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=10min
+Persistent=true
+Unit={HEALTH_SERVICE}
+
+[Install]
+WantedBy=timers.target
+'''
+    return {HEALTH_SERVICE: service, HEALTH_TIMER: timer}
+
+
 class UserBus:
     def __init__(self, home, runner=None):
         self.runner = runner or subprocess.run
@@ -135,6 +169,29 @@ def status(state, home=None, runner=None):
     return result
 
 
+
+def health_status(state, home=None, runner=None):
+    home = Path(home or Path.home())
+    state = safe_path(state, home)
+    bus = UserBus(home, runner)
+    result = {'component': 'health', 'state': str(state),
+              'controllerReady': (state / 'controller/scripts/incident-health.py').is_file(),
+              'timer': {}, 'service': {}}
+    for name, key in [(HEALTH_TIMER, 'timer'), (HEALTH_SERVICE, 'service')]:
+        try:
+            unit_path = bus.unit_path(name)
+        except subprocess.CalledProcessError:
+            result[key] = {'name': name, 'loaded': False}
+            continue
+        result[key] = {'name': name, 'loaded': True,
+                       'activeState': bus.property(unit_path, DESTINATION + '.Unit', 'ActiveState', 's'),
+                       'subState': bus.property(unit_path, DESTINATION + '.Unit', 'SubState', 's')}
+        if key == 'service':
+            result[key]['result'] = bus.property(unit_path, DESTINATION + '.Service', 'Result', 's')
+            result[key]['exitStatus'] = bus.property(unit_path, DESTINATION + '.Service', 'ExecMainStatus', 'i')
+    result['scheduled'] = result['timer'].get('activeState') == 'active' and result['timer'].get('subState') in ('waiting', 'running', 'elapsed')
+    return result
+
 def make_private_directories(path):
     missing = []
     current = path
@@ -182,16 +239,44 @@ def install(state, home=None, runner=None):
     return status(state, home, runner)
 
 
+
+def install_health(state, home=None, runner=None):
+    home = Path(home or Path.home())
+    state = safe_path(state, home)
+    if not state.is_dir() or state.stat().st_mode & 0o077:
+        raise ValueError('state directory must be private')
+    script = safe_path(state / 'controller/scripts/incident-health.py', home)
+    if not script.is_file():
+        raise ValueError('trusted health script is missing')
+    directory = safe_path(home / '.config/systemd/user', home)
+    make_private_directories(directory)
+    safe_path(directory, home)
+    for name, text in health_definitions(state).items():
+        write_unit(safe_path(directory / name, home), text)
+    bus = UserBus(home, runner)
+    bus.call('Reload')
+    bus.call('EnableUnitFiles', 'asbb', '1', HEALTH_TIMER, 'false', 'true')
+    bus.call('StartUnit', 'ss', HEALTH_TIMER, 'replace')
+    bus.call('StartUnit', 'ss', HEALTH_SERVICE, 'replace')
+    return health_status(state, home, runner)
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--state', required=True)
     action = parser.add_mutually_exclusive_group()
     action.add_argument('--install', action='store_true')
     action.add_argument('--status', action='store_true')
+    action.add_argument('--install-health', action='store_true')
+    action.add_argument('--health-status', action='store_true')
     args = parser.parse_args(argv)
-    result = status(args.state) if args.status else install(args.state)
+    if args.health_status:
+        result = health_status(args.state)
+    elif args.install_health:
+        result = install_health(args.state)
+    else:
+        result = status(args.state) if args.status else install(args.state)
     print(json.dumps(result, sort_keys=True, ensure_ascii=False))
-    return 0 if args.status or result['scheduled'] else 1
+    return 0 if args.status or args.health_status or result['scheduled'] else 1
 
 
 if __name__ == '__main__':

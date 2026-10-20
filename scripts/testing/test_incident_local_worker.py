@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -19,6 +20,9 @@ setup=load('setupworker','setup-incident-local.py')
 class LocalWorker(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.w=worker.Worker(self.root)
+        self.pending=types.SimpleNamespace(replay_pending=lambda *a:{'pending':0,'delivered':0,'blocked':False})
+        self.audit=types.SimpleNamespace(run_audit=lambda *a:None)
+        self.w.load_helper=lambda name: self.pending if name=='incident-pending-results' else self.audit
     def tearDown(self):self.temp.cleanup()
     def test_clean_env_has_no_provider_or_business_credentials(self):
         with patch.dict(os.environ,{'OPENAI_API_KEY':'forbidden','DATABASE_URL_MASTER':'forbidden','GH_TOKEN':'forbidden'}):
@@ -33,7 +37,7 @@ class LocalWorker(unittest.TestCase):
         self.assertNotIn('--privileged',args);self.assertNotIn('seccomp=unconfined',args)
         self.assertEqual(cleanup.call_args.args[0][:3],['docker','rm','-f'])
     def test_quota_wait_does_not_claim(self):
-        with patch.object(worker,'execute',return_value=b''),patch.object(self.w,'quota',return_value={'status':'wait','reason':'included_quota_low','retryAt':None,'remainingPercent':5}),patch.object(self.w,'transport') as transport:
+        with patch.object(worker,'execute',return_value=b''),patch.object(self.w,'quota',return_value={'status':'wait','reason':'included_quota_low','retryAt':None,'remainingPercent':5}),patch.object(self.w,'transport') as transport,patch.object(self.w,'clone',return_value=(self.root,'a'*40)):
             self.w.once()
         transport.assert_not_called();self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'waiting')
     def test_no_work_does_not_start_models(self):
@@ -41,6 +45,19 @@ class LocalWorker(unittest.TestCase):
             self.w.once()
         transport.assert_called_once_with('claim');phase.assert_not_called()
         self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'idle')
+    def test_proactive_audit_runs_even_when_subscription_unavailable(self):
+        self.audit.run_audit=lambda *a:{'overall':'failed'}
+        with patch.object(worker,'execute',return_value=b''),patch.object(self.w,'clone',return_value=(self.root,'a'*40)),patch.object(self.w,'quota') as quota,patch.object(self.w,'transport') as transport:
+            self.w.once()
+        quota.assert_not_called();transport.assert_not_called()
+        self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'audit_attention_required')
+    def test_pending_publication_prevents_new_claim_without_failed_callback(self):
+        self.pending.replay_pending=lambda *a:{'pending':1,'delivered':0,'blocked':False}
+        with patch.object(worker,'execute',return_value=b''),patch.object(self.w,'clone',return_value=(self.root,'a'*40)),patch.object(self.w,'quota') as quota,patch.object(self.w,'transport') as transport:
+            self.w.once()
+        quota.assert_not_called();transport.assert_not_called()
+        self.assertEqual(json.loads((self.root/'status.json').read_text())['status'],'report_pending')
+
     def test_role_copies_auth_and_uses_internal_proxy(self):
         self.w.run=self.root/'run';self.w.run.mkdir();self.w.auth.mkdir();(self.w.auth/'auth.json').write_text('{"synthetic":"session"}');self.w.artifacts=self.root/'artifacts';self.w.artifacts.mkdir()
         with patch.object(self.w,'quota',return_value={'status':'ready'}),patch.object(worker,'execute',return_value=b''),patch.object(worker.subprocess,'run'),patch.object(self.w,'container') as run:

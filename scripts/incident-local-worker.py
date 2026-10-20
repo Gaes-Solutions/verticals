@@ -128,7 +128,7 @@ class Worker:
         mounts = [(self.controller, '/controller', True), (directory, '/workspace', False), (self.artifacts, '/artifacts', False)]
         env = {'HOME': '/tmp/worker-home', 'RUNNER_TEMP': '/local-worker', 'ARTIFACT_DIR': '/artifacts',
                'INCIDENT_WORKER_FILE': '/artifacts/worker.json', 'AUTONOMY_PHASE': name,
-               'CODEX_AUTH_MODE': 'chatgpt', 'INCIDENT_OUTER_SANDBOX': 'docker', 'GITHUB_REPOSITORY': REPO, 'INCIDENT_LOCAL_RUN_ID': self.run_id}
+               'CODEX_AUTH_MODE': 'chatgpt', 'INCIDENT_FULL_RELEASE_AUDIT': 'true', 'INCIDENT_OUTER_SANDBOX': 'docker', 'GITHUB_REPOSITORY': REPO, 'INCIDENT_LOCAL_RUN_ID': self.run_id}
         command = ['bash', '/controller/scripts/autonomous-incident-cycle-phase.sh']
         if name in ('executor', 'judge'):
             quota = self.quota()
@@ -170,10 +170,20 @@ class Worker:
         env = clean_env(home)
         env.update(GH_TOKEN=private_file(self.credentials / 'github-token'), GITHUB_REPOSITORY=REPO,
                    INCIDENT_LOCAL_RUN_ID=self.run_id, ARTIFACT_DIR=str(self.artifacts),
-                   INCIDENT_WORKER_FILE=str(self.artifacts / 'worker.json'), AUTONOMY_PHASE='publish')
+                   INCIDENT_WORKER_FILE=str(self.artifacts / 'worker.json'), INCIDENT_FULL_RELEASE_AUDIT='true', AUTONOMY_PHASE='publish')
         execute(['bash', str(self.scripts / 'autonomous-incident-cycle-phase.sh')], cwd=directory, env=env, timeout=180)
 
+    def load_helper(self, name):
+        spec=importlib.util.spec_from_file_location(name.replace('-','_'),self.scripts/(name+'.py'))
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        return module
+
     def once(self):
+        pending=self.load_helper('incident-pending-results')
+        delivery=pending.replay_pending(self.state,self.scripts/'incident-worker-client.py',self.credentials/'incident-token')
+        if delivery['pending'] and not delivery['blocked']:
+            checkpoint(self.state,'report_pending',reason='publication_result_pending')
+            return
         # Recover only resources belonging to this singleton after an abrupt stop.
         for kind in ('container', 'network'):
             ids=execute(['docker', kind, 'ls', '-q', '--filter', 'label=gaes.incident.local=true'],timeout=15).decode().split()
@@ -182,21 +192,34 @@ class Worker:
                     command=['docker', kind, 'rm'] + (['-f'] if kind=='container' else []) + [identifier]
                     cleanup(command)
         execute(['docker', 'image', 'inspect', IMAGE], timeout=15)
-        quota = self.quota()
-        if quota.get('status') != 'ready':
-            checkpoint(self.state, 'waiting', **{k: quota[k] for k in ('reason', 'retryAt', 'remainingPercent') if k in quota})
-            return
         self.run = self.state / 'runs' / self.run_id
         self.run.mkdir(parents=True, mode=0o700)
         self.artifacts = self.run / 'artifacts'
         self.artifacts.mkdir(mode=0o700)
-        # Check GitHub access and pin a base before reserving business work.
         executor, sha = self.clone('executor')
+        audit=self.load_helper('incident-release-audit')
+        checkpoint(self.state,'checking',phase='release_audit',runId=self.run_id)
+        report=audit.run_audit(self,executor,sha)
+        if report is not None:
+            checkpoint(self.state,'audit_complete' if report['overall']=='passed' else 'audit_attention_required',phase='release_audit',runId=self.run_id)
+            return
+        if delivery['pending'] or delivery['blocked']:
+            checkpoint(self.state,'publication_review_required' if delivery['blocked'] else 'report_pending',reason='publication_result_pending')
+            return
+        if (self.state/'publication-review.json').is_file():
+            checkpoint(self.state,'publication_review_required',reason='publication_outcome_unknown')
+            return
+        quota = self.quota()
+        if quota.get('status') != 'ready':
+            checkpoint(self.state, 'waiting', **{k: quota[k] for k in ('reason', 'retryAt', 'remainingPercent') if k in quota})
+            return
         self.transport('claim')
         if not (self.artifacts / 'worker.json').is_file():
             checkpoint(self.state, 'idle', remainingPercent=quota.get('remainingPercent'))
             return
         claimed = True
+        publication_started = False
+        publication_saved = False
         postgres = None
         try:
             worker = json.loads((self.artifacts / 'worker.json').read_text())
@@ -220,14 +243,30 @@ class Worker:
             checkpoint(self.state, 'working', phase='judge', runId=self.run_id, incidentId=worker['incidentId'])
             self.phase('judge', judge)
             publisher, _ = self.clone('publish', sha)
+            publication_started = True
             self.publish(publisher)
-            self.transport('report', self.artifacts / 'result.json')
-            claimed = False
+            pending.save_pending(self.state,self.artifacts/'worker.json',self.artifacts/'result.json',self.run_id)
+            publication_saved = True
+            claimed = False  # A created PR must never become a generic 'failed' callback.
+            receipt=pending.replay_pending(self.state,self.scripts/'incident-worker-client.py',self.credentials/'incident-token')
+            if receipt['pending'] or receipt['blocked']:
+                checkpoint(self.state,'publication_review_required' if receipt['blocked'] else 'report_pending',runId=self.run_id,reason='publication_result_pending')
+                return
             result = json.loads((self.artifacts / 'result.json').read_text())
             checkpoint(self.state, 'review_required', runId=self.run_id, incidentId=worker['incidentId'], prUrl=result['prUrl'])
         except SubscriptionWait as waiting:
             checkpoint(self.state, 'waiting', **{k: waiting.quota[k] for k in ('reason', 'retryAt', 'remainingPercent') if k in waiting.quota}, runId=self.run_id)
         except Exception:
+            if publication_saved:
+                checkpoint(self.state,'report_pending',runId=self.run_id,reason='publication_result_pending')
+                return
+            if publication_started:
+                marker={'version':1,'runId':self.run_id,'incidentId':worker['incidentId'],'claimId':worker['claimId'],'branch':'automation/incident-'+worker['claimId']}
+                target=self.state/'publication-review.json'
+                fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+                with os.fdopen(fd,'w') as stream:json.dump(marker,stream)
+                checkpoint(self.state,'publication_review_required',runId=self.run_id,reason='publication_outcome_unknown')
+                return
             if claimed:
                 try:
                     self.transport('report')
@@ -250,7 +289,16 @@ def main():
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(state, 0o700)
     if args.command == 'status':
-        print((state / 'status.json').read_text() if (state / 'status.json').is_file() else '{"status":"not_started"}')
+        value=json.loads((state/'status.json').read_text()) if (state/'status.json').is_file() else {'status':'not_started'}
+        audit_path=state/'release-audit.json'
+        if audit_path.is_file() and not audit_path.is_symlink() and audit_path.stat().st_size<=2_000_000:
+            audit=json.loads(audit_path.read_text())
+            value['releaseAudit']={key:audit.get(key) for key in ('overall','baseSha','finishedAt','counts','manualRequired','releaseReady')}
+        else:
+            value['releaseAudit']={'overall':'not_run','releaseReady':False}
+        health=state/'health.json'
+        value['health']=json.loads(health.read_text()).get('status','unknown') if health.is_file() and not health.is_symlink() else 'not_run'
+        print(json.dumps(value))
         return
     def interrupt(_signal, _frame):
         raise InterruptedError('worker stopping')

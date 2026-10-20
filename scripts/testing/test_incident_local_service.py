@@ -1,5 +1,8 @@
 """User service installer tests: temporary HOME and mocked D-Bus, no real units."""
 import importlib.util
+import io
+import json
+from contextlib import redirect_stdout
 import os
 from pathlib import Path
 import stat
@@ -175,6 +178,102 @@ class InstallerTests(unittest.TestCase):
         self.assertIn('\\\\ path', quoted)
         service = installer.definitions(self.state)[installer.SERVICE]
         self.assertNotIn('/bin/sh', service)
+
+
+class HealthInstallerTests(unittest.TestCase):
+    def setUp(self):
+        InstallerTests.setUp(self)
+        self.health_script = self.state / 'controller/scripts/incident-health.py'
+        self.health_script.write_text('# synthetic health monitor; never executed\n')
+        self.health_script.chmod(0o600)
+
+    def install_health(self):
+        return installer.install_health(self.state, self.home, self.bus)
+
+    def test_installs_only_separate_health_units_and_starts_one_independent_check(self):
+        result = self.install_health()
+        self.assertTrue(result['scheduled'])
+        self.assertEqual(result['component'], 'health')
+        self.assertEqual(result['timer']['name'], installer.HEALTH_TIMER)
+        self.assertEqual(result['service']['name'], installer.HEALTH_SERVICE)
+        units = self.home / '.config/systemd/user'
+        self.assertEqual({path.name for path in units.iterdir()}, {installer.HEALTH_SERVICE, installer.HEALTH_TIMER})
+        service = (units / installer.HEALTH_SERVICE).read_text()
+        timer = (units / installer.HEALTH_TIMER).read_text()
+        self.assertIn(f'WorkingDirectory={self.state / "controller"}\n', service)
+        self.assertIn(f'ExecStart=/usr/bin/python3 "{self.health_script}" --state "{self.state}"', service)
+        for item in ['Type=oneshot', 'UMask=0077', 'NoNewPrivileges=true', 'TimeoutStartSec=90s']:
+            self.assertIn(item, service)
+        self.assertIn('OnUnitInactiveSec=10min', timer)
+        self.assertIn(f'Unit={installer.HEALTH_SERVICE}', timer)
+        self.assertNotIn('incident-local-worker', service)
+        self.assertNotIn('Environment=', service)
+        calls = [args for args, _ in self.bus.calls if args[3] == 'call']
+        self.assertEqual([args[7] for args in calls[:4]], ['Reload', 'EnableUnitFiles', 'StartUnit', 'StartUnit'])
+        self.assertEqual(calls[1][8:], ['asbb', '1', installer.HEALTH_TIMER, 'false', 'true'])
+        self.assertEqual(calls[2][8:], ['ss', installer.HEALTH_TIMER, 'replace'])
+        self.assertEqual(calls[3][8:], ['ss', installer.HEALTH_SERVICE, 'replace'])
+        self.assertTrue(all(installer.SERVICE not in args and installer.TIMER not in args for args, _ in self.bus.calls))
+        for path in units.iterdir():
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_existing_worker_units_are_byte_identical_and_never_started_by_health_install(self):
+        installer.install(self.state, self.home, self.bus)
+        units = self.home / '.config/systemd/user'
+        before = {name: (units / name).read_bytes() for name in (installer.SERVICE, installer.TIMER)}
+        self.bus.calls.clear()
+        self.install_health()
+        for name, body in before.items():
+            self.assertEqual((units / name).read_bytes(), body)
+        self.assertTrue(all(installer.SERVICE not in args and installer.TIMER not in args for args, _ in self.bus.calls))
+
+    def test_health_status_is_typed_readonly_and_uses_only_health_unit_names(self):
+        self.bus.missing = {installer.HEALTH_SERVICE, installer.HEALTH_TIMER}
+        result = installer.health_status(self.state, self.home, self.bus)
+        self.assertFalse(result['scheduled'])
+        self.assertTrue(result['controllerReady'])
+        self.assertEqual(result['timer'], {'name': installer.HEALTH_TIMER, 'loaded': False})
+        self.assertEqual(result['service'], {'name': installer.HEALTH_SERVICE, 'loaded': False})
+        self.assertFalse((self.home / '.config').exists())
+        self.assertTrue(all(args[7] == 'GetUnit' for args, _ in self.bus.calls))
+        self.bus.missing.clear()
+        self.bus.bad_property = 'i 1'
+        with self.assertRaises(ValueError):
+            installer.health_status(self.state, self.home, self.bus)
+
+    def test_missing_or_symlink_health_script_fails_before_touching_units(self):
+        self.health_script.unlink()
+        with self.assertRaises(ValueError):
+            self.install_health()
+        self.health_script.symlink_to(self.script)
+        with self.assertRaises(ValueError):
+            self.install_health()
+        self.assertFalse(self.bus.calls)
+        self.assertFalse((self.home / '.config').exists())
+
+    def test_health_install_refuses_unmanaged_health_units(self):
+        units = self.home / '.config/systemd/user'
+        units.mkdir(parents=True)
+        target = units / installer.HEALTH_SERVICE
+        target.write_text('[Service]\nExecStart=/bin/other\n')
+        target.chmod(0o600)
+        with self.assertRaises(ValueError):
+            self.install_health()
+        self.assertEqual(target.read_text(), '[Service]\nExecStart=/bin/other\n')
+        self.assertFalse(self.bus.calls)
+
+    def test_new_cli_flags_do_not_select_legacy_worker_actions(self):
+        for flag, selected in [('--install-health', 'install_health'), ('--health-status', 'health_status')]:
+            output = io.StringIO()
+            with self.subTest(flag=flag), \
+                 patch.object(installer, selected, return_value={'component': 'health', 'scheduled': True}) as action, \
+                 patch.object(installer, 'install') as old_install, patch.object(installer, 'status') as old_status, \
+                 redirect_stdout(output):
+                self.assertEqual(installer.main(['--state', str(self.state), flag]), 0)
+                action.assert_called_once_with(str(self.state))
+                old_install.assert_not_called()
+                old_status.assert_not_called()
+            self.assertEqual(json.loads(output.getvalue())['component'], 'health')
 
 
 class RealUnitSyntax(unittest.TestCase):
