@@ -35,7 +35,7 @@ def write_json(path, value):
 
 def policy_digest(controller):
     digest=hashlib.sha256()
-    for rel in ('scripts/release-audit.py','automation/release-audit-matrix.json'):
+    for rel in ('scripts/release-audit.py','scripts/incident-media-sandbox.py','automation/release-audit-matrix.json'):
         digest.update((controller/rel).read_bytes())
     return digest.hexdigest()
 
@@ -91,7 +91,7 @@ def run_audit(worker, checkout, sha):
     install_home.mkdir(mode=0o700)
     env={'HOME':'/tmp/audit-install-home','RUNNER_TEMP':'/tmp','CI':'true',
          'DATABASE_URL_MASTER':'postgresql://qa:synthetic-only@127.0.0.1:5432/postgres',
-         'RELEASE_AUDIT_ISOLATED':'true',
+         'RELEASE_AUDIT_ISOLATED':'true','AUDIT_TMPDIR':'/qa-temp','TMPDIR':'/qa-temp',
          'DATABASE_URL_TENANT':'postgresql://qa:synthetic-only@127.0.0.1:5432/postgres'}
     # Fixed commands from a pristine checkout; no model, server token or personal HOME.
     command=['bash','-c', 'mkdir -p "$HOME"; pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store >/artifacts/setup.log 2>&1 && pnpm --filter @gaespos/db prisma:generate >>/artifacts/setup.log 2>&1 && pnpm exec playwright install chromium >>/artifacts/setup.log 2>&1 && exec python3 /controller/scripts/release-audit.py --repo /workspace --matrix /controller/automation/release-audit-matrix.json --output /artifacts/release-audit.json']
@@ -108,8 +108,10 @@ def run_audit(worker, checkout, sha):
                 time.sleep(1)
         else:
             raise RuntimeError('synthetic_database_unavailable')
-        worker.container([(worker.controller,'/controller',True),(checkout,'/workspace',False),(worker.artifacts,'/artifacts',False),(install_home,'/tmp/audit-install-home',False)],env,command,
-                         network='container:'+postgres,timeout=3900,accepted=(0,1))
+        media=worker.load_helper('incident-media-sandbox')
+        with media.bridge(worker.artifacts.parent,worker.controller/'scripts/incident-media-sandbox.py') as media_mounts:
+            worker.container([(worker.controller,'/controller',True),(checkout,'/workspace',False),(worker.artifacts,'/artifacts',False),(install_home,'/tmp/audit-install-home',False),*media_mounts],env,command,
+                             network='container:'+postgres,timeout=3900,accepted=(0,1))
     except subprocess.TimeoutExpired:
         failure='audit_budget_exhausted'
     except Exception:

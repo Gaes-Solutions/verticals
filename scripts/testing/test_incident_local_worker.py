@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -22,7 +23,7 @@ class LocalWorker(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.w=worker.Worker(self.root)
         self.pending=types.SimpleNamespace(replay_pending=lambda *a:{'pending':0,'delivered':0,'blocked':False})
         self.audit=types.SimpleNamespace(run_audit=lambda *a:None)
-        self.w.load_helper=lambda name: self.pending if name=='incident-pending-results' else self.audit
+        self.w.load_helper=lambda name: self.pending if name=='incident-pending-results' else types.SimpleNamespace(bridge=lambda *a:nullcontext([])) if name=='incident-media-sandbox' else self.audit
     def tearDown(self):self.temp.cleanup()
     def test_clean_env_has_no_provider_or_business_credentials(self):
         with patch.dict(os.environ,{'OPENAI_API_KEY':'forbidden','DATABASE_URL_MASTER':'forbidden','GH_TOKEN':'forbidden'}):
@@ -105,6 +106,7 @@ class LocalWorker(unittest.TestCase):
         self.assertNotEqual(auth,self.w.auth);self.assertFalse(auth.exists());self.assertTrue((self.w.auth/'auth.json').is_file())
         self.assertTrue(run.call_args.kwargs['network'].startswith('gaes-incident-net-'))
         self.assertEqual(env['HTTPS_PROXY'],'http://openai-proxy:3128')
+        self.assertFalse(any(target in ('/qa-media','/qa-temp','/usr/bin/bwrap') for _,target,_ in mounts))
         self.assertFalse(any('/credentials' in str(source) or str(source)==str(Path.home()) for source,_,_ in mounts))
     def test_validation_browser_home_is_private_exec_capable_bind_without_auth(self):
         self.w.run=self.root/'run';self.w.run.mkdir();self.w.artifacts=self.root/'artifacts';self.w.artifacts.mkdir()
@@ -115,6 +117,7 @@ class LocalWorker(unittest.TestCase):
         self.assertEqual(home.stat().st_mode&0o777,0o700)
         self.assertFalse(any(target=='/local-worker/auth' for _,target,_ in mounts))
         self.assertEqual(env['HOME'],'/tmp/worker-home')
+        self.assertEqual(env['AUDIT_TMPDIR'],'/qa-temp')
 
     def test_private_credentials_reject_symlinks_and_public_permissions(self):
         target=self.root/'private';target.write_text('synthetic');target.chmod(0o600)

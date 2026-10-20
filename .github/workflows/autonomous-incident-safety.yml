@@ -72,6 +72,7 @@ jobs:
           python3 scripts/testing/test_incident_local_worker.py
           python3 scripts/testing/test_incident_pending_results.py
           python3 scripts/testing/test_incident_health.py
+          python3 scripts/testing/test_incident_media_sandbox.py
           python3 scripts/testing/test_incident_release_audit.py
           python3 scripts/testing/test_release_audit.py
       - name: Install pristine dependencies and generate clients

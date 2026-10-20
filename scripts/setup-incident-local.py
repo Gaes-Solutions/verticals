@@ -43,7 +43,7 @@ def prepare(home=Path.home(), source=Path(__file__).resolve().parent.parent):
     private_write(state/'credentials/github-token',gh.stdout.strip())
     names=['incident-local-worker.py','incident-egress-proxy.py','incident-worker-client.py',
            'codex-subscription-preflight.py','autonomous-incident-cycle-phase.sh','install-incident-local-service.py',
-           'incident-release-audit.py','release-audit.py','incident-health.py','incident-pending-results.py']
+           'incident-release-audit.py', 'incident-media-sandbox.py','release-audit.py','incident-health.py','incident-pending-results.py']
     for name in names:
         destination=state/'controller/scripts'/name
         private_write(destination,(source/'scripts'/name).read_bytes())

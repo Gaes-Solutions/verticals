@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from contextlib import nullcontext
 import importlib.util,json,tempfile,time,types,unittest
 from pathlib import Path
 from datetime import datetime,timezone,timedelta
@@ -26,24 +27,24 @@ class AuditCoordinator(unittest.TestCase):
         report['results'][0]['status']='passed';m.save_evidence(self.root,report,artifacts)
         self.assertIsNotNone(json.loads(finding.read_text())['resolvedAt'])
     def test_timeout_never_passes_unexecuted_checks(self):
-        controller=self.root/'controller';(controller/'automation').mkdir(parents=True);(controller/'scripts').mkdir();(controller/'scripts/release-audit.py').write_text('trusted')
+        controller=self.root/'controller';(controller/'automation').mkdir(parents=True);(controller/'scripts').mkdir();(controller/'scripts/release-audit.py').write_text('trusted');(controller/'scripts/incident-media-sandbox.py').write_text('trusted bridge')
         (controller/'automation/release-audit-matrix.json').write_text(json.dumps({'checks':[{'id':'one'},{'id':'two'}],'manualRequired':['physical-device']}))
         artifacts=self.root/'artifacts';artifacts.mkdir()
         def command(*a,**kw):return b''
         def container(*a,**kw):raise __import__('subprocess').TimeoutExpired('synthetic',1)
-        w=types.SimpleNamespace(state=self.root,controller=controller,artifacts=artifacts,run_id='run-one',container=container)
+        w=types.SimpleNamespace(load_helper=lambda name:types.SimpleNamespace(bridge=lambda *a:nullcontext([])),state=self.root,controller=controller,artifacts=artifacts,run_id='run-one',container=container)
         with patch.object(m,'worker_command',side_effect=command):result=m.run_audit(w,self.root,'a'*40)
         self.assertEqual(result['overall'],'incomplete');self.assertTrue(all(r['status']=='blocked' for r in result['results']))
         self.assertFalse(result['releaseReady'])
     def test_interrupted_incremental_report_keeps_completed_passes(self):
         import hashlib
-        controller=self.root/'controller';(controller/'automation').mkdir(parents=True);(controller/'scripts').mkdir();(controller/'scripts/release-audit.py').write_text('trusted')
+        controller=self.root/'controller';(controller/'automation').mkdir(parents=True);(controller/'scripts').mkdir();(controller/'scripts/release-audit.py').write_text('trusted');(controller/'scripts/incident-media-sandbox.py').write_text('trusted bridge')
         matrix=controller/'automation/release-audit-matrix.json';matrix.write_text(json.dumps({'checks':[{'id':'one'},{'id':'two'}],'manualRequired':['physical-device']}))
         artifacts=self.root/'artifacts';artifacts.mkdir()
         def container(*a,**kw):
             m.write_json(artifacts/'release-audit.json',{'baseSha':'a'*40,'controllerMatrixSha256':hashlib.sha256(matrix.read_bytes()).hexdigest(),'results':[{'checkId':'one','status':'passed','durationMs':2,'exitCode':0,'logSha256':'b'*64},{'checkId':'two','status':'notrun','durationMs':0,'exitCode':None,'logSha256':None}]})
             raise __import__('subprocess').TimeoutExpired('synthetic',1)
-        w=types.SimpleNamespace(state=self.root,controller=controller,artifacts=artifacts,run_id='run-partial',container=container)
+        w=types.SimpleNamespace(load_helper=lambda name:types.SimpleNamespace(bridge=lambda *a:nullcontext([])),state=self.root,controller=controller,artifacts=artifacts,run_id='run-partial',container=container)
         with patch.object(m,'worker_command',return_value=b''): result=m.run_audit(w,self.root,'a'*40)
         self.assertEqual(result['overall'],'incomplete');self.assertEqual(result['counts'],{'passed':1,'failed':0,'blocked':1})
         self.assertEqual(result['results'][1]['reason'],'check_not_executed')

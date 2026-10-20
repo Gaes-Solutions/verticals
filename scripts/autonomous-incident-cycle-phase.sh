@@ -335,7 +335,7 @@ PY_QA
     local controller_dir
     controller_dir="$(dirname "$INCIDENT_CONTROLLER_PATH")"
     env -i PATH="$PATH" HOME="$checks_home" TMPDIR="${RUNNER_TEMP:-/tmp}" CI=true LANG=C.UTF-8 \
-      RELEASE_AUDIT_ISOLATED=true DATABASE_URL_MASTER="$qa_url" \
+      RELEASE_AUDIT_ISOLATED=true AUDIT_TMPDIR=/qa-temp DATABASE_URL_MASTER="$qa_url" \
       timeout --signal=TERM --kill-after=30s 38m python3 "$controller_dir/release-audit.py" \
       --repo "$PWD" --matrix "$controller_dir/../automation/release-audit-matrix.json" \
       --output "$ARTIFACT_DIR/patch-release-audit.json" >>"$checks_log" 2>&1 || rc=1

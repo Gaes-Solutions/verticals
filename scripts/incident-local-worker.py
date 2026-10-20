@@ -144,7 +144,7 @@ class Worker:
             qa_home=self.run/'validate-home'
             qa_home.mkdir(mode=0o700)
             mounts.append((qa_home,'/tmp/worker-home',False))
-            env.update(RUNNER_TEMP='/tmp', FRESH_RUNNER='true', GITHUB_ACTIONS='true', DATABASE_URL_MASTER='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres', DATABASE_URL_TENANT='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres')
+            env.update(RUNNER_TEMP='/tmp', AUDIT_TMPDIR='/qa-temp', TMPDIR='/qa-temp', FRESH_RUNNER='true', GITHUB_ACTIONS='true', DATABASE_URL_MASTER='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres', DATABASE_URL_TENANT='postgresql://qa:synthetic-only@127.0.0.1:5432/postgres')
             # Install from the pristine base before the controller applies the generated patch.
             command = ['bash', '-c', 'mkdir -p "$HOME"; pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store >/tmp/install.log 2>&1 && pnpm --filter @gaespos/db prisma:generate >>/tmp/install.log 2>&1 && pnpm exec playwright install chromium >>/tmp/install.log 2>&1 && unset DATABASE_URL_TENANT && exec bash /controller/scripts/autonomous-incident-cycle-phase.sh']
         if name in ('executor', 'judge'):
@@ -165,7 +165,9 @@ class Worker:
                 cleanup(['docker', 'network', 'rm', private_net])
                 shutil.rmtree(role_auth)
         else:
-            self.container(mounts, env, command, network=network, timeout=2400)
+            media=self.load_helper('incident-media-sandbox')
+            with media.bridge(self.run,self.scripts/'incident-media-sandbox.py') as media_mounts:
+                self.container([*mounts,*media_mounts], env, command, network=network, timeout=2400)
 
     def publish(self, directory):
         home = self.run / 'publisher-home'
